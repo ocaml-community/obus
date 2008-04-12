@@ -10,8 +10,7 @@
 module type TermType =
 sig
   type var
-  type left
-  type right
+  type t
 end
 
 module type ValueType =
@@ -22,61 +21,49 @@ end
 module Make (Term : TermType) (Value : ValueType) =
 struct
   open Term
-  type 'a term = Term of 'a * 'a term list
-  type eqn = left term * right term
-  type either_term =
-    | ETLeft of Term.left * either_term list
-    | ETRight of Term.right term
-  type right_pattern =
-    | RPVar of Term.var
-    | RPTerm of Term.right * right_pattern list
-  type either_pattern =
-    | EPVar of Term.var
-    | EPLeft of Term.left * either_pattern list
-    | EPRight of right_pattern
+  type term =
+      [ `Term of Term.t * term list ]
+  type pattern =
+      [ `Term of Term.t * pattern list
+      | `Var of Term.var ]
+  type eqn = term * term
   type maker = Value.t list -> Value.t
   type generator = {
-    gen_either : either_pattern;
-    gen_right : right_pattern;
-    gen_vars : right_pattern list;
+    gen_left : pattern;
+    gen_right : pattern;
+    gen_vars : pattern list;
     gen_maker : maker;
   }
 
   let make_generator either_pattern right_pattern vars maker =
-    { gen_either = either_pattern;
+    { gen_left = either_pattern;
       gen_right = right_pattern;
       gen_vars = vars;
       gen_maker = maker }
 
-  type sub = (var * right term) list
+  type sub = (var * term) list
 
-  let rec substitute_right (sub : sub) : right_pattern -> right term = function
-      | RPVar v -> List.assoc v sub
-      | RPTerm(name, args) -> Term(name, List.map (substitute_right sub) args)
-
-  let rec substitute_either (sub : sub) : either_pattern -> either_term = function
-      | EPVar v -> ETRight(List.assoc v sub)
-      | EPLeft(name, args) -> ETLeft(name, List.map (substitute_either sub) args)
-      | EPRight(t) -> ETRight(substitute_right sub t)
+  let rec substitute sub = function
+    | `Var v -> List.assoc v sub
+    | `Term(name, args) -> `Term(name, List.map (substitute sub) args)
 
   exception Cannot_unify
 
-  let unify_right (pattern : right_pattern) (term : right term) =
+  let unify (pattern : pattern) (term : term) =
 
-    let add (var : var) (value : right term) (sub : sub) : sub =
+    let add var term sub =
       try
-        if List.assoc var sub = value
+        if List.assoc var sub = term
         then sub
         else raise Cannot_unify
       with
-        | Not_found -> (var, value) :: sub
+        | Not_found -> (var, term) :: sub
     in
 
-    let rec aux (sub : sub) (pattern : right_pattern) (term : right term)
-        : sub =
+    let rec aux sub (pattern : pattern) (term : term) =
       match (pattern, term) with
-        | RPVar v, t -> add v t sub
-        | RPTerm(ta, arga), Term(tb, argb) when ta = tb ->
+        | `Var v, t -> add v t sub
+        | `Term(ta, arga), `Term(tb, argb) when ta = tb ->
             begin try
               List.fold_left2 aux sub arga argb
             with
@@ -92,40 +79,38 @@ struct
     | Equation of eqn
     | Branches of system list
 
-  and system = System of maker * right term list * (right term * Value.t) list * (right term * equation) list
+  and system = System of maker * term list * (term * Value.t) list * (term * equation) list
 
   type 'a result =
     | Success of Value.t
     | Failure
     | Update of 'a
 
-  let unify_left (left : left term) (term : either_term) : (right term * equation) list =
-    let rec aux eqns left term =
-      match (left, term) with
-        | Term(ta, arga), ETLeft(tb, argb) ->
-            if ta = tb
-            then begin try
-              List.fold_left2 aux eqns arga argb
-            with
-              | Invalid_argument _ -> raise Cannot_unify
-            end else raise Cannot_unify
-        | x, ETRight(y) -> (y, Equation(x, y)) :: eqns
+  let match_term (a : term) (b : term) : (term * equation) list =
+    let rec aux eqns a b =
+      match (a, b) with
+        | `Term(ta, arga), `Term(tb, argb) when ta = tb -> begin try
+            List.fold_left2 aux eqns arga argb
+          with
+            | Invalid_argument _ -> raise Cannot_unify
+          end
+        | a, b -> (b, Equation(a, b)) :: eqns
     in
-      aux [] left term
+      aux [] a b
 
-  let generate (generators : generator list) : left term -> right term -> Value.t option =
+  let generate (generators : generator list) : term -> term -> Value.t option =
 
     let gen_branches ((a, b) : eqn) : system list result =
       let rec aux acc = function
         | generator :: generators -> begin
             try
-              let sub = unify_right generator.gen_right b in
-              let either = substitute_either sub generator.gen_either in
-                match unify_left a either with
+              let sub = unify generator.gen_right b in
+              let left = substitute sub generator.gen_left in
+                match match_term a left with
                   | [] -> Success(generator.gen_maker [])
                   | eqns -> aux
                       (System(generator.gen_maker,
-                              List.map (substitute_right sub) generator.gen_vars,
+                              List.map (substitute sub) generator.gen_vars,
                               [], eqns) :: acc) generators
             with
               | Cannot_unify -> aux acc generators

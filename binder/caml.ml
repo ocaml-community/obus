@@ -35,11 +35,14 @@ type dbus_type =
   | Tcons
   | Tnil
 
+type term_type =
+  | Caml_id of Ast.ident
+  | DBus_id of dbus_type
+
 module Gen = Generate.Make
   (struct
      type var = string
-     type left = dbus_type
-     type right = Ast.ident
+     type t = term_type
    end)
   (struct
      type t = caml_expr
@@ -63,14 +66,14 @@ let f3 f = function
   | [x; y; z] -> f x y z
   | _ -> assert false
 
-let t0 t = Gen.EPLeft(t, [])
-let t1 t x = Gen.EPLeft(t, [x])
-let t2 t x y = Gen.EPLeft(t, [x; y])
-let t3 t x y z = Gen.EPLeft(t, [x; y; z])
+let t0 t = `Term(DBus_id t, [])
+let t1 t x = `Term(DBus_id t, [x])
+let t2 t x y = `Term(DBus_id t, [x; y])
+let t3 t x y z = `Term(DBus_id t, [x; y; z])
 
 type reader =
-    { reader_from : Gen.either_pattern;
-      reader_vars : Gen.right_pattern list;
+    { reader_from : Gen.pattern;
+      reader_vars : Gen.pattern list;
       reader_expr : caml_expr list -> caml_expr }
 
 let rec split_at n l = match n, l with
@@ -93,8 +96,8 @@ let split2 a b l = f2 (fun x y -> (x, y)) (split_with_motif [a; b] l)
 let split3 a b c l = f3 (fun x y z -> (x, y, z)) (split_with_motif [a; b; c] l)
 
 
-let rec signature_of_term = function
-  | Gen.EPLeft(t, args) -> begin match t, args with
+let rec signature_of_term : Gen.pattern -> string = function
+  | `Term(DBus_id t, args) -> begin match t, args with
       | Tbyte, [] -> "y"
       | Tboolean, [] -> "b"
       | Tint16, [] -> "n"
@@ -116,16 +119,16 @@ let rec signature_of_term = function
     end
   | _ -> raise (Invalid_argument "signature_of_term")
 
-let right_pattern_from_caml_type t =
-  let rec aux = function
-    | (<:ctyp< $id:t$ >>) -> ([], t)
+let pattern_from_caml_type t : Gen.pattern =
+  let rec aux : caml_type -> (Gen.pattern list * term_type) = function
+    | (<:ctyp< $id:t$ >>) -> ([], Caml_id t)
     | (<:ctyp< $a$ $b$ >>) -> let args, id = aux b in
         (aux2 a :: args, id)
     | _ -> raise (Invalid_argument "caml_type")
-  and aux2 = function
-    | (<:ctyp< '$a$ >>) -> Gen.RPVar(a)
+  and aux2 : caml_type -> Gen.pattern = function
+    | (<:ctyp< '$a$ >>) -> `Var(a)
     | t -> let args, id = aux t in
-        Gen.RPTerm(id, args)
+        `Term(id, args)
   in
     aux2 t
 
@@ -255,13 +258,13 @@ let rbind r v e =
           i, $e$ >>
     end }
 let rcaml t =
-  let rp = right_pattern_from_caml_type t in
-    { reader_from = Gen.EPRight(rp);
+  let rp = pattern_from_caml_type t in
+    { reader_from = rp;
       reader_vars = [rp];
       reader_expr = f1 (fun x -> x) }
 let rv x =
-  { reader_from = Gen.EPVar(x);
-    reader_vars = [Gen.RPVar(x)];
+  { reader_from = `Var(x);
+    reader_vars = [`Var(x)];
     reader_expr = f1 (fun x -> x) }
 
 type reading_rule = Gen.generator
@@ -269,7 +272,7 @@ type reading_rule = Gen.generator
 let make_reading_rule reader caml_type =
   Gen.make_generator
     reader.reader_from
-    (right_pattern_from_caml_type caml_type)
+    (pattern_from_caml_type caml_type)
     reader.reader_vars
     reader.reader_expr
 
@@ -299,49 +302,48 @@ let default_reading_rules = [
   rbind rbyte <:patt< x >> <:expr< int_of_char x >> --> <:ctyp< char >>
 ]
 
-let rec left_from_dbus_type = function
-  | DBus.Tbyte -> Gen.Term(Tbyte, [])
-  | DBus.Tboolean -> Gen.Term(Tboolean, [])
-  | DBus.Tint16 -> Gen.Term(Tint16, [])
-  | DBus.Tint32 -> Gen.Term(Tint32, [])
-  | DBus.Tint64 -> Gen.Term(Tint64, [])
-  | DBus.Tuint16 -> Gen.Term(Tuint16, [])
-  | DBus.Tuint32 -> Gen.Term(Tuint32, [])
-  | DBus.Tuint64 -> Gen.Term(Tuint64, [])
-  | DBus.Tdouble -> Gen.Term(Tdouble, [])
-  | DBus.Tstring -> Gen.Term(Tstring, [])
-  | DBus.Tsignature -> Gen.Term(Tsignature, [])
-  | DBus.Tobject_path -> Gen.Term(Tobject_path, [])
-  | DBus.Tarray(t) -> Gen.Term(Tarray, [left_from_dbus_type t])
-  | DBus.Tdict(tk, tv) -> Gen.Term(Tdict, [left_from_dbus_type tk; left_from_dbus_type tv])
+let rec term_from_dbus_type : DBus.dbus_type -> Gen.term = function
+  | DBus.Tbyte -> t0 Tbyte
+  | DBus.Tboolean -> t0 Tboolean
+  | DBus.Tint16 -> t0 Tint16
+  | DBus.Tint32 -> t0 Tint32
+  | DBus.Tint64 -> t0 Tint64
+  | DBus.Tuint16 -> t0 Tuint16
+  | DBus.Tuint32 -> t0 Tuint32
+  | DBus.Tuint64 -> t0 Tuint64
+  | DBus.Tdouble -> t0 Tdouble
+  | DBus.Tstring -> t0 Tstring
+  | DBus.Tsignature -> t0 Tsignature
+  | DBus.Tobject_path -> t0 Tobject_path
+  | DBus.Tarray(t) -> t1 Tarray (term_from_dbus_type t)
+  | DBus.Tdict(tk, tv) -> t2 Tdict (term_from_dbus_type tk) (term_from_dbus_type tv)
   | DBus.Tstruct(tl) ->
-      Gen.Term(Tstruct,
-               [List.fold_right (fun t acc ->
-                                   Gen.Term(Tcons, [left_from_dbus_type t; acc]))
-                  tl (Gen.Term(Tnil, []))])
+      t1 Tstruct (List.fold_right (fun t acc ->
+                                     t2 Tcons (term_from_dbus_type t) acc)
+                    tl (t0 Tnil))
 (*                             match tl with
                                | [] -> []
-                               | x::l -> [List.fold_left (fun l x -> Gen.Term(Tcons,  left_from_dbus_type t])*)
-  | DBus.Tvariant -> Gen.Term(Tvariant, [])
+                               | x::l -> [List.fold_left (fun l x -> `Term(Tcons,  from_dbus_type t])*)
+  | DBus.Tvariant -> t0 Tvariant
 
-let right_from_caml_type t =
-  let rec aux = function
-    | (<:ctyp< $id:t$ >>) -> ([], t)
+let term_from_caml_type (t : caml_type) : Gen.term =
+  let rec aux : caml_type -> (Gen.term list * term_type) = function
+    | (<:ctyp< $id:t$ >>) -> ([], Caml_id t)
     | (<:ctyp< $a$ $b$ >>) -> let args, id = aux b in
         (aux2 a :: args, id)
     | _ -> raise (Invalid_argument "caml_type")
-  and aux2 t =
+  and aux2 (t : caml_type) : Gen.term  =
     let args, id = aux t in
-      Gen.Term(id, args)
+      `Term(id, args)
   in
     aux2 t
 
 let generate_reader rules dbust camlt =
-  Gen.generate rules (left_from_dbus_type dbust) (right_from_caml_type camlt)
+  Gen.generate rules (term_from_dbus_type dbust) (term_from_caml_type camlt)
 
 type writer =
-    { writer_to : Gen.either_pattern;
-      writer_vars : Gen.right_pattern list;
+    { writer_to : Gen.pattern;
+      writer_vars : Gen.pattern list;
       writer_expr : caml_expr list -> caml_expr }
 
 let wint16 =
@@ -464,13 +466,13 @@ let wcons a b =
           let i = $a.writer_expr la$ x i in
             $b.writer_expr lb$ x i >> }
 let wcaml t =
-  let rp = right_pattern_from_caml_type t in
-    { writer_to = Gen.EPRight(rp);
+  let rp = pattern_from_caml_type t in
+    { writer_to = rp;
       writer_vars = [rp];
       writer_expr = f1 (fun x -> x) }
 let wv v =
-  { writer_to = Gen.EPVar v;
-    writer_vars = [Gen.RPVar v];
+  { writer_to = `Var v;
+    writer_vars = [`Var v];
     writer_expr = f1 (fun x -> x) }
 let wconv expr writer =
   { writer_to = writer.writer_to;
@@ -483,12 +485,12 @@ type writing_rule = Gen.generator
 let make_writing_rule writer caml_type =
   Gen.make_generator
     writer.writer_to
-    (right_pattern_from_caml_type caml_type)
+    (pattern_from_caml_type caml_type)
     writer.writer_vars
     writer.writer_expr
 
 let generate_writer rules camlt dbust =
-  Gen.generate rules (left_from_dbus_type dbust) (right_from_caml_type camlt)
+  Gen.generate rules (term_from_dbus_type dbust) (term_from_caml_type camlt)
 
 let (<--) a b = make_writing_rule a b
 
