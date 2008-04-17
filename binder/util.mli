@@ -13,3 +13,5 @@ val with_open_out : string -> (out_channel -> 'a) -> 'a
 val ljoin : string -> string list -> string
 val rjoin : string -> string list -> string
 val split_upper : string -> string list
+
+val filter_map : ('a -> 'b option) -> 'a list -> 'b list

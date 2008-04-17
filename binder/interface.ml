@@ -56,11 +56,6 @@ let dtd = Dtd.check (Dtd.parse_string "<!-- DTD for D-BUS Introspection data -->
 let xml_parser = XmlParser.make ()
 let _ = XmlParser.prove xml_parser false
 
-let filter_map f l =
-  List.fold_right (fun x acc -> match f x with
-                    | None -> acc
-                    | Some(v) -> v :: acc) l []
-
 type direction = In | Out
 
 let name params = List.assoc "name" params
@@ -75,25 +70,25 @@ let from_instrospection lexbuf =
   let xml = XmlParser.parse xml_parser (XmlParser.SLexbuf lexbuf) in
     match xml with
       | Element("node", _, l) ->
-          filter_map begin function
+          Util.Util.filter_map begin function
             | Element("interface", params, components) ->
                 Some(name params,
-                     filter_map begin function
+                     Util.filter_map begin function
                        | Element("method", params, args) ->
                            Some(Method(name params,
-                                       filter_map begin function
+                                       Util.filter_map begin function
                                          | Element("arg", params, _) when direction params = In ->
                                              Some(arg params)
                                          | _ -> None
                                        end args,
-                                      filter_map begin function
+                                      Util.filter_map begin function
                                          | Element("arg", params, _) when direction params = Out ->
                                              Some(arg params)
                                          | _ -> None
                                       end args))
                        | Element("signal", params, args) ->
                            Some(Signal(name params,
-                                       filter_map begin function
+                                       Util.filter_map begin function
                                          | Element("arg", params, _) ->
                                              Some(arg params)
                                          | _ -> None

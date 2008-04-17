@@ -46,3 +46,9 @@ let split_upper name =
       String.lowercase (String.sub name i (j - i)) :: split j
   in
     split 0
+
+let filter_map f l =
+  List.fold_right (fun x acc -> match f x with
+                    | None -> acc
+                    | Some(v) -> v :: acc) l []
+
