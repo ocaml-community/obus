@@ -23,15 +23,9 @@ let with_open_in fname f =
 let with_open_out fname f =
   try_finally f close_out (open_out fname)
 
-let rec join strs sep = match strs with
-  | [] -> ""
-  | [s] -> s
-  | s :: l -> s ^ sep ^ join l sep
+let rec ljoin sep strs = String.concat sep strs
 
-let rec rjoin strs sep = match strs with
-  | [] -> ""
-  | [s] -> s
-  | s :: l -> join l sep ^ sep ^ s
+let rec rjoin sep strs = String.concat sep (List.rev strs)
 
 let split_upper name =
   let len = String.length name in
