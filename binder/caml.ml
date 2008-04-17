@@ -325,6 +325,50 @@ let args = [
   ("-label", Arg.Set with_labels, "use labels")
 ]
 
+let string_of_seq null b e sep = function
+  | [] -> null
+  | [t] -> t
+  | t :: l ->
+      b ^ t ^ List.fold_left (fun acc t -> acc ^ sep ^ t) "" l ^ e
+
+let rec list_of_tuple : mono -> mono list = function
+  | `RTerm("*nil", []) -> []
+  | `RTerm("*cons", [t; tl]) -> t :: list_of_tuple tl
+  | _ -> assert false
+
+let rec string_of_type : mono -> string = function
+  | `RTerm("*nil", []) ->
+      "unit"
+  | `RTerm("*cons", _) as t ->
+      string_of_seq "unit" "(" ")" " * " (List.map string_of_type (list_of_tuple t))
+  | `RTerm(t, args) ->
+      string_of_seq "" "(" ")" ", " (List.map string_of_type args) ^ (if args <> [] then " " else "") ^ t
+
+let type_of_ctyp typ =
+  let fail () = raise (Invalid_argument "can not understand caml type") in
+  let parse_id id =
+    Util.ljoin "." (List.map (function
+                                | Ast.IdLid(_, t) -> t
+                                | Ast.IdUid(_, t) -> t
+                                | _ -> assert false) (Ast.list_of_ident id [])) in
+  let rec parse_app acc = function
+    | (<:ctyp< $id:t$ >>) -> (List.rev acc, parse_id t)
+    | (<:ctyp< $a$ $b$ >>) -> parse_app (parse_type a :: acc) b
+    | _ -> fail ()
+  and parse_tuple : Ast.ctyp -> mono list = function
+    | (<:ctyp< ( $a$ * $b$ ) >>) -> parse_type a :: parse_tuple b
+    | t -> [parse_type t]
+  and parse_type t : mono = match t with
+    | (<:ctyp< ( $_$ * $_$ ) >>)-> tuple (parse_tuple t)
+    | _ -> let args, id = parse_app [] t in `RTerm(id, args)
+  in
+    parse_type typ
+
+let type_of_string str : mono =
+  match Syntax.parse_interf _loc (Stream.of_string (Printf.sprintf "val toto : %s" str)) with
+    | (<:sig_item< val toto : $t$ >>) -> type_of_ctyp t
+    | _ -> assert false
+
 module Print (File : sig val ch_mli : out_channel end) =
 struct
   let print fmt = Printf.fprintf File.ch_mli fmt
@@ -423,3 +467,5 @@ let write_module_sigs fname (Tree.Node(_, l)) =
   end
 
 let write_module_strs fname mstr = ()
+
+let name = "caml"

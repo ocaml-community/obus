@@ -77,3 +77,8 @@ val args : (Arg.key * Arg.spec * Arg.doc) list
 val correct_module_name : string -> string
 val correct_signal_name : string -> string
 val correct_method_name : string -> string
+
+val string_of_type : mono -> string
+val type_of_string : string -> mono
+
+val name : string

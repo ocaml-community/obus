@@ -9,23 +9,23 @@
 
 module type LanguageType =
 sig
+  val name : string
+
   type mono
   type poly
-    (** Represention of the language type *)
 
   type expr
   type module_sig = mono Interface.t
   type module_str
-
-  val parse_module_sigs : string -> module_sig Tree.t
 
   val correct_module_name : string -> string
   val correct_signal_name : string -> string
   val correct_method_name : string -> string
 
   val default_type : DBus.typ -> mono
-    (** [default typ] The default type for a dbus type *)
 
+  val string_of_type : mono -> string
+  val type_of_string : string -> mono
   val write_module_sigs : string -> module_sig Tree.t -> unit
   val write_module_strs : string -> module_str Tree.t -> unit
 
@@ -57,7 +57,8 @@ struct
 
   let map_args node l =
     List.map (fun (n, t) -> Element(node, [("name", n);
-                                           ("dbus_type", DBus.string_of_type t)], [])) l
+                                           ("dbus_type", DBus.string_of_type t);
+                                           ("type", string_of_type (default_type t))], [])) l
 
   let map_interface = function
     | None -> ([], None)
@@ -135,7 +136,11 @@ struct
           if !same_level
           then map_flatten [] l
           else map_cascade [] [] l in
-        (Element("map", [("file", !out)], xml_map), Tree.Node(None, l)) in
+        (Element("map", [("file", !out); ("language", L.name)],
+                 List.filter (function
+                                | Element("interface", _, []) -> false
+                                | _ -> true) xml_map),
+         Tree.Node(None, l)) in
       Util.with_open_out (!out ^ ".map.xml") begin fun ch ->
         Printf.fprintf ch "<!-- File generated with %s -->\n" (Filename.basename (Sys.argv.(0)));
         output_string ch (Xml.to_string_fmt xml_map)
