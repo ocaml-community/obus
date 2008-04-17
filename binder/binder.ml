@@ -40,7 +40,7 @@ struct
   let skipped_interfaces = ref []
   let permit_default = ref false
   let prefix = ref ["org\\.freedesktop\\."]
-  let out = ref "out.mli"
+  let out = ref "out.obus.xml"
   let same_level = ref false
 
   let args = [
@@ -61,51 +61,46 @@ struct
                                            ("type", string_of_type (default_type t))], [])) l
 
   let map_interface = function
-    | None -> ([], None)
-    | Some(defs) ->
-        let a, b = List.split begin List.map begin function
-          | Interface.Method(dbus_name, ins, outs) ->
-              let lang_name = correct_method_name dbus_name in
-                (Element("method", [("dbus_name", dbus_name); ("name", lang_name)],
-                         map_args "in" ins @ map_args "out" outs),
-                 Interface.Method(lang_name, map_default_type ins, map_default_type outs))
-          | Interface.Signal(dbus_name, args) ->
-              let lang_name = correct_signal_name dbus_name in
-                (Element("signal", [("dbus_name", dbus_name); ("name", lang_name)],
-                         map_args "arg" args),
-                 Interface.Signal(lang_name, map_default_type args))
-        end defs end in
-          (a, Some(b))
+    | None -> []
+    | Some(defs) -> List.map begin function
+        | Interface.Method(dbus_name, ins, outs) ->
+            Element("method", [("dbus_name", dbus_name);
+                               ("name", correct_method_name dbus_name)],
+                    map_args "in" ins @ map_args "out" outs)
+        | Interface.Signal(dbus_name, args) ->
+            Element("signal", [("dbus_name", dbus_name);
+                               ("name", correct_signal_name dbus_name)],
+                    map_args "arg" args)
+      end defs
 
   let rec map_cascade dbus_names lang_names l =
-    let a, b = List.split begin List.map begin fun (dbus_name, Tree.Node(defs, l)) ->
+    List.flatten begin List.map begin fun (dbus_name, Tree.Node(defs, l)) ->
       let dbus_names = dbus_name :: dbus_names in
       let complete_dbus_name = Util.rjoin "." dbus_names in
       let lang_name = correct_module_name dbus_name in
       let lang_names = lang_name :: lang_names in
       let complete_lang_name = Util.rjoin "." lang_names in
-      let (xml_map, defs) = map_interface defs in
-      let (xml_maps, l) = map_cascade dbus_names lang_names l in
-        (Element("interface", [("dbus_name", complete_dbus_name); ("name", complete_lang_name)], xml_map) :: xml_maps,
-         (lang_name, Tree.Node(defs, l)))
-    end l end in
-      (List.flatten a, b)
+        Element("interface",
+                [("dbus_name", complete_dbus_name);
+                 ("name", complete_lang_name)],
+                map_interface defs) :: map_cascade dbus_names lang_names l
+    end l end
 
   let rec map_flatten dbus_names l =
-    let a, b = List.split begin List.map begin fun (dbus_name, Tree.Node(defs, l)) ->
+    List.flatten begin List.map begin fun (dbus_name, Tree.Node(defs, l)) ->
       let dbus_names = dbus_name :: dbus_names in
       let complete_dbus_name = Util.rjoin "." dbus_names in
       let lang_name = correct_module_name (Util.rjoin "_" dbus_names) in
-        match defs with
-          | None
-          | Some([]) -> map_flatten dbus_names l
-          | _ ->
-              let (xml_map, defs) = map_interface defs in
-              let (xml_maps, l) = map_flatten dbus_names l in
-                (Element("interface", [("dbus_name", complete_dbus_name); ("name", lang_name)], xml_map) :: xml_maps,
-                 (lang_name, Tree.Node(defs, [])) :: l)
-    end l end in
-      (List.flatten a, List.flatten b)
+        Element("interface",
+                [("dbus_name", complete_dbus_name);
+                 ("name", lang_name)],
+                map_interface defs) :: map_flatten dbus_names l
+    end l end
+
+  let remove_empty_interfaces xml =
+    List.filter (function
+                   | Element("interface", _, []) -> false
+                   | _ -> true) xml
 
   let main () =
     Arg.parse args
@@ -130,22 +125,20 @@ struct
       (List.flatten (List.map (fun fname -> Util.with_open_in fname
                                  (fun ch -> Interface.from_instrospection
                                     (Lexing.from_channel ch))) !xml_fnames)) in
-    let xml_map, lang_interfaces =
-      let xml_map, l =
+    let xml_map =
+      let xml_map =
         let (Tree.Node(_, l)) = dbus_interfaces in
           if !same_level
           then map_flatten [] l
           else map_cascade [] [] l in
-        (Element("map", [("file", !out); ("language", L.name)],
-                 List.filter (function
-                                | Element("interface", _, []) -> false
-                                | _ -> true) xml_map),
-         Tree.Node(None, l)) in
-      Util.with_open_out (!out ^ ".map.xml") begin fun ch ->
+        Element("map",
+                [("file", !out);
+                 ("language", L.name)],
+                remove_empty_interfaces xml_map) in
+      Util.with_open_out !out begin fun ch ->
         Printf.fprintf ch "<!-- File generated with %s -->\n" (Filename.basename (Sys.argv.(0)));
         output_string ch (Xml.to_string_fmt xml_map)
-      end;
-      write_module_sigs !out lang_interfaces
+      end
 end
 
 module MakeStr(L : LanguageType) =
