@@ -315,7 +315,7 @@ let rec default_type : DBus.typ -> mono = function
 let parse_module_sigs f = Tree.empty
 
 let correct_module_name = String.capitalize
-let camlify name = Util.join (Util.split_upper name) "_"
+let camlify name = Util.ljoin "_" (Util.split_upper name)
 let correct_signal_name = camlify
 let correct_method_name = camlify
 
