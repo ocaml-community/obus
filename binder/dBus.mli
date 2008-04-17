@@ -7,7 +7,7 @@
  * This file is a part of obus, a ocaml implemtation of dbus.
  *)
 
-type dbus_type =
+type typ =
   | Tbyte
   | Tboolean
   | Tint16
@@ -20,7 +20,15 @@ type dbus_type =
   | Tstring
   | Tsignature
   | Tobject_path
-  | Tarray of dbus_type
-  | Tdict of dbus_type * dbus_type
-  | Tstruct of dbus_type list
+  | Tarray of typ
+  | Tdict of typ * typ
+  | Tstruct of typ list
   | Tvariant
+
+val type_of_string : string -> typ
+  (** [type_of_string str] Convert a dbus type representation with
+      type codes into the caml represention *)
+
+val string_of_type : typ -> string
+  (** [string_of_type typ] Inverse of type_from_string *)
+

@@ -9,11 +9,7 @@
 
 open Camlp4.PreCast
 
-type caml_expr = Ast.expr
-type caml_type = Ast.ctyp
-type caml_patt = Ast.patt
-
-type var = string
+type expr = Ast.expr
 
 type dbus_type =
   | Tbyte
@@ -35,20 +31,15 @@ type dbus_type =
   | Tcons
   | Tnil
 
-type term_type =
-  | Caml_id of Ast.ident
-  | DBus_id of dbus_type
-
 module Gen = Generate.Make
   (struct
      type var = string
-     type t = term_type
+     type left = dbus_type
+     type right = string
    end)
   (struct
-     type t = caml_expr
+     type t = expr
    end)
-
-let _loc = Loc.ghost
 
 let f0 f = function
   | [] -> f
@@ -66,466 +57,398 @@ let f3 f = function
   | [x; y; z] -> f x y z
   | _ -> assert false
 
-let t0 t = `Term(DBus_id t, [])
-let t1 t x = `Term(DBus_id t, [x])
-let t2 t x y = `Term(DBus_id t, [x; y])
-let t3 t x y z = `Term(DBus_id t, [x; y; z])
+type var = [ `Var of string ]
+type 'a typ = [ `RTerm of string * 'a list ]
+type poly = Gen.rpattern
+type mono = Gen.rterm
 
-type reader =
-    { reader_from : Gen.pattern;
-      reader_vars : Gen.pattern list;
-      reader_expr : caml_expr list -> caml_expr }
+type module_str = Ast.str_item
+type module_sig = mono Interface.t
 
-let rec split_at n l = match n, l with
-  | (0, l) -> ([], l)
-  | (n, x :: l) -> let b, e = split_at (n-1) l in (x :: b, e)
-  | _ -> raise (Invalid_argument "split_at")
+let t0 id = `RTerm(id, [])
+let t1 id a0 = `RTerm(id, [a0])
+let t2 id a0 a1 = `RTerm(id, [a0; a1])
+let t3 id a0 a1 a2 = `RTerm(id, [a0; a1; a2])
 
-let rec split_with_motif m l =
-  let rec aux m l = match m, l with
-    | [], l -> ([], l)
-    | _ :: m, e :: l -> let la, lb = aux m l in (e :: la, lb)
-    | _ -> assert false
-  in
-    match m, l with
-      | [], [] -> []
-      | tm :: hm, l -> let la, lb = aux tm l in la :: split_with_motif hm lb
-      | _ -> assert false
+let make_type id args = `RTerm(id, args)
 
-let split2 a b l = f2 (fun x y -> (x, y)) (split_with_motif [a; b] l)
-let split3 a b c l = f3 (fun x y z -> (x, y, z)) (split_with_motif [a; b; c] l)
+let v x = `Var(x)
+let int = t0 "int"
+let int32 = t0 "int32"
+let int64 = t0 "int64"
+let float = t0 "float"
+let bool = t0 "bool"
+let char = t0 "char"
+let string = t0 "string"
+let list x = t1 "list" x
+let array x = t1 "array" x
+let dbus_value = t0 "OBus.dbus_value"
+let dbus_type = t0 "OBus.dbus_type"
+let tuple (l : 'a list) : [> 'a typ ] = match l with
+  | [] -> t0 "unit"
+  | [t] -> t
+  | _ :: _ :: _ -> List.fold_right (fun t acc -> t2 "*cons" t acc) l (t0 "*nil")
 
+let _loc = Loc.ghost
 
-let rec signature_of_term : Gen.pattern -> string = function
-  | `Term(DBus_id t, args) -> begin match t, args with
-      | Tbyte, [] -> "y"
-      | Tboolean, [] -> "b"
-      | Tint16, [] -> "n"
-      | Tuint16, [] -> "q"
-      | Tint32, [] -> "i"
-      | Tuint32, [] -> "u"
-      | Tint64, [] -> "x"
-      | Tuint64, [] -> "t"
-      | Tdouble, [] -> "d"
-      | Tstring, [] -> "s"
-      | Tobject_path, [] -> "o"
-      | Tsignature, [] -> "g"
-      | Tarray, [x] -> "a" ^ signature_of_term x
-      | Tdict, [k; v] -> "a{" ^ signature_of_term k ^ signature_of_term v ^ "}"
-      | Tstruct, [x] -> "(" ^ signature_of_term x ^ ")"
-      | Tvariant, [] -> "v"
-      | Tcons, [a; b] -> signature_of_term a ^ signature_of_term b
-      | _ -> raise (Invalid_argument "signature_of_term")
-    end
-  | _ -> raise (Invalid_argument "signature_of_term")
+let dbyte = `LTerm(Tbyte, [])
+let dboolean = `LTerm(Tboolean, [])
+let dint16 = `LTerm(Tint16, [])
+let dint32 = `LTerm(Tint32, [])
+let dint64 = `LTerm(Tint64, [])
+let duint16 = `LTerm(Tuint16, [])
+let duint32 = `LTerm(Tuint32, [])
+let duint64 = `LTerm(Tuint64, [])
+let ddouble = `LTerm(Tdouble, [])
+let dstring = `LTerm(Tstring, [])
+let dsignature = `LTerm(Tsignature, [])
+let dobject_path = `LTerm(Tobject_path, [])
+let darray x = `LTerm(Tarray, [x])
+let ddict k v = `LTerm(Tdict, [k; v])
+let dstruct l = `LTerm(Tstruct, [l])
+let dvariant = `LTerm(Tvariant, [])
+let dcons e l = `LTerm(Tcons, [e; l])
+let dnil = `LTerm(Tnil, [])
 
-let pattern_from_caml_type t : Gen.pattern =
-  let rec aux : caml_type -> (Gen.pattern list * term_type) = function
-    | (<:ctyp< $id:t$ >>) -> ([], Caml_id t)
-    | (<:ctyp< $a$ $b$ >>) -> let args, id = aux b in
-        (aux2 a :: args, id)
-    | _ -> raise (Invalid_argument "caml_type")
-  and aux2 : caml_type -> Gen.pattern = function
-    | (<:ctyp< '$a$ >>) -> `Var(a)
-    | t -> let args, id = aux t in
-        `Term(id, args)
-  in
-    aux2 t
+type reader_generator = DBus.typ -> mono -> expr
+type writer_generator = mono -> DBus.typ -> expr
+type convertion_rule = reader_generator -> writer_generator -> Gen.generator * Gen.generator
 
-let rint16 =
-  { reader_from = t0 Tint16;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_int16 >> }
-let rint32 =
-  { reader_from = t0 Tint32;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_int32 >> }
-let rint64 =
-  { reader_from = t0 Tint64;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_int64 >> }
-let ruint16 =
-  { reader_from = t0 Tuint16;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_uint16 >> }
-let ruint32 =
-  { reader_from = t0 Tuint32;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_uint32 >> }
-let ruint64 =
-  { reader_from = t0 Tuint64;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_uint64 >> }
-let rint32_as_int32 =
-  { reader_from = t0 Tint32;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_int32_as_int32 >> }
-let rint64_as_int64 =
-  { reader_from = t0 Tint64;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_int64_as_int64 >> }
-let ruint32_as_int32 =
-  { reader_from = t0 Tuint32;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_uint32_as_int32 >> }
-let ruint64_as_int64 =
-  { reader_from = t0 Tuint64;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_uint64_as_int64 >> }
-let rsignature =
-  { reader_from = t0 Tsignature;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_signature >> }
-let rsignature_as_string =
-  { reader_from = t0 Tsignature;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_signature_as_string >> }
-let rbyte =
-  { reader_from = t0 Tbyte;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_byte >> }
-let rboolean =
-  { reader_from = t0 Tboolean;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_boolean >> }
-let rdouble =
-  { reader_from = t0 Tdouble;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_double >> }
-let rstring =
-  { reader_from = t0 Tstring;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_string >> }
-let robject_path =
-  { reader_from = t0 Tobject_path;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_object_path >> }
-let rarray elt_reader f x =
-  { reader_from = t1 Tarray elt_reader.reader_from;
-    reader_vars = elt_reader.reader_vars;
-    reader_expr = (fun l -> <:expr< read_array $elt_reader.reader_expr l$ $f$ $x$ >>) }
-let rdict key_reader val_reader f x =
-  { reader_from = t2 Tdict key_reader.reader_from val_reader.reader_from;
-    reader_vars = key_reader.reader_vars @ val_reader.reader_vars;
-    reader_expr = (fun l ->
-                     let key_args, val_args = split2 key_reader.reader_vars val_reader.reader_vars l in
-                       <:expr< read_dict
-                         $key_reader.reader_expr key_args$
-                         $val_reader.reader_expr val_args$
-                         $f$ $x$ >>) }
-let rstruct reader =
-  { reader_from = t1 Tstruct reader.reader_from;
-    reader_vars = reader.reader_vars;
-    reader_expr = (fun l -> <:expr< read_struct $reader.reader_expr l$ >>) }
-let rvariant =
-  { reader_from = t0 Tvariant;
-    reader_vars = [];
-    reader_expr = f0 <:expr< read_variant >> }
-let rfixed_variant chooser branches =
-  { reader_from = t0 Tvariant;
-    reader_vars = [];
-    reader_expr =
-      f0 (Ast.ExMat(_loc,
-                    chooser,
-                    List.fold_left begin fun expr (patt, reader) ->
-                      Ast.McOr(_loc,
-                               Ast.McArr(_loc,
-                                         patt,
-                                         Ast.ExNil _loc,
-                                         <:expr< read_fixed_variant
-                                           $str:signature_of_term reader.reader_from$
-                                           $reader.reader_expr []$ >>),
-                               expr)
-                    end (Ast.McNil _loc) branches)) }
-let rseq readers result =
-  List.fold_right begin fun (patt, reader) acc ->
-    { reader_from = t2 Tcons reader.reader_from acc.reader_from;
-      reader_vars = reader.reader_vars @ acc.reader_vars;
-      reader_expr = fun l ->
-        let la, lb = split2 reader.reader_vars acc.reader_vars l in
-          <:expr<
-            let i, $patt$ = $reader.reader_expr la$ i in
-              $acc.reader_expr lb$ i >> }
-  end readers { reader_from = t0 Tnil;
-                reader_vars = [];
-                reader_expr = f0 result }
-let rbind r v e =
-  { reader_from = r.reader_from;
-    reader_vars = r.reader_vars;
-    reader_expr = begin fun l ->
+let rec term_of_dbus_type = function
+  | DBus.Tbyte -> dbyte
+  | DBus.Tboolean -> dboolean
+  | DBus.Tint16 -> dint16
+  | DBus.Tuint16 -> duint16
+  | DBus.Tint32 -> dint32
+  | DBus.Tuint32 -> duint32
+  | DBus.Tint64 -> dint64
+  | DBus.Tuint64 -> duint64
+  | DBus.Tdouble -> ddouble
+  | DBus.Tstring -> dstring
+  | DBus.Tobject_path -> dobject_path
+  | DBus.Tsignature -> dsignature
+  | DBus.Tarray(x) -> darray (term_of_dbus_type x)
+  | DBus.Tdict(k, v) -> ddict (term_of_dbus_type k) (term_of_dbus_type v)
+  | DBus.Tstruct(l) -> dstruct (List.fold_right (fun x acc -> dcons (term_of_dbus_type x) acc) l dnil)
+  | DBus.Tvariant -> dvariant
+
+let make_rule left right vars reader writer =
+  (Gen.make_generator left right vars reader,
+   Gen.make_generator left right vars writer)
+
+let rule_any (ctyp : poly) (ctyp_from : poly) read write _ _ =
+  let rtype = ctyp_from
+  and rvars = [ctyp_from]
+  and rreader = f1 (fun reader -> <:expr< fun i -> let i, v = $reader$ i in (i, $read$ v) >>)
+  and rwriter = f1 (fun writer -> <:expr< fun v i -> $writer$ ($write$ v) i >>) in
+    make_rule (rtype : poly :> Gen.pattern) ctyp rvars rreader rwriter
+
+let rule_array (ctyp : poly) (etyp : poly) empty add fold _ _ =
+  let rtype = darray (etyp : poly :> Gen.pattern)
+  and rvars = [etyp]
+  and rreader = f1 (fun ereader -> <:expr< read_array $ereader$ $empty$ $add$ >>)
+  and rwriter = f1 (fun ewriter -> <:expr< write_array $ewriter$ $fold$ >>) in
+    make_rule rtype ctyp rvars rreader rwriter
+
+let rule_dict (ctyp : poly) (ktyp : poly) (vtyp : poly) empty add fold _ _ =
+  let rtype = ddict (ktyp : poly :> Gen.pattern) (vtyp : poly :> Gen.pattern)
+  and rvars = [ktyp; vtyp]
+  and rreader = f2 (fun kreader vreader -> <:expr< read_dict $kreader$ $vreader$ $empty$ $add$ >>)
+  and rwriter = f2 (fun kwriter vwriter -> <:expr< write_array $kwriter$ $vwriter$ $fold$ >>) in
+    make_rule rtype ctyp rvars rreader rwriter
+
+let rule_record (ctyp : poly) (fields : (string * poly) list) _ _ =
+  let rtype = List.fold_right (fun (_, ctyp) acc -> dcons (ctyp : poly :> Gen.pattern) acc) fields dnil
+  and rvars = List.map snd fields;
+  and rreader = fun l ->
+    let l_with_names =
+      snd (List.fold_right begin fun reader (i, l) ->
+             (i + 1, ("v" ^ string_of_int i, reader) :: l)
+           end l (0, [])) in
+      List.fold_right begin fun (name, reader) acc ->
+        (<:expr< fun i ->
+           let i, $uid:name$ = $reader$ i in
+             $acc$ >>)
+      end l_with_names
+        (Ast.ExTup(_loc,
+                   Ast.ExCom(_loc,
+                             Ast.ExId(_loc, Ast.IdLid(_loc, "i")),
+                             (Ast.ExRec(_loc,
+                                        (List.fold_left2
+                                           (fun acc (field_name, _) (var_name, _) ->
+                                              Ast.RbSem(_loc,
+                                                        Ast.RbEq(_loc,
+                                                                 Ast.IdLid(_loc, field_name),
+                                                                 Ast.ExId(_loc, Ast.IdLid(_loc, var_name))),
+                                                        acc))
+                                           (Ast.RbNil _loc) fields l_with_names),
+                                        Ast.ExNil _loc)))))
+  and rwriter = fun l ->
+    <:expr< (fun v i ->
+               $(List.fold_right2 begin fun (name, _) writer acc ->
+                   <:expr<
+                     let i = $writer$ (v . $lid:name$) i in
+                       $acc$ >>
+                 end fields l <:expr< i >>)$)
+    >> in
+    make_rule rtype ctyp rvars rreader rwriter
+
+let rule_variant (ctyp : poly) (variants : (int * string * DBus.typ * mono) list) gen_reader gen_writer =
+  let rtype : Gen.pattern = dcons (int : mono :> Gen.pattern) (dcons dvariant dnil)
+  and rvars = [(int : mono :> poly)]
+  and rreader = f1 begin fun int_reader ->
+    let match_expr =
+      Ast.ExMat(_loc,
+                Ast.ExId(_loc, Ast.IdLid(_loc, "chooser")),
+                List.fold_left begin fun expr (n, cstr, dbust, paramt) ->
+                  Ast.McOr(_loc,
+                           Ast.McArr(_loc,
+                                     Ast.PaInt(_loc, string_of_int n),
+                                     Ast.ExNil _loc,
+                                     let reader = gen_reader dbust paramt in
+                                       <:expr< let i, v =
+                                         read_fixed_variant $str:DBus.string_of_type dbust$ $reader$ i in
+                                         (i, $uid:cstr$(v)) >>),
+                           expr)
+                end (Ast.McNil _loc) variants) in
       <:expr< fun i ->
-        let i, $v$ = $r.reader_expr l$ i in
-          i, $e$ >>
-    end }
-let rcaml t =
-  let rp = pattern_from_caml_type t in
-    { reader_from = rp;
-      reader_vars = [rp];
-      reader_expr = f1 (fun x -> x) }
-let rv x =
-  { reader_from = `Var(x);
-    reader_vars = [`Var(x)];
-    reader_expr = f1 (fun x -> x) }
+        let i, chooser = $int_reader$ i in
+          $match_expr$ >>
+  end
+  and rwriter = f1 begin fun int_writer ->
+    let match_expr =
+      Ast.ExMat(_loc,
+                Ast.ExId(_loc, Ast.IdLid(_loc, "v")),
+                List.fold_left begin fun expr (n, cstr, dbust, paramt) ->
+                  Ast.McOr(_loc,
+                           Ast.McArr(_loc,
+                                     Ast.PaApp(_loc,
+                                               Ast.PaId(_loc, Ast.IdUid(_loc, cstr)),
+                                               Ast.PaId(_loc, Ast.IdLid(_loc, "x"))),
+                                     Ast.ExNil _loc,
+                                     let writer = gen_writer paramt dbust in
+                                       <:expr< let i = $int_writer$ $int:string_of_int n$ i in
+                                         write_fixed_variant $str:DBus.string_of_type dbust$ $writer$ x i >>),
+                           expr)
+                end (Ast.McNil _loc) variants) in
+      <:expr< fun i -> $match_expr$ >> end in
+    make_rule rtype ctyp rvars rreader rwriter
 
-type reading_rule = Gen.generator
 
-let make_reading_rule reader caml_type =
-  Gen.make_generator
-    reader.reader_from
-    (pattern_from_caml_type caml_type)
-    reader.reader_vars
-    reader.reader_expr
+let rule_basic (ctyp : mono) (dtyp : Gen.lterm) reader writer _ _ =
+  let rtype = (dtyp : Gen.lterm :> Gen.pattern)
+  and rvars = []
+  and rreader = f0 <:expr< $lid:reader$ >>
+  and rwriter = f0 <:expr< $lid:writer$ >> in
+    make_rule rtype (ctyp : mono :> poly) rvars rreader rwriter
 
-let (-->) a b = make_reading_rule a b
+let rule_map key_type mod_name =
+  rule_dict (t1 (mod_name ^ ".t") (v"x")) key_type (v"x")
+    (<:expr< $uid:mod_name$ . empty >>)
+    (<:expr< $uid:mod_name$ . add >>)
+    (<:expr< $uid:mod_name$ . fold >>)
 
-let default_reading_rules = [
-  rbyte --> <:ctyp< char >>;
-  rboolean --> <:ctyp< bool >>;
-  rint16 --> <:ctyp< int >>;
-  rint32 --> <:ctyp< int >>;
-  rint64 --> <:ctyp< int >>;
-  rint32_as_int32 --> <:ctyp< int32 >>;
-  rint64_as_int64 --> <:ctyp< int64 >>;
-  ruint16 --> <:ctyp< int >>;
-  ruint32 --> <:ctyp< int >>;
-  ruint64 --> <:ctyp< int >>;
-  ruint32_as_int32 --> <:ctyp< int32 >>;
-  ruint64_as_int64 --> <:ctyp< int64 >>;
-  rdouble --> <:ctyp< float >>;
-  rstring --> <:ctyp< string >>;
-  rsignature_as_string --> <:ctyp< string >>;
-  rsignature --> <:ctyp< OBus.dbus_type >>;
-  robject_path --> <:ctyp< string >>;
-  rarray (rv"a") <:expr< (::) >> <:expr< [] >> --> <:ctyp< 'a list >>;
-  rdict (rv"k") (rv"v") <:expr< fun k v l -> (k, v) :: l >> <:expr< [] >> --> <:ctyp< ('k, 'v) list >>;
-  rvariant --> <:ctyp< OBus.dbus_value >>;
-  rbind rbyte <:patt< x >> <:expr< int_of_char x >> --> <:ctyp< char >>
+let default_rules =
+  [ (fun _ _ ->
+       make_rule (dstruct (v"x")) (v"x") [v"x"]
+         (f1 (fun r -> <:expr< read_struct $r$ >>))
+         (f1 (fun w -> <:expr< write_struct $w$ >>)));
+    rule_basic int dint16 "read_int16" "write_int16";
+    rule_basic int duint16 "read_uint16" "write_uint16";
+    rule_basic int dint32 "read_int32" "write_int32";
+    rule_basic int duint32 "read_uint32" "write_uint32";
+    rule_basic int dint64 "read_int32" "write_int64";
+    rule_basic int duint64 "read_uint32" "write_uint64";
+    rule_basic int32 dint32 "read_int32_as_int32" "write_int32_from_int32";
+    rule_basic int32 duint32 "read_uint32_as_int32" "write_uint32_from_int32";
+    rule_basic int64 dint64 "read_int64_as_int64" "write_int64_from_int64";
+    rule_basic int64 duint64 "read_uint64_as_int64" "write_uint64_from_int64";
+    rule_basic char dbyte "read_byte" "write_byte";
+    rule_any (int : mono :> poly) (char : mono :> poly) (<:expr< int_of_char >>) (<:expr< char_of_int >>);
+    rule_basic bool dboolean "read_boolean" "write_boolean";
+    rule_basic float ddouble "read_double" "write_double";
+    rule_basic string dstring "read_string" "write_string";
+    rule_basic dbus_type dsignature "read_signature" "write_signature";
+    rule_basic string dsignature "read_signature_as_string" "write_signature_from_string";
+    rule_basic string dobject_path "read_object_path" "write_object_path";
+    rule_array (list (v"x")) (v"x") (<:expr< [] >>) (<:expr< ( :: ) >>)
+      (<:expr< (fun f x l -> List.fold_left (fun acc e -> f e acc) x l) >>);
+    rule_dict (list (tuple [v"x"; v"y"])) (v"x") (v"y") (<:expr< [] >>)
+      (<:expr< (fun k v l -> (k, v) :: l) >>)
+      (<:expr< (fun f x l -> List.fold_left (fun acc (k, v) -> f k v acc)) >>);
+  ]
+
+exception Cannot_generate
+
+let rec generate_reader rules dbust (camlt : mono) =
+  let gr, gw = generate_reader rules, generate_writer rules in
+  let rules = List.map (fun r -> fst (r gr gw)) rules in
+    match Gen.generate rules (term_of_dbus_type dbust) camlt with
+      | Some(v) -> v
+      | None -> raise Cannot_generate
+
+and generate_writer rules (camlt : mono) dbust =
+  let gr, gw = generate_reader rules, generate_writer rules in
+  let rules = List.map (fun r -> snd (r gr gw)) rules in
+    match Gen.generate rules (term_of_dbus_type dbust) camlt with
+      | Some(v) -> v
+      | None -> raise Cannot_generate
+
+let rec default_type : DBus.typ -> mono = function
+  | DBus.Tbyte -> char
+  | DBus.Tboolean -> bool
+  | DBus.Tint16 -> int
+  | DBus.Tuint16 -> int
+  | DBus.Tint32 -> int
+  | DBus.Tuint32 -> int
+  | DBus.Tint64 -> int64
+  | DBus.Tuint64 -> int64
+  | DBus.Tdouble -> float
+  | DBus.Tstring -> string
+  | DBus.Tobject_path -> string
+  | DBus.Tsignature -> dbus_type
+  | DBus.Tarray(x) -> list (default_type x)
+  | DBus.Tdict(k, v) -> list (tuple [default_type k; default_type v])
+  | DBus.Tstruct(l) -> tuple (List.map default_type l)
+  | DBus.Tvariant -> dbus_value
+
+let parse_module_sigs f = Tree.empty
+
+let camlify_name name =
+  let len = String.length name in
+  let result = String.create (len * 2) in
+  let rec aux previous_is_upper i j =
+    if i = len
+    then j
+    else let ch = name.[i] in
+      if (ch >= 'A' && ch <= 'Z')
+      then begin
+        let j = if previous_is_upper then j else (result.[j] <- '_'; j + 1) in
+          result.[j] <- Char.lowercase ch;
+          aux true (i + 1) (j + 1)
+      end else begin
+        result.[j] <- ch;
+        aux false (i + 1) (j + 1)
+      end in
+  let len_result = aux true 0 0 in
+    String.sub result 0 len_result
+
+let with_labels = ref false
+let no_cascade = ref false
+
+let args = [
+  ("-label", Arg.Set with_labels, "use labels");
+  ("-same-level", Arg.Set no_cascade, "do not include interface in each other")
 ]
 
-let rec term_from_dbus_type : DBus.dbus_type -> Gen.term = function
-  | DBus.Tbyte -> t0 Tbyte
-  | DBus.Tboolean -> t0 Tboolean
-  | DBus.Tint16 -> t0 Tint16
-  | DBus.Tint32 -> t0 Tint32
-  | DBus.Tint64 -> t0 Tint64
-  | DBus.Tuint16 -> t0 Tuint16
-  | DBus.Tuint32 -> t0 Tuint32
-  | DBus.Tuint64 -> t0 Tuint64
-  | DBus.Tdouble -> t0 Tdouble
-  | DBus.Tstring -> t0 Tstring
-  | DBus.Tsignature -> t0 Tsignature
-  | DBus.Tobject_path -> t0 Tobject_path
-  | DBus.Tarray(t) -> t1 Tarray (term_from_dbus_type t)
-  | DBus.Tdict(tk, tv) -> t2 Tdict (term_from_dbus_type tk) (term_from_dbus_type tv)
-  | DBus.Tstruct(tl) ->
-      t1 Tstruct (List.fold_right (fun t acc ->
-                                     t2 Tcons (term_from_dbus_type t) acc)
-                    tl (t0 Tnil))
-(*                             match tl with
-                               | [] -> []
-                               | x::l -> [List.fold_left (fun l x -> `Term(Tcons,  from_dbus_type t])*)
-  | DBus.Tvariant -> t0 Tvariant
+module Print (File : sig val ch : out_channel end) =
+struct
+  let print fmt = Printf.fprintf File.ch fmt
 
-let term_from_caml_type (t : caml_type) : Gen.term =
-  let rec aux : caml_type -> (Gen.term list * term_type) = function
-    | (<:ctyp< $id:t$ >>) -> ([], Caml_id t)
-    | (<:ctyp< $a$ $b$ >>) -> let args, id = aux b in
-        (aux2 a :: args, id)
-    | _ -> raise (Invalid_argument "caml_type")
-  and aux2 (t : caml_type) : Gen.term  =
-    let args, id = aux t in
-      `Term(id, args)
-  in
-    aux2 t
+  let print_seq null b e sep f = function
+    | [] -> print null
+    | [t] -> f t
+    | t :: l ->
+        print b;
+        f t;
+        List.iter (fun t -> print sep; f t) l;
+        print e
 
-let generate_reader rules dbust camlt =
-  Gen.generate rules (term_from_dbus_type dbust) (term_from_caml_type camlt)
+  let print_mult f = function
+    | [] -> ()
+    | [e] -> f e
+    | e :: l -> f e; List.iter (fun e -> print "\n"; f e) l
 
-type writer =
-    { writer_to : Gen.pattern;
-      writer_vars : Gen.pattern list;
-      writer_expr : caml_expr list -> caml_expr }
+  let rec list_of_tuple : mono -> mono list = function
+    | `RTerm("*nil", []) -> []
+    | `RTerm("*cons", [t; tl]) -> t :: list_of_tuple tl
+    | _ -> assert false
 
-let wint16 =
-  { writer_to = t0 Tint16;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_int16 >> }
-let wint32 =
-  { writer_to = t0 Tint32;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_int32 >> }
-let wint64 =
-  { writer_to = t0 Tint64;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_int64 >> }
-let wuint16=
-  { writer_to = t0 Tuint16;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_uint16 >> }
-let wuint32=
-  { writer_to = t0 Tuint32;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_uint32 >> }
-let wuint64=
-  { writer_to = t0 Tuint64;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_uint64 >> }
-let wint32_from_int32 =
-  { writer_to = t0 Tint32;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_int32_from_int32 >> }
-let wint64_from_int64 =
-  { writer_to = t0 Tint64;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_int64_from_int64 >> }
-let wuint32_from_int32 =
-  { writer_to = t0 Tuint32;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_uint32_from_int32 >> }
-let wuint64_from_int64 =
-  { writer_to = t0 Tuint64;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_uint64_from_int64 >> }
-let wsignature =
-  { writer_to = t0 Tsignature;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_signature >> }
-let wsignature_from_string =
-  { writer_to = t0 Tsignature;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_signature_from_string >> }
-let wbyte =
-  { writer_to = t0 Tbyte;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_byte >> }
-let wboolean =
-  { writer_to = t0 Tboolean;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_boolean >> }
-let wdouble =
-  { writer_to = t0 Tdouble;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_double >> }
-let wstring =
-  { writer_to = t0 Tstring;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_string >> }
-let wobject_path =
-  { writer_to = t0 Tobject_path;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_object_path >> }
-let warray elt_writer fold =
-  { writer_to = t1 Tarray elt_writer.writer_to;
-    writer_vars = elt_writer.writer_vars;
-    writer_expr = fun l ->
-      <:expr< write_array
-        $elt_writer.writer_expr l$
-        $fold$ >> }
-let wdict key_writer val_writer fold =
-  { writer_to = t2 Tdict key_writer.writer_to val_writer.writer_to;
-    writer_vars = key_writer.writer_vars @ val_writer.writer_vars;
-    writer_expr = fun l ->
-      let lk, lv = split2 key_writer.writer_vars val_writer.writer_vars l in
-        <:expr< write_dict
-          $key_writer.writer_expr lk$
-          $val_writer.writer_expr lv$
-          $fold$ >> }
-let wstruct writer =
-  { writer_to = t1 Tstruct writer.writer_to;
-    writer_vars = writer.writer_vars;
-    writer_expr = fun l ->
-      <:expr< write_struct $writer.writer_expr l$ >> }
-let wvariant =
-  { writer_to = t0 Tvariant;
-    writer_vars = [];
-    writer_expr = f0 <:expr< write_variant >> }
-let wfixed_variant branches common_writer =
-  { writer_to = t0 Tvariant;
-    writer_vars = common_writer.writer_vars;
-    writer_expr = fun l ->
-      <:expr< fun x i ->
-        $Ast.ExMat(_loc,
-                   <:expr< x >>,
-                   List.fold_left begin fun acc (patt, common_expr, expr, writer) ->
-                     Ast.McOr(_loc,
-                              Ast.McArr(_loc,
-                                        patt,
-                                        Ast.ExNil _loc,
-                                        <:expr<
-                                          let i = $common_writer.writer_expr l$ $common_expr$ i in
-                                            $writer.writer_expr []$ $expr$ i
-                                            >>),
-                              acc)
-                   end (Ast.McNil _loc) branches)$ >> }
-let wcons a b =
-  { writer_to = t2 Tcons a.writer_to b.writer_to;
-    writer_vars = a.writer_vars @ b.writer_vars;
-    writer_expr = fun l ->
-      let la, lb = split2 a.writer_vars b.writer_vars l in
-        <:expr< fun (x,y) i ->
-          let i = $a.writer_expr la$ x i in
-            $b.writer_expr lb$ x i >> }
-let wcaml t =
-  let rp = pattern_from_caml_type t in
-    { writer_to = rp;
-      writer_vars = [rp];
-      writer_expr = f1 (fun x -> x) }
-let wv v =
-  { writer_to = `Var v;
-    writer_vars = [`Var v];
-    writer_expr = f1 (fun x -> x) }
-let wconv expr writer =
-  { writer_to = writer.writer_to;
-    writer_vars = writer.writer_vars;
-    writer_expr = fun l ->
-      <:expr< fun x -> $writer.writer_expr l$ ($expr$ x) >> }
+  let rec print_type : mono -> unit = function
+    | `RTerm("*nil", []) -> print "unit"
+    | `RTerm("*cons", _) as t -> print_seq "unit" "(" ")" " * " print_type (list_of_tuple t)
+    | `RTerm(t, args) ->
+        print_seq "" "(" ")" ", " print_type args;
+        if args <> [] then print " ";
+        print "%s" t
 
-type writing_rule = Gen.generator
+  let rec print_module indent name (Tree.Node(i, sons)) =
+    let defs = (match i with None -> [] | Some(x) -> x) in
+      if defs <> [] || not !no_cascade
+      then print "%smodule %s : sig\n" indent (String.capitalize name);
+      if defs <> [] then
+        print "%s  type t
 
-let make_writing_rule writer caml_type =
-  Gen.make_generator
-    writer.writer_to
-    (pattern_from_caml_type caml_type)
-    writer.writer_vars
-    writer.writer_expr
+%s  val proxy : OBus.proxy -> t
 
-let generate_writer rules camlt dbust =
-  Gen.generate rules (term_from_dbus_type dbust) (term_from_caml_type camlt)
+" indent indent;
+      print_mult begin function
+        | Interface.Method(name, ins, outs) ->
+            let name = camlify_name name
+            and in_names, in_types = List.split ins
+            and out_names, out_types = List.split outs in
+              print "%s  val %s : t -> " indent name;
+              begin match ins with
+                | [] -> print "unit -> "
+                | _ -> List.iter (fun (name, typ) ->
+                                    if !with_labels then begin
+                                      print "~(%s:" name;
+                                      print_type typ;
+                                      print ")"
+                                    end else
+                                      print_type typ;
+                                    print " -> ") ins
+              end;
+              print_type (tuple out_types);
+              print "\n%s    (** [%s" indent name;
+              print_seq " ()" "" "" "" (print " %s") in_names;
+              print "] result: ";
+              print_seq "()" "" "" ", " (print "%s") out_names;
+              print " *)\n"
+        | Interface.Signal(name, args) ->
+            let name = camlify_name name
+            and arg_names, arg_types = List.split args in
+              print "%s  val %s : " indent name;
+              print_type (t1 "signal" (tuple arg_types));
+              print "\n%s    (** args: " indent;
+              print_seq "()" "" "" ", " (print "%s") arg_names;
+              print " *)\n"
+      end defs;
+      if !no_cascade
+      then begin
+        if defs <> [] then begin
+          print "end\n";
+          if sons <> [] then print "\n"
+        end;
+        print_modules "" name sons;
+      end else begin
+        if defs <> [] && sons <> [] then print "\n";
+        print_modules (indent ^ "  ") name sons;
+        print "%send\n" indent
+      end
+  and print_modules indent name l =
+    print_mult (fun (n, m) ->
+                  if !no_cascade
+                  then print_module "" (if name <> "" then name ^ "_" ^ n else n) m
+                  else print_module indent n m) l
 
-let (<--) a b = make_writing_rule a b
+  let print_file fname mods =
+    print "\
+(*
+ * %s
+ * %s
+ *
+ * File generated with %s.
+ *)
 
-let default_writing_rules = [
-  wbyte <-- <:ctyp< char >>;
-  wboolean <-- <:ctyp< bool >>;
-  wint16 <-- <:ctyp< int >>;
-  wint32 <-- <:ctyp< int >>;
-  wint64 <-- <:ctyp< int >>;
-  wint32_from_int32 <-- <:ctyp< int32 >>;
-  wint64_from_int64 <-- <:ctyp< int64 >>;
-  wuint16 <-- <:ctyp< int >>;
-  wuint32 <-- <:ctyp< int >>;
-  wuint64 <-- <:ctyp< int >>;
-  wuint32_from_int32 <-- <:ctyp< int32 >>;
-  wuint64_from_int64 <-- <:ctyp< int64 >>;
-  wdouble <-- <:ctyp< float >>;
-  wstring <-- <:ctyp< string >>;
-  wsignature_from_string <-- <:ctyp< string >>;
-  wsignature <-- <:ctyp< OBus.dbus_type >>;
-  wobject_path <-- <:ctyp< string >>;
-  warray (wv"a") (<:expr< fun f l x -> List.fold_left f x l >>) <-- <:ctyp< 'a list >>;
-  wdict (wv"k") (wv"v") (<:expr< fun f l x -> List.fold_left (fun acc (k, v) -> f k v acc) f l x >>) <-- <:ctyp< ('k, 'v) list >>;
-  wvariant <-- <:ctyp< OBus.dbus_value >>;
-  wconv <:expr< char_of_int >> (wcaml <:ctyp< char >>) <-- <:ctyp< int >>
-]
+" fname (String.make (String.length fname) '-') (Filename.basename (Sys.argv.(0)));
+    print_modules "" "" mods
+end
 
+let write_module_sigs fname (Tree.Node(_, l)) =
+  Util.with_open_out fname begin fun ch ->
+    let module P = Print(struct let ch = ch end) in
+      P.print_file fname l
+  end
 
-let map_reading mod_name key_type =
-  let mod_expr = <:ident< $uid:String.capitalize mod_name$ >> in
-    rdict (rcaml key_type) (rv"a")
-      (<:expr< $id:mod_expr$ . add >>) (<:expr< $id:mod_expr$ . empty >>)
-    --> Ast.TyId(_loc, Ast.IdAcc(_loc, mod_expr, Ast.IdLid(_loc, "i")))
-
-let map_writing mod_name key_type =
-  let mod_expr = <:ident< $uid:String.capitalize mod_name$ >> in
-    wdict (wcaml key_type) (wv"a")
-      (<:expr< $id:mod_expr$ . fold >>) <-- Ast.TyId(_loc, Ast.IdAcc(_loc, mod_expr, Ast.IdLid(_loc, "i")))
+let write_module_strs fname mstr = ()
