@@ -19,6 +19,10 @@ sig
 
   val parse_module_sigs : string -> module_sig Tree.t
 
+  val correct_module_name : string -> string
+  val correct_signal_name : string -> string
+  val correct_method_name : string -> string
+
   val default_type : DBus.typ -> mono
     (** [default typ] The default type for a dbus type *)
 

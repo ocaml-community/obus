@@ -73,3 +73,7 @@ val write_module_sigs : string -> module_sig Tree.t -> unit
 val write_module_strs : string -> module_str Tree.t -> unit
 
 val args : (Arg.key * Arg.spec * Arg.doc) list
+
+val correct_module_name : string -> string
+val correct_signal_name : string -> string
+val correct_method_name : string -> string

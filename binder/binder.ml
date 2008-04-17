@@ -19,6 +19,10 @@ sig
 
   val parse_module_sigs : string -> module_sig Tree.t
 
+  val correct_module_name : string -> string
+  val correct_signal_name : string -> string
+  val correct_method_name : string -> string
+
   val default_type : DBus.typ -> mono
     (** [default typ] The default type for a dbus type *)
 
@@ -37,13 +41,82 @@ struct
   let permit_default = ref false
   let prefix = ref ["org\\.freedesktop\\."]
   let out = ref "out.mli"
+  let same_level = ref false
 
   let args = [
     ("-skip", Arg.String (fun s -> skipped_interfaces := s :: !skipped_interfaces), "skip interfaces matching regexp");
     ("-allow-default", Arg.Set permit_default, "do not skip default interfaces");
     ("-o", Arg.Set_string out, "output file (default = out.mli)");
-    ("-prefix", Arg.String (fun p -> prefix := p :: !prefix), "prefix to delete from interface names")
+    ("-prefix", Arg.String (fun p -> prefix := p :: !prefix), "prefix to delete from interface names");
+    ("-flat", Arg.Set same_level, "do not include interfaces in each other")
   ] @ L.args
+
+  module PrintAndMap(File : sig val ch : out_channel end) =
+  struct
+    let print fmt = Printf.fprintf File.ch fmt
+
+    let map_default_type l = List.map (fun (name, typ) -> (name, default_type typ)) l
+
+    let print_args l =
+      print "<";
+      let prt (n, t) = print "%s:%s" n (DBus.string_of_type t) in
+        begin match l with
+          | [] -> ()
+          | [nt] -> prt nt
+          | nt :: l -> prt nt; List.iter (fun nt -> print " "; prt nt) l
+        end;
+        print ">"
+
+    let map_interface = function
+      | None -> None
+      | Some(defs) ->
+          Some(List.map begin function
+                 | Interface.Method(dbus_name, ins, outs) ->
+                     let lang_name = correct_method_name dbus_name in
+                       print "  method %s %s " dbus_name lang_name;
+                       print_args ins;
+                       print " ";
+                       print_args outs;
+                       print "\n";
+                       Interface.Method(lang_name, map_default_type ins, map_default_type outs)
+                 | Interface.Signal(dbus_name, args) ->
+                     let lang_name = correct_signal_name dbus_name in
+                       print "  signal %s %s " dbus_name lang_name;
+                       print_args args;
+                       print "\n";
+                       Interface.Signal(lang_name, map_default_type args)
+               end defs)
+
+    let rec map_cascade dbus_names lang_names l =
+      List.map begin fun (dbus_name, Tree.Node(defs, l)) ->
+        let dbus_names = dbus_name :: dbus_names in
+        let complete_dbus_name = Util.join dbus_names "." in
+        let lang_name = correct_module_name dbus_name in
+        let lang_names = lang_name :: lang_names in
+        let complete_lang_name = Util.join lang_names "." in
+          print "interface %s %s {\n" complete_dbus_name complete_lang_name;
+          let defs = map_interface defs in
+            print "end\n";
+            let l = map_cascade dbus_names lang_names l in
+              (lang_name, Tree.Node(defs, l))
+      end l
+
+    let rec map_flatten dbus_names l =
+      List.flatten begin List.map begin fun (dbus_name, Tree.Node(defs, l)) ->
+        let dbus_names = dbus_name :: dbus_names in
+        let complete_dbus_name = Util.join dbus_names "." in
+        let lang_name = correct_module_name (Util.join dbus_names "_") in
+          match defs with
+            | None
+            | Some([]) -> map_flatten dbus_names l
+            | _ ->
+                print "interface %s %s\n" complete_dbus_name lang_name;
+                let defs = map_interface defs in
+                  print "end\n";
+                  let l = map_flatten dbus_names l in
+                    (lang_name, Tree.Node(defs, [])) :: l
+      end l end
+  end
 
   let main () =
     Arg.parse args
@@ -68,9 +141,13 @@ struct
       (List.flatten (List.map (fun fname -> Util.with_open_in fname
                                  (fun ch -> Interface.from_instrospection
                                     (Lexing.from_channel ch))) !xml_fnames)) in
-    let lang_interfaces = Tree.map (Interface.map default_type) dbus_interfaces in
+    let lang_interfaces =
+      Tree.Node(None, Util.with_open_out (!out ^ ".map") (fun ch -> let module PM = PrintAndMap(struct let ch = ch end) in
+                                                          let (Tree.Node(_, l)) = dbus_interfaces in
+                                                            if !same_level
+                                                            then PM.map_flatten [] l
+                                                            else PM.map_cascade [] [] l)) in
       write_module_sigs !out lang_interfaces
-
 end
 
 module MakeStr(L : LanguageType) =
