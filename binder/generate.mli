@@ -10,7 +10,8 @@
 module type TermType =
 sig
   type var
-  type t
+  type right
+  type left
 end
 
 module type ValueType =
@@ -20,16 +21,19 @@ end
 
 module Make (Term : TermType) (Value : ValueType) :
 sig
-  type term =
-      [ `Term of Term.t * term list ]
-
+  type lterm = [ `LTerm of Term.left * lterm list ]
+  type rterm = [ `RTerm of Term.right * rterm list ]
+  type rpattern =
+      [ `RTerm of Term.right * rpattern list
+      | `Var of Term.var ]
   type pattern =
-      [ `Term of Term.t * pattern list
+      [ `LTerm of Term.left * pattern list
+      | `RTerm of Term.right * rpattern list
       | `Var of Term.var ]
 
   type generator
 
-  val make_generator : pattern -> pattern -> pattern list -> (Value.t list -> Value.t) -> generator
+  val make_generator : pattern -> rpattern -> rpattern list -> (Value.t list -> Value.t) -> generator
 
-  val generate : generator list -> term -> term  -> Value.t option
+  val generate : generator list -> lterm -> rterm  -> Value.t option
 end

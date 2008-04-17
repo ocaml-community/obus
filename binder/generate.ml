@@ -10,7 +10,8 @@
 module type TermType =
 sig
   type var
-  type t
+  type left
+  type right
 end
 
 module type ValueType =
@@ -21,17 +22,26 @@ end
 module Make (Term : TermType) (Value : ValueType) =
 struct
   open Term
+
+  type lterm = [ `LTerm of Term.left * lterm list ]
+  type rterm = [ `RTerm of Term.right * rterm list ]
   type term =
-      [ `Term of Term.t * term list ]
-  type pattern =
-      [ `Term of Term.t * pattern list
+      [ `LTerm of Term.left * term list
+      | `RTerm of Term.right * rterm list ]
+  type rpattern =
+      [ `RTerm of Term.right * rpattern list
       | `Var of Term.var ]
-  type eqn = term * term
+  type pattern =
+      [ `LTerm of Term.left * pattern list
+      | `RTerm of Term.right * rpattern list
+      | `Var of Term.var ]
+
+  type eqn = lterm * rterm
   type maker = Value.t list -> Value.t
   type generator = {
     gen_left : pattern;
-    gen_right : pattern;
-    gen_vars : pattern list;
+    gen_right : rpattern;
+    gen_vars : rpattern list;
     gen_maker : maker;
   }
 
@@ -41,15 +51,20 @@ struct
       gen_vars = vars;
       gen_maker = maker }
 
-  type sub = (var * term) list
+  type sub = (var * rterm) list
 
-  let rec substitute sub = function
-    | `Var v -> List.assoc v sub
-    | `Term(name, args) -> `Term(name, List.map (substitute sub) args)
+  let rec substitute_right (sub : sub) : rpattern -> rterm = function
+    | `Var v -> (List.assoc v sub)
+    | `RTerm(name, args) -> `RTerm(name, List.map (substitute_right sub) args)
+
+  let rec substitute (sub : sub) : pattern -> term = function
+    | `Var v -> ((List.assoc v sub) : rterm :> term)
+    | `LTerm(name, args) -> `LTerm(name, List.map (substitute sub) args)
+    | `RTerm(name, args) -> `RTerm(name, List.map (substitute_right sub) args)
 
   exception Cannot_unify
 
-  let unify (pattern : pattern) (term : term) =
+  let unify pattern term =
 
     let add var term sub =
       try
@@ -60,10 +75,10 @@ struct
         | Not_found -> (var, term) :: sub
     in
 
-    let rec aux sub (pattern : pattern) (term : term) =
+    let rec aux sub pattern term =
       match (pattern, term) with
         | `Var v, t -> add v t sub
-        | `Term(ta, arga), `Term(tb, argb) when ta = tb ->
+        | `RTerm(ta, arga), `RTerm(tb, argb) when ta = tb ->
             begin try
               List.fold_left2 aux sub arga argb
             with
@@ -79,28 +94,29 @@ struct
     | Equation of eqn
     | Branches of system list
 
-  and system = System of maker * term list * (term * Value.t) list * (term * equation) list
+  and system = System of maker * rterm list * (rterm * Value.t) list * (rterm * equation) list
 
   type 'a result =
     | Success of Value.t
     | Failure
     | Update of 'a
 
-  let match_term (a : term) (b : term) : (term * equation) list =
-    let rec aux eqns a b =
+  let match_term (a : lterm) (b : term) : (rterm * equation) list =
+    let rec aux (eqns : (rterm * equation) list) (a : lterm) (b : term) : (rterm * equation) list =
       match (a, b) with
-        | `Term(ta, arga), `Term(tb, argb) when ta = tb -> begin try
+        | `LTerm(ta, arga), `LTerm(tb, argb) when ta = tb -> begin try
             List.fold_left2 aux eqns arga argb
           with
             | Invalid_argument _ -> raise Cannot_unify
           end
-        | a, b -> (b, Equation(a, b)) :: eqns
+        | `LTerm _, `LTerm _ -> raise Cannot_unify
+        | a, (#rterm as b) -> (b, Equation(a, b)) :: eqns
     in
       aux [] a b
 
-  let generate (generators : generator list) : term -> term -> Value.t option =
+  let generate generators =
 
-    let gen_branches ((a, b) : eqn) : system list result =
+    let gen_branches (a, b) =
       let rec aux acc = function
         | generator :: generators -> begin
             try
@@ -110,7 +126,7 @@ struct
                   | [] -> Success(generator.gen_maker [])
                   | eqns -> aux
                       (System(generator.gen_maker,
-                              List.map (substitute sub) generator.gen_vars,
+                              List.map (substitute_right sub) generator.gen_vars,
                               [], eqns) :: acc) generators
             with
               | Cannot_unify -> aux acc generators
@@ -123,7 +139,7 @@ struct
         aux [] generators
     in
 
-    let rec one_step_system (System(maker, vars, mapping, eqns)) : system result =
+    let rec one_step_system (System(maker, vars, mapping, eqns)) =
       let rec aux acc mapping = function
         | (t, eqn) :: eqns -> begin match one_step_equation eqn with
             | Success(v) -> aux acc ((t, v) :: mapping) eqns
@@ -137,7 +153,7 @@ struct
       in
         aux [] mapping eqns
 
-    and one_step_equation : equation -> equation result = function
+    and one_step_equation = function
       | Equation(eqn) -> begin match gen_branches eqn with
           | Success(v) -> Success(v)
           | Failure -> Failure
@@ -158,7 +174,7 @@ struct
            aux [] branches
     in
 
-    let rec find (equation : equation) : Value.t option =
+    let rec find equation =
       match one_step_equation equation with
         | Success(v) -> Some(v)
         | Failure -> None
