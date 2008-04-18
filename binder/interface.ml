@@ -70,7 +70,7 @@ let from_instrospection lexbuf =
   let xml = XmlParser.parse xml_parser (XmlParser.SLexbuf lexbuf) in
     match xml with
       | Element("node", _, l) ->
-          Util.Util.filter_map begin function
+          Util.filter_map begin function
             | Element("interface", params, components) ->
                 Some(name params,
                      Util.filter_map begin function
