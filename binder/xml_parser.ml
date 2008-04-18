@@ -62,3 +62,17 @@ let parse xml_parser xml =
   match xml_parser xml with
     | Some(v) -> v
     | None -> raise Parse_failed
+
+let p0 = pn
+let p1 x1 = pc x1 (pn)
+let p2 x2 x1 = pc x2 (pc x1 (pn))
+let p3 x3 x2 x1 = pc x3 (pc x2 (pc x1 (pn)))
+let p4 x4 x3 x2 x1 = pc x4 (pc x3 (pc x2 (pc x1 (pn))))
+let p5 x5 x4 x3 x2 x1 = pc x5 (pc x4 (pc x3 (pc x2 (pc x1 (pn)))))
+
+let s0 = sn
+let s1 x1 = sc x1 (sn)
+let s2 x2 x1 = sc x2 (sc x1 (sn))
+let s3 x3 x2 x1 = sc x3 (sc x2 (sc x1 (sn)))
+let s4 x4 x3 x2 x1 = sc x4 (sc x3 (sc x2 (sc x1 (sn))))
+let s5 x5 x4 x3 x2 x1 = sc x5 (sc x4 (sc x3 (sc x2 (sc x1 (sn)))))

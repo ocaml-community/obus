@@ -56,3 +56,17 @@ val elt : string -> ('a, 'b) param_parser -> ('b, 'c) seq_parser -> 'a -> 'c xml
 val parse : 'a xml_parser -> Xml.xml -> 'a
   (** [parse parser xml] Parse an entire xml document using
       [parser] *)
+
+val p0 : ('a, 'a) param_parser
+val p1 : string -> (string -> 'a, 'a) param_parser
+val p2 : string -> string -> (string -> string -> 'a, 'a) param_parser
+val p3 : string -> string -> string -> (string -> string -> string -> 'a, 'a) param_parser
+val p4 : string -> string -> string -> string -> (string -> string -> string -> string -> 'a, 'a) param_parser
+val p5 : string -> string -> string -> string -> string -> (string -> string -> string -> string -> string -> 'a, 'a) param_parser
+
+val s0 : ('a, 'a) seq_parser
+val s1 : 'a1 seq_elt_parser -> ('a1 -> 'a, 'a) seq_parser
+val s2 : 'a2 seq_elt_parser -> 'a1 seq_elt_parser -> ('a2 -> 'a1 -> 'a, 'a) seq_parser
+val s3 : 'a3 seq_elt_parser -> 'a2 seq_elt_parser -> 'a1 seq_elt_parser -> ('a3 -> 'a2 -> 'a1 -> 'a, 'a) seq_parser
+val s4 : 'a4 seq_elt_parser -> 'a3 seq_elt_parser -> 'a2 seq_elt_parser -> 'a1 seq_elt_parser -> ('a4 -> 'a3 -> 'a2 -> 'a1 -> 'a, 'a) seq_parser
+val s5 : 'a5 seq_elt_parser -> 'a4 seq_elt_parser -> 'a3 seq_elt_parser -> 'a2 seq_elt_parser -> 'a1 seq_elt_parser -> ('a5 -> 'a4 -> 'a3 -> 'a2 -> 'a1 -> 'a, 'a) seq_parser
