@@ -1,5 +1,8 @@
+"pa_seq.ml": camlp4of, use_camlp4
+"dBus.ml": camlp4o, pa_seq
+"lmap.ml": camlp4o, pa_seq
 "test.ml": camlp4of
-"caml.ml": camlp4of
+"caml.ml": camlp4of, pa_seq
 <test.*>: use_camlp4
 <caml.*>: use_camlp4
 <interface.*>: pkg_xml-light

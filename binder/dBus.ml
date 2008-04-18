@@ -115,12 +115,12 @@ type direction = In | Out
 let from_xml xml =
   let get_dir direction args = Util.filter_map
     (fun (dir, arg) -> if dir = direction then Some(arg) else None) args in
-    parse (elt "node" p0
+    parse (elt "node" [<>]
              (s2
-                (any (elt "interface" (p1 "name")
+                (any (elt "interface"  [< "name" >]
                         (s1 (union
-                               [elt "method" (p1 "name")
-                                  (s1 (any (elt "arg" (p3 "name" "direction" "type")
+                               [elt "method" [< "name" >]
+                                  (s1 (any (elt "arg" [< "name"; "direction"; "type" >]
                                               s0
                                               (fun name dir typ ->
                                                  (begin match dir with
@@ -129,13 +129,13 @@ let from_xml xml =
                                                     | _ -> raise Parse_failed
                                                   end, Arg(name, type_of_string typ))))))
                                   (fun name args -> Method(name, get_dir In args, get_dir Out args));
-                                elt "signal" (p1 "name")
-                                  (s1 (any (elt "arg" (p2 "name" "type")
+                                elt "signal" [< "name" >]
+                                  (s1 (any (elt "arg" [< "name"; "type" >]
                                               s0
                                               (fun name typ -> Arg(name, type_of_string typ)))))
                                   (fun name args -> Signal(name, args))]))
                         (fun name defs -> (name, defs))))
-                (any (elt "node" (p1 "name")
+                (any (elt "node" [< "name" >]
                         s0
                         (fun x -> x))))
              (fun interfs _ -> interfs)) xml

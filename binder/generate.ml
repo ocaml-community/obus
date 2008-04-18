@@ -37,19 +37,30 @@ struct
       | `Var of Term.var ]
 
   type eqn = lterm * rterm
-  type maker = Value.t list -> Value.t
-  type generator = {
-    gen_left : pattern;
-    gen_right : rpattern;
-    gen_vars : rpattern list;
-    gen_maker : maker;
-  }
 
-  let make_generator either_pattern right_pattern vars maker =
-    { gen_left = either_pattern;
-      gen_right = right_pattern;
-      gen_vars = vars;
-      gen_maker = maker }
+  type 'a func =
+    | Func of 'a
+    | List of (Value.t list -> Value.t)
+
+  class maker vars maker = object
+    val vars : (rterm, Value.t, 'a, Value.t) Seq.t = vars
+    val maker : 'a func = maker
+    method make mapping =
+      let vars = Seq.map (fun var -> List.assoc var mapping) vars in
+        match maker with
+          | Func f -> Seq.apply f vars
+          | List f -> f (Seq.to_list vars)
+  end
+
+  class generator left right vars maker = object
+    method left : pattern = left
+    method right : rpattern = right
+    val vars : (rpattern, Value.t, 'a, Value.t) Seq.t = vars
+    val maker : 'a func = maker
+    method maker f = new maker (Seq.map f vars) maker
+  end
+
+  let make_generator left right vars maker = new generator left right vars maker
 
   type sub = (var * rterm) list
 
@@ -94,7 +105,7 @@ struct
     | Equation of eqn
     | Branches of system list
 
-  and system = System of maker * rterm list * (rterm * Value.t) list * (rterm * equation) list
+  and system = System of maker * (rterm * Value.t) list * (rterm * equation) list
 
   type 'a result =
     | Success of Value.t
@@ -120,13 +131,12 @@ struct
       let rec aux acc = function
         | generator :: generators -> begin
             try
-              let sub = unify generator.gen_right b in
-              let left = substitute sub generator.gen_left in
+              let sub = unify generator#right b in
+              let left = substitute sub generator#left in
                 match match_term a left with
-                  | [] -> Success(generator.gen_maker [])
+                  | [] -> Success((generator#maker (substitute_right []))#make [])
                   | eqns -> aux
-                      (System(generator.gen_maker,
-                              List.map (substitute_right sub) generator.gen_vars,
+                      (System(generator#maker (substitute_right sub),
                               [], eqns) :: acc) generators
             with
               | Cannot_unify -> aux acc generators
@@ -139,7 +149,7 @@ struct
         aux [] generators
     in
 
-    let rec one_step_system (System(maker, vars, mapping, eqns)) =
+    let rec one_step_system (System(maker, mapping, eqns)) =
       let rec aux acc mapping = function
         | (t, eqn) :: eqns -> begin match one_step_equation eqn with
             | Success(v) -> aux acc ((t, v) :: mapping) eqns
@@ -147,8 +157,8 @@ struct
             | Update(eqn) -> aux ((t, eqn) :: acc) mapping eqns
           end
         | [] -> begin match acc with
-            | [] -> Success(maker (List.map (fun var -> List.assoc var mapping) vars))
-            | _ -> Update(System(maker, vars, mapping, acc))
+            | [] -> Success(maker#make mapping)
+            | _ -> Update(System(maker, mapping, acc))
           end
       in
         aux [] mapping eqns

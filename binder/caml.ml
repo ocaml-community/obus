@@ -41,29 +41,10 @@ module Gen = Generate.Make
      type t = expr
    end)
 
-let f0 f = function
-  | [] -> f
-  | _ -> assert false
-
-let f1 f = function
-  | [x] -> f x
-  | _ -> assert false
-
-let f2 f = function
-  | [x; y] -> f x y
-  | _ -> assert false
-
-let f3 f = function
-  | [x; y; z] -> f x y z
-  | _ -> assert false
-
 type var = [ `Var of string ]
 type 'a typ = [ `RTerm of string * 'a list ]
 type poly = Gen.rpattern
 type mono = Gen.rterm
-
-type module_str = Ast.str_item
-type module_sig = mono Interface.t
 
 let t0 id = `RTerm(id, [])
 let t1 id a0 = `RTerm(id, [a0])
@@ -138,29 +119,30 @@ let make_rule left right vars reader writer =
 
 let rule_any (ctyp : poly) (ctyp_from : poly) read write _ _ =
   let rtype = ctyp_from
-  and rvars = [ctyp_from]
-  and rreader = f1 (fun reader -> <:expr< fun i -> let i, v = $reader$ i in (i, $read$ v) >>)
-  and rwriter = f1 (fun writer -> <:expr< fun v i -> $writer$ ($write$ v) i >>) in
-    make_rule (rtype : poly :> Gen.pattern) ctyp rvars rreader rwriter
+  and rvars = [< ctyp_from >]
+  and rreader reader = <:expr< fun i -> let i, v = $reader$ i in (i, $read$ v) >>
+  and rwriter writer = <:expr< fun v i -> $writer$ ($write$ v) i >> in
+    make_rule (rtype : poly :> Gen.pattern) ctyp rvars (Gen.Func rreader) (Gen.Func rwriter)
 
 let rule_array (ctyp : poly) (etyp : poly) empty add fold _ _ =
   let rtype = darray (etyp : poly :> Gen.pattern)
-  and rvars = [etyp]
-  and rreader = f1 (fun ereader -> <:expr< read_array $ereader$ $empty$ $add$ >>)
-  and rwriter = f1 (fun ewriter -> <:expr< write_array $ewriter$ $fold$ >>) in
-    make_rule rtype ctyp rvars rreader rwriter
+  and rvars = [< etyp >]
+  and rreader ereader = <:expr< read_array $ereader$ $empty$ $add$ >>
+  and rwriter ewriter = <:expr< write_array $ewriter$ $fold$ >> in
+    make_rule rtype ctyp rvars (Gen.Func rreader) (Gen.Func rwriter)
 
 let rule_dict (ctyp : poly) (ktyp : poly) (vtyp : poly) empty add fold _ _ =
   let rtype = ddict (ktyp : poly :> Gen.pattern) (vtyp : poly :> Gen.pattern)
-  and rvars = [ktyp; vtyp]
-  and rreader = f2 (fun kreader vreader -> <:expr< read_dict $kreader$ $vreader$ $empty$ $add$ >>)
-  and rwriter = f2 (fun kwriter vwriter -> <:expr< write_array $kwriter$ $vwriter$ $fold$ >>) in
-    make_rule rtype ctyp rvars rreader rwriter
+  and rvars = [< ktyp; vtyp >]
+  and rreader kreader vreader = <:expr< read_dict $kreader$ $vreader$ $empty$ $add$ >>
+  and rwriter kwriter vwriter = <:expr< write_array $kwriter$ $vwriter$ $fold$ >> in
+    make_rule rtype ctyp rvars (Gen.Func rreader) (Gen.Func rwriter)
 
-let rule_record (ctyp : poly) (fields : (string * poly) list) _ _ =
+let rule_record (ctyp : poly) (field_seq : (string * poly, expr, 'a, expr) Seq.t) _ _ =
+  let fields = Seq.to_list field_seq in
   let rtype = List.fold_right (fun (_, ctyp) acc -> dcons (ctyp : poly :> Gen.pattern) acc) fields dnil
-  and rvars = List.map snd fields;
-  and rreader = fun l ->
+  and rvars = Seq.map snd field_seq;
+  and rreader l =
     let l_with_names =
       snd (List.fold_right begin fun reader (i, l) ->
              (i + 1, ("v" ^ string_of_int i, reader) :: l)
@@ -183,7 +165,7 @@ let rule_record (ctyp : poly) (fields : (string * poly) list) _ _ =
                                                         acc))
                                            (Ast.RbNil _loc) fields l_with_names),
                                         Ast.ExNil _loc)))))
-  and rwriter = fun l ->
+  and rwriter l =
     <:expr< (fun v i ->
                $(List.fold_right2 begin fun (name, _) writer acc ->
                    <:expr<
@@ -191,12 +173,12 @@ let rule_record (ctyp : poly) (fields : (string * poly) list) _ _ =
                        $acc$ >>
                  end fields l <:expr< i >>)$)
     >> in
-    make_rule rtype ctyp rvars rreader rwriter
+    make_rule rtype ctyp rvars (Gen.List rreader) (Gen.List rwriter)
 
 let rule_variant (ctyp : poly) (variants : (int * string * DBus.typ * mono) list) gen_reader gen_writer =
   let rtype : Gen.pattern = dcons (int : mono :> Gen.pattern) (dcons dvariant dnil)
-  and rvars = [(int : mono :> poly)]
-  and rreader = f1 begin fun int_reader ->
+  and rvars = [< (int : mono :> poly) >]
+  and rreader int_reader =
     let match_expr =
       Ast.ExMat(_loc,
                 Ast.ExId(_loc, Ast.IdLid(_loc, "chooser")),
@@ -214,8 +196,7 @@ let rule_variant (ctyp : poly) (variants : (int * string * DBus.typ * mono) list
       <:expr< fun i ->
         let i, chooser = $int_reader$ i in
           $match_expr$ >>
-  end
-  and rwriter = f1 begin fun int_writer ->
+  and rwriter int_writer =
     let match_expr =
       Ast.ExMat(_loc,
                 Ast.ExId(_loc, Ast.IdLid(_loc, "v")),
@@ -231,16 +212,16 @@ let rule_variant (ctyp : poly) (variants : (int * string * DBus.typ * mono) list
                                          write_fixed_variant $str:DBus.string_of_type dbust$ $writer$ x i >>),
                            expr)
                 end (Ast.McNil _loc) variants) in
-      <:expr< fun i -> $match_expr$ >> end in
-    make_rule rtype ctyp rvars rreader rwriter
+      <:expr< fun i -> $match_expr$ >> in
+    make_rule rtype ctyp rvars (Gen.Func rreader) (Gen.Func rwriter)
 
 
 let rule_basic (ctyp : mono) (dtyp : Gen.lterm) reader writer _ _ =
   let rtype = (dtyp : Gen.lterm :> Gen.pattern)
-  and rvars = []
-  and rreader = f0 <:expr< $lid:reader$ >>
-  and rwriter = f0 <:expr< $lid:writer$ >> in
-    make_rule rtype (ctyp : mono :> poly) rvars rreader rwriter
+  and rvars = [<>]
+  and rreader = <:expr< $lid:reader$ >>
+  and rwriter = <:expr< $lid:writer$ >> in
+    make_rule rtype (ctyp : mono :> poly) rvars (Gen.Func rreader) (Gen.Func rwriter)
 
 let rule_map key_type mod_name =
   rule_dict (t1 (mod_name ^ ".t") (v"x")) key_type (v"x")
@@ -250,9 +231,9 @@ let rule_map key_type mod_name =
 
 let default_rules =
   [ (fun _ _ ->
-       make_rule (dstruct (v"x")) (v"x") [v"x"]
-         (f1 (fun r -> <:expr< read_struct $r$ >>))
-         (f1 (fun w -> <:expr< write_struct $w$ >>)));
+       make_rule (dstruct (v"x")) (v"x") [< (v"x") >]
+         (Gen.Func (fun r -> <:expr< read_struct $r$ >>))
+         (Gen.Func (fun w -> <:expr< write_struct $w$ >>)));
     rule_basic int dint16 "read_int16" "write_int16";
     rule_basic int duint16 "read_uint16" "write_uint16";
     rule_basic int dint32 "read_int32" "write_int32";
@@ -460,9 +441,9 @@ struct
     print_modules "" l
 end*)
 
-let write_modules fname (Lmap.Mapping(_, mapping)) =
+let generate fname (Lmap.Mapping(_, mapping)) =
   ()
-  (*Util.with_open_out fname begin fun ch_mli ->
+(*  Util.with_open_out fname begin fun ch_mli ->
     let module P = Print(struct
                            let ch_mli = ch_mli
                          end) in

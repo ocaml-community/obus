@@ -46,7 +46,7 @@ type convertion_rule
 
 val rule_dict : poly -> poly -> poly -> expr -> expr -> expr -> convertion_rule
 val rule_array : poly -> poly -> expr -> expr -> expr -> convertion_rule
-val rule_record : poly -> (string * poly) list -> convertion_rule
+val rule_record : poly -> (string * poly, expr, _, expr) Seq.t -> convertion_rule
 val rule_variant : poly -> (int * string * DBus.typ * mono) list -> convertion_rule
 val rule_any : poly -> poly -> expr -> expr -> convertion_rule
 val rule_map : poly -> string -> convertion_rule
@@ -64,7 +64,7 @@ val generate_writer : convertion_rule list -> mono -> DBus.typ -> expr
 
 val default_type : DBus.typ -> mono
 
-val write_modules : string -> mono Lmap.t -> unit
+val generate : string -> mono Lmap.t -> unit
 
 val args_mapper : (Arg.key * Arg.spec * Arg.doc) list
 val args_generator : (Arg.key * Arg.spec * Arg.doc) list

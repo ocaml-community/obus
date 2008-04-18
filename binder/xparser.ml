@@ -12,19 +12,16 @@ exception Parse_failed
 open Xml
 
 type 'a xml_parser = xml -> 'a option
-type ('a, 'b) param_parser = (string * string) list -> 'a -> 'b
+type ('a, 'b) param_parser = (string, string, 'a, 'b) Seq.t
 type 'a seq_elt_parser = xml list -> 'a * xml list
 type ('a, 'b) seq_parser = xml list -> 'a -> 'b * xml list
 
-let pn l f = f
-
-let pc param_name params_parser l f =
-  (params_parser l) (f (List.assoc param_name l))
-
-let elt elt_name params_parser sons_parser f = function
+let elt elt_name params sons_parser f = function
   | Element(name, args, sons) when name = elt_name ->
       begin try
-        match sons_parser sons (params_parser args f) with
+        match sons_parser sons
+          (Seq.apply f
+             (Seq.map (fun name -> List.assoc name args) params)) with
           | v, [] -> Some(v)
           | _ -> None
       with
@@ -62,13 +59,6 @@ let parse xml_parser xml =
   match xml_parser xml with
     | Some(v) -> v
     | None -> raise Parse_failed
-
-let p0 = pn
-let p1 x1 = pc x1 (pn)
-let p2 x2 x1 = pc x2 (pc x1 (pn))
-let p3 x3 x2 x1 = pc x3 (pc x2 (pc x1 (pn)))
-let p4 x4 x3 x2 x1 = pc x4 (pc x3 (pc x2 (pc x1 (pn))))
-let p5 x5 x4 x3 x2 x1 = pc x5 (pc x4 (pc x3 (pc x2 (pc x1 (pn)))))
 
 let s0 = sn
 let s1 x1 = sc x1 (sn)

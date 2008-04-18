@@ -13,7 +13,7 @@ exception Parse_failed
 
 type 'a xml_parser
 
-type ('a, 'b) param_parser
+type ('a, 'b) param_parser = (string, string, 'a, 'b) Seq.t
   (** A parser of parameters list which return a value of type 'b *)
 
 type 'a seq_elt_parser
@@ -22,10 +22,6 @@ type 'a seq_elt_parser
 
 type ('a, 'b) seq_parser
   (** A parser of a list of xml which return a value of type 'b *)
-
-val pc : string -> ('a, 'b) param_parser -> (string -> 'a, 'b) param_parser
-val pn : ('a, 'a) param_parser
-  (** Construction of parameters parsers *)
 
 val sc : 'a seq_elt_parser -> ('b, 'c) seq_parser -> ('a -> 'b, 'c) seq_parser
 val sn : ('a, 'a) seq_parser
@@ -56,13 +52,6 @@ val elt : string -> ('a, 'b) param_parser -> ('b, 'c) seq_parser -> 'a -> 'c xml
 val parse : 'a xml_parser -> Xml.xml -> 'a
   (** [parse parser xml] Parse an entire xml document using
       [parser] *)
-
-val p0 : ('a, 'a) param_parser
-val p1 : string -> (string -> 'a, 'a) param_parser
-val p2 : string -> string -> (string -> string -> 'a, 'a) param_parser
-val p3 : string -> string -> string -> (string -> string -> string -> 'a, 'a) param_parser
-val p4 : string -> string -> string -> string -> (string -> string -> string -> string -> 'a, 'a) param_parser
-val p5 : string -> string -> string -> string -> string -> (string -> string -> string -> string -> string -> 'a, 'a) param_parser
 
 val s0 : ('a, 'a) seq_parser
 val s1 : 'a1 seq_elt_parser -> ('a1 -> 'a, 'a) seq_parser

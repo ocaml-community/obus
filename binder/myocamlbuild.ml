@@ -17,6 +17,12 @@ let find_syntaxes () = ["camlp4o"; "camlp4r"]
 (* ocamlfind command *)
 let ocamlfind x = S[A"ocamlfind"; x]
 
+let myexts () =
+  List.map (fun s -> String.sub s 3 (String.length s - 6))
+    (blank_sep_strings &
+       Lexing.from_string &
+       run_and_read "echo pa_*.ml")
+
 let _ = dispatch begin function
   | Before_options ->
 
@@ -27,8 +33,6 @@ let _ = dispatch begin function
       Options.ocamldoc := ocamlfind & A"ocamldoc"
 
   | After_rules ->
-
-      ocaml_lib "obus/obus";
 
       (* When one link an OCaml library/binary/package, one should use -linkpkg *)
       flag ["ocaml"; "link"] & A"-linkpkg";
@@ -51,5 +55,9 @@ let _ = dispatch begin function
         flag ["ocaml"; "doc";      "syntax_"^syntax] & S[A"-syntax"; A syntax];
       end (find_syntaxes ());
 
+      List.iter begin fun ext ->
+        flag ["ocaml"; "pp"; "pa_"^ext] (A("pa_"^ext^".cmo"));
+        dep ["ocaml"; "ocamldep"; "pa_"^ext] ["pa_"^ext^".cmo"];
+      end (myexts ());
   | _ -> ()
 end

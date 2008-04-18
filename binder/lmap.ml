@@ -108,30 +108,30 @@ let to_xml type_writer =
 let from_xml type_reader xml =
   let args_parser () =
     s1 (union
-          [elt "arg" (p4 "dname" "name" "dtype" "type")
+          [elt "arg" [< "dname"; "name"; "dtype"; "type" >]
              s0
              (fun dname name dtyp typ ->
                 Arg((dname, name), DBus.type_of_string dtyp, type_reader typ));
-           elt "pack" (p1 "type")
-             (s1 (any (elt "arg" (p4 "dname" "name" "dtype" "type")
+           elt "pack" [< "type" >]
+             (s1 (any (elt "arg" [< "dname"; "name"; "dtype"; "type" >]
                          s0
                          (fun dname name dtyp typ ->
                             ((dname, name), DBus.type_of_string dtyp, type_reader typ)))))
              (fun typ l -> Pack(l, type_reader typ))])
   in
-    parse (elt "map" (p1 "language")
-             (s1 (any (elt "interface" (p2 "dname" "name")
+    parse (elt "map" [< "language" >]
+             (s1 (any (elt "interface" [< "dname"; "name" >]
                          (s1 (union
-                                [elt "method" (p2 "dname" "name")
+                                [elt "method" [< "dname"; "name" >]
                                    (s2
-                                      (one (elt "params" p0
+                                      (one (elt "params" [<>]
                                               (args_parser ())
                                               (fun x -> x)))
-                                      (one (elt "result" p0
+                                      (one (elt "result" [<>]
                                               (args_parser ())
                                               (fun x -> x))))
                                    (fun dname name ins outs -> Method((dname, name), ins, outs));
-                                 elt "signal" (p2 "dname" "name")
+                                 elt "signal" [< "dname"; "name" >]
                                    (args_parser ())
                                    (fun dname name args -> Signal((dname, name), args))]))
                          (fun dname name defs -> (dname, name, defs)))))
