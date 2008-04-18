@@ -81,3 +81,62 @@ let type_of_string dtyp =
   in
   let _, _, t = aux 0 in t
 
+
+type name = string
+
+type param = Arg of name * typ
+type def =
+  | Method of name * param list * param list
+  | Signal of name * param list
+
+type tree =
+  | Node of (name * def list * tree) list
+
+let regexp = Str.regexp "\\."
+
+let rec add name x t =
+  let rec aux (Node(interfs)) = function
+    | [] -> raise (Invalid_argument "invalid interface name")
+    | [name] -> Node(List.map begin fun (name', defs, sons) ->
+                       if name = name'
+                       then (name', x, sons)
+                       else (name', defs, sons)
+                     end interfs)
+    | name :: names -> Node(match List.partition (fun (n, _, _) -> n = name) interfs with
+                              | [(name, defs, sons)], l -> (name, defs, aux sons names) :: l
+                              | [], l -> (name, [], aux (Node []) names) :: l
+                              | _ -> assert false)
+  in
+    aux t (Str.split regexp name)
+
+open Xml_parser
+
+type direction = In | Out
+
+let from_xml xml =
+  let get_dir direction args = Util.filter_map
+    (fun (dir, arg) -> if dir = direction then Some(arg) else None) args in
+    parse (elt "node" p0
+             (s2
+                (any (elt "interfaces" (p1 "name")
+                        (s1 (union
+                               [elt "method" (p1 "name")
+                                  (s1 (any (elt "arg" (p3 "name" "direction" "type")
+                                              s0
+                                              (fun name dir typ ->
+                                                 (begin match dir with
+                                                    | "in" -> In
+                                                    | "out" -> Out
+                                                    | _ -> raise Parse_failed
+                                                  end, Arg(name, type_of_string typ))))))
+                                  (fun name args -> Method(name, get_dir In args, get_dir Out args));
+                                elt "signal" (p1 "name")
+                                  (s1 (any (elt "arg" (p2 "name" "type")
+                                              s0
+                                              (fun name typ -> Arg(name, type_of_string typ)))))
+                                  (fun name args -> Signal(name, args))]))
+                        (fun name defs -> (name, defs))))
+                (any (elt "node" (p1 "name")
+                        s0
+                        (fun x -> x))))
+             (fun interfs _ -> interfs)) xml
