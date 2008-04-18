@@ -109,7 +109,7 @@ let rec add name x t =
   in
     aux t (Str.split regexp name)
 
-open Xml_parser
+open Xparser
 
 type direction = In | Out
 
@@ -118,7 +118,7 @@ let from_xml xml =
     (fun (dir, arg) -> if dir = direction then Some(arg) else None) args in
     parse (elt "node" p0
              (s2
-                (any (elt "interfaces" (p1 "name")
+                (any (elt "interface" (p1 "name")
                         (s1 (union
                                [elt "method" (p1 "name")
                                   (s1 (any (elt "arg" (p3 "name" "direction" "type")

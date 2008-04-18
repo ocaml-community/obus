@@ -4,7 +4,7 @@
 <caml.*>: use_camlp4
 <interface.*>: pkg_xml-light
 <binder.*>: pkg_xml-light, use_str
-<xml_parser.*>: pkg_xml-light
+<xparser.*>: pkg_xml-light
 <dBus.*>: pkg_xml-light
 <lmap.*>: pkg_xml-light
 <util.*>: pkg_xml-light

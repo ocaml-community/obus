@@ -72,7 +72,6 @@ struct
     then skipped_interfaces := !skipped_interfaces @ ["org\\.freedesktop\\.DBus.*"];
 
     let filters = List.map Str.regexp !skipped_interfaces in
-    let prefix = List.map Str.regexp !prefix in
     let accept name = not (List.exists (fun r -> Str.string_match r name 0) filters) in
     let rec delete_prefix name = function
       | [] -> name
@@ -82,7 +81,7 @@ struct
           else delete_prefix name prefixes
     in
     let dbus_interfaces = List.fold_left
-      (fun acc (name, defs) -> if accept name then DBus.add (delete_prefix name prefix) defs acc else acc)
+      (fun acc (name, defs) -> if accept name then DBus.add name defs acc else acc)
       (DBus.Node [])
       (List.flatten (List.map (fun fname -> Util.with_open_in fname
                                  (fun ch -> DBus.from_xml

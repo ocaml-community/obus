@@ -25,7 +25,7 @@ type 'a t =
   | Mapping of string * 'a tree
 
 open Xml
-open Xml_parser
+open Xparser
 
 let to_xml type_writer =
   let name_mapping_to_params (dname, name) = [("dname", dname); ("name", name)] in
@@ -58,9 +58,16 @@ let to_xml type_writer =
               end content) :: main_to_xml sons
     end mappings end
   in
+
+  let remove_empty interfaces =
+    List.filter (function
+                   | Element("interface", _, []) -> false
+                   | _ -> true) interfaces
+  in
+
     (fun (Mapping(language, mapping)) ->
        Element("map", [("language", language)],
-               main_to_xml mapping))
+               remove_empty (main_to_xml mapping)))
 
 let from_xml type_reader xml =
   let args_parser () =
