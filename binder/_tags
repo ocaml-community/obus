@@ -5,4 +5,5 @@
 <interface.*>: pkg_xml-light
 <binder.*>: pkg_xml-light, use_str
 <tree.*>: use_str
+<xml_parser.*>: pkg_xml-light
 <obus-caml-sig.*>: pkg_xml-light, use_camlp4, use_str

@@ -52,3 +52,8 @@ let filter_map f l =
                     | None -> acc
                     | Some(v) -> v :: acc) l []
 
+let part_map f l =
+  List.fold_right (fun x (success, failure) -> match f x with
+                     | None -> (success, x :: failure)
+                     | Some(v) -> (v :: success, failure)) l []
+
