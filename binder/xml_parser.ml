@@ -46,6 +46,12 @@ let opt xml_parser xmls =
     | [v], l -> (Some(v), l)
     | _ -> raise Parse_failed
 
+let union xml_parsers xmls =
+  Util.part_map (fun xml ->
+                   match Util.filter_map (fun xml_parser -> xml_parser xml) xml_parsers with
+                     | [v] -> Some(v)
+                     | _ -> None) xmls
+
 let sn xmls f = (f, xmls)
 
 let sc seq_elt_parser seq_parser xmls f =

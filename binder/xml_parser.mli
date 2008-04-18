@@ -43,6 +43,11 @@ val opt : 'a xml_parser -> 'a option seq_elt_parser
   (** [opt parser] parse at most one element of a given type in a list
       of xml *)
 
+val union : 'a xml_parser list -> 'a list seq_elt_parser
+  (** [union parsers] parse any element of one of the types parsed by
+      [parsers]. In the resulting list element are in the same order
+      as in the xml *)
+
 val elt : string -> ('a, 'b) param_parser -> ('b, 'c) seq_parser -> 'a -> 'c xml_parser
   (** [elt name params sons f] parse an element of type [name] with
       parameters [params] and sons [sons] and apply [f] on the
