@@ -44,7 +44,7 @@ val to_xml : ('a -> string) -> 'a t -> Xml.xml
   (** [to_xml type_writer xml] Create an xml representation of a
       mapping *)
 
-module Make(L : Binder.LanguageType) : sig
+module Make(L : Language.S) : sig
   val from_interfaces : 'a Interface.t Tree.t -> 'a t
     (** [from_interfaces interfaces] convert a interfaces hierarchy
         into a mapping for the specified language *)
