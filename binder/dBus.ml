@@ -97,11 +97,10 @@ let regexp = Str.regexp "\\."
 let rec add name x t =
   let rec aux (Node(interfs)) = function
     | [] -> raise (Invalid_argument "invalid interface name")
-    | [name] -> Node(List.map begin fun (name', defs, sons) ->
-                       if name = name'
-                       then (name', x, sons)
-                       else (name', defs, sons)
-                     end interfs)
+    | [name] -> Node(match List.partition (fun (n, _, _) -> n = name) interfs with
+                       | [(name, defs, sons)], l -> (name, x, sons) :: l
+                       | [], l -> (name, x, Node []) :: l
+                       | _ -> assert false)
     | name :: names -> Node(match List.partition (fun (n, _, _) -> n = name) interfs with
                               | [(name, defs, sons)], l -> (name, defs, aux sons names) :: l
                               | [], l -> (name, [], aux (Node []) names) :: l

@@ -42,20 +42,21 @@ let to_xml type_writer =
     end args
   in
 
-  let rec main_to_xml (Node(mappings)) =
-    List.flatten begin List.map begin fun (nm, content, sons) ->
-      Element("interface", name_mapping_to_params nm,
-              List.map begin function
-                | Method(nm, ins, outs) ->
-                    Element("method", name_mapping_to_params nm,
-                            [Element("params", [],
-                                     args_to_xml ins);
-                             Element("result", [],
-                                     args_to_xml outs)])
-                | Signal(nm, args) ->
-                    Element("signal", name_mapping_to_params nm,
-                            args_to_xml args)
-              end content) :: main_to_xml sons
+  let rec main_to_xml lang_names (Node(mappings)) =
+    List.flatten begin List.map begin fun ((dbus_name, lang_name), content, sons) ->
+      let lang_names = lang_name :: lang_names in
+        Element("interface", name_mapping_to_params (dbus_name, Util.rjoin "." lang_names),
+                List.map begin function
+                  | Method(nm, ins, outs) ->
+                      Element("method", name_mapping_to_params nm,
+                              [Element("params", [],
+                                       args_to_xml ins);
+                               Element("result", [],
+                                       args_to_xml outs)])
+                  | Signal(nm, args) ->
+                      Element("signal", name_mapping_to_params nm,
+                              args_to_xml args)
+                end content) :: main_to_xml lang_names sons
     end mappings end
   in
 
@@ -67,7 +68,7 @@ let to_xml type_writer =
 
     (fun (Mapping(language, mapping)) ->
        Element("map", [("language", language)],
-               remove_empty (main_to_xml mapping)))
+               remove_empty (main_to_xml [] mapping)))
 
 let from_xml type_reader xml =
   let args_parser () =

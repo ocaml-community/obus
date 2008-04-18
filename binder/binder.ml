@@ -14,15 +14,13 @@ struct
   let xml_fnames = ref []
   let skipped_interfaces = ref []
   let permit_default = ref false
-  let prefix = ref ["org\\.freedesktop\\."]
   let out = ref "out.obus.xml"
   let flat = ref false
 
   let args = [
     ("-skip", Arg.String (fun s -> skipped_interfaces := s :: !skipped_interfaces), "skip interfaces matching regexp");
     ("-allow-default", Arg.Set permit_default, "do not skip default interfaces");
-    ("-o", Arg.Set_string out, "output file (default = out.mli)");
-    ("-prefix", Arg.String (fun p -> prefix := p :: !prefix), "prefix to delete from interface names");
+    ("-o", Arg.Set_string out, Printf.sprintf "output file (default = %s)" !out);
     ("-flat", Arg.Set flat, "do not include interfaces in each other")
   ] @ L.args_mapper
 
@@ -73,13 +71,6 @@ struct
 
     let filters = List.map Str.regexp !skipped_interfaces in
     let accept name = not (List.exists (fun r -> Str.string_match r name 0) filters) in
-    let rec delete_prefix name = function
-      | [] -> name
-      | prefix :: prefixes ->
-          if Str.string_match prefix name 0
-          then Str.replace_first prefix "" name
-          else delete_prefix name prefixes
-    in
     let dbus_interfaces = List.fold_left
       (fun acc (name, defs) -> if accept name then DBus.add name defs acc else acc)
       (DBus.Node [])
