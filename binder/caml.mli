@@ -62,21 +62,17 @@ val generate_writer : convertion_rule list -> mono -> DBus.typ -> expr
 
 (** {6 Caml modules} *)
 
-type module_str
-type module_sig = mono Interface.t
-
-val parse_module_sigs : string -> module_sig Tree.t
-
 val default_type : DBus.typ -> mono
 
-val write_module_sigs : string -> module_sig Tree.t -> unit
-val write_module_strs : string -> module_str Tree.t -> unit
+val write_modules : string -> mono Lmap.t -> unit
 
-val args : (Arg.key * Arg.spec * Arg.doc) list
+val args_mapper : (Arg.key * Arg.spec * Arg.doc) list
+val args_generator : (Arg.key * Arg.spec * Arg.doc) list
 
 val correct_module_name : string -> string
 val correct_signal_name : string -> string
 val correct_method_name : string -> string
+val correct_arg_name : string -> string
 
 val string_of_type : mono -> string
 val type_of_string : string -> mono

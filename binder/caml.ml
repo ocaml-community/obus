@@ -318,10 +318,14 @@ let correct_module_name = String.capitalize
 let camlify name = Util.ljoin "_" (Util.split_upper name)
 let correct_signal_name = camlify
 let correct_method_name = camlify
+let correct_arg_name = function
+  | "type" -> "typ"
+  | x -> x
 
 let with_labels = ref false
 
-let args = [
+let args_mapper = []
+let args_generator = [
   ("-label", Arg.Set with_labels, "use labels")
 ]
 
@@ -369,7 +373,7 @@ let type_of_string str : mono =
     | (<:sig_item< val toto : $t$ >>) -> type_of_ctyp t
     | _ -> assert false
 
-module Print (File : sig val ch_mli : out_channel end) =
+(*module Print (File : sig val ch_mli : out_channel end) =
 struct
   let print fmt = Printf.fprintf File.ch_mli fmt
 
@@ -456,16 +460,15 @@ struct
 
 " fname (String.make (String.length fname) '-') (Filename.basename (Sys.argv.(0)));
     print_modules "" l
-end
+end*)
 
-let write_module_sigs fname (Tree.Node(_, l)) =
-  Util.with_open_out fname begin fun ch_mli ->
+let write_modules fname (Lmap.Mapping(_, mapping)) =
+  ()
+  (*Util.with_open_out fname begin fun ch_mli ->
     let module P = Print(struct
                            let ch_mli = ch_mli
                          end) in
-      P.print_file fname l
-  end
-
-let write_module_strs fname mstr = ()
+      P.print_file fname mapping
+  end*)
 
 let name = "caml"

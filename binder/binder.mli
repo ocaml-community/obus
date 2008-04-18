@@ -16,4 +16,3 @@ module MakeGen(L : Language.S) :
 sig
   val main : unit -> unit
 end
-

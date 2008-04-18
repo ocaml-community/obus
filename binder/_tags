@@ -7,4 +7,5 @@
 <xml_parser.*>: pkg_xml-light
 <dBus.*>: pkg_xml-light
 <lmap.*>: pkg_xml-light
-<obus-caml-sig.*>: pkg_xml-light, use_camlp4, use_str
+<util.*>: pkg_xml-light
+<obus-caml-*.*>: pkg_xml-light, use_camlp4, use_str

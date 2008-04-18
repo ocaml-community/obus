@@ -93,8 +93,3 @@ let from_xml type_reader xml =
                                    (fun dname name args -> Signal((dname, name), args))]))
                          (fun dname name defs -> ((dname, name), defs, Node [])))))
              (fun language mappings -> Mapping(language, Node mappings))) xml
-
-module Make(L : Binder.LanguageType) =
-struct
-  let from_interfaces interfaces = Mapping("toto", Node [])
-end

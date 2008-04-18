@@ -55,5 +55,9 @@ let filter_map f l =
 let part_map f l =
   List.fold_right (fun x (success, failure) -> match f x with
                      | None -> (success, x :: failure)
-                     | Some(v) -> (v :: success, failure)) l []
+                     | Some(v) -> (v :: success, failure)) l ([], [])
 
+let xml_parser = XmlParser.make ()
+let _ = XmlParser.prove xml_parser false
+
+let parse_xml lexbuf = XmlParser.parse xml_parser (XmlParser.SLexbuf lexbuf)
