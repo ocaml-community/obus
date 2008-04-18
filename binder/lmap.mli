@@ -43,3 +43,6 @@ val from_xml : (string -> 'a) -> Xml.xml -> 'a t
 val to_xml : ('a -> string) -> 'a t -> Xml.xml
   (** [to_xml type_writer xml] Create an xml representation of a
       mapping *)
+
+val merge : 'a t -> 'a t -> 'a t
+  (** [merge a b] merge two mapping *)

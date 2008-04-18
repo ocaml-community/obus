@@ -17,4 +17,4 @@ val split_upper : string -> string list
 val filter_map : ('a -> 'b option) -> 'a list -> 'b list
 val part_map : ('a -> 'b option) -> 'a list -> 'b list * 'a list
 
-val parse_xml : Lexing.lexbuf -> Xml.xml
+val parse_xml : string -> Xml.xml

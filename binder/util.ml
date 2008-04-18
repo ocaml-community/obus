@@ -60,4 +60,5 @@ let part_map f l =
 let xml_parser = XmlParser.make ()
 let _ = XmlParser.prove xml_parser false
 
-let parse_xml lexbuf = XmlParser.parse xml_parser (XmlParser.SLexbuf lexbuf)
+let parse_xml fname =
+  XmlParser.parse xml_parser (XmlParser.SFile fname)

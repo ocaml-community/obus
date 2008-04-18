@@ -74,9 +74,7 @@ struct
     let dbus_interfaces = List.fold_left
       (fun acc (name, defs) -> if accept name then DBus.add name defs acc else acc)
       (DBus.Node [])
-      (List.flatten (List.map (fun fname -> Util.with_open_in fname
-                                 (fun ch -> DBus.from_xml
-                                    (Util.parse_xml (Lexing.from_channel ch)))) !xml_fnames)) in
+      (List.flatten (List.map (fun fname -> DBus.from_xml (Util.parse_xml fname)) !xml_fnames)) in
     let map =
       Lmap.Mapping(L.name,
                    if !flat
@@ -91,5 +89,20 @@ end
 
 module MakeGen(L : Language.S) =
 struct
-  let main () = ()
+  let out = ref "out"
+  let map_files = ref []
+
+  let args = [
+    ("-o", Arg.Set_string out, Printf.sprintf "output file prefix (default = %s)" !out)
+  ] @ L.args_generator
+
+  let main () =
+    Arg.parse args
+      (fun s -> map_files := s :: !map_files)
+      "generate a caml module signature from a introspection data";
+
+    let mapping =
+      List.fold_left Lmap.merge (Lmap.Mapping(L.name, Lmap.Node []))
+        (List.map (fun s -> Lmap.from_xml L.type_of_string (Util.parse_xml s)) !map_files) in
+      ()
 end

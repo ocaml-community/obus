@@ -27,6 +27,41 @@ type 'a t =
 open Xml
 open Xparser
 
+let regexp = Str.regexp "\\."
+
+let extract name def_mappings =
+  match List.partition (fun ((_, n), _, _) -> n = name) def_mappings with
+    | [v], l -> (Some(v), l)
+    | [], l -> (None, l)
+    | _ -> assert false
+
+let add mappings (dbus_name, lang_name, x) =
+  let rec aux (Node(mappings)) = function
+    | [] -> raise (Invalid_argument "invalid module name")
+    | [name] -> Node(match extract name mappings with
+                       | Some((_, name), maps, sons), l -> ((dbus_name, name), x, sons) :: l
+                       | None, l -> ((dbus_name, name), x, Node []) :: l)
+    | name :: names -> Node(match extract name mappings with
+                              | Some((dn, name), maps, sons), l -> ((dn, name), maps, aux sons names) :: l
+                              | None, l -> (("", name), [], aux (Node []) names) :: l)
+  in
+    aux mappings (Str.split regexp lang_name)
+
+let merge (Mapping(la, a)) (Mapping(lb, b)) =
+  let rec aux (Node(a)) (Node(b)) =
+    Node begin List.fold_left begin fun acc (((dnb, nb), mapsb, sonsb) as b) ->
+      match extract nb acc with
+        | Some((dna, na), mapsa, sonsa), l -> begin match mapsb with
+            | [] -> ((dna, na), mapsa, aux sonsa sonsb)
+            | _ -> ((dnb, nb), mapsb, aux sonsa sonsb)
+          end :: l
+        | None, l -> b :: l
+    end a b end
+  in
+    if la = lb
+    then raise (Invalid_argument "cannot merge mapping from different languages")
+    else Mapping(la, aux a b)
+
 let to_xml type_writer =
   let name_mapping_to_params (dname, name) = [("dname", dname); ("name", name)] in
 
@@ -99,5 +134,6 @@ let from_xml type_reader xml =
                                  elt "signal" (p2 "dname" "name")
                                    (args_parser ())
                                    (fun dname name args -> Signal((dname, name), args))]))
-                         (fun dname name defs -> ((dname, name), defs, Node [])))))
-             (fun language mappings -> Mapping(language, Node mappings))) xml
+                         (fun dname name defs -> (dname, name, defs)))))
+             (fun language mappings -> Mapping(language,
+                                               List.fold_left add (Node []) mappings))) xml

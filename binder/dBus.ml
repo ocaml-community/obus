@@ -94,7 +94,7 @@ type tree =
 
 let regexp = Str.regexp "\\."
 
-let rec add name x t =
+let add name x t =
   let rec aux (Node(interfs)) = function
     | [] -> raise (Invalid_argument "invalid interface name")
     | [name] -> Node(match List.partition (fun (n, _, _) -> n = name) interfs with
