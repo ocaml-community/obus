@@ -175,15 +175,15 @@ let rule_any (ctyp : poly) (ctyp_from : poly) read write _ _ =
 let rule_array (ctyp : poly) (etyp : poly) empty add fold _ _ =
   let rtype = darray (etyp : poly :> Gen.pattern)
   and rvars = [< etyp >]
-  and rreader ereader = <:expr< read_array $ereader$ $empty$ $add$ >>
-  and rwriter ewriter = <:expr< write_array $ewriter$ $fold$ >> in
+  and rreader ereader = <:expr< R.read_array $ereader$ $empty$ $add$ >>
+  and rwriter ewriter = <:expr< W.write_array $ewriter$ $fold$ >> in
     make_rule rtype ctyp rvars (Gen.Func rreader) (Gen.Func rwriter)
 
 let rule_dict (ctyp : poly) (ktyp : poly) (vtyp : poly) empty add fold _ _ =
   let rtype = ddict (ktyp : poly :> Gen.pattern) (vtyp : poly :> Gen.pattern)
   and rvars = [< ktyp; vtyp >]
-  and rreader kreader vreader = <:expr< read_dict $kreader$ $vreader$ $empty$ $add$ >>
-  and rwriter kwriter vwriter = <:expr< write_array $kwriter$ $vwriter$ $fold$ >> in
+  and rreader kreader vreader = <:expr< R.read_dict $kreader$ $vreader$ $empty$ $add$ >>
+  and rwriter kwriter vwriter = <:expr< W.write_array $kwriter$ $vwriter$ $fold$ >> in
     make_rule rtype ctyp rvars (Gen.Func rreader) (Gen.Func rwriter)
 
 let rule_record (ctyp : poly) (field_seq : (string * poly, expr, 'a, expr) Seq.t) _ _ =
@@ -237,7 +237,7 @@ let rule_variant (ctyp : poly) (variants : (int * string * DBus.typ * mono) list
                                      Ast.ExNil _loc,
                                      let reader = gen_reader dbust paramt in
                                        <:expr< let i, v =
-                                         read_fixed_variant $str:DBus.string_of_type dbust$ $reader$ i in
+                                         R.read_fixed_variant $str:DBus.string_of_type dbust$ $reader$ i in
                                          (i, $uid:cstr$(v)) >>),
                            expr)
                 end (Ast.McNil _loc) variants) in
@@ -257,7 +257,7 @@ let rule_variant (ctyp : poly) (variants : (int * string * DBus.typ * mono) list
                                      Ast.ExNil _loc,
                                      let writer = gen_writer paramt dbust in
                                        <:expr< let i = $int_writer$ $int:string_of_int n$ i in
-                                         write_fixed_variant $str:DBus.string_of_type dbust$ $writer$ x i >>),
+                                         W.write_fixed_variant $str:DBus.string_of_type dbust$ $writer$ x i >>),
                            expr)
                 end (Ast.McNil _loc) variants) in
       <:expr< fun i -> $match_expr$ >> in
@@ -267,8 +267,8 @@ let rule_variant (ctyp : poly) (variants : (int * string * DBus.typ * mono) list
 let rule_basic (ctyp : mono) (dtyp : Gen.lterm) reader writer _ _ =
   let rtype = (dtyp : Gen.lterm :> Gen.pattern)
   and rvars = [<>]
-  and rreader = <:expr< $lid:reader$ >>
-  and rwriter = <:expr< $lid:writer$ >> in
+  and rreader = <:expr< R . $lid:reader$ >>
+  and rwriter = <:expr< W . $lid:writer$ >> in
     make_rule rtype (ctyp : mono :> poly) rvars (Gen.Func rreader) (Gen.Func rwriter)
 
 let rule_map key_type mod_name =
@@ -471,7 +471,7 @@ struct
   open Lmap
 
   let arg_names args =
-    snd (List.fold_right (fun _ (i, l) -> (i + 1, ("x" ^ string_of_int i) :: l)) args (0, []))
+    List.rev (snd (List.fold_left (fun (i, l) _ -> (i + 1, ("x" ^ string_of_int i) :: l)) (0, []) args))
 
   let sig_of_args args =
     List.fold_left begin fun acc arg -> match arg with
@@ -497,17 +497,17 @@ struct
           (<:expr< OBus.LowLevel.send_message proxy $str:sig_of_args ins$ $str:sig_of_args outs$
              (fun byte_order buffer i -> match byte_order with
                 | OBus.LowLevel.LittleEndian ->
-                    let module W = OBus.LowLevel.Writer(struct buffer = buffer end)(OBus.LowLevel.LittleEndian)
+                    let module W = OBus.LowLevel.Writer(struct let buffer = buffer end)(OBus.LowLevel.LittleEndian)
                     in $writer$
                 | OBus.LowLevel.BigEndian ->
-                    let module W = OBus.LowLevel.Writer(struct buffer = buffer end)(OBus.LowLevel.BigEndian)
+                    let module W = OBus.LowLevel.Writer(struct let buffer = buffer end)(OBus.LowLevel.BigEndian)
                     in $writer$)
              (fun byte_order buffer i -> match byte_order with
                 | OBus.LowLevel.LittleEndian ->
-                    let module R = OBus.LowLevel.Reader(struct buffer = buffer end)(OBus.LowLevel.LittleEndian)
+                    let module R = OBus.LowLevel.Reader(struct let buffer = buffer end)(OBus.LowLevel.LittleEndian)
                     in $reader$
                 | OBus.LowLevel.LittleEndian ->
-                    let module R = OBus.LowLevel.Reader(struct buffer = buffer end)(OBus.LowLevel.BigEndian)
+                    let module R = OBus.LowLevel.Reader(struct let buffer = buffer end)(OBus.LowLevel.BigEndian)
                     in $reader$)
              $reader$ >>)
         in
