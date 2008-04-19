@@ -41,6 +41,12 @@ module Gen = Generate.Make
      type t = expr
    end)
 
+module Caml =
+  Camlp4.Printers.OCaml.Make
+    (Camlp4OCamlParser.Make
+       (Camlp4OCamlRevisedParser.Make
+          (Camlp4.OCamlInitSyntax.Make(Ast)(Gram)(Quotation))));;
+
 type var = [ `Var of string ]
 type 'a typ = [ `RTerm of string * 'a list ]
 type poly = Gen.rpattern
@@ -327,30 +333,28 @@ let rec string_of_type : mono -> string = function
   | `RTerm(t, args) ->
       string_of_seq "" "(" ")" ", " (List.map string_of_type args) ^ (if args <> [] then " " else "") ^ t
 
-let type_of_ctyp typ =
-  let fail () = raise (Invalid_argument "can not understand caml type") in
+let type_of_ctyp str typ =
+  let fail () = raise (Invalid_argument ("can not understand this caml type: " ^ str)) in
   let parse_id id =
     Util.ljoin "." (List.map (function
                                 | Ast.IdLid(_, t) -> t
                                 | Ast.IdUid(_, t) -> t
-                                | _ -> assert false) (Ast.list_of_ident id [])) in
+                                | _ -> fail ()) (Ast.list_of_ident id [])) in
   let rec parse_app acc = function
     | (<:ctyp< $id:t$ >>) -> (List.rev acc, parse_id t)
     | (<:ctyp< $a$ $b$ >>) -> parse_app (parse_type a :: acc) b
     | _ -> fail ()
   and parse_tuple : Ast.ctyp -> mono list = function
-    | (<:ctyp< ( $a$ * $b$ ) >>) -> parse_type a :: parse_tuple b
+    | Ast.TySta(_, a, b) -> parse_tuple a @ parse_tuple b
     | t -> [parse_type t]
   and parse_type t : mono = match t with
-    | (<:ctyp< ( $_$ * $_$ ) >>)-> tuple (parse_tuple t)
+    | Ast.TyTup(_, t) -> tuple (parse_tuple t)
     | _ -> let args, id = parse_app [] t in `RTerm(id, args)
   in
     parse_type typ
 
 let type_of_string str : mono =
-  match Syntax.parse_interf _loc (Stream.of_string (Printf.sprintf "val toto : %s" str)) with
-    | (<:sig_item< val toto : $t$ >>) -> type_of_ctyp t
-    | _ -> assert false
+  type_of_ctyp str (Caml.Gram.parse Caml.ctyp _loc (Stream.of_string str))
 
 (*module Print (File : sig val ch_mli : out_channel end) =
 struct

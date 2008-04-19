@@ -58,7 +58,7 @@ let merge (Mapping(la, a)) (Mapping(lb, b)) =
         | None, l -> b :: l
     end a b end
   in
-    if la = lb
+    if la <> lb
     then raise (Invalid_argument "cannot merge mapping from different languages")
     else Mapping(la, aux a b)
 
