@@ -11,17 +11,38 @@ exception Parse_failed
 
 open Xml
 
+type param =
+  | P of string
+  | D of string * string
+  | F of string * string list
+  | A of string * string * string list
+
 type 'a xml_parser = xml -> 'a option
-type ('a, 'b) param_parser = (string, string, 'a, 'b) Seq.t
+type ('a, 'b) param_parser = (param, string, 'a, 'b) Seq.t
 type 'a seq_elt_parser = xml list -> 'a * xml list
 type ('a, 'b) seq_parser = xml list -> 'a -> 'b * xml list
+
+let param_desc = function
+  | P(n) -> (n, None, None)
+  | D(n, v) -> (n, Some v, None)
+  | F(n, vs) -> (n, None, Some vs)
+  | A(n, v, vs) -> (n, Some v, Some vs)
+
+let get_arg args spec =
+  let (name, default, field) = param_desc spec in
+  let value = try Some(List.assoc name args) with Not_found -> None in
+    match (value, default, field) with
+      | None, Some d, _ -> d
+      | Some v, _, Some f when List.mem v f -> v
+      | Some v, _, _ -> v
+      | _ -> raise Parse_failed
 
 let elt elt_name params sons_parser f = function
   | Element(name, args, sons) when name = elt_name ->
       begin try
         match sons_parser sons
           (Seq.apply f
-             (Seq.map (fun name -> List.assoc name args) params)) with
+             (Seq.map (get_arg args) params)) with
           | v, [] -> Some(v)
           | _ -> None
       with

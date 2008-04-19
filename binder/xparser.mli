@@ -13,7 +13,18 @@ exception Parse_failed
 
 type 'a xml_parser
 
-type ('a, 'b) param_parser = (string, string, 'a, 'b) Seq.t
+type param =
+    (** Desprition of a parameter *)
+  | P of string
+      (** Just a parameter name *)
+  | D of string * string
+      (** Name with a default value *)
+  | F of string * string list
+      (** Name with a list of possible values *)
+  | A of string * string * string list
+      (** Name, default value and possible values *)
+
+type ('a, 'b) param_parser = (param, string, 'a, 'b) Seq.t
   (** A parser of parameters list which return a value of type 'b *)
 
 type 'a seq_elt_parser
