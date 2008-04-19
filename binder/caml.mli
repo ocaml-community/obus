@@ -55,8 +55,6 @@ val default_rules : convertion_rule list
 
 (** {6 Code generation} *)
 
-exception Cannot_generate
-
 val generate_reader : convertion_rule list -> DBus.typ -> mono -> expr
 val generate_writer : convertion_rule list -> mono -> DBus.typ -> expr
 

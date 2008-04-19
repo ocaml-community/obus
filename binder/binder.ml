@@ -65,7 +65,7 @@ struct
   let main () =
     Arg.parse args
       (fun s -> xml_fnames := s :: !xml_fnames)
-      "generate a caml module signature from a introspection data";
+      "generate a mapping file from introspection data";
     if not !permit_default
     then skipped_interfaces := !skipped_interfaces @ ["org\\.freedesktop\\.DBus.*"];
 
@@ -99,10 +99,10 @@ struct
   let main () =
     Arg.parse args
       (fun s -> map_files := s :: !map_files)
-      "generate a caml module signature from a introspection data";
+      "generate a caml module from a mapping";
 
     let mapping =
       List.fold_left Lmap.merge (Lmap.Mapping(L.name, Lmap.Node []))
         (List.map (fun s -> Lmap.from_xml L.type_of_string (Util.parse_xml s)) !map_files) in
-      ()
+      L.generate !out mapping
 end

@@ -119,6 +119,48 @@ let rec term_of_dbus_type = function
   | DBus.Tstruct(l) -> dstruct (List.fold_right (fun x acc -> dcons (term_of_dbus_type x) acc) l dnil)
   | DBus.Tvariant -> dvariant
 
+let string_of_seq null b e sep = function
+  | [] -> null
+  | [t] -> t
+  | t :: l ->
+      b ^ t ^ List.fold_left (fun acc t -> acc ^ sep ^ t) "" l ^ e
+
+let rec list_of_tuple : mono -> mono list = function
+  | `RTerm("*nil", []) -> []
+  | `RTerm("*cons", [t; tl]) -> t :: list_of_tuple tl
+  | _ -> assert false
+
+let rec string_of_type : mono -> string = function
+  | `RTerm("*nil", []) ->
+      "unit"
+  | `RTerm("*cons", _) as t ->
+      string_of_seq "unit" "(" ")" " * " (List.map string_of_type (list_of_tuple t))
+  | `RTerm(t, args) ->
+      string_of_seq "" "(" ")" ", " (List.map string_of_type args) ^ (if args <> [] then " " else "") ^ t
+
+let type_of_ctyp str typ =
+  let fail () = raise (Invalid_argument ("can not understand this caml type: " ^ str)) in
+  let parse_id id =
+    Util.ljoin "." (List.map (function
+                                | Ast.IdLid(_, t) -> t
+                                | Ast.IdUid(_, t) -> t
+                                | _ -> fail ()) (Ast.list_of_ident id [])) in
+  let rec parse_app acc = function
+    | (<:ctyp< $id:t$ >>) -> (List.rev acc, parse_id t)
+    | (<:ctyp< $a$ $b$ >>) -> parse_app (parse_type a :: acc) b
+    | _ -> fail ()
+  and parse_tuple : Ast.ctyp -> mono list = function
+    | Ast.TySta(_, a, b) -> parse_tuple a @ parse_tuple b
+    | t -> [parse_type t]
+  and parse_type t : mono = match t with
+    | Ast.TyTup(_, t) -> tuple (parse_tuple t)
+    | _ -> let args, id = parse_app [] t in `RTerm(id, args)
+  in
+    parse_type typ
+
+let type_of_string str : mono =
+  type_of_ctyp str (Caml.Gram.parse Caml.ctyp _loc (Stream.of_string str))
+
 let make_rule left right vars reader writer =
   (Gen.make_generator left right vars reader,
    Gen.make_generator left right vars writer)
@@ -240,6 +282,14 @@ let default_rules =
        make_rule (dstruct (v"x")) (v"x") [< (v"x") >]
          (Gen.Func (fun r -> <:expr< read_struct $r$ >>))
          (Gen.Func (fun w -> <:expr< write_struct $w$ >>)));
+    (fun _ _ ->
+       make_rule (dcons (v"x") (v"y")) (t2 "*cons" (v"x") (v"y")) [< (v"x"); (v"y") >]
+         (Gen.Func (fun rx ry -> <:expr< fun i -> let i, vx = $rx$ i in let i, vy = $ry$ i in (i, (vx, vy)) >>))
+         (Gen.Func (fun wx wy -> <:expr< fun (vx, vy) i -> let i = $wx$ vx i in let i = $wy$ vy i in i >>)));
+    (fun _ _ ->
+       make_rule dnil (t0 "*nil") Seq.nil
+         (Gen.Func <:expr< fun i -> (i, ()) >>)
+         (Gen.Func <:expr< fun () i -> i >>));
     rule_basic int dint16 "read_int16" "write_int16";
     rule_basic int duint16 "read_uint16" "write_uint16";
     rule_basic int dint32 "read_int32" "write_int32";
@@ -256,6 +306,7 @@ let default_rules =
     rule_basic float ddouble "read_double" "write_double";
     rule_basic string dstring "read_string" "write_string";
     rule_basic dbus_type dsignature "read_signature" "write_signature";
+    rule_basic dbus_value dvariant "read_variant" "write_variant";
     rule_basic string dsignature "read_signature_as_string" "write_signature_from_string";
     rule_basic string dobject_path "read_object_path" "write_object_path";
     rule_array (list (v"x")) (v"x") (<:expr< [] >>) (<:expr< ( :: ) >>)
@@ -265,21 +316,25 @@ let default_rules =
       (<:expr< (fun f x l -> List.fold_left (fun acc (k, v) -> f k v acc)) >>);
   ]
 
-exception Cannot_generate
-
 let rec generate_reader rules dbust (camlt : mono) =
   let gr, gw = generate_reader rules, generate_writer rules in
   let rules = List.map (fun r -> fst (r gr gw)) rules in
     match Gen.generate rules (term_of_dbus_type dbust) camlt with
       | Some(v) -> v
-      | None -> raise Cannot_generate
+      | None -> failwith
+          (Printf.sprintf "can not generate a reader for : %s -> %s"
+             (DBus.string_of_type dbust)
+             (string_of_type camlt))
 
 and generate_writer rules (camlt : mono) dbust =
   let gr, gw = generate_reader rules, generate_writer rules in
   let rules = List.map (fun r -> snd (r gr gw)) rules in
     match Gen.generate rules (term_of_dbus_type dbust) camlt with
       | Some(v) -> v
-      | None -> raise Cannot_generate
+      | None -> failwith
+          (Printf.sprintf "can not generate a writer for : %s -> %s"
+             (string_of_type camlt)
+             (DBus.string_of_type dbust))
 
 let rec default_type : DBus.typ -> mono = function
   | DBus.Tbyte -> char
@@ -314,49 +369,7 @@ let args_generator = [
   ("-label", Arg.Set with_labels, "use labels")
 ]
 
-let string_of_seq null b e sep = function
-  | [] -> null
-  | [t] -> t
-  | t :: l ->
-      b ^ t ^ List.fold_left (fun acc t -> acc ^ sep ^ t) "" l ^ e
-
-let rec list_of_tuple : mono -> mono list = function
-  | `RTerm("*nil", []) -> []
-  | `RTerm("*cons", [t; tl]) -> t :: list_of_tuple tl
-  | _ -> assert false
-
-let rec string_of_type : mono -> string = function
-  | `RTerm("*nil", []) ->
-      "unit"
-  | `RTerm("*cons", _) as t ->
-      string_of_seq "unit" "(" ")" " * " (List.map string_of_type (list_of_tuple t))
-  | `RTerm(t, args) ->
-      string_of_seq "" "(" ")" ", " (List.map string_of_type args) ^ (if args <> [] then " " else "") ^ t
-
-let type_of_ctyp str typ =
-  let fail () = raise (Invalid_argument ("can not understand this caml type: " ^ str)) in
-  let parse_id id =
-    Util.ljoin "." (List.map (function
-                                | Ast.IdLid(_, t) -> t
-                                | Ast.IdUid(_, t) -> t
-                                | _ -> fail ()) (Ast.list_of_ident id [])) in
-  let rec parse_app acc = function
-    | (<:ctyp< $id:t$ >>) -> (List.rev acc, parse_id t)
-    | (<:ctyp< $a$ $b$ >>) -> parse_app (parse_type a :: acc) b
-    | _ -> fail ()
-  and parse_tuple : Ast.ctyp -> mono list = function
-    | Ast.TySta(_, a, b) -> parse_tuple a @ parse_tuple b
-    | t -> [parse_type t]
-  and parse_type t : mono = match t with
-    | Ast.TyTup(_, t) -> tuple (parse_tuple t)
-    | _ -> let args, id = parse_app [] t in `RTerm(id, args)
-  in
-    parse_type typ
-
-let type_of_string str : mono =
-  type_of_ctyp str (Caml.Gram.parse Caml.ctyp _loc (Stream.of_string str))
-
-(*module Print (File : sig val ch_mli : out_channel end) =
+module PrintSig (File : sig val ch_mli : out_channel end) =
 struct
   let print fmt = Printf.fprintf File.ch_mli fmt
 
@@ -387,52 +400,60 @@ struct
         if args <> [] then print " ";
         print "%s" t
 
-  let rec print_module indent name (Tree.Node(i, sons)) =
-    let defs = (match i with None -> [] | Some(x) -> x) in
-      print "%smodule %s : sig\n" indent name;
-      if defs <> [] then
-        print "%s  type t
+  let strip_args l =
+    List.map begin function
+      | Lmap.Arg((_, name), _, t) -> (name, t)
+      | Lmap.Pack _ -> failwith "packs are currently unsupported"
+    end l
+
+  let rec print_module indent ((_, name), defs, sons) =
+    print "%smodule %s : sig\n" indent name;
+    if defs <> [] then
+      print "%s  type t
 
 %s  val proxy : OBus.proxy -> t
 
 " indent indent;
-      print_mult begin function
-        | Interface.Method(name, ins, outs) ->
-            let in_names, in_types = List.split ins
-            and out_names, out_types = List.split outs in
-              print "%s  val %s : t -> " indent name;
-              begin match ins with
-                | [] -> print "unit -> "
-                | _ -> List.iter (fun (name, typ) ->
-                                    if !with_labels then begin
-                                      print "~(%s:" name;
-                                      print_type typ;
-                                      print ")"
-                                    end else
-                                      print_type typ;
-                                    print " -> ") ins
-              end;
-              print_type (tuple out_types);
-              print "\n%s    (** [%s" indent name;
-              print_seq " ()" "" "" "" (print " %s") in_names;
-              print "] result: ";
-              print_seq "()" "" "" ", " (print "%s") out_names;
-              print " *)\n"
-        | Interface.Signal(name, args) ->
-            let arg_names, arg_types = List.split args in
-              print "%s  val %s : " indent name;
-              print_type (t1 "signal" (tuple arg_types));
-              print "\n%s    (** args: " indent;
-              print_seq "()" "" "" ", " (print "%s") arg_names;
-              print " *)\n"
-      end defs;
-      if defs <> [] && sons <> [] then print "\n";
-      print_modules (indent ^ "  ") sons;
-      print "%send\n" indent
-  and print_modules indent l =
-    print_mult (fun (n, m) -> print_module indent n m) l
+    print_mult begin function
+      | Lmap.Method((_, name), ins, outs) ->
+          let ins = strip_args ins
+          and outs = strip_args outs in
+          let in_names, in_types = List.split ins
+          and out_names, out_types = List.split outs in
+            print "%s  val %s : t -> " indent name;
+            begin match ins with
+              | [] -> print "unit -> "
+              | _ -> List.iter (fun (name, typ) ->
+                                  if !with_labels then begin
+                                    print "~(%s:" name;
+                                    print_type typ;
+                                    print ")"
+                                  end else
+                                    print_type typ;
+                                  print " -> ") ins
+            end;
+            print_type (tuple out_types);
+            print "\n%s    (** [%s" indent name;
+            print_seq " ()" "" "" "" (print " %s") in_names;
+            print "] result: ";
+            print_seq "()" "" "" ", " (print "%s") out_names;
+            print " *)\n"
+      | Lmap.Signal((_, name), args) ->
+          let args = strip_args args in
+          let arg_names, arg_types = List.split args in
+            print "%s  val %s : " indent name;
+            print_type (t1 "Obus.signal" (tuple arg_types));
+            print "\n%s    (** args: " indent;
+            print_seq "()" "" "" ", " (print "%s") arg_names;
+            print " *)\n"
+    end defs;
+    if defs <> [] && sons <> (Lmap.Node []) then print "\n";
+    print_modules (indent ^ "  ") sons;
+    print "%send\n" indent
+  and print_modules indent (Lmap.Node(l)) =
+    print_mult (print_module indent) l
 
-  let print_file fname l =
+  let print_sig fname (Lmap.Mapping(_, mods)) =
     print "\
 (*
  * %s
@@ -442,16 +463,87 @@ struct
  *)
 
 " fname (String.make (String.length fname) '-') (Filename.basename (Sys.argv.(0)));
-    print_modules "" l
-end*)
+    print_modules "" mods
+end
 
-let generate fname (Lmap.Mapping(_, mapping)) =
-  ()
-(*  Util.with_open_out fname begin fun ch_mli ->
-    let module P = Print(struct
-                           let ch_mli = ch_mli
-                         end) in
-      P.print_file fname mapping
-  end*)
+module GenExpr =
+struct
+  open Lmap
+
+  let arg_names args =
+    snd (List.fold_right (fun _ (i, l) -> (i + 1, ("x" ^ string_of_int i) :: l)) args (0, []))
+
+  let sig_of_args args =
+    List.fold_left begin fun acc arg -> match arg with
+      | Arg(_, dt, _) -> acc ^ DBus.string_of_type dt
+      | Pack(l, _) -> List.fold_left (fun acc (_, dt, _) -> acc ^ DBus.string_of_type dt) acc l
+    end "" args
+
+  let make_defs interface_name = function
+    | Method((dbus_name, name), ins, outs) ->
+        let in_names = arg_names ins in
+        let out_names = arg_names outs in
+        let writer = List.fold_right2 begin fun def name acc -> match def with
+          | Arg(_, dt, t) ->
+              (<:expr< let i = $generate_writer default_rules t dt$ $lid:name$ i in $acc$ >>)
+          | _ -> assert false
+        end ins in_names (<:expr< i >>) in
+        let reader = List.fold_right2 begin fun def name acc -> match def with
+          | Arg(_, dt, t) ->
+              (<:expr< let i, $lid:name$ = $generate_reader default_rules dt t$ i in $acc$ >>)
+          | _ -> assert false
+        end outs out_names (<:expr< (i, $Ast.exCom_of_list (List.map (fun x -> <:expr< $lid:x$ >>) out_names)$) >>) in
+        let body =
+          (<:expr< OBus.LowLevel.send_message proxy $str:sig_of_args ins$ $str:sig_of_args outs$
+             (fun byte_order buffer i -> match byte_order with
+                | OBus.LowLevel.LittleEndian ->
+                    let module W = OBus.LowLevel.Writer(struct buffer = buffer end)(OBus.LowLevel.LittleEndian)
+                    in $writer$
+                | OBus.LowLevel.BigEndian ->
+                    let module W = OBus.LowLevel.Writer(struct buffer = buffer end)(OBus.LowLevel.BigEndian)
+                    in $writer$)
+             (fun byte_order buffer i -> match byte_order with
+                | OBus.LowLevel.LittleEndian ->
+                    let module R = OBus.LowLevel.Reader(struct buffer = buffer end)(OBus.LowLevel.LittleEndian)
+                    in $reader$
+                | OBus.LowLevel.LittleEndian ->
+                    let module R = OBus.LowLevel.Reader(struct buffer = buffer end)(OBus.LowLevel.BigEndian)
+                    in $reader$)
+             $reader$ >>)
+        in
+          (<:str_item<
+             let $lid:name$ proxy = $List.fold_right
+               (fun n acc -> <:expr< fun $lid:n$ -> $acc$ >>) in_names body$ >>)
+    | Signal((_, name), _) -> (<:str_item< let $lid:name$ = Obj.magic 0 >>)
+
+  let rec make_mod ((dbus_name, name), defs, Node sons) =
+    let extra = match defs with
+      | [] -> <:str_item< >>
+      | _ -> <:str_item< type t = OBus.proxy let proxy p = p >>
+    in
+    let content = List.map (make_defs dbus_name) defs in
+    let son_mods = List.map make_mod sons in
+      (<:str_item< module $uid:name$ =
+                   struct
+                     $extra$ ;;
+                     $Ast.stSem_of_list content$ ;;
+                     $Ast.stSem_of_list son_mods$
+                   end >>)
+
+  let main (Mapping(_, Node mods)) =
+    Ast.stSem_of_list (List.map make_mod mods)
+end
+
+let generate fname mapping =
+  let mli_name = fname ^ ".mli" in
+  let ml_name = fname ^ ".ml" in
+    Util.with_open_out mli_name
+      begin fun ch_mli ->
+        let module P = PrintSig(struct
+                               let ch_mli = ch_mli
+                             end) in
+          P.print_sig mli_name mapping
+      end;
+    Caml.print_implem ~output_file:ml_name (GenExpr.main mapping)
 
 let name = "caml"
