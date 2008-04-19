@@ -7,6 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-module M = Binder.MakeGen(Caml)
+module M = Binder.MakeGen(Caml.Make(struct let rules = Caml.Rules.default end))
 
 let _ = M.main ()

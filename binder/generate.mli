@@ -33,11 +33,11 @@ sig
 
   type generator
 
-  type 'a func =
-    | Func of 'a
-    | List of (Value.t list -> Value.t)
+  type ('a, 'b) value_maker =
+    | Seq of ('a, Value.t, 'b, Value.t) Seq.t * 'b
+    | List of 'a list * (Value.t list -> Value.t)
 
-  val make_generator : pattern -> rpattern -> (rpattern, Value.t, 'a, Value.t) Seq.t -> 'a func -> generator
+  val make_generator : pattern -> rpattern -> (rpattern, 'a) value_maker -> generator
 
   val generate : generator list -> lterm -> rterm  -> Value.t option
 end

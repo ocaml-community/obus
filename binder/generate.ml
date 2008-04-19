@@ -38,29 +38,27 @@ struct
 
   type eqn = lterm * rterm
 
-  type 'a func =
-    | Func of 'a
-    | List of (Value.t list -> Value.t)
+  type ('a, 'b) value_maker =
+    | Seq of ('a, Value.t, 'b, Value.t) Seq.t * 'b
+    | List of 'a list * (Value.t list -> Value.t)
 
-  class maker vars maker = object
-    val vars : (rterm, Value.t, 'a, Value.t) Seq.t = vars
-    val maker : 'a func = maker
-    method make mapping =
-      let vars = Seq.map (fun var -> List.assoc var mapping) vars in
-        match maker with
-          | Func f -> Seq.apply f vars
-          | List f -> f (Seq.to_list vars)
+  class maker maker = object
+    val maker : (rterm, 'a) value_maker = maker
+    method make mapping = match maker with
+      | Seq(vars, f) -> Seq.apply f (Seq.map (fun var -> List.assoc var mapping) vars)
+      | List(vars, f) -> f (List.map (fun var -> List.assoc var mapping) vars)
   end
 
-  class generator left right vars maker = object
+  class generator left right maker = object
     method left : pattern = left
     method right : rpattern = right
-    val vars : (rpattern, Value.t, 'a, Value.t) Seq.t = vars
-    val maker : 'a func = maker
-    method maker f = new maker (Seq.map f vars) maker
+    val maker : (rpattern, 'a) value_maker = maker
+    method maker f = new maker (match maker with
+                                  | Seq(vars, g) -> Seq(Seq.map f vars, g)
+                                  | List(vars, g) -> List(List.map f vars, g))
   end
 
-  let make_generator left right vars maker = new generator left right vars maker
+  let make_generator left right maker = new generator left right maker
 
   type sub = (var * rterm) list
 
