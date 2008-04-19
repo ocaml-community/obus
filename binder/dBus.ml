@@ -81,61 +81,35 @@ let type_of_string dtyp =
   in
   let _, _, t = aux 0 in t
 
-
-type name = string
-
-type param = Arg of name * typ
-type def =
-  | Method of name * param list * param list
-  | Signal of name * param list
-
-type tree =
-  | Node of (name * def list * tree) list
-
-let regexp = Str.regexp "\\."
-
-let add name x t =
-  let rec aux (Node(interfs)) = function
-    | [] -> raise (Invalid_argument "invalid interface name")
-    | [name] -> Node(match List.partition (fun (n, _, _) -> n = name) interfs with
-                       | [(name, defs, sons)], l -> (name, x, sons) :: l
-                       | [], l -> (name, x, Node []) :: l
-                       | _ -> assert false)
-    | name :: names -> Node(match List.partition (fun (n, _, _) -> n = name) interfs with
-                              | [(name, defs, sons)], l -> (name, defs, aux sons names) :: l
-                              | [], l -> (name, [], aux (Node []) names) :: l
-                              | _ -> assert false)
-  in
-    aux t (Str.split regexp name)
+type interface = typ Sig.t
 
 open Xparser
 
 type direction = In | Out
 
 let from_xml xml =
-  let get_dir direction args = Util.filter_map
-    (fun (dir, arg) -> if dir = direction then Some(arg) else None) args in
-    parse (elt "node" [<>]
-             (s2
-                (any (elt "interface"  [< "name" >]
-                        (s1 (union
-                               [elt "method" [< "name" >]
-                                  (s1 (any (elt "arg" [< "name"; "direction"; "type" >]
-                                              s0
-                                              (fun name dir typ ->
-                                                 (begin match dir with
-                                                    | "in" -> In
-                                                    | "out" -> Out
-                                                    | _ -> raise Parse_failed
-                                                  end, Arg(name, type_of_string typ))))))
-                                  (fun name args -> Method(name, get_dir In args, get_dir Out args));
-                                elt "signal" [< "name" >]
-                                  (s1 (any (elt "arg" [< "name"; "type" >]
-                                              s0
-                                              (fun name typ -> Arg(name, type_of_string typ)))))
-                                  (fun name args -> Signal(name, args))]))
-                        (fun name defs -> (name, defs))))
-                (any (elt "node" [< "name" >]
-                        s0
-                        (fun x -> x))))
-             (fun interfs _ -> interfs)) xml
+  parse (elt "node" [<>]
+           (s2
+              (any (elt "interface"  [< (P"name") >]
+                      (s1 (union
+                             [elt "method" [< (P"name") >]
+                                (s2
+                                   (any (elt "arg" [< (P"name"); (A("direction", "in", ["in"])); (P"type") >]
+                                           s0
+                                           (fun name _ typ ->
+                                              Sig.Arg(name, type_of_string typ))))
+                                   (any (elt "arg" [< (P"name"); (A("direction", "in", ["out"])); (P"type") >]
+                                           s0
+                                           (fun name _ typ ->
+                                              Sig.Arg(name, type_of_string typ)))))
+                                (fun name ins outs -> Sig.Method(name, ins, outs));
+                              elt "signal" [< (P"name") >]
+                                (s1 (any (elt "arg" [< (P"name"); (P"type") >]
+                                            s0
+                                            (fun name typ -> Sig.Arg(name, type_of_string typ)))))
+                                (fun name args -> Sig.Signal(name, args))]))
+                      (fun name defs -> Sig.Sig(name, defs))))
+              (any (elt "node" [< (P"name") >]
+                      s0
+                      (fun x -> x))))
+           (fun interfs _ -> interfs)) xml

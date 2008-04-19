@@ -7,34 +7,17 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** This module define a data structure used to represent the mapping
-    of types/names of dbus types/names to destination languages
-    types/names *)
+(** Description of a mapping between DBus types/names to the
+    destination language types/names *)
 
-type name = string
-type name_mapping = name * name
-    (** A mapping from a dbus name to a language native name *)
+type 'a t = {
+  language : string;
+  sigs : 'a Sig.tree;
+  map : (string * DBus.interface) list;
+}
 
-type 'a param_mapping =
-    (** A mapping from a parameter with name and type *)
-  | Arg of name_mapping * DBus.typ * 'a
-      (** Single param mapping *)
-  | Pack of (name_mapping * DBus.typ * 'a) list * 'a
-      (** Mapping from a list of dbus parameters to one single
-          parameters *)
-
-type 'a def_mapping =
-    (** A definition mapping *)
-  | Method of name_mapping * 'a param_mapping list * 'a param_mapping list
-  | Signal of name_mapping * 'a param_mapping list
-
-type 'a tree =
-    (** A mapping for a hierarchy of interfaces *)
-  | Node of (name_mapping * 'a def_mapping list * 'a tree) list
-
-type 'a t =
-    (** A mapping with description (language name) *)
-  | Mapping of string * 'a tree
+val empty : string -> 'a t
+  (** [empty] empty mapping *)
 
 val from_xml : (string -> 'a) -> Xml.xml -> 'a t
   (** [from_xml type_reader xml] Create a mapping from its xml

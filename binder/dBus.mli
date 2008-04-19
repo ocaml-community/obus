@@ -32,23 +32,8 @@ val type_of_string : string -> typ
 val string_of_type : typ -> string
   (** [string_of_type typ] Inverse of type_from_string *)
 
-type name = string
+type interface = typ Sig.t
 
-type param = Arg of name * typ
-  (** A parameter with its name and type in a definition *)
-
-type def =
-    (** A definition in an interface *)
-  | Method of name * param list * param list
-  | Signal of name * param list
-
-type tree =
-    (** A hierarchy of interfaces *)
-  | Node of (name * def list * tree) list
-
-val add : name -> def list -> tree -> tree
-  (** [add name defs tree] add an interface into a tree *)
-
-val from_xml : Xml.xml -> (name * def list) list
+val from_xml : Xml.xml -> interface list
   (** [from_xml xml] parse a xml obtained from introspection into a
-      list of interfaces with their names *)
+      list of interfaces *)

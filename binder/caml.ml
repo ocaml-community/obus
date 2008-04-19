@@ -400,13 +400,10 @@ struct
         if args <> [] then print " ";
         print "%s" t
 
-  let strip_args l =
-    List.map begin function
-      | Lmap.Arg((_, name), _, t) -> (name, t)
-      | Lmap.Pack _ -> failwith "packs are currently unsupported"
-    end l
+  let split_args args =
+    List.split (List.map (fun (Sig.Arg(n, t)) -> (n, t)) args)
 
-  let rec print_module indent ((_, name), defs, sons) =
+  let rec print_module indent (Sig.Sig(name, defs), sons) =
     print "%smodule %s : sig\n" indent name;
     if defs <> [] then
       print "%s  type t
@@ -415,15 +412,13 @@ struct
 
 " indent indent;
     print_mult begin function
-      | Lmap.Method((_, name), ins, outs) ->
-          let ins = strip_args ins
-          and outs = strip_args outs in
-          let in_names, in_types = List.split ins
-          and out_names, out_types = List.split outs in
+      | Sig.Method(name, ins, outs) ->
+          let in_names, in_types = split_args ins
+          and out_names, out_types = split_args outs in
             print "%s  val %s : t -> " indent name;
             begin match ins with
               | [] -> print "unit -> "
-              | _ -> List.iter (fun (name, typ) ->
+              | _ -> List.iter (fun (Sig.Arg(name, typ)) ->
                                   if !with_labels then begin
                                     print "~(%s:" name;
                                     print_type typ;
@@ -438,22 +433,21 @@ struct
             print "] result: ";
             print_seq "()" "" "" ", " (print "%s") out_names;
             print " *)\n"
-      | Lmap.Signal((_, name), args) ->
-          let args = strip_args args in
-          let arg_names, arg_types = List.split args in
+      | Sig.Signal(name, args) ->
+          let arg_names, arg_types = split_args args in
             print "%s  val %s : " indent name;
             print_type (t1 "Obus.signal" (tuple arg_types));
             print "\n%s    (** args: " indent;
             print_seq "()" "" "" ", " (print "%s") arg_names;
             print " *)\n"
     end defs;
-    if defs <> [] && sons <> (Lmap.Node []) then print "\n";
+    if defs <> [] && sons <> Sig.empty then print "\n";
     print_modules (indent ^ "  ") sons;
     print "%send\n" indent
-  and print_modules indent (Lmap.Node(l)) =
+  and print_modules indent (Sig.Tree(l)) =
     print_mult (print_module indent) l
 
-  let print_sig fname (Lmap.Mapping(_, mods)) =
+  let print_sig fname mapping =
     print "\
 (*
  * %s
@@ -463,38 +457,28 @@ struct
  *)
 
 " fname (String.make (String.length fname) '-') (Filename.basename (Sys.argv.(0)));
-    print_modules "" mods
+    print_modules "" mapping.Lmap.sigs
 end
 
 module GenExpr =
 struct
-  open Lmap
-
-  let arg_names args =
-    List.rev (snd (List.fold_left (fun (i, l) _ -> (i + 1, ("x" ^ string_of_int i) :: l)) (0, []) args))
+  open Sig
 
   let sig_of_args args =
-    List.fold_left begin fun acc arg -> match arg with
-      | Arg(_, dt, _) -> acc ^ DBus.string_of_type dt
-      | Pack(l, _) -> List.fold_left (fun acc (_, dt, _) -> acc ^ DBus.string_of_type dt) acc l
-    end "" args
+    List.fold_left (fun acc (Arg(_, dtype)) -> acc ^ DBus.string_of_type dtype) "" args
 
-  let make_defs interface_name = function
-    | Method((dbus_name, name), ins, outs) ->
-        let in_names = arg_names ins in
-        let out_names = arg_names outs in
-        let writer = List.fold_right2 begin fun def name acc -> match def with
-          | Arg(_, dt, t) ->
-              (<:expr< let i = $generate_writer default_rules t dt$ $lid:name$ i in $acc$ >>)
-          | _ -> assert false
-        end ins in_names (<:expr< i >>) in
-        let reader = List.fold_right2 begin fun def name acc -> match def with
-          | Arg(_, dt, t) ->
-              (<:expr< let i, $lid:name$ = $generate_reader default_rules dt t$ i in $acc$ >>)
-          | _ -> assert false
-        end outs out_names (<:expr< (i, $Ast.exCom_of_list (List.map (fun x -> <:expr< $lid:x$ >>) out_names)$) >>) in
+  let make_def interface_name ddef ldef = match ddef, ldef with
+    | (Method(dname, dins, douts),
+       Method(lname, lins, louts)) ->
+        let writer = List.fold_right2 begin fun (Arg(_, dtype)) (Arg(lname, ltype)) acc ->
+          <:expr< let i = $generate_writer default_rules ltype dtype$ $lid:lname$ i in $acc$ >>
+        end dins lins (<:expr< i >>) in
+        let reader = List.fold_right2 begin fun (Arg(_, dtype)) (Arg(lname, ltype)) acc ->
+          <:expr< let i, $lid:lname$ = $generate_reader default_rules dtype ltype$ i in $acc$ >>
+        end douts louts
+          (<:expr< (i, $Ast.exCom_of_list (List.map (fun (Arg(name, _)) -> <:expr< $lid:name$ >>) louts)$) >>) in
         let body =
-          (<:expr< OBus.LowLevel.send_message proxy $str:sig_of_args ins$ $str:sig_of_args outs$
+          (<:expr< OBus.LowLevel.send_message proxy $str:dname$ $str:sig_of_args dins$ $str:sig_of_args douts$
              (fun byte_order buffer i -> match byte_order with
                 | OBus.LowLevel.LittleEndian ->
                     let module W = OBus.LowLevel.Writer(struct let buffer = buffer end)(OBus.LowLevel.LittleEndian)
@@ -512,26 +496,32 @@ struct
              $reader$ >>)
         in
           (<:str_item<
-             let $lid:name$ proxy = $List.fold_right
-               (fun n acc -> <:expr< fun $lid:n$ -> $acc$ >>) in_names body$ >>)
-    | Signal((_, name), _) -> (<:str_item< let $lid:name$ = Obj.magic 0 >>)
+             let $lid:lname$ proxy = $List.fold_right
+               (fun (Arg(name, _)) acc -> <:expr< fun $lid:name$ -> $acc$ >>) lins body$ >>)
+    | (Signal(_, _),
+       Signal(lname, _)) -> (<:str_item< let $lid:lname$ = Obj.magic 0 >>)
+    | _ -> assert false
 
-  let rec make_mod ((dbus_name, name), defs, Node sons) =
-    let extra = match defs with
+  let rec make_mod map lnames (Sig(lname, ldefs), Tree sons) =
+    let lnames = lname :: lnames in
+    let content = begin match ldefs with
       | [] -> <:str_item< >>
-      | _ -> <:str_item< type t = OBus.proxy let proxy p = p >>
-    in
-    let content = List.map (make_defs dbus_name) defs in
-    let son_mods = List.map make_mod sons in
-      (<:str_item< module $uid:name$ =
+      | _ ->
+          let (Sig(dname, ddefs)) = List.assoc (Util.rjoin "." lnames) map in
+            (<:str_item< type t = OBus.proxy ;;
+                         let proxy p = p ;;
+                         $Ast.stSem_of_list (List.map2 (make_def dname) ddefs ldefs)$ >>)
+    end in
+    let son_mods = List.map (make_mod map lnames) sons in
+      (<:str_item< module $uid:lname$ =
                    struct
-                     $extra$ ;;
-                     $Ast.stSem_of_list content$ ;;
+                     $content$ ;;
                      $Ast.stSem_of_list son_mods$
                    end >>)
 
-  let main (Mapping(_, Node mods)) =
-    Ast.stSem_of_list (List.map make_mod mods)
+  let main mapping =
+    let (Tree mods) = mapping.Lmap.sigs in
+      Ast.stSem_of_list (List.map (make_mod mapping.Lmap.map []) mods)
 end
 
 let generate fname mapping =

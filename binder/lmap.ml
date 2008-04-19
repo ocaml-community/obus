@@ -10,89 +10,59 @@
 type name = string
 type name_mapping = name * name
 
-type 'a param_mapping =
-  | Arg of name_mapping * DBus.typ * 'a
-  | Pack of (name_mapping * DBus.typ * 'a) list * 'a
-
-type 'a def_mapping =
-  | Method of name_mapping * 'a param_mapping list * 'a param_mapping list
-  | Signal of name_mapping * 'a param_mapping list
-
-type 'a tree =
-  | Node of (name_mapping * 'a def_mapping list * 'a tree) list
-
-type 'a t =
-  | Mapping of string * 'a tree
+type 'a t = {
+  language : string;
+  sigs : 'a Sig.tree;
+  map : (string * DBus.interface) list;
+}
 
 open Xml
 open Xparser
 
-let regexp = Str.regexp "\\."
+let empty language =
+  { language = language;
+    sigs = Sig.Tree [];
+    map = [] }
 
-let extract name def_mappings =
-  match List.partition (fun ((_, n), _, _) -> n = name) def_mappings with
-    | [v], l -> (Some(v), l)
-    | [], l -> (None, l)
-    | _ -> assert false
+let merge a b =
+  if a.language <> b.language
+  then raise (Invalid_argument "cannot merge mapping from different languages")
+  else { language = a.language;
+         sigs = Sig.merge a.sigs b.sigs;
+         map = b.map @ a.map }
 
-let add mappings (dbus_name, lang_name, x) =
-  let rec aux (Node(mappings)) = function
-    | [] -> raise (Invalid_argument "invalid module name")
-    | [name] -> Node(match extract name mappings with
-                       | Some((_, name), maps, sons), l -> ((dbus_name, name), x, sons) :: l
-                       | None, l -> ((dbus_name, name), x, Node []) :: l)
-    | name :: names -> Node(match extract name mappings with
-                              | Some((dn, name), maps, sons), l -> ((dn, name), maps, aux sons names) :: l
-                              | None, l -> (("", name), [], aux (Node []) names) :: l)
-  in
-    aux mappings (Str.split regexp lang_name)
+let to_xml type_writer mapping =
+  let names dname lname = [("dname", dname); ("name", lname)] in
 
-let merge (Mapping(la, a)) (Mapping(lb, b)) =
-  let rec aux (Node(a)) (Node(b)) =
-    Node begin List.fold_left begin fun acc (((dnb, nb), mapsb, sonsb) as b) ->
-      match extract nb acc with
-        | Some((dna, na), mapsa, sonsa), l -> begin match mapsb with
-            | [] -> ((dna, na), mapsa, aux sonsa sonsb)
-            | _ -> ((dnb, nb), mapsb, aux sonsa sonsb)
-          end :: l
-        | None, l -> b :: l
-    end a b end
-  in
-    if la <> lb
-    then raise (Invalid_argument "cannot merge mapping from different languages")
-    else Mapping(la, aux a b)
-
-let to_xml type_writer =
-  let name_mapping_to_params (dname, name) = [("dname", dname); ("name", name)] in
-
-  let rec args_to_xml args =
-    List.map begin function
-      | Arg(nm, dt, t) ->
-          Element("arg", name_mapping_to_params nm
-                    @ [("dtype", DBus.string_of_type dt);
-                       ("type", type_writer t)], [])
-      | Pack(nmdts, t) ->
-          Element("pack", [("type", type_writer t)],
-                  args_to_xml (List.map (fun (x, y, z) -> Arg(x, y, z)) nmdts))
-    end args
+  let rec args_to_xml dir dargs largs =
+    List.map2 begin fun (Sig.Arg(dname, dtype)) (Sig.Arg(lname, ltype)) ->
+      Element("arg", names dname lname
+                @ (match dir with Some(d) -> [("direction", d)] | None -> [])
+                @ [("dtype", DBus.string_of_type dtype);
+                   ("type", type_writer ltype)], [])
+    end dargs largs
   in
 
-  let rec main_to_xml lang_names (Node(mappings)) =
-    List.flatten begin List.map begin fun ((dbus_name, lang_name), content, sons) ->
-      let lang_names = lang_name :: lang_names in
-        Element("interface", name_mapping_to_params (dbus_name, Util.rjoin "." lang_names),
-                List.map begin function
-                  | Method(nm, ins, outs) ->
-                      Element("method", name_mapping_to_params nm,
-                              [Element("params", [],
-                                       args_to_xml ins);
-                               Element("result", [],
-                                       args_to_xml outs)])
-                  | Signal(nm, args) ->
-                      Element("signal", name_mapping_to_params nm,
-                              args_to_xml args)
-                end content) :: main_to_xml lang_names sons
-    end mappings end
+  let rec main_to_xml lnames (Sig.Tree(nodes)) =
+    List.flatten begin List.map begin fun (Sig.Sig(lshortname, ldefs), t) ->
+      let lnames = lshortname :: lnames in
+      let lname = Util.rjoin "." lnames in
+      let rest = main_to_xml lnames t in
+        match ldefs with
+          | [] -> rest
+          | _ -> let (Sig.Sig(dname, ddefs)) = List.assoc lname mapping.map in
+              Element("interface", names dname lname,
+                      List.map2 begin fun a b -> match a, b with
+                        | Sig.Method(dn, dins, douts), Sig.Method(ln, lins, louts) ->
+                            Element("method", names dn ln,
+                                    args_to_xml (Some "in") dins lins
+                                    @ args_to_xml (Some "out") douts louts)
+                        | Sig.Signal(dn, dargs), Sig.Signal(ln, largs) ->
+                            Element("signal", names dn ln,
+                                    args_to_xml None dargs largs)
+                        | _ -> assert false
+                      end ddefs ldefs) :: rest
+    end nodes end
   in
 
   let remove_empty interfaces =
@@ -100,40 +70,46 @@ let to_xml type_writer =
                    | Element("interface", _, []) -> false
                    | _ -> true) interfaces
   in
-
-    (fun (Mapping(language, mapping)) ->
-       Element("map", [("language", language)],
-               remove_empty (main_to_xml [] mapping)))
+    Element("map", [("language", mapping.language)],
+            remove_empty (main_to_xml [] mapping.sigs))
 
 let from_xml type_reader xml =
-  let args_parser () =
-    s1 (union
-          [elt "arg" [< "dname"; "name"; "dtype"; "type" >]
-             s0
-             (fun dname name dtyp typ ->
-                Arg((dname, name), DBus.type_of_string dtyp, type_reader typ));
-           elt "pack" [< "type" >]
-             (s1 (any (elt "arg" [< "dname"; "name"; "dtype"; "type" >]
-                         s0
-                         (fun dname name dtyp typ ->
-                            ((dname, name), DBus.type_of_string dtyp, type_reader typ)))))
-             (fun typ l -> Pack(l, type_reader typ))])
-  in
-    parse (elt "map" [< "language" >]
-             (s1 (any (elt "interface" [< "dname"; "name" >]
-                         (s1 (union
-                                [elt "method" [< "dname"; "name" >]
-                                   (s2
-                                      (one (elt "params" [<>]
-                                              (args_parser ())
-                                              (fun x -> x)))
-                                      (one (elt "result" [<>]
-                                              (args_parser ())
-                                              (fun x -> x))))
-                                   (fun dname name ins outs -> Method((dname, name), ins, outs));
-                                 elt "signal" [< "dname"; "name" >]
-                                   (args_parser ())
-                                   (fun dname name args -> Signal((dname, name), args))]))
-                         (fun dname name defs -> (dname, name, defs)))))
-             (fun language mappings -> Mapping(language,
-                                               List.fold_left add (Node []) mappings))) xml
+  parse (elt "map" [< (P"language") >]
+           (s1 (any (elt "interface" [< (P"dname"); (P"name") >]
+                       (s1 (union
+                              [elt "method" [< (P"dname"); (P"name") >]
+                                 (s2
+                                    (any (elt "arg" [< (P"dname"); (P"name"); (A("direction", "in", ["in"])); (P"dtype"); (P"type") >]
+                                            s0
+                                            (fun dname lname _ dtype ltype ->
+                                               (Sig.Arg(dname, DBus.type_of_string dtype),
+                                                Sig.Arg(lname, type_reader ltype)))))
+                                    (any (elt "arg" [< (P"dname"); (P"name"); (A("direction", "in", ["out"])); (P"dtype"); (P"type") >]
+                                            s0
+                                            (fun dname lname _ dtype ltype ->
+                                               (Sig.Arg(dname, DBus.type_of_string dtype),
+                                                Sig.Arg(lname, type_reader ltype))))))
+                                 (fun dname lname ins outs ->
+                                    let dins, lins = List.split ins
+                                    and douts, louts = List.split outs in
+                                      (Sig.Method(dname, dins, douts),
+                                       Sig.Method(lname, lins, louts)));
+                               elt "signal" [< (P"dname"); (P"name") >]
+                                 (s1 (any (elt "arg" [< (P"dname"); (P"name"); (P"dtype"); (P"type") >]
+                                             s0
+                                             (fun dname lname dtype ltype ->
+                                                (Sig.Arg(dname, DBus.type_of_string dtype),
+                                                 Sig.Arg(lname, type_reader ltype))))))
+                                 (fun dname lname args ->
+                                    let dargs, largs = List.split args in
+                                      (Sig.Signal(dname, dargs),
+                                       Sig.Signal(lname, largs)))]))
+                       (fun dname lname defs ->
+                          let ddefs, ldefs = List.split defs in
+                            ((lname, Sig.Sig(dname, ddefs)),
+                             (lname, ldefs))))))
+           (fun language sigs ->
+              let map, sigs = List.split sigs in
+                { language = language;
+                  sigs = List.fold_left (fun acc (name, defs) -> Sig.add name defs acc) (Sig.Tree []) sigs;
+                  map = map } )) xml
