@@ -59,5 +59,7 @@ let _ = dispatch begin function
         flag ["ocaml"; "pp"; "pa_"^ext] (A("pa_"^ext^".cmo"));
         dep ["ocaml"; "ocamldep"; "pa_"^ext] ["pa_"^ext^".cmo"];
       end (myexts ());
+
+      ocaml_lib "obus/OBus";
   | _ -> ()
 end
