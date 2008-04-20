@@ -30,11 +30,15 @@ let param_desc = function
 
 let get_arg args spec =
   let (name, default, field) = param_desc spec in
-  let value = try Some(List.assoc name args) with Not_found -> None in
-    match (value, default, field) with
-      | None, Some d, _ -> d
-      | Some v, _, Some f when List.mem v f -> v
-      | Some v, _, _ -> v
+  let value =
+    try List.assoc name args
+    with Not_found -> match default with
+      | Some(v) -> v
+      | None -> raise Parse_failed
+  in
+    match field with
+      | None -> value
+      | Some f when List.mem value f -> value
       | _ -> raise Parse_failed
 
 let elt elt_name params sons_parser f = function
