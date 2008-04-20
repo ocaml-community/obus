@@ -13,3 +13,13 @@ module Values = Values_internal
 
 type bus = LowLevel.bus
 
+exception Connection_failed
+
+let session () =
+  LowLevel.open_bus (Address.session ())
+
+let system () =
+  LowLevel.open_bus (Address.system ())
+
+let connect_to_bus str =
+  LowLevel.open_bus (Address.of_string str)

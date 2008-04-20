@@ -32,3 +32,5 @@ module Values : Values.S
 (** {6 Low level operations} *)
 
 module LowLevel : LowLevel.S with type bus = bus
+                             and module T = Types
+                             and module V = Values

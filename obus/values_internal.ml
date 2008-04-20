@@ -56,7 +56,7 @@ let rec type_of_single = function
 and type_of_t l = List.map type_of_single l
 
 let string_of_basic = function
-  | Byte(c) -> "Byte(" ^ Char.escaped c ^ ")"
+  | Byte(c) -> "Byte('" ^ Char.escaped c ^ "')"
   | Boolean(b) -> "Boolean(" ^ (if b then "true" else "false") ^ ")"
   | Int16(i) -> "Int16(" ^ string_of_int i ^ ")"
   | Int32(i) -> "Int32(" ^ Int32.to_string i ^ ")"
@@ -65,7 +65,7 @@ let string_of_basic = function
   | Uint32(i) -> "Uint32(" ^ Int32.to_string i ^ ")"
   | Uint64(i) -> "Uint64(" ^ Int64.to_string i ^ ")"
   | Double(d) -> "Double(" ^ string_of_float d ^ ")"
-  | String(s) -> "String(" ^ s ^ ")"
+  | String(s) -> "String(\"" ^ s ^ "\")"
   | Signature(s) -> "Signature(" ^ T.string_of_t s ^ ")"
   | Object_path(s) -> "Object_path(" ^ s ^ ")"
 

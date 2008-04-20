@@ -30,10 +30,10 @@ type client_command =
 type guid = string
 
 type server_command =
-  | `Rejected of string list
-  | `Ok of data
-  | `Data of data
-  | `Error of string
+    [ `Rejected of string list
+    | `OK of data
+    | `Data of data
+    | `Error of string ]
 
 (* Parsing *)
 
@@ -113,7 +113,7 @@ let parse_command line =
 
 let server_command_of_string command argument = match command with
   | "REJECTED" -> `Rejected(Str.split separator_regex argument)
-  | "OK" -> `Ok(data_of_hexstring argument)
+  | "OK" -> `OK(data_of_hexstring argument)
   | "DATA" -> `Data(data_of_hexstring argument)
   | "ERROR" -> `Error(argument)
   | _ -> raise (ParseError "unknown command")
@@ -129,7 +129,7 @@ let string_of_client_command = function
 
 type auth_mechanism_return =
   | AMRContinue of data
-  | AMROk of data
+  | AMROK of data
   | AMRError of string
 
 class virtual auth_mechanism = object
@@ -141,7 +141,7 @@ end
 
 class auth_external = object
   inherit auth_mechanism
-  method init = AMROk(string_of_int (Unix.getuid ()))
+  method init = AMROK(string_of_int (Unix.getuid ()))
 end
 
 type auth_mechanism_definition = string * (unit -> auth_mechanism)
@@ -163,7 +163,7 @@ let rec find_mechanism = function
   | (name, create_mech)::mechs -> let mech = create_mech () in
       match mech#init with
         | AMRContinue(resp) -> Some(`Auth(name, resp), (`Waiting_for_data, mech, mechs))
-        | AMROk(resp)       -> Some(`Auth(name, resp), (`Waiting_for_ok,   mech, mechs))
+        | AMROK(resp)       -> Some(`Auth(name, resp), (`Waiting_for_ok,   mech, mechs))
         | AMRError(_)       -> find_mechanism mechs
 
 let client_transition (state, mech, mechs) cmd = match state, cmd with
@@ -171,7 +171,7 @@ let client_transition (state, mech, mechs) cmd = match state, cmd with
       ClientTransition(
         match mech#data data with
           | AMRContinue(resp) -> `Data(resp), (`Waiting_for_data, mech, mechs)
-          | AMROk(resp)       -> `Data(resp), (`Waiting_for_ok,   mech, mechs)
+          | AMROK(resp)       -> `Data(resp), (`Waiting_for_ok,   mech, mechs)
           | AMRError(msg)     -> `Error(msg), (`Waiting_for_data, mech, mechs))
 
   | _, `Rejected(supported_mechanisms) ->
@@ -185,7 +185,7 @@ let client_transition (state, mech, mechs) cmd = match state, cmd with
 
   | `Waiting_for_reject, _ -> ClientFailure "protocol error"
 
-  | _, `Ok(guid) -> ClientFinal
+  | _, `OK(guid) -> ClientFinal
 
   | `Waiting_for_ok, `Data _
   | _, `Error _ -> ClientTransition(`Cancel, (`Waiting_for_reject, mech, mechs))
@@ -232,7 +232,8 @@ let do_auth fd =
       sendline (string_of_client_command command ^ eol_delim)
 
     and recv_command () =
-      server_command_of_string (parse_command (recvline ())) in
+      let cmd, args = parse_command (recvline ()) in
+        server_command_of_string cmd args in
 
       match find_mechanism mechanisms with
         | Some(cmd, state) ->

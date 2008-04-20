@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-module L : LowLevel.S
-
 type typ =
   | Invalid
   | Method_call
@@ -32,8 +30,10 @@ type fields =
   | Sender of string
   | Signature of string
 
+type byte_order = LittleEndian | BigEndian
+
 type t = {
-  byte_order : L.byte_order;
+  byte_order : byte_order;
   typ : typ;
   flags : flags list;
   protocol_version : int;
@@ -41,10 +41,3 @@ type t = {
   serial : serial;
   fields : fields list;
 }
-
-val write : L.buffer -> t -> L.ptr -> (int -> unit) * L.ptr
-  (** [write buf header ptr] marshal an header, return a function that
-      can be used for writing message size *)
-
-val read : L.buffer -> t L.reader
-  (** [read buf] load an header from its marshaled representation *)

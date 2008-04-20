@@ -7,6 +7,9 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+type buffer = string
+exception Connection_failed
+
 let max_array_size = 1 lsl 26
 
 module type ByteOrder =
@@ -328,12 +331,13 @@ struct
       if len > max_array_size
       then raise (Read_error "array too big!")
       else
-        read_until begin fun acc i ->
-          let i = pad8 i in
-          let i, key = key_reader i in
-          let i, value = val_reader i in
-            (i, add key value acc)
-        end empty (i + len) i
+        let i = pad8 i in
+          read_until begin fun acc i ->
+            let i = pad8 i in
+            let i, key = key_reader i in
+            let i, value = val_reader i in
+              (i, add key value acc)
+          end empty (i + len) i
 
   let read_structure reader i = reader (pad8 i)
 
@@ -449,7 +453,7 @@ struct
       buffer.[i + data32_bit3] <- char_of_int (Int32.to_int (Int32.shift_right v 24) land 0xff);
       i + 4
 
-  let write_uint32_from_int32 = write_int32
+  let write_uint32_from_int32 = write_int32_from_int32
 
   let write_int64_from_int64 v i =
     let i = pad8 i in
@@ -464,10 +468,10 @@ struct
       i + 8
 
   let write_uint64_from_int64 = write_int64_from_int64
-  let write_int64 = write_int64_from_int64
-  let write_uint64 = write_uint64_from_int64
+  let write_int64 v i = write_int64_from_int64 (Int64.of_int v) i
+  let write_uint64 v i = write_uint64_from_int64 (Int64.of_int v) i
 
-  let write_double v i = write_int64 (Int64.of_float v) i
+  let write_double v i = write_int64_from_int64 (Int64.of_float v) i
 
   let write_string s i =
     let len = String.length s in
@@ -541,7 +545,7 @@ struct
        marshaled array followed by the marshaled array contents *)
     let i = pad4 i in
     let j = i + 4 in
-    let k = fold elt_writer j v in
+    let k = fold (fun v i -> elt_writer v i) j v in
     let len = k - j in
       if len > max_array_size
       then raise (Write_error "array too big!")
@@ -597,28 +601,181 @@ end
 type 'a cookie = int
 
 type bus = {
-  fd : int;
+  fd : Unix.file_descr;
   buffer : string;
-  mutable next_cookie : int32;
+  mutable next_serial : int32;
 }
+
+open Header
+
+module WriteH(BO : ByteOrder)(Buffer : BufferType) =
+struct
+  module W = Writer(BO)(Buffer)
+  let write header i =
+    let i = W.write_byte begin match header.byte_order with
+      | LittleEndian -> 'l'
+      | BigEndian -> 'B'
+    end i in
+    let i = W.write_byte begin match header.typ with
+      | Invalid -> '\x00'
+      | Method_call -> '\x01'
+      | Method_return -> '\x02'
+      | Error -> '\x03'
+      | Signal -> '\x04'
+    end i in
+    let i = W.write_byte begin char_of_int
+        (List.fold_left
+           (fun acc flag -> match flag with
+              | ReplyExpected -> acc land (lnot 1)
+              | AutoStart -> acc land (lnot 2))
+           0b11 header.flags)
+    end i in
+    let j = W.write_byte (char_of_int header.protocol_version) i in
+    let i = W.write_uint32 header.length j in
+    let i = W.write_uint32_from_int32 header.serial i in
+    let i = W.write_array begin fun v i ->
+      W.write_structure begin fun v i -> match v with
+        | Path(x) -> let i = W.write_byte '\x01' i in W.write_fixed_variant "o" W.write_object_path x i
+        | Interface(x) -> let i = W.write_byte '\x02' i in W.write_fixed_variant "s" W.write_string x i
+        | Member(x) -> let i = W.write_byte '\x03' i in W.write_fixed_variant "s" W.write_string x i
+        | Error_name(x) -> let i = W.write_byte '\x04' i in W.write_fixed_variant "s" W.write_string x i
+        | Reply_serial(x) -> let i = W.write_byte '\x05' i in W.write_fixed_variant "u" W.write_int32_from_int32 x i
+        | Destination(x) -> let i = W.write_byte '\x06' i in W.write_fixed_variant "s" W.write_string x i
+        | Sender(x) -> let i = W.write_byte '\x07' i in W.write_fixed_variant "s" W.write_string x i
+        | Signature(x) -> let i = W.write_byte '\x08' i in W.write_fixed_variant "g" W.write_signature_from_string x i
+      end v i
+    end (fun f x l -> List.fold_left (fun acc v -> f v acc) x l) header.fields i
+    in
+      ((fun length -> ignore (W.write_uint32 length j)), W.pad8 i)
+end
+
+module WriteHLE = WriteH(LittleEndian)
+module WriteHBE = WriteH(BigEndian)
+
+let write_header buffer header i =
+  let module Buffer = struct let buffer = buffer end in
+    match header.byte_order with
+      | LittleEndian -> let module W = WriteHLE(Buffer) in
+          W.write header i
+      | BigEndian -> let module W = WriteHBE(Buffer) in
+          W.write header i
+
+module ReadH(BO : ByteOrder)(Buffer : BufferType) =
+struct
+  module R = Reader(BO)(Buffer)
+  let read i =
+    let i, byte_order = R.read_byte i in
+    let i, message_type = R.read_byte i in
+    let i, flags = R.read_byte i in
+    let i, protocol_version = R.read_byte i in
+    let i, length = R.read_uint32 i in
+    let i, serial = R.read_uint32_as_int32 i in
+    let i, fields = R.read_array begin fun i ->
+      R.read_structure begin fun i ->
+        let i, code = R.read_byte i in
+          match code with
+            | '\x01' -> let i, x = R.read_fixed_variant "o" R.read_object_path i in (i, Path(x))
+            | '\x02' -> let i, x = R.read_fixed_variant "s" R.read_string i in (i, Interface(x))
+            | '\x03' -> let i, x = R.read_fixed_variant "s" R.read_string i in (i, Member(x))
+            | '\x04' -> let i, x = R.read_fixed_variant "s" R.read_string i in (i, Error_name(x))
+            | '\x05' -> let i, x = R.read_fixed_variant "u" R.read_uint32_as_int32 i in (i, Reply_serial(x))
+            | '\x06' -> let i, x = R.read_fixed_variant "s" R.read_string i in (i, Destination(x))
+            | '\x07' -> let i, x = R.read_fixed_variant "s" R.read_string i in (i, Sender(x))
+            | '\x08' -> let i, x = R.read_fixed_variant "g" R.read_signature_as_string i in (i, Signature(x))
+            | code when code < '\x01' || code > '\x08' -> failwith "unknown header field code"
+            | _ -> let _, x = R.read_variant i in
+                failwith (Printf.sprintf "malformed header field(code = %d, value = %s)"
+                            (int_of_char code)
+                            (V.string_of_single x))
+      end i
+    end [] (fun e l -> e :: l) i in
+      (R.pad8 i,
+       { byte_order = (match byte_order with
+                         | 'l' -> LittleEndian
+                         | 'B' -> BigEndian
+                         | _ -> failwith "unknown endianess");
+         typ = (match message_type with
+                  | '\x00' -> Invalid
+                  | '\x01' -> Method_call
+                  | '\x02' -> Method_return
+                  | '\x03' -> Error
+                  | '\x04' -> Signal
+                  | _ -> failwith "unknown message type");
+         flags = begin
+           let flags = int_of_char flags in
+           let l = if flags land 1 = 0 then [ReplyExpected] else [] in
+             if flags land 2 = 0 then AutoStart :: l else l
+         end;
+         protocol_version = int_of_char protocol_version;
+         length = length;
+         serial = serial;
+         fields = fields })
+end
+
+module ReadHLE = ReadH(LittleEndian)
+module ReadHBE = ReadH(BigEndian)
+
+let read_header buffer i =
+  let module Buffer = struct let buffer = buffer end in
+    match buffer.[i] with
+      | 'l' -> let module R = ReadHLE(Buffer) in
+          R.read i
+      | 'B' -> let module R = ReadHBE(Buffer) in
+          R.read i
+      | _ -> failwith (Printf.sprintf "invalid byte order %c" buffer.[i])
 
 module H = Header
 
-let send_message bus hfields msig rsig writer reader () =
-  let id = bus.next_cookie in
-    bus.next_cookie <- id + 1;
-    let f, i = H.write
-      { H.byte_order = L.LittleEndian;
+let send_message bus hfields msig rsig writer reader =
+  let id = bus.next_serial in
+    bus.next_serial <- Int32.succ id;
+    String.fill bus.buffer 0 (String.length bus.buffer) '\x00';
+    let f, i = write_header bus.buffer
+      { H.byte_order = H.LittleEndian;
         H.typ = H.Method_call;
         H.flags = [ReplyExpected; AutoStart];
         H.protocol_version = 1;
         H.length = 0;
         H.serial = id;
         H.fields = hfields } 0 in
-    let j = writer L.LittleEndian bus.buffer i in
+    let j = writer LittleEndian bus.buffer i in
       f (j - i);
-      Unix.write fd bus.buffer 0 j;
-      Unix.read fd bus.buffer 0 5000;
-      let i, header = H.read 0 in
+      let h = open_out "/tmp/toto" in
+        output_string h (String.sub bus.buffer 0 j);
+        close_out h;
+      Printf.printf "send = %d\n" (Unix.write bus.fd bus.buffer 0 j);
+      let c = (Unix.read bus.fd bus.buffer 0 5000) in
+      Printf.printf "recv = %d\n" c;
+      let h = open_out "/tmp/titi" in
+        output_string h (String.sub bus.buffer 0 c);
+        close_out h;
+      let i, header = read_header bus.buffer 0 in
+        Printf.printf "length = %d\n" header.length;
       let i, v = reader header.H.byte_order bus.buffer i in
         v
+
+open Unix
+
+let rec open_bus = function
+  | [] -> failwith "cannot connect"
+  | (name, params) :: tl -> match name with
+      | "unix" ->
+          begin match match (Util.assoc "abstract" params,
+		             Util.assoc "path" params) with
+	    | None, None
+	    | Some _, Some _ -> None
+	    | Some abstract, None -> Some("\x00" ^ abstract)
+	    | None, Some path -> Some(path)
+          with
+            | Some(addr) -> begin try
+                let fd = socket PF_UNIX SOCK_STREAM 0 in
+                  connect fd (ADDR_UNIX(addr));
+                  match Auth.do_auth fd with
+                    | Auth.Success -> { fd = fd; buffer = String.create 65536; next_serial = Int32.one }
+                    | Auth.Failure _ -> open_bus tl
+              with
+                  _ -> open_bus tl
+              end
+            | None -> open_bus tl
+          end
+      | _ -> open_bus tl
