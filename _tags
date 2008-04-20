@@ -1,0 +1,8 @@
+"pa_seq.ml": camlp4of, use_camlp4
+"binder/dBus.ml": camlp4o, pa_seq
+"binder/lmap.ml": camlp4o, pa_seq
+"binder/caml.ml": camlp4of, pa_seq
+<binder/caml.*>: use_camlp4_full, use_dynlink
+<binder/*>: pkg_xml-light
+<binder/binder.*>: pkg_str
+<binder/obus-caml-*.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
