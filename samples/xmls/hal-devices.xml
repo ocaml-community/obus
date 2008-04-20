@@ -1,0 +1,200 @@
+<node>
+  <interface name="org.freedesktop.DBus.Introspectable">
+    <method name="Introspect">
+      <arg name="data" direction="out" type="s"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device">
+    <method name="GetAllProperties">
+      <arg name="properties" direction="out" type="a{sv}"/>
+    </method>
+    <method name="SetMultipleProperties">
+      <arg name="properties" direction="in" type="a{sv}"/>
+    </method>
+    <method name="GetProperty">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="out" type="v"/>
+    </method>
+    <method name="GetPropertyString">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="out" type="s"/>
+    </method>
+    <method name="GetPropertyStringList">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="out" type="as"/>
+    </method>
+    <method name="GetPropertyInteger">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="out" type="i"/>
+    </method>
+    <method name="GetPropertyBoolean">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="out" type="b"/>
+    </method>
+    <method name="GetPropertyDouble">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="out" type="d"/>
+    </method>
+    <method name="SetProperty">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="v"/>
+    </method>
+    <method name="SetPropertyString">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="s"/>
+    </method>
+    <method name="SetPropertyStringList">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="as"/>
+    </method>
+    <method name="SetPropertyInteger">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="i"/>
+    </method>
+    <method name="SetPropertyBoolean">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="b"/>
+    </method>
+    <method name="SetPropertyDouble">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="d"/>
+    </method>
+    <method name="RemoveProperty">
+      <arg name="key" direction="in" type="s"/>
+    </method>
+    <method name="GetPropertyType">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="type" direction="out" type="i"/>
+    </method>
+    <method name="PropertyExists">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="does_it_exist" direction="out" type="b"/>
+    </method>
+    <method name="AddCapability">
+      <arg name="capability" direction="in" type="s"/>
+    </method>
+    <method name="QueryCapability">
+      <arg name="capability" direction="in" type="s"/>
+      <arg name="does_it_have_capability" direction="out" type="b"/>
+    </method>
+    <method name="Lock">
+      <arg name="reason" direction="in" type="s"/>
+      <arg name="acquired_lock" direction="out" type="b"/>
+    </method>
+    <method name="Unlock">
+      <arg name="released_lock" direction="out" type="b"/>
+    </method>
+    <method name="AcquireInterfaceLock">
+      <arg name="interface_name" direction="in" type="s"/>
+      <arg name="exclusive" direction="in" type="b"/>
+    </method>
+    <method name="ReleaseInterfaceLock">
+      <arg name="interface_name" direction="in" type="s"/>
+    </method>
+    <method name="IsCallerLockedOut">
+      <arg name="interface_name" direction="in" type="s"/>
+      <arg name="caller_sysbus_name" direction="in" type="s"/>
+      <arg name="whether_caller_is_locked_out" direction="out" type="b"/>
+    </method>
+    <method name="IsCallerPrivileged">
+      <arg name="action" direction="in" type="s"/>
+      <arg name="action_parameters" type="as"/>
+      <arg name="caller_sysbus_name" direction="in" type="s"/>
+      <arg name="result" direction="out" type="s"/>
+    </method>
+    <method name="IsLockedByOthers">
+      <arg name="interface_name" direction="in" type="s"/>
+      <arg name="whether_it_is_locked_by_others" direction="out" type="b"/>
+    </method>
+    <method name="StringListAppend">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="s"/>
+    </method>
+    <method name="StringListPrepend">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="s"/>
+    </method>
+    <method name="StringListRemove">
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="s"/>
+    </method>
+    <method name="EmitCondition">
+      <arg name="condition_name" direction="in" type="s"/>
+      <arg name="condition_details" direction="in" type="s"/>
+      <arg name="rc" direction="out" type="b"/>
+    </method>
+    <method name="Rescan">
+      <arg name="call_had_sideeffect" direction="out" type="b"/>
+    </method>
+    <method name="Reprobe">
+      <arg name="call_had_sideeffect" direction="out" type="b"/>
+    </method>
+    <method name="ClaimInterface">
+      <arg name="interface_name" direction="in" type="s"/>
+      <arg name="introspection_xml" direction="in" type="s"/>
+      <arg name="rc" direction="out" type="b"/>
+    </method>
+    <method name="AddonIsReady">
+      <arg name="rc" direction="out" type="b"/>
+    </method>
+    <signal name="PropertyModified">
+      <arg name="num_updates" type="i"/>
+      <arg name="updates" type="a(sbb)"/>
+    </signal>
+    <signal name="Condition">
+      <arg name="cond_name" type="s"/>
+      <arg name="cond_details" type="s"/>
+    </signal>
+    <signal name="InterfaceLockAcquired">
+      <arg name="interface_name" type="s"/>
+      <arg name="lock_holder" type="s"/>
+      <arg name="num_locks" type="i"/>
+    </signal>
+    <signal name="InterfaceLockReleased">
+      <arg name="interface_name" type="s"/>
+      <arg name="lock_holder" type="s"/>
+      <arg name="num_locks" type="i"/>
+    </signal>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.Volume">
+    <method name="Mount">
+      <arg name="mount_point" direction="in" type="s"/>
+      <arg name="fstype" direction="in" type="s"/>
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="Unmount">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="Eject">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.Storage">
+    <method name="Eject">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="CloseTray">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.Storage">
+    <method name="Eject">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="CloseTray">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.Storage.Removable">
+    <method name="CheckForMedia">
+      <arg name="call_had_sideeffect" direction="out" type="b"/>
+    </method>
+  </interface>
+</node>
