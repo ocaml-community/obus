@@ -91,8 +91,8 @@ struct
   let string = t0 "string"
   let list x = t1 "list" x
   let array x = t1 "array" x
-  let dbus_value = t0 "OBus.dbus_value"
-  let dbus_type = t0 "OBus.dbus_type"
+  let dbus_value = t0 "OBus.Values.single"
+  let dbus_type = t0 "OBus.Types.t"
   let tuple l = match l with
     | [] -> t0 "unit"
     | [t] -> t
@@ -116,12 +116,12 @@ struct
     [ (int, Any(char, <:expr< int_of_char >>, <:expr< char_of_int >>));
       (list (v"x"),
        Array(v"x",
-             <:expr< [] >>, <:expr< ( :: ) >>,
+             <:expr< [] >>, <:expr< fun x l -> x :: l >>,
              <:expr< (fun f x l -> List.fold_left (fun acc e -> f e acc) x l) >>));
       (list (tuple [v"x"; v"y"]),
        Dict(v"x", v"y",
             <:expr< [] >>, <:expr< (fun k v l -> (k, v) :: l) >>,
-            <:expr< (fun f x l -> List.fold_left (fun acc (k, v) -> f k v acc)) >>)) ]
+            <:expr< (fun f x l -> List.fold_left (fun acc (k, v) -> f k v acc) x l) >>)) ]
 end
 
 module Make(R : sig val rules : Rules.convertion_rule list end) =
@@ -209,7 +209,8 @@ struct
   let rule_array (ctyp : pat) (etyp : pat) empty add fold =
     let rtype = darray (etyp : pat :> Gen.pattern)
     and rvars = [< etyp >]
-    and rreader ereader = <:expr< R.read_array $ereader$ $empty$ $add$ >>
+    and rreader ereader =
+      (<:expr< R.read_array $ereader$ $empty$ $add$ >>)
     and rwriter ewriter = <:expr< W.write_array $ewriter$ $fold$ >> in
       make_rule rtype ctyp (Gen.Seq(rvars, rreader)) (Gen.Seq(rvars, rwriter))
 
@@ -217,7 +218,7 @@ struct
     let rtype = ddict (ktyp : pat :> Gen.pattern) (vtyp : pat :> Gen.pattern)
     and rvars = [< ktyp; vtyp >]
     and rreader kreader vreader = <:expr< R.read_dict $kreader$ $vreader$ $empty$ $add$ >>
-    and rwriter kwriter vwriter = <:expr< W.write_array $kwriter$ $vwriter$ $fold$ >> in
+    and rwriter kwriter vwriter = <:expr< W.write_dict $kwriter$ $vwriter$ $fold$ >> in
       make_rule rtype ctyp (Gen.Seq(rvars, rreader)) (Gen.Seq(rvars, rwriter))
 
   let rule_record (ctyp : pat) (fields : (string * pat) list) =
@@ -428,7 +429,7 @@ struct
       if defs <> [] then
         print "%s  type t
 
-%s  val proxy : OBus.proxy -> t
+%s  val proxy : OBus.bus -> string -> string -> t
 
 " indent indent;
       print_mult begin function
@@ -454,12 +455,13 @@ struct
               print_seq "()" "" "" ", " (print "%s") out_names;
               print " *)\n"
         | Sig.Signal(name, args) ->
-            let arg_names, arg_types = split_args args in
+            ()
+            (*let arg_names, arg_types = split_args args in
               print "%s  val %s : " indent name;
               print_type (t1 "Obus.signal" (tuple arg_types));
               print "\n%s    (** args: " indent;
               print_seq "()" "" "" ", " (print "%s") arg_names;
-              print " *)\n"
+              print " *)\n"*)
       end defs;
       if defs <> [] && sons <> Sig.empty then print "\n";
       print_modules (indent ^ "  ") sons;
@@ -496,28 +498,36 @@ struct
           let reader = List.fold_right2 begin fun (Arg(_, dtype)) (Arg(lname, ltype)) acc ->
             <:expr< let i, $lid:lname$ = $generate_reader dtype ltype$ i in $acc$ >>
           end douts louts
-            (<:expr< (i, $Ast.exCom_of_list (List.map (fun (Arg(name, _)) -> <:expr< $lid:name$ >>) louts)$) >>) in
+            (let result_expr = match louts with
+               | [] -> <:expr< () >>
+               | _ -> Ast.exCom_of_list (List.map (fun (Arg(name, _)) -> <:expr< $lid:name$ >>) louts)
+             in <:expr< (i, $result_expr$) >>)
+          in
+          let send_sig = sig_of_args dins
+          and repl_sig = sig_of_args douts in
           let body =
-            (<:expr< OBus.LowLevel.send_message proxy $str:dname$ $str:sig_of_args dins$ $str:sig_of_args douts$
+            (<:expr< OBus.LowLevel.send_message bus (Header.Signature $str:send_sig$ :: Header.Member $str:dname$ :: fields)
+               $str:send_sig$ $str:repl_sig$
                (fun byte_order buffer i -> match byte_order with
-                  | OBus.LowLevel.LittleEndian ->
-                      let module W = OBus.LowLevel.Writer(struct let buffer = buffer end)(OBus.LowLevel.LittleEndian)
+                  | Header.LittleEndian ->
+                      let module W = OBus.LowLevel.Writer(OBus.LowLevel.LittleEndian)(struct let buffer = buffer end)
                       in $writer$
-                  | OBus.LowLevel.BigEndian ->
-                      let module W = OBus.LowLevel.Writer(struct let buffer = buffer end)(OBus.LowLevel.BigEndian)
+                  | Header.BigEndian ->
+                      let module W = OBus.LowLevel.Writer(OBus.LowLevel.BigEndian)(struct let buffer = buffer end)
                       in $writer$)
                (fun byte_order buffer i -> match byte_order with
-                  | OBus.LowLevel.LittleEndian ->
-                      let module R = OBus.LowLevel.Reader(struct let buffer = buffer end)(OBus.LowLevel.LittleEndian)
+                  | Header.LittleEndian ->
+                      let module R = OBus.LowLevel.Reader(OBus.LowLevel.LittleEndian)(struct let buffer = buffer end)
                       in $reader$
-                  | OBus.LowLevel.LittleEndian ->
-                      let module R = OBus.LowLevel.Reader(struct let buffer = buffer end)(OBus.LowLevel.BigEndian)
-                      in $reader$)
-               $reader$ >>)
+                  | Header.BigEndian ->
+                      let module R = OBus.LowLevel.Reader(OBus.LowLevel.BigEndian)(struct let buffer = buffer end)
+                      in $reader$) >>)
           in
-            (<:str_item<
-               let $lid:lname$ proxy = $List.fold_right
-                 (fun (Arg(name, _)) acc -> <:expr< fun $lid:name$ -> $acc$ >>) lins body$ >>)
+          let f_expr = match lins with
+            | [] -> (<:expr< fun () -> $body$ >>)
+            | _ -> List.fold_right (fun (Arg(name, _)) acc -> <:expr< fun $lid:name$ -> $acc$ >>) lins body
+          in
+            (<:str_item< let $lid:lname$ (bus, fields) = $f_expr$ >>)
       | (Signal(_, _),
          Signal(lname, _)) -> (<:str_item< let $lid:lname$ = Obj.magic 0 >>)
       | _ -> assert false
@@ -528,8 +538,8 @@ struct
         | [] -> <:str_item< >>
         | _ ->
             let (Sig(dname, ddefs)) = List.assoc (Util.rjoin "." lnames) map in
-              (<:str_item< type t = OBus.proxy ;;
-                           let proxy p = p ;;
+              (<:str_item< type t = OBus.bus * Header.fields list ;;
+                           let proxy bus dest path = (bus, [Header.Destination dest; Header.Path path; Header.Interface $str:dname$]) ;;
                            $Ast.stSem_of_list (List.map2 (make_def dname) ddefs ldefs)$ >>)
       end in
       let son_mods = List.map (make_mod map lnames) sons in
