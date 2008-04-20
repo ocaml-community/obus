@@ -87,6 +87,13 @@ open Xparser
 
 type direction = In | Out
 
+let rename_args args =
+  snd begin List.fold_right begin fun (name, typ) (i, l) ->
+    match name with
+      | "?" -> (i + 1, Sig.Arg("__unamed" ^ (string_of_int i), typ) :: l)
+      | _ -> (i, Sig.Arg(name, typ) :: l)
+  end args (0, []) end
+
 let from_xml xml =
   parse (elt "node" [<>]
            (s2
@@ -94,20 +101,20 @@ let from_xml xml =
                       (s1 (union
                              [elt "method" [< (P"name") >]
                                 (s2
-                                   (any (elt "arg" [< (P"name"); (A("direction", "in", ["in"])); (P"type") >]
+                                   (any (elt "arg" [< (D("name","?")); (A("direction", "in", ["in"])); (P"type") >]
                                            s0
                                            (fun name _ typ ->
-                                              Sig.Arg(name, type_of_string typ))))
-                                   (any (elt "arg" [< (P"name"); (A("direction", "in", ["out"])); (P"type") >]
+                                              (name, type_of_string typ))))
+                                   (any (elt "arg" [< (D("name","?")); (A("direction", "in", ["out"])); (P"type") >]
                                            s0
                                            (fun name _ typ ->
-                                              Sig.Arg(name, type_of_string typ)))))
-                                (fun name ins outs -> Sig.Method(name, ins, outs));
+                                              (name, type_of_string typ)))))
+                                (fun name ins outs -> Sig.Method(name, rename_args ins, rename_args outs));
                               elt "signal" [< (P"name") >]
-                                (s1 (any (elt "arg" [< (P"name"); (P"type") >]
+                                (s1 (any (elt "arg" [< (D("name","?")); (P"type") >]
                                             s0
-                                            (fun name typ -> Sig.Arg(name, type_of_string typ)))))
-                                (fun name args -> Sig.Signal(name, args))]))
+                                            (fun name typ -> (name, type_of_string typ)))))
+                                (fun name args -> Sig.Signal(name, rename_args args))]))
                       (fun name defs -> Sig.Sig(name, defs))))
               (any (elt "node" [< (P"name") >]
                       s0
