@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-let max_array_size = 1 lsl 26
-
 module type TypesSig = sig
   type basic =
     | Byte
