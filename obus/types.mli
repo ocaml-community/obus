@@ -1,6 +1,6 @@
 (*
- * types.ml
- * --------
+ * OBusTypes.mli
+ * -------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -86,5 +86,3 @@ module type S = sig
   val single_of_tsingle : 'a tsingle -> single
   val list_of_tlist : ('a, 'b) tlist -> t
 end
-
-module M : S = Types_internal

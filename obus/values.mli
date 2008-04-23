@@ -1,6 +1,6 @@
 (*
- * values.ml
- * ---------
+ * OBusValues.mli
+ * --------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -10,7 +10,7 @@
 (** Representation of DBus values *)
 
 module type S = sig
-  module T : Types.S
+  module T : OBusTypes.S
 
   type basic =
       private
@@ -80,5 +80,3 @@ module type S = sig
   val type_of_tsingle : 'a tsingle -> 'a T.tsingle
   val type_of_tlist : ('a, 'b) tlist -> ('a, 'b) T.tlist
 end
-
-module M : S = Values_internal
