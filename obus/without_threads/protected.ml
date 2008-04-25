@@ -7,12 +7,12 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-type 'a procted = 'a ref
+type 'a t = 'a ref
 
-let make x = x
+let make x = ref x
 let get = ( ! )
 let set = ( := )
-let update x f = x := f x
-let safe_update x f = x := f x
-let process x f = let y, z = f !x in x := z; y
-let safe_process = update
+let update f x = x := f !x
+let safe_update f x = x := f !x
+let process f x = let y, z = f !x in x := z; y
+let safe_process = process

@@ -15,7 +15,7 @@ let make_transport fd =
 
 let _ =
   Transport.register_maker begin function
-    | Unix path ->
+    | Address.Unix path ->
         let fd = Unix.socket Unix.PF_UNIX Unix.SOCK_STREAM 0 in
           Unix.connect fd (Unix.ADDR_UNIX(path));
           Some(make_transport fd)

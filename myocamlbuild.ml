@@ -60,6 +60,9 @@ let _ = dispatch begin function
         dep ["ocaml"; "ocamldep"; "pa_"^ext] ["pa_"^ext^".cmo"];
       end (myexts ());
 
-      ocaml_lib "obus/OBus";
+      (* For samples to find .cmi files *)
+      flag ["ocaml"; "compile"; "samples"] & S[A"-I"; A"obus"];
+      flag ["ocaml"; "link"; "samples"] (A"obus.cma");
+      dep ["ocaml"; "ocamldep"; "samples"] ["obus.cma"];
   | _ -> ()
 end
