@@ -74,4 +74,4 @@ module BEReader(B : Buffer) : Reader
 
 (** Util functions *)
 
-val read_until : (ptr -> 'a -> ptr * 'a) -> 'a -> ptr -> ptr
+val read_until : (ptr -> 'a -> ptr * 'a) -> 'a -> ptr -> ptr -> ptr * 'a

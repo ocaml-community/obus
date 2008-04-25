@@ -15,7 +15,7 @@ let rec assoc x = function
 let rec find_map f = function
   | [] -> None
   | x :: l -> match f x with
-      | None -> find f l
+      | None -> find_map f l
       | y -> y
 
 let filter_map f l =
@@ -23,13 +23,13 @@ let filter_map f l =
                     | None -> acc
                     | Some(v) -> v :: acc) l []
 
-let try_all l x = match l with
+let rec try_all l x = match l with
   | [] -> None
   | f :: l -> match f x with
-      | None -> try_all x l
+      | None -> try_all l x
       | y -> y
 
-let select x = function
+let rec select x = function
   | [] -> []
   | f :: l -> match f x with
       | None -> select x l

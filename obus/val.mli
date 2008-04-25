@@ -23,7 +23,6 @@ type typ =
   | Tstring
   | Tsignature
   | Tobject_path
-  | Tbasic of typ
   | Tarray of typ
   | Tdict of typ * typ
   | Tstructure of typ list
@@ -45,9 +44,8 @@ type value =
   | Uint64 of int64
   | Double of float
   | String of string
-  | Signature of typ
+  | Signature of typ list
   | Object_path of string
-  | Basic of value
   | Array of typ * value list
       (** Array and dict must also contain types information because
           they can be empty *)
@@ -73,7 +71,7 @@ val int64 : (int64, yes) cstr
 val uint16 : (int, yes) cstr
 val uint32 : (int32, yes) cstr
 val uint64 : (int64, yes) cstr
-val double : (double, yes) cstr
+val double : (float, yes) cstr
 val string : (string, yes) cstr
 val signature : (typ list, yes) cstr
 val object_path : (string, yes) cstr
@@ -82,7 +80,7 @@ val dict : ('a, yes) cstr -> ('b, _) cstr -> (('a * 'b) list, no) cstr
 val structure : 'a seq_cstr  -> ('a, no) cstr
 val variant : (value, yes) cstr
 val cons : ('a, _) cstr -> 'b seq_cstr -> ('a * 'b) seq_cstr
-val nil : () seq_cstr
+val nil : unit seq_cstr
 
 val make_type : (_, _) cstr -> typ
 val make_value : ('a, _) cstr -> 'a -> value
@@ -96,8 +94,8 @@ val get_list : 'a seq_cstr -> value list -> 'a
 
 (** Marshaling (for auto-generated code) *)
 
-val read_value : Wire.buffer -> Wire.ptr -> value list
-val write_value : value list -> Header.byte_order -> Wire.buffer -> Wire.ptr -> unit
+val read_value : Header.t -> Wire.buffer -> Wire.ptr -> value list
+val write_value : value list -> Header.byte_order -> Wire.buffer -> Wire.ptr -> int
 
 module Writer(W : Wire.Writer) : sig
   val typ : Wire.ptr -> typ -> Wire.ptr

@@ -11,9 +11,6 @@ type name = string
 type key = string
 type value = string
 
-type raw = name * (key * value) list
-    (** Type for an address *)
-
 type t =
   | Unix of string
       (** A unix socket, the argument is the path *)

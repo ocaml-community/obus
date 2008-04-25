@@ -47,12 +47,12 @@ type t = {
 (** If something wrong appened, [Error.Error] must be raised *)
 }
 
-let unix_like : backend -> (string -> int -> int -> int) -> (string -> int -> int -> int) -> (unit -> unit) -> t
+val unix_like : backend -> (string -> int -> int -> int) -> (string -> int -> int -> int) -> (unit -> unit) -> t
   (** [unix_like backend read write close] create a transport from two
       function [read] and [write] which behave as [Unix.read] and
       [Unix.write] *)
 
-let fd : t -> Unix.file_descr
+val fd : t -> Unix.file_descr
   (** [fd transport] return the file descriptor used by the transport,
       usefull for doing a select for example. If the transport does
       not a file descriptor then it raise an [Invalid_argument] *)

@@ -21,7 +21,7 @@ module ObjectSet = SSet
 type guid = Auth.guid
 
 type 'a reader = Header.t -> string -> int -> 'a
-type writer = Header.t -> stirng -> int -> unit
+type writer = Header.byte_order -> string -> int -> int
 
 type waiting_mode =
   | Wait_sync of Mutex.t
@@ -30,7 +30,8 @@ type waiting_mode =
       (* The reply will stored somewhere and the caller will get it
          later *)
 
-type filter = Header.t -> Value.t Lazy.t -> bool
+type body = Val.value list
+type filter = Header.t -> body Lazy.t -> bool
 
 type any_filter =
   | User of filter
@@ -61,7 +62,7 @@ type t = {
   guid : guid;
 
   (* Message filters *)
-  filters : (any_filter * wait_mode) list Protected.t;
+  filters : (any_filter * waiting_mode) list Protected.t;
 
   (* There are always one predefined filter which handle method call
      and reply, it use these structure for that: *)
@@ -71,21 +72,21 @@ type t = {
 }
 
 (* Mapping from server guid to connection *)
-let guid_connection_map = guid GuidMap.t Protected.t
+let guid_connection_map = Protected.make GuidMap.empty
 
 (* Remove a connection from the mapping, for when a connection is
    being garbage collected *)
 let remove_connection connection =
   Protected.update (GuidMap.remove connection.guid) guid_connection_map
 
-type message = Header.t * Value.t
+type message = Header.t * body
 
-let gen_serial connection = Protected.process (fun x -> (x, Int32.succ c)) connection.next_serial
+let gen_serial connection = Protected.process (fun x -> (x, Int32.succ x)) connection.next_serial
 
 let write_message connection header body_writer =
   Mutex.lock connection.outgoing_buffer_m;
   try
-    Message.write connection.transport connection.outgoing_buffer_m header body_writer;
+    Message.write connection.transport connection.outgoing_buffer header body_writer;
     Mutex.unlock connection.outgoing_buffer_m
   with
       e ->
@@ -94,35 +95,40 @@ let write_message connection header body_writer =
 
 let raw_send_message_sync connection header body_writer body_reader =
   let m = Mutex.create () in
+  let v = ref None in
     Mutex.lock m;
-    Protected.update  (SerialMap.add header.H.serial (body_reader, Wait_sync m)) connection.serial_waiters;
+    Protected.update (SerialMap.add header.Header.serial
+                        ((fun header buffer ptr ->
+                            v := Some(body_reader header buffer ptr)),
+                         Wait_sync m)) connection.serial_waiters;
     write_message connection header body_writer;
-    Mutex.lock m
+    Mutex.lock m;
+    match !v with
+      | Some x -> x
+      | None -> assert false
 
 let raw_send_message_async connection header body_writer body_reader =
-  Protected.update (SerialMap.add header.H.serial (body_reader, Wait_async)) connection.serial_waiters;
+  Protected.update (SerialMap.add header.Header.serial (body_reader, Wait_async)) connection.serial_waiters;
   write_message connection header body_writer
 
 let raw_send_message_no_reply connection header body_writer =
   write_message connection header body_writer
 
 let raw_add_filter connection reader =
-  Protected.update (fun l -> Raw(reader) :: l) connection.filters;
+  Protected.update (fun l -> (Raw(reader), Wait_async) :: l) connection.filters
 
 let send_message_sync connection (header, body) =
-  let v = ref [] in
-    raw_send_message_sync connection header
-      (Wire.write_value body) (fun buffer ptr -> v := Wire.Wire.read_value buffer ptr);
-    !v
+  raw_send_message_sync connection header
+    (Val.write_value body) (fun header buffer ptr -> (header, Val.read_value header buffer ptr))
 let send_message_async connection (header, body) f =
-  raw_send_message_async connection header (Wire.write_value body)
-    (fun buffer ptr -> f (Wire.read_value buffer ptr))
+  raw_send_message_async connection header (Val.write_value body)
+    (fun header buffer ptr -> f (header, Val.read_value header buffer ptr))
 let send_message_no_reply connection (header, body) =
-  raw_send_message_no_reply connection header (Wire.write_value body)
+  raw_send_message_no_reply connection header (Val.write_value body)
 let add_filter connection filter =
-  Protected.update (fun l -> User(filter) :: l) connection.filters
+  Protected.update (fun l -> (User(filter), Wait_async) :: l) connection.filters
 let add_interface connection interface =
-  Protected.update (fun m -> InterfMap.add (I.get_handlers interface) interface m) connection.interfaces
+  Protected.update (fun m -> InterfMap.add (I.name interface) (I.get_handlers interface) m) connection.interfaces
 
 let wakeup = function
   | Wait_sync(m) ->
@@ -139,13 +145,13 @@ let read connection (reader, mode) header body_start =
 
 open Header
 
-let internal_dipastch connection =
+let internal_dispatch connection =
   let header, body_start = Message.read connection.transport connection.incoming_buffer in
     (* The body is a lazy value so it is computed at most one time *)
-  let body = Lazy.lazy_from_fun (fun () -> read_value header body_start) in
+  let body = Lazy.lazy_from_fun (fun () -> Val.read_value header !(connection.incoming_buffer) body_start) in
   let rec aux = function
     | (filter, mode) :: l ->
-        try
+        begin try
           let handled = begin match filter with
             | User filter -> filter header body
             | Raw reader -> reader header !(connection.incoming_buffer) body_start
@@ -158,27 +164,27 @@ let internal_dipastch connection =
             _ ->
               (* We can not do anything if the filter raise an exception.. *)
               aux l
+        end
     | [] ->
         (* The message has not been handled, try with internal dispatching *)
         match header.message_type, header.fields with
           | Method_return, { reply_serial = Some(serial) }
           | Error, { reply_serial = Some(serial) } ->
-              begin match Protected.update connection.serial_waiters begin fun map ->
-                try
-                  let waiter = SerialMap.find serial map in
-                    (Some(waiter), SerialMap.remove serial map)
-                with
-                    Not_found -> (None, map)
-              end with
+              begin match (Protected.process begin fun map ->
+                             try
+                               let waiter = SerialMap.find serial map in
+                                 (Some(waiter), SerialMap.remove serial map)
+                             with
+                                 Not_found -> (None, map)
+                           end connection.serial_waiters) with
                 | Some w -> read connection w header body_start
                 | None -> ()
               end
           | Method_call, { interface = Some(interface) } ->
               begin try
-                ingore (read connection
-                          (InterfMap.find interface
-                             (Protected.get connection.interfaces)).I.method_call
-                          header body_start)
+                ignore ((InterfMap.find interface
+                           (Protected.get connection.interfaces)).I.method_call
+                          header !(connection.incoming_buffer) body_start)
               with
                   Not_found ->
                     (* XXX TODO: send an error message XXX *)
@@ -190,13 +196,16 @@ let internal_dipastch connection =
               begin try
                 InterfMap.iter begin fun _ interface ->
                   try
-                    if reader connection interface.I.method_call header body_start then
+                    if interface.I.method_call header !(connection.incoming_buffer) body_start then
                       raise Exit
                   with
                       _ -> ()
                 end (Protected.get connection.interfaces);
               with Exit -> ()
               end
+          | _ ->
+              (* Message dropped *)
+              ()
   in
     (* Try all the filters *)
     aux (Protected.get connection.filters)
@@ -210,37 +219,48 @@ let transport connection = connection.transport
 let guid connection = connection.guid
 
 let of_transport transport priv =
-  let guid = Auth.launch (transport.Transport.lexbuf ()) in
-  let make () =
-    {
-      transport = transport;
-      incoming_buffer = String.create 65536;
-      outgoing_buffer = Protected.make (String.create 65536);
-      next_serial = Protected.make Int32.zero;
-      guid = guid
-    }
-  in
-  let connection = match priv with
-    | true -> make ()
-    | false ->
-        Protected.safe_process begin fun m -> try
-          (GuidMap.find guid m, m)
-        with
-            Not_found ->
-              let connection = make () in
-                (try Gc.finalize remove_connection connection with _ -> ());
-                (connection, GuidMap.add guid m)
-        end guid_connetion_map
-  in
-    (* Launch dispatcher *)
-    Thread.create (fun () -> while true do internal_dispatch connection done) ()
+  match Auth.launch transport with
+    | None -> raise (Failure "cannot authentificate on the given transport")
+    | Some(guid) ->
+        let make () =
+          {
+            transport = transport;
+            incoming_buffer = ref (String.create 65536);
+            outgoing_buffer = ref (String.create 65536);
+            outgoing_buffer_m = Mutex.create ();
+            serial_waiters = Protected.make SerialMap.empty;
+            interfaces = Protected.make InterfMap.empty;
+            filters = Protected.make [];
+            next_serial = Protected.make Int32.zero;
+            guid = guid
+          }
+        in
+        let connection = match priv with
+          | true -> make ()
+          | false ->
+              Protected.safe_process begin fun m -> try
+                (GuidMap.find guid m, m)
+              with
+                  Not_found ->
+                    let connection = make () in
+                      (try Gc.finalise remove_connection connection with _ -> ());
+                      (connection, GuidMap.add guid connection m)
+              end guid_connection_map
+        in
+          (* Launch dispatcher *)
+          ignore (Thread.create (fun () -> while true do internal_dispatch connection done) ());
+          connection
 
 let of_addresses addresses =
-  let transport = Util.find begin fun addr ->
-    try
-      match Transport.create addr with
-        | None -> None
-        | Some(transport) -> Some(of_transport transport)
-    with
-        _ -> None
-  end addresses
+  match
+    Util.find_map begin fun addr ->
+      try
+        match Transport.create addr with
+          | None -> None
+          | Some(transport) -> Some(of_transport transport)
+      with
+          _ -> None
+    end addresses
+  with
+    | Some(connection) -> connection
+    | None -> raise (Failure "all transport failed")

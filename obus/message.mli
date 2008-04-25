@@ -10,4 +10,4 @@
 (** Internal module for marshaling/unmarshaling messages *)
 
 val read : Transport.t -> string ref -> Header.t * int
-val write : Transport.t -> string ref -> Header.t -> (Header.byte_order -> string -> int -> unit) -> unit
+val write : Transport.t -> string ref -> Header.t -> (Header.byte_order -> string -> int -> int) -> unit

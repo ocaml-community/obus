@@ -7,32 +7,29 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-module type TypesSig = sig
-  type typ =
-    | Tbyte
-    | Tboolean
-    | Tint16
-    | Tint32
-    | Tint64
-    | Tuint16
-    | Tuint32
-    | Tuint64
-    | Tdouble
-    | Tstring
-    | Tsignature
-    | Tobject_path
-    | Tbasic of typ
-    | Tarray of typ
-    | Tdict of typ * typ
-    | Tstructure of typ list
-    | Tvariant
-end
+type typ =
+  | Tbyte
+  | Tboolean
+  | Tint16
+  | Tint32
+  | Tint64
+  | Tuint16
+  | Tuint32
+  | Tuint64
+  | Tdouble
+  | Tstring
+  | Tsignature
+  | Tobject_path
+  | Tarray of typ
+  | Tdict of typ * typ
+  | Tstructure of typ list
+  | Tvariant
 
 module type Exn = sig
   exception Fail of string
 end
 
-module Signature(T : TypesSig)(E : Exn) =
+module Signature(E : Exn) =
 struct
   open T
 

@@ -22,7 +22,7 @@ exception Parse_error of string
 let of_string str =
   try
     let buf = Buffer.create 42 in
-    let addresses = List.rev (AddrLexer.addresses [] buf) in
+    let addresses = List.rev (AddrLexer.addresses [] buf (Lexing.from_string str)) in
       List.map (fun (name, params) -> match name with
                   | "unix" -> begin
                       match Util.assoc "path" params, Util.assoc "abstract" params with
@@ -32,7 +32,7 @@ let of_string str =
                     end
                       (* XXX TODO: handle more addresses and transport
                          (tcp, ...) XXX *)
-                  | _ -> None) addresses
+                  | _ -> Unknown(name, params)) addresses
   with
       Failure msg -> raise (Parse_error msg)
 

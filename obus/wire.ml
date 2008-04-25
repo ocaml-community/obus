@@ -9,7 +9,7 @@
 
 type ptr = int
 type buffer = string
-module type BasicWriter = sig
+module type Writer = sig
   type 'a t = ptr -> 'a -> unit
   val buffer : buffer
   val pad2 : ptr -> ptr
@@ -30,7 +30,7 @@ module type BasicWriter = sig
   val string_string : ptr -> string -> ptr
   val string_signature : ptr -> string -> ptr
 end
-module type BasicReader = sig
+module type Reader = sig
   type 'a t = ptr -> 'a
   val buffer : buffer
   val pad2 : ptr -> ptr
@@ -313,9 +313,6 @@ struct
     let len = int_of_char buffer.[i] in
       (i + 2 + len, String.sub buffer (i + 1) len)
 end
-
-module T = Types
-module V = Values
 
 let rec read_until f x limit i =
   if i = limit

@@ -21,15 +21,15 @@ val name : 'a t -> name
 
 type value = string
 type annotation = Annotation of name * value
-type argument = Arg of name * Type.single
+type argument = Arg of name * Val.typ
 type access = Read | Write | Read_write
 type definition =
   | Method of name * (*in*) argument list * (*out*) argument list * annotation list
   | Signal of name * argument list * annotation list
-  | Property of name * Type.single * access * annotation list
+  | Property of name * Val.typ * access * annotation list
 type signature = Interface of name * definition list * annotation list
 
-val print_xml : (('a, 'b, unit) format -> 'a) -> signature -> unit
+val print_xml : Buffer.t -> signature -> unit
   (** Marshal a interface into introspection data *)
 
 (** For auto-generated code *)

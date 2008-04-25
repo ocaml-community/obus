@@ -29,7 +29,8 @@ val of_addresses : Address.t list -> bool -> t
 
 (** {6 Sending messages} *)
 
-type message = Header.t * Value.t
+type body = Val.value list
+type message = Header.t * body
 
 val gen_serial : t -> Header.serial
   (** [gen_serial connection] Generate a fresh serial *)
@@ -51,7 +52,7 @@ val dispatch : t -> unit
   (** [dispatch bus] read and dispatch one message. If using threads
       [dispatch] do nothing. *)
 
-type filter = Header.t -> Value.t Lazy.t -> bool
+type filter = Header.t -> body Lazy.t -> bool
   (** A filter is a function that take a message, do something with
       and return true if the message can be considered has "handled"
       or false if other filters must be called on it. *)
@@ -83,9 +84,9 @@ val guid : t -> guid
     programs *)
 
 type 'a reader = Header.t -> string -> int -> 'a
-type writer = Header.byte_order -> stirng -> int -> unit
+type writer = Header.byte_order -> string -> int -> int
 
-val raw_send_message_sync : t -> Header.t -> writer -> unit reader -> unit
+val raw_send_message_sync : t -> Header.t -> writer -> 'a reader -> 'a
 val raw_send_message_async : t -> Header.t -> writer -> unit reader -> unit
 val raw_send_message_no_reply : t -> Header.t -> writer -> unit
 val raw_add_filter : t -> bool reader -> unit

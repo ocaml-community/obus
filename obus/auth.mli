@@ -9,7 +9,7 @@
 
 (** Handle authentification mechanisms *)
 
-type data = sting
+type data = string
     (** Data for an auth mechanism *)
 
 type mechanism_return =
@@ -36,8 +36,9 @@ end
 class virtual immediate :
 object
   (** Immediate authentification *)
-  inherit mechanism
   method virtual init : mechanism_return
+  method data : data -> mechanism_return
+  method shutdown : unit
 end
 
 (** {6 Registration} *)
@@ -50,6 +51,6 @@ val register_mechanism : string -> (unit -> mechanism) -> unit
 type guid = string
     (** Server identifier *)
 
-val launch : Lexing.lexbuf -> guid
-  (** [launch lexbuf] launch authentification with [lexbuf] as
-      input *)
+val launch : Transport.t -> guid option
+  (** [launch transport] launch authentification on the given
+      transport *)
