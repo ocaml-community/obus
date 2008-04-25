@@ -12,3 +12,9 @@ val max_array_size : int
 
 val max_message_size : int
   (** Maximum size of a message *)
+
+val protocol_version : int
+  (** The protocol version implemented by obus *)
+
+val default_system_bus_address : string
+  (** Address of the system bus *)

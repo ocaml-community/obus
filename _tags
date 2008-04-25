@@ -7,3 +7,5 @@
 <binder/binder.*>: pkg_str
 <binder/obus-caml-*.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
 <samples/*.{byte,native}>: pkg_unix, pkg_str
+"common": include
+<obus/OBus_thread.*>: thread, pkg_threads

@@ -7,32 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** DBus message description *)
+(** Internal module for marshaling/unmarshaling messages *)
 
-type typ =
-  | Invalid
-  | Method_call
-  | Method_return
-  | Error
-  | Signal
-
-type serial
-
-type flag =
-  | No_reply_expected
-  | No_auto_start
-
-type field =
-  | Path of string
-  | Member of string
-  | Interface of string
-  | Error_name of string
-  | Reply_serial of serial
-  | Destination of string
-  | Sender of string
-  | Signature of string
-
-type header = typ * flag list * field list
-type body = Value.t
-
-type t = header * body
+val read : Transport.t -> string ref -> Header.t * int
+val write : Transport.t -> string ref -> Header.t -> (Header.byte_order -> string -> int -> unit) -> unit

@@ -207,3 +207,133 @@ let make_type_list = make_type
 let make_value_list = make_value
 let get (_, _, g) = g
 let get_list = get
+
+module SigW = Common.SignatureWriter(T)(struct exception Fail = Write_error end)
+module SigR = Common.SignatureReader(T)(struct exception Fail = Read_error end)
+
+module Writer(W : Wire.BasicWriter) =
+struct
+  let typ i t =
+    let j = SigW.write W.buffer (i + 1) t in
+      W.buffer.[i] <- char_of_int (j - i);
+      W.buffer.[j] <- '\x00';
+      i + 1
+
+  let typ_list i t =
+    let j = SigW.write_list W.buffer i t in
+      W.buffer.[i] <- char_of_int (j - i);
+      W.buffer.[j] <- '\x00';
+      i + 1
+
+  let rec write_array f i =
+    let i = W.pad4 i in
+    let j = i + 4 in
+    let k = f j in
+    let len = k - j in
+      if len > Constant.max_array_size
+      then raise (Write_error "array too big!")
+      else begin
+        W.int_int32 len i;
+        k
+      end
+
+  let value i = function
+    | Byte(v) -> W.buffer.[i] <- v; i + 1
+    | Boolean(v) -> let i = W.pad4 i in W.bool_boolean i v; i + 4
+    | Int16(v) -> let i = W.pad2 i in W.int_int16 i v; i + 2
+    | Int32(v) -> let i = W.pad4 i in W.int32_int32 i v; i + 4
+    | Int64(v) -> let i = W.pad8 i in W.int64_int64 i v; i + 8
+    | Uint16(v) -> let i = W.pad2 i in W.int_uint16 i v; i + 2
+    | Uint32(v) -> let i = W.pad4 i in W.int32_uint32 i v; i + 4
+    | Uint64(v) -> let i = W.pad8 i in W.int64_uint64 i v; i + 8
+    | Double(v) -> let i = W.pad8 i in W.float_double i v; i + 8
+    | String(v) -> W.string_string (W.pad4 i) v
+    | Signature(v) -> write_t i v
+    | Object_path(v) -> W.string_string (W.pad4 i) v
+    | Array(_, v) -> write_array (fun i -> List.fold_left value i v) i
+    | Dict(_, _, v) -> write_array (fun i -> List.fold_left (fun i (k, v) -> write (write (W.pad8 i) k) v) i v) i
+    | Structure(v) -> List.fold_left value (W.pad8 i) v
+    | Variant(v) -> let i = write_single_t i (type_of_single v) in value i v
+
+  let value_list = List.fold_left value
+end
+
+module Reader(R : Wire.BasicReader) =
+struct
+  let read_single_t = SigR.read R.buffer
+  let read_t = SigR.read_list R.buffer
+
+  let typ i = function
+    | Tbyte -> (i + 1, Byte(R.buffer.[i]))
+    | Tboolean -> let i = R.pad4 i in (i + 4, Boolean(R.bool_boolean i))
+    | Tint16 -> let i = R.pad2 i in (i + 2, Int16(R.int_int16 i))
+    | Tint32 -> let i = R.pad4 i in (i + 4, Int32(R.int32_int32 i))
+    | Tint64 -> let i = R.pad8 i in (i + 8, Int64(R.int64_int64 i))
+    | Tuint16 -> let i = R.pad2 i in (i + 2, Uint16(R.int_uint16 i))
+    | Tuint32 -> let i = R.pad4 i in (i + 4, Uint32(R.int32_uint32 i))
+    | Tuint64 -> let i = R.pad8 i in (i + 8, Uint64(R.int64_uint64 i))
+    | Tdouble -> let i = R.pad8 i in (i + 8, Double(R.float_double i))
+    | Tstring -> let i, v = R.string_string (R.pad4 i) in (i, String(v))
+    | Tsignature -> let len = int_of_char R.buffer.[i] in (i + 1 + len, Signature(snd (SigR.read_t R.buffer (i + 1))))
+    | Tobject_path -> let i, v = R.string_string (R.pad4 i) in (i, Object_path(v))
+    | Tarray(t) ->
+        let i = R.pad4 i in
+        let len = R.int_uint32 i in
+          if len > Constant.max_array_size
+          then raise (Read_error "array too big!")
+          else
+            let i, v = Wire.read_until begin fun i acc ->
+              let i, v = read_single_v i t in
+                (i, v :: acc)
+            end [] (i + len) i in
+              (i, Array(t, List.rev v))
+    | Tdict(tk, tv) ->
+        let i = R.pad4 i in
+        let len = R.int_uint32 i in
+          if len > Constant.max_array_size
+          then raise (Read_error "array too big!")
+          else
+            let i = R.pad8 i in
+            let i, v = Wire.read_until begin fun i acc ->
+              let i, k = read_basic_v (R.pad8 i) tk in
+              let i, v = read_single_v i tv in
+                (i, (k, v) :: acc)
+            end [] (i + len) i in
+              (i, Dict(tk, tv, List.rev v))
+    | Tstructure(t) ->
+        let i , v = List.fold_left begin fun (i, acc) t ->
+          let i, v = read_single_v i t in
+            (i, v :: acc)
+        end (R.pad8 i, []) t in
+          (i, Structure(List.rev v))
+    | Tvariant ->
+        let len = int_of_char R.buffer.[i] in
+        let _, t = SigR.read_single R.buffer (i + 1) in
+        let i, v = read_single_v (i + 2 + len) t in
+          (i, Variant(v))
+
+  let read_list i t =
+    let i, v = List.fold_left begin fun (i,acc) t ->
+      let i, v = read i t in
+        (i, v :: acc)
+    end (i, []) t in
+      (i, List.rev v)
+end
+
+let write_value value byte_order buffer ptr =
+  ignore (match byte_order with
+            | Header.Little_endian ->
+                let module W = Writer(Wire.LEWriter(struct let buffer = buffer end)) in
+                  W.value_list ptr value
+            | Header.Big_endian ->
+                let module W = Writer(Wire.BEWriter(struct let buffer = buffer end)) in
+                  W.value_list ptr value)
+
+let read_value buffer ptr =
+  snd (match header.Header.byte_order with
+         | Header.Little_endian ->
+             let module R = Reader(Wire.LEReader(struct let buffer = buffer end)) in
+               R.value_list ptr
+         | Header.Big_endian ->
+             let module R = Reader(Wire.BEReader(struct let buffer = buffer end)) in
+               R.value_list ptr)

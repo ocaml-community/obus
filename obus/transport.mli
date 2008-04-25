@@ -23,40 +23,47 @@ exception Error of error * exn option
 
 (** {6 Transport definition} *)
 
-class type t = object
-  method backend : [> ]
-    (** transport backend *)
+type backend =
+  | Unix of Unix.file_descr
+  | Unknown
 
-  method recv : string -> int -> int -> unit
-    (** [recv buffer pos count] must receive exactly [count] bytes
-        and store it in [buffer] starting from [pos]. *)
+type t = {
+  backend : backend;
 
-  method send : string -> int -> int -> unit
-    (** [send buffer pos count] must send exactly [count] bytes from
-        [buffer] starting at [pos]. *)
+  recv : string -> int -> int -> unit;
+  (** [recv buffer pos count] must receive exactly [count] bytes and
+      store it in [buffer] starting from [pos]. *)
 
-  method close : unit
-    (** [close] shutdown the transport *)
+  send : string -> int -> int -> unit;
+  (** [send buffer pos count] must send exactly [count] bytes from
+      [buffer] starting at [pos]. *)
 
-(** If something wrong appened, [Error] must be raised *)
-end
+  close : unit -> unit;
+  (** [close ()] shutdown the transport *)
 
-class virtual unix_like : object
-  (** Transport with read and write which same behaviour of Unix read
-      and write function *)
-  inherit t
-  method virtual backend : [> ]
-  method virtual read : string -> int -> int -> int
-  method virtual write : string -> int -> int -> int
-end
+  lexbuf : unit -> Lexing.lexbuf;
+  (** [lexbuf ()] return a lexing buffer, used by authentification *)
+
+(** If something wrong appened, [Error.Error] must be raised *)
+}
+
+let unix_like : backend -> (string -> int -> int -> int) -> (string -> int -> int -> int) -> (unit -> unit) -> t
+  (** [unix_like backend read write close] create a transport from two
+      function [read] and [write] which behave as [Unix.read] and
+      [Unix.write] *)
+
+let fd : t -> Unix.file_descr
+  (** [fd transport] return the file descriptor used by the transport,
+      usefull for doing a select for example. If the transport does
+      not a file descriptor then it raise an [Invalid_argument] *)
 
 (** {6 Creation} *)
 
-val create : ([> Address.t ] as 'a) list -> (t * 'a list) option
-  (** [create addresses] try to make a working transport from a list
-      of addresses. It return also the list of untested addresses. *)
+val create : Address.t -> t option
+  (** [create addresses] try to make a working transport from an
+      address *)
 
-type maker = [> Address.t ] -> t option
+type maker = Address.t -> t option
   (** A maker is a function which take an address and create a
       transport from it. *)
 

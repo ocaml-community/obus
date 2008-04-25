@@ -7,7 +7,9 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-type typ =
+(** Header description *)
+
+type message_type =
   | Invalid
   | Method_call
   | Method_return
@@ -15,29 +17,44 @@ type typ =
   | Signal
 
 type serial = int32
+  (** Message identifier *)
 
-type flags =
-  | ReplyExpected
-  | AutoStart
+type flags = {
+  (** Optionnal flags *)
+  no_reply_expected : bool;
+  no_auto_start : bool;
+}
 
-type fields =
-  | Path of string
-  | Interface of string
-  | Member of string
-  | Error_name of string
-  | Reply_serial of serial
-  | Destination of string
-  | Sender of string
-  | Signature of string
+val default_flags : flags
+  (** Defaults flags (all is false) *)
 
-type byte_order = LittleEndian | BigEndian
+type fields = {
+  (** Optionnal headers fields *)
+  path : string option;
+  member : string option;
+  interface : string option;
+  error_name : string option;
+  reply_serial : serial option;
+  destination : string option;
+  sender : string option;
+  signature : string option;
+}
+
+val empty_fields : fields
+  (** Fields where each entry is [None] *)
+
+type byte_order = Little_endian | Big_endian
+    (** Message byte order *)
 
 type t = {
+  (** Header description *)
   byte_order : byte_order;
-  typ : typ;
-  flags : flags list;
-  protocol_version : int;
-  length : int;
+  message_type : message_type;
+  flags : flags;
   serial : serial;
-  fields : fields list;
+  fields : fields;
+
+  (** Note: there is more fields in a real DBus messages but some like
+      length or protocol version are added/checked automatically by
+      OBus *)
 }

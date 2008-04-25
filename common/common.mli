@@ -10,26 +10,24 @@
 (** Shared code *)
 
 module type TypesSig = sig
-  type basic =
-    | Byte
-    | Boolean
-    | Int16
-    | Int32
-    | Int64
-    | Uint16
-    | Uint32
-    | Uint64
-    | Double
-    | String
-    | Signature
-    | Object_path
-  type single =
-    | Basic of basic
-    | Array of single
-    | Dict of basic * single
-    | Structure of single list
-    | Variant
-  type t = single list
+  type typ =
+    | Tbyte
+    | Tboolean
+    | Tint16
+    | Tint32
+    | Tint64
+    | Tuint16
+    | Tuint32
+    | Tuint64
+    | Tdouble
+    | Tstring
+    | Tsignature
+    | Tobject_path
+    | Tbasic of typ
+    | Tarray of typ
+    | Tdict of typ * typ
+    | Tstructure of typ list
+    | Tvariant
 end
 
 module type Exn = sig
@@ -37,18 +35,18 @@ module type Exn = sig
 end
 
 module SignatureReader(T : TypesSig)(E : Exn) : sig
-  val read_t : string -> int -> int * T.t
-    (** [read_t str pos] read a marshaled signature *)
+  val read_list : string -> int -> int * T.typ list
+    (** [read_list str pos] read a marshaled signature *)
 
-  val read_single : string -> int -> int * T.single
-    (** [read_single str pos] same as [read_t] but read only one
-        single type *)
+  val read : string -> int -> int * T.typ
+    (** [read str pos] same as [read_list] but read only one single
+        type *)
 end
 
 module SignatureWriter(T : TypesSig)(E : Exn) : sig
-  val write_t : string -> int -> T.t -> int
-    (** [write_t t str pos] write a signaute *)
+  val write_list : string -> int -> T.typ list -> int
+    (** [write_list t str pos] write a signaute *)
 
-  val write_single : string -> int -> T.single -> int
-    (** [write_single t str pos] write a single type signaute *)
+  val write : string -> int -> T.typ -> int
+    (** [write t str pos] write a single type signaute *)
 end

@@ -93,3 +93,22 @@ val get : ('a, _) cstr -> value -> 'a
 val get_list : 'a seq_cstr -> value list -> 'a
   (** [get] and [get_list] raise an [Invalid_argument] if the value
       has not the valid type *)
+
+(** Marshaling (for auto-generated code) *)
+
+val read_value : Wire.buffer -> Wire.ptr -> value list
+val write_value : value list -> Header.byte_order -> Wire.buffer -> Wire.ptr -> unit
+
+module Writer(W : Wire.Writer) : sig
+  val typ : Wire.ptr -> typ -> Wire.ptr
+  val typ_list : Wire.ptr -> typ list -> Wire.ptr
+  val value : Wire.ptr -> value -> Wire.ptr
+  val value_list : Wire.ptr -> value list -> Wire.ptr
+end
+
+module Reader(R : Wire.Reader) : sig
+  val typ : Wire.ptr -> Wire.ptr * typ
+  val typ_list : Wire.ptr -> Wire.ptr * typ list
+  val value : Wire.ptr -> typ -> Wire.ptr * value
+  val value_list : Wire.ptr -> typ list -> Wire.ptr * value list
+end

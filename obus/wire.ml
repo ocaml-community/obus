@@ -9,8 +9,8 @@
 
 type ptr = int
 type buffer = string
-module type Basic = sig
-  type 'a t
+module type BasicWriter = sig
+  type 'a t = ptr -> 'a -> unit
   val buffer : buffer
   val pad2 : ptr -> ptr
   val pad4 : ptr -> ptr
@@ -27,9 +27,30 @@ module type Basic = sig
   val int32_uint32 : int32 t
   val int64_uint64 : int64 t
   val float_double : float t
+  val string_string : ptr -> string -> ptr
+  val string_signature : ptr -> string -> ptr
 end
-module type BasicWriter = Basic with type 'a t = ptr -> 'a -> unit
-module type BasicReader = Basic with type 'a t = ptr -> 'a
+module type BasicReader = sig
+  type 'a t = ptr -> 'a
+  val buffer : buffer
+  val pad2 : ptr -> ptr
+  val pad4 : ptr -> ptr
+  val pad8 : ptr -> ptr
+  val bool_boolean : bool t
+  val int_int16 : int t
+  val int_int32 : int t
+  val int_int64 : int t
+  val int_uint16 : int t
+  val int_uint32 : int t
+  val int_uint64 : int t
+  val int32_int32 : int32 t
+  val int64_int64 : int64 t
+  val int32_uint32 : int32 t
+  val int64_uint64 : int64 t
+  val float_double : float t
+  val string_string : ptr -> ptr * string
+  val string_signature : ptr -> ptr * string
+end
 module type Buffer = sig val buffer : buffer end
 exception Write_error of string
 exception Read_error of string
@@ -168,6 +189,22 @@ struct
   let int64_uint64 = int64_int64
 
   let float_double i v = int64_int64 i (Int64.of_float v)
+
+  let string_string i str =
+    let len = String.length str in
+      int_uint32 len i;
+      String.blit str 0 buffer (i + 4) len;
+      let i = i + 4 + len in
+        buffer.[i] <- '\x00';
+        i + 1
+
+  let string_signature i str =
+    let len = String.length str in
+      buffer.[i] <- char_of_int len;
+      String.blit str 0 buffer (i + 1) len;
+      let i = i + 1 + len in
+        buffer.[i] <- '\x00';
+        i + 1
 end
 
 module Reader(BO : ByteOrder)(B : Buffer) =
@@ -267,148 +304,26 @@ struct
   let int64_uint64 = int64_int64
 
   let float_double i = Int64.to_float (int64_uint64 i)
+
+  let string_string i =
+    let len = int_uint32 i in
+      (i + 5 + len, String.sub buffer (i + 4) len)
+
+  let string_signature i =
+    let len = int_of_char buffer.[i] in
+      (i + 2 + len, String.sub buffer (i + 1) len)
 end
 
-module T = Types_internal
-module V = Values_internal
+module T = Types
+module V = Values
 
-module SigW = Common.SignatureWriter(T)(struct exception Fail = Write_error end)
-module SigR = Common.SignatureReader(T)(struct exception Fail = Read_error end)
-
-module SingleWriter(B : BasicWriter) =
-struct
-  let write_single_t i t =
-    let j = SigW.write_single B.buffer (i + 1) t in
-      B.buffer.[i] <- char_of_int (j - i);
-      B.buffer.[j] <- '\x00';
-      i + 1
-
-  let write_t i t =
-    let j = SigW.write_t B.buffer i t in
-      B.buffer.[i] <- char_of_int (j - i);
-      B.buffer.[j] <- '\x00';
-      i + 1
-
-  let write_string i str =
-    let i = B.pad4 i in
-    let len = String.length str in
-      B.int_uint32 (String.length str) i;
-      String.blit str 0 B.buffer (i + 4) len;
-      let i = i + 4 + len in
-        B.buffer.[i] <- '\x00';
-        i + 1
-
-  let write_basic_v i = function
-    | V.Byte(v) -> B.buffer.[i] <- v; i + 1
-    | V.Boolean(v) -> let i = B.pad4 i in B.bool_boolean i v; i + 4
-    | V.Int16(v) -> let i = B.pad2 i in B.int_int16 i v; i + 2
-    | V.Int32(v) -> let i = B.pad4 i in B.int32_int32 i v; i + 4
-    | V.Int64(v) -> let i = B.pad8 i in B.int64_int64 i v; i + 8
-    | V.Uint16(v) -> let i = B.pad2 i in B.int_uint16 i v; i + 2
-    | V.Uint32(v) -> let i = B.pad4 i in B.int32_uint32 i v; i + 4
-    | V.Uint64(v) -> let i = B.pad8 i in B.int64_uint64 i v; i + 8
-    | V.Double(v) -> let i = B.pad8 i in B.float_double i v; i + 8
-    | V.String(v) -> write_string i v
-    | V.Signature(v) -> write_t i v
-    | V.Object_path(v) -> write_string i v
-
-  let rec write_array f i =
-    let i = B.pad4 i in
-    let j = i + 4 in
-    let k = f j in
-    let len = k - j in
-      if len > Common.max_array_size
-      then raise (Write_error "array too big!")
-      else begin
-        B.int_int32 len i;
-        k
-      end
-
-  let rec write_single_v i = function
-    | V.Basic(v) -> write_basic_v i v
-    | V.Array(_, v) -> write_array (fun i -> List.fold_left write_single_v i v) i
-    | V.Dict(_, _, v) -> write_array (fun i -> List.fold_left (fun i (k, v) -> write_single_v (write_basic_v (B.pad8 i) k) v) i v) i
-    | V.Structure(v) -> List.fold_left write_single_v (B.pad8 i) v
-    | V.Variant(v) -> let i = write_single_t i (V.type_of_single v) in write_single_v i v
-
-  let write_v = List.fold_left write_single_v
-end
-
-module SingleReader(B : BasicReader) =
-struct
-  let read_single_t = SigR.read_single B.buffer
-  let read_t = SigR.read_t B.buffer
-
-  let read_basic_v i = function
-    | T.Byte -> (i + 1, V.Byte(B.buffer.[i]))
-    | T.Boolean -> let i = B.pad4 i in (i + 4, V.Boolean(B.bool_boolean i))
-    | T.Int16 -> let i = B.pad2 i in (i + 2, V.Int16(B.int_int16 i))
-    | T.Int32 -> let i = B.pad4 i in (i + 4, V.Int32(B.int32_int32 i))
-    | T.Int64 -> let i = B.pad8 i in (i + 8, V.Int64(B.int64_int64 i))
-    | T.Uint16 -> let i = B.pad2 i in (i + 2, V.Uint16(B.int_uint16 i))
-    | T.Uint32 -> let i = B.pad4 i in (i + 4, V.Uint32(B.int32_uint32 i))
-    | T.Uint64 -> let i = B.pad8 i in (i + 8, V.Uint64(B.int64_uint64 i))
-    | T.Double -> let i = B.pad8 i in (i + 8, V.Double(B.float_double i))
-    | T.String -> let i = B.pad4 i in let len = B.int_uint32 i in (i + 4 + len, V.String(String.sub B.buffer (i + 4) len))
-    | T.Signature -> let len = int_of_char B.buffer.[i] in (i + 1 + len, V.Signature(snd (SigR.read_t B.buffer (i + 1))))
-    | T.Object_path -> let i = B.pad4 i in let len = B.int_uint32 i in (i + 4 + len, V.Object_path(String.sub B.buffer (i + 4) len))
-
-
-  let rec read_until f x limit i =
-    if i = limit
-    then (i, x)
-    else if i < limit
-    then let j, y = f x i in
-      read_until f y limit j
-    else raise (Read_error "wrong array size!")
-
-  let rec read_single_v i = function
-    | T.Basic(t) ->
-        let i, x = read_basic_v i t in
-          (i, V.Basic x)
-    | T.Array(t) ->
-        let i = B.pad4 i in
-        let len = B.int_uint32 i in
-          if len > Common.max_array_size
-          then raise (Read_error "array too big!")
-          else
-            let i, v = read_until begin fun acc i ->
-              let i, v = read_single_v i t in
-                (i, v :: acc)
-            end [] (i + len) i in
-              (i, V.Array(t, List.rev v))
-    | T.Dict(tk, tv) ->
-        let i = B.pad4 i in
-        let len = B.int_uint32 i in
-          if len > Common.max_array_size
-          then raise (Read_error "array too big!")
-          else
-            let i = B.pad8 i in
-            let i, v = read_until begin fun acc i ->
-              let i, k = read_basic_v (B.pad8 i) tk in
-              let i, v = read_single_v i tv in
-                (i, (k, v) :: acc)
-            end [] (i + len) i in
-              (i, V.Dict(tk, tv, List.rev v))
-    | T.Structure(t) ->
-        let i , v = List.fold_left begin fun (i, acc) t ->
-          let i, v = read_single_v i t in
-            (i, v :: acc)
-        end (B.pad8 i, []) t in
-          (i, V.Structure(List.rev v))
-    | T.Variant ->
-        let len = int_of_char B.buffer.[i] in
-        let _, t = SigR.read_single B.buffer (i + 1) in
-        let i, v = read_single_v (i + 2 + len) t in
-          (i, V.Variant(v))
-
-  let read_v i t =
-    let i, v = List.fold_left begin fun (i,acc) t ->
-      let i, v = read_single_v i t in
-        (i, v :: acc)
-    end (i, []) t in
-      (i, List.rev v)
-end
+let rec read_until f x limit i =
+  if i = limit
+  then (i, x)
+  else if i < limit
+  then let j, y = f i x in
+    read_until f y limit j
+  else raise (Read_error "wrong array size!")
 
 module LEWriter = Writer(LE)
 module BEWriter = Writer(BE)

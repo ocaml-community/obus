@@ -12,7 +12,7 @@ open DBus
 open Hal
 
 let _ =
-  let bus = OBus.system () in
+  let bus = OBus.Bus.system () in
   let dbus = DBus.proxy bus "org.freedesktop.DBus" "/org/freedesktop/DBus" in
     Printf.printf "connection name : %s\n" (DBus.hello dbus ());
     let manager = Hal.Manager.proxy bus "org.freedesktop.Hal" "/org/freedesktop/Hal/Manager" in

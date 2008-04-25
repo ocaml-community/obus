@@ -8,26 +8,24 @@
  *)
 
 module type TypesSig = sig
-  type basic =
-    | Byte
-    | Boolean
-    | Int16
-    | Int32
-    | Int64
-    | Uint16
-    | Uint32
-    | Uint64
-    | Double
-    | String
-    | Signature
-    | Object_path
-  type single =
-    | Basic of basic
-    | Array of single
-    | Dict of basic * single
-    | Structure of single list
-    | Variant
-  type t = single list
+  type typ =
+    | Tbyte
+    | Tboolean
+    | Tint16
+    | Tint32
+    | Tint64
+    | Tuint16
+    | Tuint32
+    | Tuint64
+    | Tdouble
+    | Tstring
+    | Tsignature
+    | Tobject_path
+    | Tbasic of typ
+    | Tarray of typ
+    | Tdict of typ * typ
+    | Tstructure of typ list
+    | Tvariant
 end
 
 module type Exn = sig
@@ -36,35 +34,22 @@ end
 
 module Signature(T : TypesSig)(E : Exn) =
 struct
-  let basic_of_char = function
-    | 'y' -> T.Byte
-    | 'b' -> T.Boolean
-    | 'n' -> T.Int16
-    | 'q' -> T.Uint16
-    | 'i' -> T.Int32
-    | 'u' -> T.Uint32
-    | 'x' -> T.Int64
-    | 't' -> T.Uint64
-    | 'd' -> T.Double
-    | 's' -> T.String
-    | 'o' -> T.Object_path
-    | 'g' -> T.Signature
-    | _ -> raise (E.Fail (Printf.sprintf "unknown basic type code %c" c))
+  open T
 
-  let rec read_single str i =
+  let rec read str i =
     match str.[i] with
-      | 'y' -> (i + 1, T.Basic T.Byte)
-      | 'b' -> (i + 1, T.Basic T.Boolean)
-      | 'n' -> (i + 1, T.Basic T.Int16)
-      | 'q' -> (i + 1, T.Basic T.Uint16)
-      | 'i' -> (i + 1, T.Basic T.Int32)
-      | 'u' -> (i + 1, T.Basic T.Uint32)
-      | 'x' -> (i + 1, T.Basic T.Int64)
-      | 't' -> (i + 1, T.Basic T.Uint64)
-      | 'd' -> (i + 1, T.Basic T.Double)
-      | 's' -> (i + 1, T.Basic T.String)
-      | 'o' -> (i + 1, T.Basic T.Object_path)
-      | 'g' -> (i + 1, T.Basic T.Signature)
+      | 'y' -> (i + 1, Tbyte)
+      | 'b' -> (i + 1, Tboolean)
+      | 'n' -> (i + 1, Tint16)
+      | 'q' -> (i + 1, Tuint16)
+      | 'i' -> (i + 1, Tint32)
+      | 'u' -> (i + 1, Tuint32)
+      | 'x' -> (i + 1, Tint64)
+      | 't' -> (i + 1, Tuint64)
+      | 'd' -> (i + 1, Tdouble)
+      | 's' -> (i + 1, Tstring)
+      | 'o' -> (i + 1, Tobject_path)
+      | 'g' -> (i + 1, Tsignature)
       | 'a' ->
           if str.[i + 1] = '{'
           then begin
@@ -72,63 +57,58 @@ struct
             let i, tval = read_single str (i + 3) in
               if str.[i] <> '}'
               then raise (E.Fail "'}' expected")
-              else (i + 1, T.Dict(tkey, tval))
+              else (i + 1, Tdict(tkey, tval))
           end else begin
             let i, t = read_single i in
-              (i, T.Array(t))
+              (i, Tarray(t))
           end
       | '(' ->
-          let i, t = read_single_until str ')' i in
-            (i, T.Structure(t))
-      | 'v' -> (i + 1, T.Variant)
+          let i, t = read_until str ')' i in
+            (i, Tstructure(t))
+      | 'v' -> (i + 1, Tvariant)
       | _ -> raise (E.Fail (Printf.sprintf "unknown type code %c" c))
 
-  and read_single_type_until str cend i =
+  and read_until str cend i =
     if str.[i] = cend
     then (i + 1, [])
     else
-      let i, hd = read_single i in
-      let i, tl = read_single_until str cend i in
+      let i, hd = read i in
+      let i, tl = read_until str cend i in
         (i, hd :: tl)
 
-  let read_type str = read_single_until str '\x00'
+  let read_list str = read_until str '\x00'
 
-  let char_of_basic = function
-    | T.Byte -> 'y'
-    | T.Boolean -> 'b'
-    | T.Int16 -> 'n'
-    | T.Uint16 -> 'q'
-    | T.Int32 -> 'i'
-    | T.Uint32 -> 'u'
-    | T.Int64 -> 'x'
-    | T.Uint64 -> 't'
-    | T.Double -> 'd'
-    | T.String -> 's'
-    | T.Object_path -> 'o'
-    | T.Signature -> 'g'
-
-  let rec write_single str i = function
-    | T.Basic(t) ->
-        str.[i] <- char_of_basic t;
-        i + 1
-    | T.Array(t) ->
+  let rec write str i = function
+    | Tbyte -> str.[i] <- 'y'; i + 1
+    | Tboolean -> str.[i] <- 'b'; i + 1
+    | Tint16 -> str.[i] <- 'n'; i + 1
+    | Tuint16 -> str.[i] <- 'q'; i + 1
+    | Tint32 -> str.[i] <- 'i'; i + 1
+    | Tuint32 -> str.[i] <- 'u'; i + 1
+    | Tint64 -> str.[i] <- 'x'; i + 1
+    | Tuint64 -> str.[i] <- 't'; i + 1
+    | Tdouble -> str.[i] <- 'd'; i + 1
+    | Tstring -> str.[i] <- 's'; i + 1
+    | Tobject_path -> str.[i] <- 'o'; i + 1
+    | Tsignature -> str.[i] <- 'g'; i + 1
+    | Tarray(t) ->
         str.[i] <- 'a';
-        write_single str (i + 1) t
-    | T.Dict(tk, tv) ->
+        write str (i + 1) t
+    | Tdict(tk, tv) ->
         str.[i] <- 'a';
         str.[i + 1] <- '{';
         str.[i + 2] <- char_of_basic tk;
-        let i = write_single str (i + 3) tv in
+        let i = write str (i + 3) tv in
           str.[i] <- '}';
           i + 1
-    | T.Structure(t) ->
+    | Tstructure(t) ->
         str.[i] <- '(';
-        let i = List.fold_left (write_single str) i t in
+        let i = List.fold_left (write str) i t in
           str.[i] <- ')';
           i + 1
-    | T.Variant ->
+    | Tvariant ->
         str.[i] <- 'v';
         i + 1
 
-  let write_t str i t = List.fold_left (write_single str) i t
+  let write_list str i t = List.fold_left (write str) i t
 end

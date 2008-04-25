@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** High-level interface to DBus message bus *)
+(** Interface to DBus message bus *)
 
 type t
   (** Abstract type for a message bus.
@@ -17,8 +17,8 @@ type t
       a application which routes messages between several DBus
       connections. *)
 
-type name
-  (** A bus name *)
+type name = string
+    (** A bus name *)
 
 (** {6 Connection} *)
 
@@ -31,15 +31,15 @@ val session : unit -> t
 val system : unit -> t
   (** [connect ()] open the system message bus *)
 
-val connect : [> Address.t ] list -> t
+val connect : Address.t list -> t
   (** [connect addresses] connect to the bus which have [address] as
       possible addresses. *)
 
 (** {6 Dispatching} *)
 
 val dispatch : t -> unit
-  (** [dispatch bus] read and dispatch all pending message. If using
-      threads [dispatch] do nothing.
+  (** [dispatch bus] read and dispatch one message. If using threads
+      [dispatch] do nothing.
 
       This is a shorthand for [Connection.dispatch (connection bus)] *)
 
@@ -65,3 +65,9 @@ val from_connection : Connection.t -> t
   (** [from_connection connection] create a message bus from a DBus
       conenction. (This just request a unqiue name calling
       org.freedesktop.DBus.Hello on the message bus) *)
+
+(** {6 Proxies} *)
+
+val make_proxy : t -> -> 'a Interface.t -> name -> Proxy.path -> 'a t
+  (** shorthand for [Proxy.make (Bus.connection bus) interface (Some
+      name) path] *)

@@ -14,7 +14,6 @@ val ljoin : string -> string list -> string
 val rjoin : string -> string list -> string
 val split_upper : string -> string list
 
-val filter_map : ('a -> 'b option) -> 'a list -> 'b list
 val part_map : ('a -> 'b option) -> 'a list -> 'b list * 'a list
 
 val parse_xml : string -> Xml.xml

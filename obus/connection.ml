@@ -82,56 +82,47 @@ type message = Header.t * Value.t
 
 let gen_serial connection = Protected.process (fun x -> (x, Int32.succ c)) connection.next_serial
 
-let raw_send_message_sync bus header body_writer body_reader =
+let write_message connection header body_writer =
+  Mutex.lock connection.outgoing_buffer_m;
+  try
+    Message.write connection.transport connection.outgoing_buffer_m header body_writer;
+    Mutex.unlock connection.outgoing_buffer_m
+  with
+      e ->
+        Mutex.unlock connection.outgoing_buffer_m;
+        raise e
+
+let raw_send_message_sync connection header body_writer body_reader =
   let m = Mutex.create () in
     Mutex.lock m;
-    Protected.update  (SerialMap.add header.H.serial (body_reader, Wait_sync m)) bus.serial_waiters;
-    write_message bus header body_writer;
+    Protected.update  (SerialMap.add header.H.serial (body_reader, Wait_sync m)) connection.serial_waiters;
+    write_message connection header body_writer;
     Mutex.lock m
 
-let raw_send_message_async bus header body_writer body_reader =
-  Protected.update (SerialMap.add header.H.serial (body_reader, Wait_async)) bus.serial_waiters;
-  write_message bus header body_writer
+let raw_send_message_async connection header body_writer body_reader =
+  Protected.update (SerialMap.add header.H.serial (body_reader, Wait_async)) connection.serial_waiters;
+  write_message connection header body_writer
 
-let raw_send_message_no_reply bus header body_writer =
-  write_message bus header body_writer
+let raw_send_message_no_reply connection header body_writer =
+  write_message connection header body_writer
 
 let raw_add_filter connection reader =
   Protected.update (fun l -> Raw(reader) :: l) connection.filters;
 
-(* Marshal a general dbus value *)
-let write_value value byte_order buffer ptr =
-  ignore (match byte_order with
-            | Little_endian ->
-                let module W = Wire.LEWriter(struct let buffer = buffer end) in
-                  W.value ptr value
-            | Big_endian ->
-                let module W = Wire.BEWriter(struct let buffer = buffer end) in
-                  W.value ptr value)
-
-(* Read a general dbus value *)
-let read_value buffer ptr =
-  snd (match header.byte_order with
-         | Little_endian ->
-             let module R = Wire.LEReader(struct let buffer = buffer end) in
-               R.value ptr
-         | Big_endian ->
-             let module R = Wire.BEReader(struct let buffer = buffer end) in
-               R.value ptr)
-
-  let send_message_sync connection (header, body) =
+let send_message_sync connection (header, body) =
+  let v = ref [] in
     raw_send_message_sync connection header
-      (write_value body) read_value
-let send_message_async connection (header, body) =
-  raw_send_message_async connection header
-    (write_value body) read_value
+      (Wire.write_value body) (fun buffer ptr -> v := Wire.Wire.read_value buffer ptr);
+    !v
+let send_message_async connection (header, body) f =
+  raw_send_message_async connection header (Wire.write_value body)
+    (fun buffer ptr -> f (Wire.read_value buffer ptr))
 let send_message_no_reply connection (header, body) =
-  raw_send_message_no_reply connection header
-    (write_value body) read_value
+  raw_send_message_no_reply connection header (Wire.write_value body)
 let add_filter connection filter =
   Protected.update (fun l -> User(filter) :: l) connection.filters
 let add_interface connection interface =
-  Protected.update (fun m -> InterfMap.add (I.get_handlers interface) interface m) bus.interfaces
+  Protected.update (fun m -> InterfMap.add (I.get_handlers interface) interface m) connection.interfaces
 
 let wakeup = function
   | Wait_sync(m) ->
@@ -149,7 +140,7 @@ let read connection (reader, mode) header body_start =
 open Header
 
 let internal_dipastch connection =
-  let header, body_start = Message.read bus.transport bus.incoming_buffer in
+  let header, body_start = Message.read connection.transport connection.incoming_buffer in
     (* The body is a lazy value so it is computed at most one time *)
   let body = Lazy.lazy_from_fun (fun () -> read_value header body_start) in
   let rec aux = function
@@ -172,7 +163,7 @@ let internal_dipastch connection =
         match header.message_type, header.fields with
           | Method_return, { reply_serial = Some(serial) }
           | Error, { reply_serial = Some(serial) } ->
-              begin match Protected.update bus.serial_waiters begin fun map ->
+              begin match Protected.update connection.serial_waiters begin fun map ->
                 try
                   let waiter = SerialMap.find serial map in
                     (Some(waiter), SerialMap.remove serial map)
@@ -186,7 +177,7 @@ let internal_dipastch connection =
               begin try
                 ingore (read connection
                           (InterfMap.find interface
-                             (Protected.get bus.interfaces)).I.method_call
+                             (Protected.get connection.interfaces)).I.method_call
                           header body_start)
               with
                   Not_found ->
@@ -203,12 +194,12 @@ let internal_dipastch connection =
                       raise Exit
                   with
                       _ -> ()
-                end (Protected.get bus.interfaces);
+                end (Protected.get connection.interfaces);
               with Exit -> ()
               end
   in
     (* Try all the filters *)
-    aux (Protected.get bus.filters)
+    aux (Protected.get connection.filters)
 
 let dispatch connection =
   if ThreadConfig.use_threads
@@ -219,7 +210,7 @@ let transport connection = connection.transport
 let guid connection = connection.guid
 
 let of_transport transport priv =
-  let guid = Auth.launch transport#lexbuf in
+  let guid = Auth.launch (transport.Transport.lexbuf ()) in
   let make () =
     {
       transport = transport;
