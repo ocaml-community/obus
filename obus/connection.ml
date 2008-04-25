@@ -18,7 +18,7 @@ module SerialMap = IMap
 module InterfMap = SMap
 module ObjectSet = SSet
 
-type guid = Auth.guid
+type guid = Address.guid
 
 type 'a reader = Header.t -> string -> int -> 'a
 type writer = Header.byte_order -> string -> int -> int
@@ -93,20 +93,6 @@ let write_message connection header body_writer =
         Mutex.unlock connection.outgoing_buffer_m;
         raise e
 
-let raw_send_message_sync connection header body_writer body_reader =
-  let m = Mutex.create () in
-  let v = ref None in
-    Mutex.lock m;
-    Protected.update (SerialMap.add header.Header.serial
-                        ((fun header buffer ptr ->
-                            v := Some(body_reader header buffer ptr)),
-                         Wait_sync m)) connection.serial_waiters;
-    write_message connection header body_writer;
-    Mutex.lock m;
-    match !v with
-      | Some x -> x
-      | None -> assert false
-
 let raw_send_message_async connection header body_writer body_reader =
   Protected.update (SerialMap.add header.Header.serial (body_reader, Wait_async)) connection.serial_waiters;
   write_message connection header body_writer
@@ -117,9 +103,6 @@ let raw_send_message_no_reply connection header body_writer =
 let raw_add_filter connection reader =
   Protected.update (fun l -> (Raw(reader), Wait_async) :: l) connection.filters
 
-let send_message_sync connection (header, body) =
-  raw_send_message_sync connection header
-    (Val.write_value body) (fun header buffer ptr -> (header, Val.read_value header buffer ptr))
 let send_message_async connection (header, body) f =
   raw_send_message_async connection header (Val.write_value body)
     (fun header buffer ptr -> f (header, Val.read_value header buffer ptr))
@@ -251,16 +234,38 @@ let of_transport transport priv =
           ignore (Thread.create (fun () -> while true do internal_dispatch connection done) ());
           connection
 
-let of_addresses addresses =
-  match
-    Util.find_map begin fun addr ->
-      try
-        match Transport.create addr with
-          | None -> None
-          | Some(transport) -> Some(of_transport transport)
-      with
-          _ -> None
-    end addresses
-  with
-    | Some(connection) -> connection
-    | None -> raise (Failure "all transport failed")
+let of_addresses addresses = function
+  | true -> of_transport (Transport.of_addresses addresses) true
+  | false ->
+      (* Try to find an guid that we already have *)
+      let guids = Util.filter_map (fun (_, _, g) -> g) addresses in
+      let map = Protected.get guid_connection_map in
+        match Util.find_map (Util.exn_to_opt (fun guid -> GuidMap.find guid map)) guids with
+          | Some(connection) -> connection
+          | None -> of_transport (Transport.of_addresses addresses) false
+
+let rec wait_for_reply connection v = match !v with
+  | None -> internal_dispatch connection; wait_for_reply connection v
+  | Some x -> x
+
+let raw_send_message_sync connection header body_writer body_reader =
+  let m = Mutex.create () in
+  let v = ref None in
+    Mutex.lock m;
+    Protected.update (SerialMap.add header.Header.serial
+                        ((fun header buffer ptr ->
+                            v := Some(body_reader header buffer ptr)),
+                         Wait_sync m)) connection.serial_waiters;
+    write_message connection header body_writer;
+    if ThreadConfig.use_threads
+    then begin
+      Mutex.lock m;
+      match !v with
+        | Some x -> x
+        | None -> assert false
+    end else
+      wait_for_reply connection v
+
+let send_message_sync connection (header, body) =
+  raw_send_message_sync connection header
+    (Val.write_value body) (fun header buffer ptr -> (header, Val.read_value header buffer ptr))

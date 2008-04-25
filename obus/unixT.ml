@@ -19,7 +19,7 @@ let make_transport fd = {
 }
 
 let _ =
-  register_maker begin function
+  register_maker begin fun (_, known, _) -> match known with
     | Address.Unix path ->
         let fd = Unix.socket Unix.PF_UNIX Unix.SOCK_STREAM 0 in
           Unix.connect fd (Unix.ADDR_UNIX(path));

@@ -12,3 +12,4 @@ val find_map : ('a -> 'b option) -> 'a list -> 'b option
 val filter_map : ('a -> 'b option) -> 'a list -> 'b list
 val try_all : ('a -> 'b option) list -> 'a -> 'b option
 val select : 'a -> ('a -> 'b option) list -> 'b list
+val exn_to_opt : ('a -> 'b) -> 'a -> 'b option

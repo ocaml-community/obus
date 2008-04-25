@@ -10,12 +10,18 @@
 type name = string
 type key = string
 type value = string
+type guid = string
 
-type t =
+type raw = name * (key * value) list
+    (** A just parsed address *)
+
+type known =
+    (** Addresses handled by obus *)
   | Unix of string
       (** A unix socket, the argument is the path *)
-  | Unknown of name * (key * value) list
-      (** Unknown address *)
+  | Unknown
+
+type t = raw * known * guid option
 
 exception Parse_error of string
 

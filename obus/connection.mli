@@ -12,7 +12,7 @@
 type t
   (** Abstract type for a connection *)
 
-type guid = string
+type guid = Address.guid
     (** Unique identifier of a server *)
 
 (** {6 Creation} *)

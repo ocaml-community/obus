@@ -30,6 +30,19 @@ let fd transport = match transport.backend with
 type maker = Address.t -> t option
 
 let makers = Protected.make []
-let safe f x = try f x with _ -> None
+
+let safe f x =
+  try
+    f x
+  with
+      e ->
+        let ((name, _), _, _) = x in
+          LOG("failure while trying to make a transport from %s: %s" name (Printexc.to_string e));
+          None
+
 let register_maker maker = Protected.update (fun l -> safe maker :: l) makers
-let create address = Util.try_all (Protected.get makers) address
+
+let of_addresses addresses =
+  match Util.find_map (Util.try_all (Protected.get makers)) addresses with
+    | Some(transport) -> transport
+    | None -> raise (Failure "no working address found")

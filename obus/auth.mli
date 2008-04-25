@@ -48,9 +48,6 @@ val register_mechanism : string -> (unit -> mechanism) -> unit
 
 (** {6 Make authentification} *)
 
-type guid = string
-    (** Server identifier *)
-
-val launch : Transport.t -> guid option
+val launch : Transport.t -> Address.guid option
   (** [launch transport] launch authentification on the given
       transport *)

@@ -49,9 +49,9 @@ val fd : t -> Unix.file_descr
 
 (** {6 Creation} *)
 
-val create : Address.t -> t option
-  (** [create addresses] try to make a working transport from an
-      address *)
+val of_addresses : Address.t list -> t
+  (** [create addresses] try to make a working transport from a list
+      of addresses. *)
 
 type maker = Address.t -> t option
   (** A maker is a function which take an address and create a

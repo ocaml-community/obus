@@ -34,3 +34,5 @@ let rec select x = function
   | f :: l -> match f x with
       | None -> select x l
       | Some v -> v :: select x l
+
+let exn_to_opt f x = try Some(f x) with _ -> None
