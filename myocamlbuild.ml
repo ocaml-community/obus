@@ -63,6 +63,6 @@ let _ = dispatch begin function
       (* For samples to find .cmi files *)
       flag ["ocaml"; "compile"; "samples"] & S[A"-I"; A"obus"];
       flag ["ocaml"; "link"; "samples"] (A"obus.cma");
-      dep ["ocaml"; "ocamldep"; "samples"] ["obus.cma"];
+      dep ["ocaml"; "samples"] ["obus.cma"];
   | _ -> ()
 end
