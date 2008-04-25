@@ -18,18 +18,10 @@ type backend =
 
 type t = {
   backend : backend;
-  recv : string -> int -> int -> unit;
-  send : string -> int -> int -> unit;
+  recv : string -> int -> int -> int;
+  send : string -> int -> int -> int;
   close : unit -> unit;
-  lexbuf : unit -> Lexing.lexbuf;
 }
-
-let unix_like backend read write close =
-  { backend = backend;
-    recv = (fun buf pos count -> assert (read buf pos count = count));
-    send = (fun buf pos count -> assert (read buf pos count = count));
-    close = close;
-    lexbuf = (fun () -> Lexing.from_function (fun buf count -> read buf 0 count)) }
 
 let fd transport = match transport.backend with
   | Unix fd -> fd

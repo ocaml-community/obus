@@ -30,27 +30,17 @@ type backend =
 type t = {
   backend : backend;
 
-  recv : string -> int -> int -> unit;
-  (** [recv buffer pos count] must receive exactly [count] bytes and
-      store it in [buffer] starting from [pos]. *)
+  recv : string -> int -> int -> int;
+  (** [recv buffer pos count] must behave as [Unix.read fd]. *)
 
-  send : string -> int -> int -> unit;
-  (** [send buffer pos count] must send exactly [count] bytes from
-      [buffer] starting at [pos]. *)
+  send : string -> int -> int -> int;
+  (** [send buffer pos count] must behave as [Unix.write fd]. *)
 
   close : unit -> unit;
   (** [close ()] shutdown the transport *)
 
-  lexbuf : unit -> Lexing.lexbuf;
-  (** [lexbuf ()] return a lexing buffer, used by authentification *)
-
 (** If something wrong appened, [Error.Error] must be raised *)
 }
-
-val unix_like : backend -> (string -> int -> int -> int) -> (string -> int -> int -> int) -> (unit -> unit) -> t
-  (** [unix_like backend read write close] create a transport from two
-      function [read] and [write] which behave as [Unix.read] and
-      [Unix.write] *)
 
 val fd : t -> Unix.file_descr
   (** [fd transport] return the file descriptor used by the transport,

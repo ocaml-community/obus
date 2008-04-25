@@ -74,7 +74,7 @@ struct
           if total_length > String.length !buffer then
             buffer := String.create total_length;
 
-          transport.Transport.recv !buffer 0 total_length;
+          assert (transport.Transport.recv !buffer 0 total_length = total_length);
 
           let module R = FieldsReader(MakeR(struct let buffer = !buffer end)) in
           let start, fields = R.read fields_length in
@@ -126,14 +126,14 @@ struct
           then raise (Wire.Write_error "message too big!")
           else begin
             W.int_uint32 4 (j - i);
-            transport.Transport.send W.buffer 0 j
+            assert (transport.Transport.send W.buffer 0 j = j)
           end
       end
 end
 
 let read transport buffer =
   (* Read the minimum for knowing the total size of the message *)
-  transport.Transport.recv !buffer 0 16;
+  assert (transport.Transport.recv !buffer 0 16 = 16);
   (* We immediatly look for the byte order, then read the header *)
   match !buffer.[0] with
     | 'l' -> let module R = Reader(Wire.LEReader)

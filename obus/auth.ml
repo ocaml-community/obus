@@ -138,14 +138,15 @@ let marshal_client_command buf = function
       Buffer.add_string buf message
 
 let launch transport =
-  let lexbuf = transport.Transport.lexbuf () in
+  let lexbuf = Lexing.from_function (fun buf count -> transport.Transport.send buf 0 count) in
 
   let send command =
     let buf = Buffer.create 42 in
       marshal_client_command buf command;
       Buffer.add_string buf "\r\n";
       let line = Buffer.contents buf in
-        transport.Transport.send line 0 (String.length line)
+      let len = String.length line in
+        assert (transport.Transport.send line 0 len = len)
 
   and recv () =
     AuthLexer.command lexbuf
@@ -153,7 +154,7 @@ let launch transport =
 
     match find_mechanism (Protected.get makers) with
       | Some(cmd, state) ->
-          transport.Transport.send "\x00" 0 1;
+          assert (transport.Transport.send "\x00" 0 1 = 1);
           send cmd;
           client_machine_exec recv send state
       | None -> None
