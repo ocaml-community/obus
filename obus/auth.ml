@@ -138,7 +138,16 @@ let marshal_client_command buf = function
       Buffer.add_string buf message
 
 let launch transport =
-  let lexbuf = Lexing.from_function (fun buf count -> transport.Transport.send buf 0 count) in
+  let read =
+    if Log.authentification
+    then
+      (fun buf count -> let count = transport.Transport.recv buf 0 count in
+         DEBUG("received: %s" (String.sub buf 0 count));
+         count)
+    else
+      (fun buf count -> transport.Transport.recv buf 0 count)
+  in
+  let lexbuf = Lexing.from_function read in
 
   let send command =
     let buf = Buffer.create 42 in
@@ -146,6 +155,7 @@ let launch transport =
       Buffer.add_string buf "\r\n";
       let line = Buffer.contents buf in
       let len = String.length line in
+        DEBUG("sending: %s" line);
         assert (transport.Transport.send line 0 len = len)
 
   and recv () =

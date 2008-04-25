@@ -28,7 +28,12 @@ let of_string str =
                       match Util.assoc "path" params, Util.assoc "abstract" params with
                         | Some path, None -> Unix path
                         | None, Some abst -> Unix ("\x00" ^ abst)
-                        | _ -> Unknown(name, params)
+                        | None, None ->
+                            ERROR("invalid unix address: can not specify \"path\" and \"abstract\" at the same time");
+                            Unknown(name, params)
+                        | Some _, Some _ ->
+                            ERROR("invalid unix address: must specify \"path\" or \"abstract\"");
+                            Unknown(name, params)
                     end
                       (* XXX TODO: handle more addresses and transport
                          (tcp, ...) XXX *)

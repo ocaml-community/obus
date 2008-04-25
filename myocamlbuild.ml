@@ -56,7 +56,7 @@ let _ = dispatch begin function
       end (find_syntaxes ());
 
       List.iter begin fun ext ->
-        flag ["ocaml"; "pp"; "pa_"^ext] (A("pa_"^ext^".cmo"));
+        flag ["ocaml"; "pp"; "pa_"^ext] & S[A"camlp4o"; A("pa_"^ext^".cmo")];
         dep ["ocaml"; "ocamldep"; "pa_"^ext] ["pa_"^ext^".cmo"];
       end (myexts ());
 
