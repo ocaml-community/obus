@@ -38,9 +38,9 @@ let of_string str =
 
 let system () =
   of_string
-    (try Unix.getenv "DBUS_SYSTEM_BUS_ADDRESS" with
+    (try Sys.getenv "DBUS_SYSTEM_BUS_ADDRESS" with
          Not_found -> Constant.default_system_bus_address)
 
 let session () =
-  try of_string (Unix.getenv "DBUS_SESSION_BUS_ADDRESS") with
+  try of_string (Sys.getenv "DBUS_SESSION_BUS_ADDRESS") with
       Not_found -> []
