@@ -124,17 +124,17 @@ struct
 
   (* Pad bytes must not be left uninitialized *)
   let pad2 i =
-    let len = i mod 2 in
+    let len = i land 1 in
       String.fill buffer i len '\x00';
       i + len
 
   let pad4 i =
-    let len = 3 - (i-1) mod 4 in
+    let len = (4 - i) land 3 in
       String.fill buffer i len '\x00';
       i + len
 
   let pad8 i =
-    let len = 7 - (i-1) mod 8 in
+    let len = (8 - i) land 7 in
       String.fill buffer i len '\x00';
       i + len
 
@@ -213,9 +213,9 @@ struct
   type 'a t = ptr -> 'a
   let buffer = B.buffer
 
-  let pad2 i = i + (i mod 2)
-  let pad4 i = i + (3 - (i-1) mod 4)
-  let pad8 i = i + (7 - (i-1) mod 8)
+  let pad2 i = i + (i land 1)
+  let pad4 i = i + ((4 - i) land 3)
+  let pad8 i = i + ((8 - i) land 7)
 
   let int_int16 i =
     let v0 = int_of_char (buffer.[i + data16_bit0])
