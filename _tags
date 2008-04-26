@@ -1,5 +1,4 @@
-<pa_*>: camlp4of, use_camlp4
-<trace.*>: camlp4of, use_camlp4
+<syntax/*>: camlp4of, use_camlp4
 "binder/dBus.ml": camlp4o, pa_seq
 "binder/lmap.ml": camlp4o, pa_seq
 "binder/caml.ml": camlp4of, pa_seq

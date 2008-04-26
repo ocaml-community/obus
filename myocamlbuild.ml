@@ -18,10 +18,10 @@ let find_syntaxes () = ["camlp4o"; "camlp4r"]
 let ocamlfind x = S[A"ocamlfind"; x]
 
 let myexts () =
-  List.map (fun s -> String.sub s 3 (String.length s - 6))
+  List.map (fun x -> Pathname.basename (Pathname.remove_extension x))
     (blank_sep_strings &
        Lexing.from_string &
-       run_and_read "echo pa_*.ml")
+       run_and_read "echo syntax/*.ml")
 
 let _ = dispatch begin function
   | Before_options ->
@@ -56,13 +56,9 @@ let _ = dispatch begin function
       end (find_syntaxes ());
 
       List.iter begin fun ext ->
-        flag ["ocaml"; "pp"; "pa_"^ext] & A("pa_"^ext^".cmo");
-        dep ["ocaml"; "ocamldep"; "pa_"^ext] ["pa_"^ext^".cmo"];
+        flag ["ocaml"; "pp"; ext] & A("syntax/"^ext^".cmo");
+        dep ["ocaml"; "ocamldep"; ext] ["syntax/"^ext^".cmo"];
       end (myexts ());
-
-      (* Tracing *)
-      flag ["ocaml"; "pp"; "trace"] & A("trace.cmo");
-      dep ["ocaml"; "ocamldep"; "trace"] ["trace.cmo"];
 
       (* For samples to find .cmi files *)
       flag ["ocaml"; "compile"; "samples"] & S[A"-I"; A"obus"];
