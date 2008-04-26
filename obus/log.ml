@@ -9,13 +9,15 @@
 
 let (verbose,
      authentification,
-     transport) =
+     transport,
+     connection) =
   try
     let s = Sys.getenv "OBUSLOG" in
       if String.contains s '*'
-      then (true, true, true)
+      then (true, true, true, true)
       else (true,
             String.contains s 'a',
-            String.contains s 't')
+            String.contains s 't',
+            String.contains s 'c')
   with
-      Not_found -> (false, false, false)
+      Not_found -> (false, false, false, false)

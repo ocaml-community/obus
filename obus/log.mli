@@ -12,3 +12,4 @@
 val verbose : bool
 val authentification : bool
 val transport : bool
+val connection : bool

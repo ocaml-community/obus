@@ -192,6 +192,18 @@ let internal_dispatch connection =
               (* Message dropped *)
               ()
   in
+    (* Write errors on stderr for debugging *)
+    if Log.connection && header.message_type = Error
+    then begin
+      let msg = match header.fields.signature with
+        | Some "s" -> fst (Values.get_values (Values.cons Values.string Values.nil) (Lazy.force body))
+        | None -> ""
+      and name = match header.fields.error_name with
+        | Some name -> name
+        | None -> ""
+      in
+        DEBUG("error received: %s: %s" name msg)
+    end;
     (* Try all the filters *)
     aux (Protected.get connection.filters)
 
