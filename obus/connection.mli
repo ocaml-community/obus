@@ -32,7 +32,7 @@ val of_addresses : Address.t list -> bool -> t
 (** Note: these functions take a complete message description, you may
     have a look at [Message] for easy creation of messages *)
 
-type body = Val.value list
+type body = Values.values
 type send_message = Header.send * body
 type recv_message = Header.recv * body
 

@@ -13,13 +13,14 @@ type path = string
 
 type 'a t = {
   connection : Connection.t;
-  interface : Interface.t;
+  interface : 'a Interface.t;
   name : name option;
   path : path;
 }
 
 let make connection interface name path =
   { connection = connection;
+    interface = interface;
     name = name;
     path = path }
 

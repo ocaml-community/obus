@@ -31,7 +31,7 @@ type waiting_mode =
       (* The reply will stored somewhere and the caller will get it
          later *)
 
-type body = Val.value list
+type body = Values.values
 type filter = recv -> body Lazy.t -> bool
 
 type any_filter =
@@ -108,10 +108,10 @@ let raw_add_filter connection reader =
   Protected.update (fun l -> (Raw(reader), Wait_async) :: l) connection.filters
 
 let send_message_async connection (header, body) f =
-  raw_send_message_async connection header (Val.write_value body)
-    (fun header buffer ptr -> f (header, Val.read_value header buffer ptr))
+  raw_send_message_async connection header (Values.write_values body)
+    (fun header buffer ptr -> f (header, Values.read_values header buffer ptr))
 let send_message_no_reply connection (header, body) =
-  raw_send_message_no_reply connection header (Val.write_value body)
+  raw_send_message_no_reply connection header (Values.write_values body)
 let add_filter connection filter =
   Protected.update (fun l -> (User(filter), Wait_async) :: l) connection.filters
 let add_interface connection interface =
@@ -133,7 +133,7 @@ let read connection (reader, mode) header body_start =
 let internal_dispatch connection =
   let header, body_start = MessageRW.read connection.transport connection.incoming_buffer in
     (* The body is a lazy value so it is computed at most one time *)
-  let body = Lazy.lazy_from_fun (fun () -> Val.read_value header !(connection.incoming_buffer) body_start) in
+  let body = Lazy.lazy_from_fun (fun () -> Values.read_values header !(connection.incoming_buffer) body_start) in
   let rec aux = function
     | (filter, mode) :: l ->
         begin try
@@ -271,4 +271,4 @@ let raw_send_message_sync connection header body_writer body_reader =
 
 let send_message_sync connection (header, body) =
   raw_send_message_sync connection header
-    (Val.write_value body) (fun header buffer ptr -> (header, Val.read_value header buffer ptr))
+    (Values.write_values body) (fun header buffer ptr -> (header, Values.read_values header buffer ptr))

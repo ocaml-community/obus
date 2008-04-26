@@ -1,6 +1,6 @@
 (*
- * type.mli
- * --------
+ * values.mli
+ * ----------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -9,7 +9,7 @@
 
 (** {6 DBus types} *)
 
-type typ =
+type dtype =
     private
   | Tbyte
   | Tboolean
@@ -23,16 +23,19 @@ type typ =
   | Tstring
   | Tsignature
   | Tobject_path
-  | Tarray of typ
-  | Tdict of typ * typ
-  | Tstructure of typ list
+  | Tarray of dtype
+  | Tdict of dtype * dtype
+  | Tstructure of dtype list
   | Tvariant
+type dtypes = dtype list
 
-val string_of_type : typ -> string
-val string_of_types : typ list -> string
+val string_of_dtype : dtype -> string
+val string_of_dtypes : dtypes -> string
 
-val signature_of_type : typ -> string
-val signature_of_types : typ list -> string
+val signature_of_dtype : dtype -> string
+val dtype_of_signature : string -> dtype
+val signature_of_dtypes : dtypes -> string
+val dtypes_of_signature : string -> dtypes
 
 (** {6 DBus values} *)
 
@@ -48,19 +51,20 @@ type value =
   | Uint64 of int64
   | Double of float
   | String of string
-  | Signature of typ list
+  | Signature of dtype list
   | Object_path of string
-  | Array of typ * value list
+  | Array of dtype * value list
       (** Array and dict must also contain types information because
           they can be empty *)
-  | Dict of typ * typ * (value * value) list
+  | Dict of dtype * dtype * (value * value) list
   | Structure of value list
   | Variant of value
+type values = value list
 
 val string_of_value : value -> string
 val string_of_values : value list -> string
-val type_of_value : value -> typ
-val type_of_values : value list -> typ list
+val dtype_of_value : value -> dtype
+val dtype_of_values : value list -> dtype list
 
 (** {6 DBus types/values construction} *)
 
@@ -79,7 +83,7 @@ val uint32 : (int32, yes) cstr
 val uint64 : (int64, yes) cstr
 val double : (float, yes) cstr
 val string : (string, yes) cstr
-val signature : (typ list, yes) cstr
+val signature : (dtype list, yes) cstr
 val object_path : (string, yes) cstr
 val array : ('a, _) cstr -> ('a list, no) cstr
 val dict : ('a, yes) cstr -> ('b, _) cstr -> (('a * 'b) list, no) cstr
@@ -88,31 +92,31 @@ val variant : (value, yes) cstr
 val cons : ('a, _) cstr -> 'b seq_cstr -> ('a * 'b) seq_cstr
 val nil : unit seq_cstr
 
-val make_type : (_, _) cstr -> typ
+val make_dtype : (_, _) cstr -> dtype
 val make_value : ('a, _) cstr -> 'a -> value
-val make_type_list : 'a seq_cstr -> typ list
-val make_value_list : 'a seq_cstr -> 'a -> value list
+val make_dtypes : 'a seq_cstr -> dtype list
+val make_values : 'a seq_cstr -> 'a -> value list
 
-val get : ('a, _) cstr -> value -> 'a
-val get_list : 'a seq_cstr -> value list -> 'a
+val get_value : ('a, _) cstr -> value -> 'a
+val get_values : 'a seq_cstr -> value list -> 'a
   (** [get] and [get_list] raise an [Invalid_argument] if the value
       has not the valid type *)
 
 (** Marshaling (for auto-generated code) *)
 
-val read_value : Header.recv -> Wire.buffer -> Wire.ptr -> value list
-val write_value : value list -> Header.byte_order -> Wire.buffer -> Wire.ptr -> int
+val read_values : Header.recv -> Wire.buffer -> Wire.ptr -> value list
+val write_values : value list -> Header.byte_order -> Wire.buffer -> Wire.ptr -> int
 
 module Writer(W : Wire.Writer) : sig
-  val typ : Wire.ptr -> typ -> Wire.ptr
-  val typ_list : Wire.ptr -> typ list -> Wire.ptr
+  val dtype : Wire.ptr -> dtype -> Wire.ptr
+  val dtypes : Wire.ptr -> dtypes -> Wire.ptr
   val value : Wire.ptr -> value -> Wire.ptr
-  val value_list : Wire.ptr -> value list -> Wire.ptr
+  val values : Wire.ptr -> values -> Wire.ptr
 end
 
 module Reader(R : Wire.Reader) : sig
-  val typ : Wire.ptr -> Wire.ptr * typ
-  val typ_list : Wire.ptr -> Wire.ptr * typ list
-  val value : Wire.ptr -> typ -> Wire.ptr * value
-  val value_list : Wire.ptr -> typ list -> Wire.ptr * value list
+  val dtype : Wire.ptr -> Wire.ptr * dtype
+  val dtypes : Wire.ptr -> Wire.ptr * dtypes
+  val value : Wire.ptr -> dtype -> Wire.ptr * value
+  val values : Wire.ptr -> dtypes -> Wire.ptr * values
 end

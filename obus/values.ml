@@ -1,6 +1,6 @@
 (*
- * val.ml
- * ------
+ * values.ml
+ * ---------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -9,7 +9,7 @@
 
 include Common
 
-let rec string_of_type = function
+let rec string_of_dtype = function
   | Tbyte -> "Byte"
   | Tboolean -> "Boolean"
   | Tint16 -> "Int16"
@@ -22,12 +22,12 @@ let rec string_of_type = function
   | Tstring -> "String"
   | Tsignature -> "Signature"
   | Tobject_path -> "Object_path"
-  | Tarray(t) -> "Array(" ^ string_of_type t ^ ")"
-  | Tdict(tk, tv) -> "Dict(" ^ string_of_type tk ^ ", " ^ string_of_type tv ^ ")"
-  | Tstructure(t) -> "Structure(" ^ string_of_types t ^ ")"
+  | Tarray(t) -> "Array(" ^ string_of_dtype t ^ ")"
+  | Tdict(tk, tv) -> "Dict(" ^ string_of_dtype tk ^ ", " ^ string_of_dtype tv ^ ")"
+  | Tstructure(t) -> "Structure(" ^ string_of_dtypes t ^ ")"
   | Tvariant -> "Variant"
 
-and string_of_types types = "[" ^ String.concat "; " (List.map string_of_type types) ^ "]"
+and string_of_dtypes types = "[" ^ String.concat "; " (List.map string_of_dtype types) ^ "]"
 
 type value =
   | Byte of char
@@ -40,12 +40,13 @@ type value =
   | Uint64 of int64
   | Double of float
   | String of string
-  | Signature of typ list
+  | Signature of dtypes
   | Object_path of string
-  | Array of typ * value list
-  | Dict of typ * typ * (value * value) list
+  | Array of dtype * value list
+  | Dict of dtype * dtype * (value * value) list
   | Structure of value list
   | Variant of value
+type values = value list
 
 let rec string_of_value = function
   | Byte(c) -> "Byte('" ^ Char.escaped c ^ "')"
@@ -58,10 +59,10 @@ let rec string_of_value = function
   | Uint64(i) -> "Uint64(" ^ Int64.to_string i ^ ")"
   | Double(d) -> "Double(" ^ string_of_float d ^ ")"
   | String(s) -> "String(\"" ^ s ^ "\")"
-  | Signature(s) -> "Signature(" ^ string_of_types s ^ "])"
+  | Signature(s) -> "Signature(" ^ string_of_dtypes s ^ "])"
   | Object_path(s) -> "Object_path(" ^ s ^ ")"
-  | Array(t, vs) -> "Array(" ^ string_of_type t ^ ", " ^ string_of_values vs ^ ")"
-  | Dict(tk, tv, vs) -> "Dict(" ^ string_of_type tk ^ ", " ^ string_of_type tv ^
+  | Array(t, vs) -> "Array(" ^ string_of_dtype t ^ ", " ^ string_of_values vs ^ ")"
+  | Dict(tk, tv, vs) -> "Dict(" ^ string_of_dtype tk ^ ", " ^ string_of_dtype tv ^
       ", " ^ "[" ^ String.concat "; "
         (List.map (fun (k, v) -> string_of_value k ^ ", " ^ string_of_value v) vs) ^ "])"
   | Structure(t) -> "Structure(" ^ string_of_values t ^ ")"
@@ -69,7 +70,7 @@ let rec string_of_value = function
 
 and string_of_values values = "[" ^ String.concat "; " (List.map string_of_value values) ^ "]"
 
-let rec type_of_value = function
+let rec dtype_of_value = function
   | Byte _ -> Tbyte
   | Boolean _ -> Tboolean
   | Int16 _ -> Tint16
@@ -84,17 +85,17 @@ let rec type_of_value = function
   | Object_path _ -> Tobject_path
   | Array(t, _) -> Tarray(t)
   | Dict(tk, tv, _) -> Tdict(tk, tv)
-  | Structure(l) -> Tstructure(type_of_values l)
+  | Structure(l) -> Tstructure(dtype_of_values l)
   | Variant _ -> Tvariant
 
-and type_of_values values = List.map type_of_value values
+and dtype_of_values values = List.map dtype_of_value values
 
 (** {6 DBus types/values construction} *)
 
-type ('a, 'is_basic) cstr = typ * ('a -> value) * (value -> 'a)
+type ('a, 'is_basic) cstr = dtype * ('a -> value) * (value -> 'a)
 type yes
 type no
-type 'a seq_cstr = typ list * ('a -> value list) * (value list -> 'a)
+type 'a seq_cstr = dtypes * ('a -> values) * (values -> 'a)
 
 let invalid_type () = raise (Failure "invalid type")
 
@@ -189,12 +190,12 @@ let nil = ([],
               | [] -> ()
               | _ -> invalid_type ()))
 
-let make_type (t, _, _) = t
+let make_dtype (t, _, _) = t
 let make_value (_, f, _) = f
-let make_type_list = make_type
-let make_value_list = make_value
-let get (_, _, g) = g
-let get_list = get
+let make_dtypes = make_dtype
+let make_values = make_value
+let get_value (_, _, g) = g
+let get_values = get_value
 
 open Wire
 
@@ -233,13 +234,13 @@ struct
         i + 1
 
 
-  let typ i t =
+  let dtype i t =
     let j = aux (i + 1) t in
       W.buffer.[i] <- char_of_int (j - i);
       W.buffer.[j] <- '\x00';
       i + 1
 
-  let typ_list i t =
+  let dtypes i t =
     let j = List.fold_left aux (i + 1) t in
       W.buffer.[i] <- char_of_int (j - i);
       W.buffer.[j] <- '\x00';
@@ -289,14 +290,14 @@ struct
     | Uint64(v) -> let i = W.pad8 i in W.int64_uint64 i v; i + 8
     | Double(v) -> let i = W.pad8 i in W.float_double i v; i + 8
     | String(v) -> W.string_string (W.pad4 i) v
-    | Signature(t) -> typ_list i t
+    | Signature(t) -> dtypes i t
     | Object_path(v) -> W.string_string (W.pad4 i) v
     | Array(t, v) -> write_array (fun i -> List.fold_left value i v) i (pad t (i + 4))
     | Dict(_, _, v) -> write_array (fun i -> List.fold_left (fun i (k, v) -> value (value (W.pad8 i) k) v) i v) i (W.pad8 (i + 4))
     | Structure(v) -> List.fold_left value (W.pad8 i) v
-    | Variant(v) -> let i = typ i (type_of_value v) in value i v
+    | Variant(v) -> let i = dtype i (dtype_of_value v) in value i v
 
-  let value_list = List.fold_left value
+  let values = List.fold_left value
 end
 
 let basic_of_char = function
@@ -314,18 +315,18 @@ let basic_of_char = function
   | 'g' -> Tsignature
   | c -> raise (Read_error (Printf.sprintf "unknown type code %c" c))
 
-let rec read_typ str i =
+let rec read_dtype str i =
   match str.[i] with
     | 'a' ->
         if str.[i + 1] = '{'
         then begin
           let tkey = basic_of_char str.[i + 2] in
-          let i, tval = read_typ str (i + 3) in
+          let i, tval = read_dtype str (i + 3) in
             if str.[i] <> '}'
             then raise (Read_error "'}' expected")
             else (i + 1, Tdict(tkey, tval))
         end else begin
-          let i, t = read_typ str (i + 1) in
+          let i, t = read_dtype str (i + 1) in
             (i, Tarray(t))
         end
     | '(' ->
@@ -338,16 +339,19 @@ and read_until str cend i =
   if str.[i] = cend
   then (i + 1, [])
   else
-    let i, hd = read_typ str i in
+    let i, hd = read_dtype str i in
     let i, tl = read_until str cend i in
       (i, hd :: tl)
 
-let rec read_typ_list str limit i =
+let rec read_dtypes str limit i =
   if i = limit
   then []
   else
-    let i, hd = read_typ str i in
-      hd :: read_typ_list str limit i
+    let i, hd = read_dtype str i in
+      hd :: read_dtypes str limit i
+
+let dtype_of_signature signature = snd (read_dtype signature 0)
+let dtypes_of_signature signature = read_dtypes signature (String.length signature) 0
 
 module Reader(R : Reader) =
 struct
@@ -366,8 +370,8 @@ struct
     | 'g' -> Tsignature
     | c -> raise (Read_error (Printf.sprintf "unknown type code %c" c))
 
-  let typ = read_typ R.buffer
-  let typ_list = read_until R.buffer '\x00'
+  let dtype = read_dtype R.buffer
+  let dtypes = read_until R.buffer '\x00'
 
   let rec value i = function
     | Tbyte -> (i + 1, Byte(R.buffer.[i]))
@@ -380,7 +384,7 @@ struct
     | Tuint64 -> let i = R.pad8 i in (i + 8, Uint64(R.int64_uint64 i))
     | Tdouble -> let i = R.pad8 i in (i + 8, Double(R.float_double i))
     | Tstring -> let i, v = R.string_string (R.pad4 i) in (i, String(v))
-    | Tsignature -> let len = int_of_char R.buffer.[i] in (i + 1 + len, Signature(snd (typ_list (i + 1))))
+    | Tsignature -> let len = int_of_char R.buffer.[i] in (i + 1 + len, Signature(snd (dtypes (i + 1))))
     | Tobject_path -> let i, v = R.string_string (R.pad4 i) in (i, Object_path(v))
     | Tarray(t) ->
         let i = R.pad4 i in
@@ -416,11 +420,11 @@ struct
           (i, Structure(List.rev v))
     | Tvariant ->
         let len = int_of_char R.buffer.[i] in
-        let _, t = typ (i + 1) in
+        let _, t = dtype (i + 1) in
         let i, v = value (i + 2 + len) t in
           (i, Variant(v))
 
-  let value_list i t =
+  let values i t =
     let i, v = List.fold_left begin fun (i,acc) t ->
       let i, v = value i t in
         (i, v :: acc)
@@ -428,24 +432,24 @@ struct
       (i, List.rev v)
 end
 
-let write_value value byte_order buffer ptr =
+let write_values value byte_order buffer ptr =
   match byte_order with
     | Header.Little_endian ->
         let module W = Writer(LEWriter(struct let buffer = buffer end)) in
-          W.value_list ptr value
+          W.values ptr value
     | Header.Big_endian ->
         let module W = Writer(BEWriter(struct let buffer = buffer end)) in
-          W.value_list ptr value
+          W.values ptr value
 
-let read_value header buffer ptr =
+let read_values header buffer ptr =
   let t = (match header.Header.fields.Header.signature with
-             | Some s -> read_typ_list s (String.length s) 0
+             | Some s -> dtypes_of_signature s
              | _ -> []) in
     snd (match header.Header.byte_order with
            | Header.Little_endian ->
                let module R = Reader(LEReader(struct let buffer = buffer end)) in
-                 R.value_list ptr t
+                 R.values ptr t
            | Header.Big_endian ->
                let module R = Reader(BEReader(struct let buffer = buffer end)) in
-                 R.value_list ptr t)
+                 R.values ptr t)
 

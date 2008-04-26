@@ -10,12 +10,12 @@
 type name = string
 type value = string
 type annotation = Annotation of name * value
-type argument = Arg of name * Val.typ
+type argument = Arg of name * Values.dtype
 type access = Read | Write | Read_write
 type definition =
   | Method of name * (*in*) argument list * (*out*) argument list * annotation list
   | Signal of name * argument list * annotation list
-  | Property of name * Val.typ * access * annotation list
+  | Property of name * Values.dtype * access * annotation list
 type signature = Interface of name * definition list * annotation list
 
 type property_handlers = {
@@ -44,8 +44,8 @@ let get_handlers i = i.handlers
 let print_xml buf (Interface(name, definitions, annotations)) =
   let print fmt = Printf.bprintf buf fmt in
   let print_args dir args =
-    List.iter begin fun (Arg(name, typ)) ->
-      print "      <arg name=\"%s\" direction=\"%s\" type=\"%s\"/>\n" name dir (Val.string_of_type typ)
+    List.iter begin fun (Arg(name, dtype)) ->
+      print "      <arg name=\"%s\" direction=\"%s\" type=\"%s\"/>\n" name dir (Values.signature_of_dtype dtype)
     end args
   in
   let print_annotations indent annotations =
@@ -66,9 +66,9 @@ let print_xml buf (Interface(name, definitions, annotations)) =
           print_args "in" args;
           print_annotations "  " annotations;
           print "    </signal>\n"
-      | Property(name, typ, access, annotations) ->
+      | Property(name, dtype, access, annotations) ->
           print "    <property name=\"%s\" type=\"%s\" access=\"%s\">\n"
-            name (Val.string_of_type typ)
+            name (Values.signature_of_dtype dtype)
             (match access with
                | Read -> "read"
                | Write -> "write"

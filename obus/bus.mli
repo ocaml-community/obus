@@ -68,6 +68,6 @@ val from_connection : Connection.t -> t
 
 (** {6 Proxies} *)
 
-val make_proxy : t -> -> 'a Interface.t -> name -> Proxy.path -> 'a t
+val make_proxy : t -> 'a Interface.t -> name -> Proxy.path -> 'a Proxy.t
   (** shorthand for [Proxy.make (Bus.connection bus) interface (Some
       name) path] *)
