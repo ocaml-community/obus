@@ -100,7 +100,7 @@ val get_list : 'a seq_cstr -> value list -> 'a
 
 (** Marshaling (for auto-generated code) *)
 
-val read_value : Header.t -> Wire.buffer -> Wire.ptr -> value list
+val read_value : Header.recv Header.t -> Wire.buffer -> Wire.ptr -> value list
 val write_value : value list -> Header.byte_order -> Wire.buffer -> Wire.ptr -> int
 
 module Writer(W : Wire.Writer) : sig

@@ -35,13 +35,13 @@ val print_xml : Buffer.t -> signature -> unit
 (** For auto-generated code *)
 
 type property_handlers = {
-  property_set : string -> Header.t -> string -> int -> unit;
-  property_get : string -> Header.t -> string -> int -> unit;
-  property_getall : Header.t -> string -> int -> unit;
+  property_set : string -> Header.recv Header.t -> string -> int -> unit;
+  property_get : string -> Header.recv Header.t -> string -> int -> unit;
+  property_getall : Header.recv Header.t -> string -> int -> unit;
 }
 
 type handlers = {
-  method_call : Header.t -> string -> int -> bool;
+  method_call : Header.recv Header.t -> string -> int -> bool;
   (* Note: the interface method call handler must return [true] if it
      can handle the message, otherwise it return [false]. This is used
      for method which do not have an interface field since this is not

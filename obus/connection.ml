@@ -21,7 +21,7 @@ module ObjectSet = SSet
 
 type guid = Address.guid
 
-type 'a reader = Header.t -> string -> int -> 'a
+type 'a reader = Header.recv Header.t -> string -> int -> 'a
 type writer = byte_order -> string -> int -> int
 
 type waiting_mode =
@@ -32,7 +32,7 @@ type waiting_mode =
          later *)
 
 type body = Val.value list
-type filter = Header.t -> body Lazy.t -> bool
+type filter = recv Header.t -> body Lazy.t -> bool
 
 type any_filter =
   | User of filter
@@ -80,27 +80,28 @@ let guid_connection_map = Protected.make GuidMap.empty
 let remove_connection connection =
   Protected.update (GuidMap.remove connection.guid) guid_connection_map
 
-type message = Header.t * body
+type 'a message = 'a Header.t * body
 
 let gen_serial connection = Protected.process (fun x -> (x, Int32.succ x)) connection.next_serial
 
-let write_message connection header body_writer =
-  let serial = gen_serial connection in
-    Mutex.lock connection.outgoing_buffer_m;
-    try
-      MessageRW.write connection.transport connection.outgoing_buffer header serial body_writer;
-      Mutex.unlock connection.outgoing_buffer_m
-    with
-        e ->
-          Mutex.unlock connection.outgoing_buffer_m;
-          raise e
+let write_message connection header serial body_writer =
+  Mutex.lock connection.outgoing_buffer_m;
+  try
+    MessageRW.write connection.transport connection.outgoing_buffer header serial body_writer;
+    Mutex.unlock connection.outgoing_buffer_m
+  with
+      e ->
+        Mutex.unlock connection.outgoing_buffer_m;
+        raise e
 
 let raw_send_message_async connection header body_writer body_reader =
-  Protected.update (SerialMap.add header.serial (body_reader, Wait_async)) connection.serial_waiters;
-  write_message connection header body_writer
+  let serial = gen_serial connection in
+    Protected.update (SerialMap.add serial (body_reader, Wait_async)) connection.serial_waiters;
+    write_message connection header serial body_writer
 
 let raw_send_message_no_reply connection header body_writer =
-  write_message connection header body_writer
+  let serial = gen_serial connection in
+    write_message connection header serial body_writer
 
 let raw_add_filter connection reader =
   Protected.update (fun l -> (Raw(reader), Wait_async) :: l) connection.filters
@@ -249,14 +250,15 @@ let rec wait_for_reply connection v = match !v with
   | Some x -> x
 
 let raw_send_message_sync connection header body_writer body_reader =
+  let serial = gen_serial connection in
   let m = Mutex.create () in
   let v = ref None in
     Mutex.lock m;
-    Protected.update (SerialMap.add header.serial
+    Protected.update (SerialMap.add serial
                         ((fun header buffer ptr ->
                             v := Some(body_reader header buffer ptr)),
                          Wait_sync m)) connection.serial_waiters;
-    write_message connection header body_writer;
+    write_message connection header serial body_writer;
     if ThreadConfig.use_threads
     then begin
       Mutex.lock m;

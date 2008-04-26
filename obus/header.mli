@@ -46,12 +46,21 @@ val empty_fields : fields
 type byte_order = Little_endian | Big_endian
     (** Message byte order *)
 
-type t = {
+type send = unit
+type recv = serial
+    (** The type of the message, [send] mean that the message is
+        destined to be send over the bus, so we must not fill the
+        [serial] field in the header because it will be generated
+        automatically by the library. [recv] mean a message a received
+        message, so there is already a [serial] in the header that we
+        can look at. *)
+
+type 'a t = {
   (** Header description *)
   byte_order : byte_order;
   message_type : message_type;
   flags : flags;
-  serial : serial;
+  serial : 'a;
   fields : fields;
 
   (** Note: there is more fields in a real DBus messages but some like
