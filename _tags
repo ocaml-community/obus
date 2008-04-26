@@ -9,4 +9,6 @@
 <samples/*.{byte,native}>: pkg_unix
 <samples/**>: pkg_unix, samples, camlp4o, pa_dbus_typval
 "common": include
+"obus/threadsigs": include
 <obus/*.ml>: camlp4o, pa_log
+<obus/with_threads/*>: thread

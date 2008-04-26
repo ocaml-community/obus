@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open ThreadImplem
+
 open Header
 module I = Interface
 
