@@ -7,17 +7,38 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-let (verbose,
-     authentification,
-     transport,
-     connection) =
+let split str =
+  let rec aux pos =
+    try
+      let i = String.index_from str pos ',' in
+        String.sub str pos (i - pos) :: aux (i + 1)
+    with
+        Not_found -> [String.sub str pos (String.length str - pos)]
+  in
+    aux 0
+
+module type Section = sig
+  val authentification : bool
+  val transport : bool
+  val connection : bool
+end
+
+module Make(What : sig val var : string end) =
+struct
+  let (authentification,
+       transport,
+       connection) =
   try
-    let s = Sys.getenv "OBUSLOG" in
+    let s = Sys.getenv What.var in
       if String.contains s '*'
-      then (true, true, true, true)
-      else (true,
-            String.contains s 'a',
-            String.contains s 't',
-            String.contains s 'c')
+      then (true, true, true)
+      else let sections = split s in
+        (List.mem "authentification" sections,
+         List.mem "transport" sections,
+         List.mem "connection" sections)
   with
-      Not_found -> (false, false, false, false)
+      Not_found -> (false, false, false)
+end
+
+module Verbose = Make(struct let var = "OBUSLOG" end)
+module Debug = Make(struct let var = "OBUSDEBUG" end)

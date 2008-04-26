@@ -139,7 +139,7 @@ let marshal_client_command buf = function
 
 let launch transport =
   let read =
-    if Log.authentification
+    if Log.Debug.authentification
     then
       (fun buf count -> let count = transport.Transport.recv buf 0 count in
          DEBUG("received: %s" (String.sub buf 0 count));

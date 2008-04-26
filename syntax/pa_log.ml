@@ -28,12 +28,12 @@ let rec insert section prefix =
 let map_expr = function
   | <:expr@_loc< LOG($x$) >> ->
     let section = section (Loc.file_name _loc) in
-      <:expr< if Log.verbose
+      <:expr< if Log.Verbose.$lid:section$
       then $insert section "" x$
       else () >>
   | <:expr@_loc< DEBUG($x$) >> ->
     let section = section (Loc.file_name _loc) in
-      <:expr< if Log.$lid:section$
+      <:expr< if Log.Debug.$lid:section$
       then $insert section "" x$
       else () >>
   | <:expr@_loc< ERROR($x$) >> ->

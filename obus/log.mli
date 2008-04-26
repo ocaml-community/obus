@@ -7,9 +7,16 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** Print information, according to the value of OBUSLOG *)
+(** Print information, according to the value of OBUSLOG and
+    OBUSDEBUG:
 
-val verbose : bool
-val authentification : bool
-val transport : bool
-val connection : bool
+    "*" for all section or a comma separated list of section *)
+
+module type Section = sig
+  val authentification : bool
+  val transport : bool
+  val connection : bool
+end
+
+module Verbose : Section
+module Debug : Section
