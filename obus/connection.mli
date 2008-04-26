@@ -33,20 +33,21 @@ val of_addresses : Address.t list -> bool -> t
     have a look at [Message] for easy creation of messages *)
 
 type body = Val.value list
-type 'a message = 'a Header.t * body
+type send_message = Header.send * body
+type recv_message = Header.recv * body
 
-val send_message_sync : t -> Header.send message -> Header.recv message
+val send_message_sync : t -> send_message -> recv_message
   (** [send_message_sync connection message] send a message over a
       DBus connection.
 
       Note: the serial field of the header will always be filled
       automatically *)
 
-val send_message_async : t -> Header.send message -> (Header.recv message -> unit) -> unit
+val send_message_async : t -> send_message -> (recv_message -> unit) -> unit
   (** same as send_message_sync but return immediatly and register a
       function for receiving the result *)
 
-val send_message_no_reply : t -> Header.send message -> unit
+val send_message_no_reply : t -> send_message -> unit
   (** same as send_message_sync but do not expect a reply *)
 
 (** {6 Dispatching} *)
@@ -55,7 +56,7 @@ val dispatch : t -> unit
   (** [dispatch bus] read and dispatch one message. If using threads
       [dispatch] do nothing. *)
 
-type filter = Header.recv Header.t -> body Lazy.t -> bool
+type filter = Header.recv -> body Lazy.t -> bool
   (** A filter is a function that take a message, do something with
       and return true if the message can be considered has "handled"
       or false if other filters must be called on it. *)
@@ -86,10 +87,10 @@ val guid : t -> guid
 (** Note: these functions are not intended to be used by the
     programs *)
 
-type 'a reader = Header.recv Header.t -> string -> int -> 'a
+type 'a reader = Header.recv -> string -> int -> 'a
 type writer = Header.byte_order -> string -> int -> int
 
-val raw_send_message_sync : t -> Header.send Header.t -> writer -> 'a reader -> 'a
-val raw_send_message_async : t -> Header.send Header.t -> writer -> unit reader -> unit
-val raw_send_message_no_reply : t -> Header.send Header.t -> writer -> unit
+val raw_send_message_sync : t -> Header.send -> writer -> 'a reader -> 'a
+val raw_send_message_async : t -> Header.send -> writer -> unit reader -> unit
+val raw_send_message_no_reply : t -> Header.send -> writer -> unit
 val raw_add_filter : t -> bool reader -> unit

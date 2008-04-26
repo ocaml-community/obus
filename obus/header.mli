@@ -46,24 +46,25 @@ val empty_fields : fields
 type byte_order = Little_endian | Big_endian
     (** Message byte order *)
 
-type send = unit
-type recv = serial
-    (** The type of the message, [send] mean that the message is
-        destined to be send over the bus, so we must not fill the
-        [serial] field in the header because it will be generated
-        automatically by the library. [recv] mean a message a received
-        message, so there is already a [serial] in the header that we
-        can look at. *)
-
-type 'a t = {
+type ('length, 'serial)  t = {
   (** Header description *)
   byte_order : byte_order;
   message_type : message_type;
   flags : flags;
-  serial : 'a;
+  length : 'length;
+  serial : 'serial;
   fields : fields;
-
-  (** Note: there is more fields in a real DBus messages but some like
-      length or protocol version are added/checked automatically by
-      OBus *)
+(** Note: The protocol version is not represented here because it is
+    added/checked automatically by OBus. You can not communicate with
+    an application that does not have the same protocol version as
+    you. *)
 }
+
+type send = (unit, unit) t
+type recv = (int, serial) t
+    (** An header can be a 'send' header, which means that the message
+        is destined to be send over the bus, so we must not fill
+        [serial] and [length] fields because it will be done
+        automatically by the library. Or a 'recv' header, which mean
+        that the message has been received, so we can look at these
+        informations. *)

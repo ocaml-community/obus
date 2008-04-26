@@ -82,6 +82,7 @@ struct
                H.message_type = message_type;
                H.flags = flags;
                H.serial = serial;
+               H.length = length;
                H.fields = fields }, start)
 end
 

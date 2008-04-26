@@ -19,13 +19,13 @@ type definition =
 type signature = Interface of name * definition list * annotation list
 
 type property_handlers = {
-  property_set : string -> Header.recv Header.t -> string -> int -> unit;
-  property_get : string -> Header.recv Header.t -> string -> int -> unit;
-  property_getall : Header.recv Header.t -> string -> int -> unit;
+  property_set : string -> Header.recv -> string -> int -> unit;
+  property_get : string -> Header.recv -> string -> int -> unit;
+  property_getall : Header.recv -> string -> int -> unit;
 }
 
 type handlers = {
-  method_call : Header.recv Header.t -> string -> int -> bool;
+  method_call : Header.recv -> string -> int -> bool;
   introspecter : string -> (signature * string list) option;
   property : property_handlers option;
 }

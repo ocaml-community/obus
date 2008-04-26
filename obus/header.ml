@@ -47,14 +47,14 @@ let empty_fields = {
   signature = None;
 }
 
-type recv = serial
-type send = unit
-
 type byte_order = Little_endian | Big_endian
-type 'a t = {
+type ('a, 'b) t = {
   byte_order : byte_order;
   message_type : message_type;
   flags : flags;
-  serial : 'a;
+  length : 'a;
+  serial : 'b;
   fields : fields;
 }
+type send = (unit, unit) t
+type recv = (int, serial) t

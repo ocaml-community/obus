@@ -21,7 +21,7 @@ module ObjectSet = SSet
 
 type guid = Address.guid
 
-type 'a reader = Header.recv Header.t -> string -> int -> 'a
+type 'a reader = Header.recv -> string -> int -> 'a
 type writer = byte_order -> string -> int -> int
 
 type waiting_mode =
@@ -32,7 +32,7 @@ type waiting_mode =
          later *)
 
 type body = Val.value list
-type filter = recv Header.t -> body Lazy.t -> bool
+type filter = recv -> body Lazy.t -> bool
 
 type any_filter =
   | User of filter
@@ -80,7 +80,8 @@ let guid_connection_map = Protected.make GuidMap.empty
 let remove_connection connection =
   Protected.update (GuidMap.remove connection.guid) guid_connection_map
 
-type 'a message = 'a Header.t * body
+type send_message = Header.send * body
+type recv_message = Header.recv * body
 
 let gen_serial connection = Protected.process (fun x -> (x, Int32.succ x)) connection.next_serial
 
