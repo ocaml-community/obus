@@ -29,6 +29,7 @@ type typ =
   | Tvariant
 
 val string_of_type : typ -> string
+val string_of_types : typ list -> string
 
 (** {6 DBus values} *)
 
@@ -54,7 +55,9 @@ type value =
   | Variant of value
 
 val string_of_value : value -> string
+val string_of_values : value list -> string
 val type_of_value : value -> typ
+val type_of_values : value list -> typ list
 
 (** {6 DBus types/values construction} *)
 

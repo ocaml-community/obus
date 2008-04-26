@@ -40,8 +40,10 @@ let rec string_of_type = function
   | Tobject_path -> "Object_path"
   | Tarray(t) -> "Array(" ^ string_of_type t ^ ")"
   | Tdict(tk, tv) -> "Dict(" ^ string_of_type tk ^ ", " ^ string_of_type tv ^ ")"
-  | Tstructure(t) -> "Structure([" ^ String.concat "; " (List.map string_of_type t) ^ "])"
+  | Tstructure(t) -> "Structure(" ^ string_of_types t ^ ")"
   | Tvariant -> "Variant"
+
+and string_of_types types = "[" ^ String.concat "; " (List.map string_of_type types) ^ "]"
 
 type value =
   | Byte of char
@@ -72,14 +74,16 @@ let rec string_of_value = function
   | Uint64(i) -> "Uint64(" ^ Int64.to_string i ^ ")"
   | Double(d) -> "Double(" ^ string_of_float d ^ ")"
   | String(s) -> "String(\"" ^ s ^ "\")"
-  | Signature(s) -> "Signature([" ^ String.concat "; " (List.map string_of_type s) ^ "])"
+  | Signature(s) -> "Signature(" ^ string_of_types s ^ "])"
   | Object_path(s) -> "Object_path(" ^ s ^ ")"
-  | Array(t, vs) -> "Array(" ^ string_of_type t ^ ", [" ^ String.concat "; " (List.map string_of_value vs) ^ "])"
+  | Array(t, vs) -> "Array(" ^ string_of_type t ^ ", " ^ string_of_values vs ^ ")"
   | Dict(tk, tv, vs) -> "Dict(" ^ string_of_type tk ^ ", " ^ string_of_type tv ^
       ", " ^ "[" ^ String.concat "; "
         (List.map (fun (k, v) -> string_of_value k ^ ", " ^ string_of_value v) vs) ^ "])"
-  | Structure(t) -> "Structure([" ^ String.concat "; " (List.map string_of_value t) ^ "])"
+  | Structure(t) -> "Structure(" ^ string_of_values t ^ ")"
   | Variant(x) -> "Variant(" ^ string_of_value x ^ ")"
+
+and string_of_values values = "[" ^ String.concat "; " (List.map string_of_value values) ^ "]"
 
 let rec type_of_value = function
   | Byte _ -> Tbyte
@@ -96,8 +100,10 @@ let rec type_of_value = function
   | Object_path _ -> Tobject_path
   | Array(t, _) -> Tarray(t)
   | Dict(tk, tv, _) -> Tdict(tk, tv)
-  | Structure(l) -> Tstructure(List.map type_of_value l)
+  | Structure(l) -> Tstructure(type_of_values l)
   | Variant _ -> Tvariant
+
+and type_of_values values = List.map type_of_value values
 
 (** {6 DBus types/values construction} *)
 
@@ -288,6 +294,56 @@ struct
   let value_list = List.fold_left value
 end
 
+let basic_of_char = function
+  | 'y' -> Tbyte
+  | 'b' -> Tboolean
+  | 'n' -> Tint16
+  | 'q' -> Tuint16
+  | 'i' -> Tint32
+  | 'u' -> Tuint32
+  | 'x' -> Tint64
+  | 't' -> Tuint64
+  | 'd' -> Tdouble
+  | 's' -> Tstring
+  | 'o' -> Tobject_path
+  | 'g' -> Tsignature
+  | c -> raise (Read_error (Printf.sprintf "unknown type code %c" c))
+
+let rec read_typ str i =
+  match str.[i] with
+    | 'a' ->
+        if str.[i + 1] = '{'
+        then begin
+          let tkey = basic_of_char str.[i + 2] in
+          let i, tval = read_typ str (i + 3) in
+            if str.[i] <> '}'
+            then raise (Read_error "'}' expected")
+            else (i + 1, Tdict(tkey, tval))
+        end else begin
+          let i, t = read_typ str i in
+            (i, Tarray(t))
+        end
+    | '(' ->
+        let i, t = read_until str ')' i in
+          (i, Tstructure(t))
+    | 'v' -> (i + 1, Tvariant)
+    | c -> (i + 1, basic_of_char c)
+
+and read_until str cend i =
+  if str.[i] = cend
+  then (i + 1, [])
+  else
+    let i, hd = read_typ str i in
+    let i, tl = read_until str cend i in
+      (i, hd :: tl)
+
+let rec read_typ_list str limit i =
+  if i = limit
+  then []
+  else
+    let i, hd = read_typ str i in
+      hd :: read_typ_list str limit i
+
 module Reader(R : Reader) =
 struct
   let basic_of_char = function
@@ -305,35 +361,8 @@ struct
     | 'g' -> Tsignature
     | c -> raise (Read_error (Printf.sprintf "unknown type code %c" c))
 
-  let rec typ i =
-    match R.buffer.[i] with
-      | 'a' ->
-          if R.buffer.[i + 1] = '{'
-          then begin
-            let tkey = basic_of_char R.buffer.[i + 2] in
-            let i, tval = typ (i + 3) in
-              if R.buffer.[i] <> '}'
-              then raise (Read_error "'}' expected")
-              else (i + 1, Tdict(tkey, tval))
-          end else begin
-            let i, t = typ i in
-              (i, Tarray(t))
-          end
-      | '(' ->
-          let i, t = read_until ')' i in
-            (i, Tstructure(t))
-      | 'v' -> (i + 1, Tvariant)
-      | c -> (i + 1, basic_of_char c)
-
-  and read_until cend i =
-    if R.buffer.[i] = cend
-    then (i + 1, [])
-    else
-      let i, hd = typ i in
-      let i, tl = read_until cend i in
-        (i, hd :: tl)
-
-  let typ_list = read_until '\x00'
+  let typ = read_typ R.buffer
+  let typ_list = read_until R.buffer '\x00'
 
   let rec value i = function
     | Tbyte -> (i + 1, Byte(R.buffer.[i]))
@@ -403,9 +432,7 @@ let write_value value byte_order buffer ptr =
 
 let read_value header buffer ptr =
   let t = (match header.Header.fields.Header.signature with
-             | Some s ->
-                 let module R = Reader(LEReader(struct let buffer = "\x00" end)) in
-                   snd (R.typ_list 0)
+             | Some s -> read_typ_list s (String.length s) 0
              | _ -> []) in
     snd (match header.Header.byte_order with
            | Header.Little_endian ->
