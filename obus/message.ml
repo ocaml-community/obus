@@ -14,22 +14,22 @@ module H = Header
 module FieldsReader(R : Wire.Reader) =
 struct
   let match_signature signature i =
-    if (R.buffer.[i] <> '\x01' or R.buffer.[i + 1] <> signature)
+    if (R.buffer.[i + 1] <> '\x01' or R.buffer.[i + 2] <> signature)
     then
-      raise (Read_error (Printf.sprintf "invalid signature: \"%c\" expected, got \"%s\"" signature (snd(R.string_signature i))))
+      raise (Read_error (Printf.sprintf "invalid signature: \"%c\" expected, got \"%s\"" signature (snd(R.string_signature (i+1)))))
 
   let read fields_length =
-    Wire.read_until begin fun i acc ->
+    Wire.read_until begin fun i acc -> let i = R.pad8 i in
       match R.buffer.[i] with
-        | '\x01' -> match_signature 'o' i; let i, x = R.string_string (i + 4) in  (R.pad8 i, { acc with H.path = Some x })
-        | '\x02' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (R.pad8 i, { acc with H.interface = Some x })
-        | '\x03' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (R.pad8 i, { acc with H.member = Some x })
-        | '\x04' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (R.pad8 i, { acc with H.error_name = Some x })
+        | '\x01' -> match_signature 'o' i; let i, x = R.string_string (i + 4) in  (i, { acc with H.path = Some x })
+        | '\x02' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (i, { acc with H.interface = Some x })
+        | '\x03' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (i, { acc with H.member = Some x })
+        | '\x04' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (i, { acc with H.error_name = Some x })
         | '\x05' -> match_signature 'u' i; let x = R.int32_uint32 (i + 4) in (i + 8, { acc with H.reply_serial = Some x })
-        | '\x06' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (R.pad8 i, { acc with H.destination = Some x })
-        | '\x07' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (R.pad8 i, { acc with H.sender = Some x })
-        | '\x08' -> match_signature 'g' i; let i, x = R.string_signature (i + 4) in (R.pad8 i, { acc with H.signature = Some x })
-        | code when code < '\x01' || code > '\x08' -> failwith "unknown header field code"
+        | '\x06' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (i, { acc with H.destination = Some x })
+        | '\x07' -> match_signature 's' i; let i, x = R.string_string (i + 4) in (i, { acc with H.sender = Some x })
+        | '\x08' -> match_signature 'g' i; let i, x = R.string_signature (i + 4) in (i, { acc with H.signature = Some x })
+        | code when code < '\x01' || code > '\x08' -> failwith (Printf.sprintf "unknown header field code: %d" (int_of_char code))
         | code -> raise (Read_error (Printf.sprintf "malformed header field(code = %d)" (int_of_char code)))
     end H.empty_fields fields_length 0
 end
@@ -90,11 +90,12 @@ struct
   let write_if code signature writer i = function
     | None  -> i
     | Some(v) ->
-        W.buffer.[i] <- code;
-        W.buffer.[i + 1] <- '\x01';
-        W.buffer.[i + 2] <- signature;
-        W.buffer.[i + 3] <- '\x00';
-        W.pad8 (writer (i + 4) v)
+        let i = W.pad8 i in
+          W.buffer.[i] <- code;
+          W.buffer.[i + 1] <- '\x01';
+          W.buffer.[i + 2] <- signature;
+          W.buffer.[i + 3] <- '\x00';
+          writer (i + 4) v
 
   let write transport byte_order_char header writer =
     W.buffer.[0] <- byte_order_char;
@@ -120,7 +121,10 @@ struct
       if i > Constant.max_array_size
       then raise (Wire.Write_error "array too big!")
       else begin
-        W.int_uint32 12 i;
+        W.int_uint32 12 (i - 16);
+        (* The body start after alignement padding of the header to an
+           8-boundary *)
+        let i = W.pad8 i in
         let j = writer header.H.byte_order W.buffer i in
           if j > Constant.max_message_size
           then raise (Wire.Write_error "message too big!")

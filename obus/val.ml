@@ -261,17 +261,38 @@ struct
       W.buffer.[j] <- '\x00';
       i + 1
 
-  let rec write_array f i =
+  let rec write_array f i j =
     let i = W.pad4 i in
-    let j = i + 4 in
     let k = f j in
     let len = k - j in
       if len > Constant.max_array_size
       then raise (Write_error "array too big!")
       else begin
-        W.int_int32 len i;
+        W.int_int32 i len;
         k
       end
+
+  let pad1 x = x
+    (* The length of an array start after alignement padding of the
+       first element, so we must pad before calculate the end of an
+       array *)
+  let pad = function
+    | Tbyte -> pad1
+    | Tboolean -> W.pad4
+    | Tint16 -> W.pad2
+    | Tint32 -> W.pad4
+    | Tint64 -> W.pad8
+    | Tuint16 -> W.pad2
+    | Tuint32 -> W.pad4
+    | Tuint64 -> W.pad8
+    | Tdouble -> W.pad8
+    | Tstring -> W.pad4
+    | Tsignature -> pad1
+    | Tobject_path -> W.pad4
+    | Tarray _ -> W.pad4
+    | Tdict _ -> W.pad4
+    | Tstructure _ -> W.pad8
+    | Tvariant -> pad1
 
   let rec value i = function
     | Byte(v) -> W.buffer.[i] <- v; i + 1
@@ -286,8 +307,8 @@ struct
     | String(v) -> W.string_string (W.pad4 i) v
     | Signature(t) -> typ_list i t
     | Object_path(v) -> W.string_string (W.pad4 i) v
-    | Array(_, v) -> write_array (fun i -> List.fold_left value i v) i
-    | Dict(_, _, v) -> write_array (fun i -> List.fold_left (fun i (k, v) -> value (value (W.pad8 i) k) v) i v) i
+    | Array(t, v) -> write_array (fun i -> List.fold_left value i v) i (pad t (i + 4))
+    | Dict(_, _, v) -> write_array (fun i -> List.fold_left (fun i (k, v) -> value (value (W.pad8 i) k) v) i v) i (W.pad8 (i + 4))
     | Structure(v) -> List.fold_left value (W.pad8 i) v
     | Variant(v) -> let i = typ i (type_of_value v) in value i v
 
@@ -320,7 +341,7 @@ let rec read_typ str i =
             then raise (Read_error "'}' expected")
             else (i + 1, Tdict(tkey, tval))
         end else begin
-          let i, t = read_typ str i in
+          let i, t = read_typ str (i + 1) in
             (i, Tarray(t))
         end
     | '(' ->
@@ -380,6 +401,7 @@ struct
     | Tarray(t) ->
         let i = R.pad4 i in
         let len = R.int_uint32 i in
+        let i = i + 4 in
           if len > Constant.max_array_size
           then raise (Read_error "array too big!")
           else
@@ -391,6 +413,7 @@ struct
     | Tdict(tk, tv) ->
         let i = R.pad4 i in
         let len = R.int_uint32 i in
+        let i = i + 4 in
           if len > Constant.max_array_size
           then raise (Read_error "array too big!")
           else

@@ -192,7 +192,7 @@ struct
 
   let string_string i str =
     let len = String.length str in
-      int_uint32 len i;
+      int_uint32 i len;
       String.blit str 0 buffer (i + 4) len;
       let i = i + 4 + len in
         buffer.[i] <- '\x00';
