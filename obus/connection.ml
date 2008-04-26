@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Header
 module I = Interface
 
 module SMap = Map.Make(struct type t = string let compare = compare end)
@@ -21,7 +22,7 @@ module ObjectSet = SSet
 type guid = Address.guid
 
 type 'a reader = Header.t -> string -> int -> 'a
-type writer = Header.byte_order -> string -> int -> int
+type writer = byte_order -> string -> int -> int
 
 type waiting_mode =
   | Wait_sync of Mutex.t
@@ -56,7 +57,7 @@ type t = {
   outgoing_buffer_m : Mutex.t;
 
   (* Next available serial for sending message *)
-  next_serial : Header.serial Protected.t;
+  next_serial : serial Protected.t;
 
   (* The server guid *)
   guid : guid;
@@ -84,17 +85,18 @@ type message = Header.t * body
 let gen_serial connection = Protected.process (fun x -> (x, Int32.succ x)) connection.next_serial
 
 let write_message connection header body_writer =
-  Mutex.lock connection.outgoing_buffer_m;
-  try
-    Message.write connection.transport connection.outgoing_buffer header body_writer;
-    Mutex.unlock connection.outgoing_buffer_m
-  with
-      e ->
-        Mutex.unlock connection.outgoing_buffer_m;
-        raise e
+  let serial = gen_serial connection in
+    Mutex.lock connection.outgoing_buffer_m;
+    try
+      MessageRW.write connection.transport connection.outgoing_buffer header serial body_writer;
+      Mutex.unlock connection.outgoing_buffer_m
+    with
+        e ->
+          Mutex.unlock connection.outgoing_buffer_m;
+          raise e
 
 let raw_send_message_async connection header body_writer body_reader =
-  Protected.update (SerialMap.add header.Header.serial (body_reader, Wait_async)) connection.serial_waiters;
+  Protected.update (SerialMap.add header.serial (body_reader, Wait_async)) connection.serial_waiters;
   write_message connection header body_writer
 
 let raw_send_message_no_reply connection header body_writer =
@@ -126,10 +128,8 @@ let read connection (reader, mode) header body_start =
   reader header !(connection.incoming_buffer) body_start;
   wakeup mode
 
-open Header
-
 let internal_dispatch connection =
-  let header, body_start = Message.read connection.transport connection.incoming_buffer in
+  let header, body_start = MessageRW.read connection.transport connection.incoming_buffer in
     (* The body is a lazy value so it is computed at most one time *)
   let body = Lazy.lazy_from_fun (fun () -> Val.read_value header !(connection.incoming_buffer) body_start) in
   let rec aux = function
@@ -252,7 +252,7 @@ let raw_send_message_sync connection header body_writer body_reader =
   let m = Mutex.create () in
   let v = ref None in
     Mutex.lock m;
-    Protected.update (SerialMap.add header.Header.serial
+    Protected.update (SerialMap.add header.serial
                         ((fun header buffer ptr ->
                             v := Some(body_reader header buffer ptr)),
                          Wait_sync m)) connection.serial_waiters;

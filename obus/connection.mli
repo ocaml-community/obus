@@ -29,15 +29,18 @@ val of_addresses : Address.t list -> bool -> t
 
 (** {6 Sending messages} *)
 
+(** Note: these functions take a complete message description, you may
+    have a look at [Message] for easy creation of messages *)
+
 type body = Val.value list
 type message = Header.t * body
 
-val gen_serial : t -> Header.serial
-  (** [gen_serial connection] Generate a fresh serial *)
-
 val send_message_sync : t -> message ->  message
   (** [send_message_sync connection message] send a message over a
-      DBus connection *)
+      DBus connection.
+
+      Note: the serial field of the header will always be filled
+      automatically *)
 
 val send_message_async : t -> message -> (message -> unit) -> unit
   (** same as send_message_sync but return immediatly and register a

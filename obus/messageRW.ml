@@ -1,6 +1,6 @@
 (*
- * message.ml
- * ----------
+ * messageRW.ml
+ * ------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -97,7 +97,7 @@ struct
           W.buffer.[i + 3] <- '\x00';
           writer (i + 4) v
 
-  let write transport byte_order_char header writer =
+  let write transport byte_order_char header serial writer =
     W.buffer.[0] <- byte_order_char;
     W.buffer.[1] <- begin match header.H.message_type with
         | H.Invalid -> '\x00'
@@ -109,7 +109,7 @@ struct
     W.buffer.[2] <- char_of_int ((if header.H.flags.H.no_reply_expected then 1 else 0) lor
                                    (if header.H.flags.H.no_auto_start then 2 else 0));
     W.buffer.[3] <- char_of_int Constant.protocol_version;
-    W.int32_uint32 8 header.H.serial;
+    W.int32_uint32 8 serial;
     let i = write_if '\x01' 'o' W.string_string 16 header.H.fields.H.path in
     let i = write_if '\x02' 's' W.string_string i header.H.fields.H.interface in
     let i = write_if '\x03' 's' W.string_string i header.H.fields.H.member in
@@ -146,14 +146,14 @@ let read transport buffer =
       in R.read transport buffer H.Big_endian
     | _ -> raise (Read_error "invalid byte order")
 
-let write transport buffer header body_writer =
+let write transport buffer header serial body_writer =
   let rec aux () =
     try
       match header.H.byte_order with
         | H.Little_endian -> let module W = Writer(Wire.LEWriter(struct let buffer = !buffer end))
-          in W.write transport 'l' header body_writer
+          in W.write transport 'l' header serial body_writer
         | H.Big_endian -> let module W = Writer(Wire.BEWriter(struct let buffer = !buffer end))
-          in W.write transport 'B' header body_writer
+          in W.write transport 'B' header serial body_writer
     with
         Invalid_argument "index out of bounds" ->
           buffer := (String.create (String.length !buffer * 2));

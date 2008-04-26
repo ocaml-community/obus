@@ -7,23 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-type typ =
-  | Tbyte
-  | Tboolean
-  | Tint16
-  | Tint32
-  | Tint64
-  | Tuint16
-  | Tuint32
-  | Tuint64
-  | Tdouble
-  | Tstring
-  | Tsignature
-  | Tobject_path
-  | Tarray of typ
-  | Tdict of typ * typ
-  | Tstructure of typ list
-  | Tvariant
+include Common
 
 let rec string_of_type = function
   | Tbyte -> "Byte"

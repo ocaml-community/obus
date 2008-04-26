@@ -1,6 +1,6 @@
 <pa_*>: camlp4of, use_camlp4
-"binder/dBus.ml": pa_seq
-"binder/lmap.ml": pa_seq
+"binder/dBus.ml": camlp4o, pa_seq
+"binder/lmap.ml": camlp4o, pa_seq
 "binder/caml.ml": camlp4of, pa_seq
 <binder/caml.*>: use_camlp4_full, use_dynlink
 <binder/*>: pkg_xml-light
@@ -9,4 +9,4 @@
 <samples/*.{byte,native}>: pkg_unix
 <samples/*>: samples
 "common": include
-<obus/*.ml>: pa_log
+<obus/*.ml>: camlp4o, pa_log

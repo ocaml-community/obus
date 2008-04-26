@@ -31,6 +31,9 @@ type typ =
 val string_of_type : typ -> string
 val string_of_types : typ list -> string
 
+val signature_of_type : typ -> string
+val signature_of_types : typ list -> string
+
 (** {6 DBus values} *)
 
 type value =

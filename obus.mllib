@@ -6,4 +6,5 @@ obus/without_threads/Mutex
 obus/without_threads/ThreadConfig
 obus/AuthLexer
 obus/AddrLexer
+common/Common
 obus/OBus
