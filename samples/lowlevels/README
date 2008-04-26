@@ -1,0 +1,8 @@
+Examples in this directory use the 'lowlevel' interface of OBus. This
+means that they create and send themselves their message. You must
+know a minimum DBus to use it.
+
+Note: you can control verbosity of OBus with the environment variables
+OBUSLOG and OBUSDEBUG (see obus/log.ml for description). For examples
+to see all errors returned by dbus applications set OBUSLOG to
+"connection".

@@ -7,6 +7,6 @@
 <binder/binder.*>: pkg_str
 <binder/obus-caml-*.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
 <samples/*.{byte,native}>: pkg_unix
-<samples/*>: samples
+<samples/**>: pkg_unix, samples, camlp4o, pa_dbus_typval
 "common": include
 <obus/*.ml>: camlp4o, pa_log
