@@ -214,7 +214,7 @@ let of_transport transport priv =
             serial_waiters = Protected.make SerialMap.empty;
             interfaces = Protected.make InterfMap.empty;
             filters = Protected.make [];
-            next_serial = Protected.make Int32.zero;
+            next_serial = Protected.make 1l;
             guid = guid
           }
         in
