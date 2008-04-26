@@ -60,6 +60,10 @@ let _ = dispatch begin function
         dep ["ocaml"; "ocamldep"; "pa_"^ext] ["pa_"^ext^".cmo"];
       end (myexts ());
 
+      (* Tracing *)
+      flag ["ocaml"; "pp"; "trace"] & A("trace.cmo");
+      dep ["ocaml"; "ocamldep"; "trace"] ["trace.cmo"];
+
       (* For samples to find .cmi files *)
       flag ["ocaml"; "compile"; "samples"] & S[A"-I"; A"obus"];
       flag ["ocaml"; "link"; "samples"] (A"obus.cma");
