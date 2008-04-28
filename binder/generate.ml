@@ -31,34 +31,29 @@ struct
   type rpattern =
       [ `RTerm of Term.right * rpattern list
       | `Var of Term.var ]
-  type pattern =
-      [ `LTerm of Term.left * pattern list
+  type lpattern =
+      [ `LTerm of Term.left * lpattern list
       | `RTerm of Term.right * rpattern list
       | `Var of Term.var ]
 
   type eqn = lterm * rterm
 
-  type ('a, 'b) value_maker =
-    | Seq of ('a, Value.t, 'b, Value.t) Seq.t * 'b
-    | List of 'a list * (Value.t list -> Value.t)
+  type ('a, 'b) args = ('a, Value.t, 'b, Value.t list -> Value.t) Seq.t
+  type maker = (rterm -> Value.t) -> Value.t
 
-  class maker maker = object
-    val maker : (rterm, 'a) value_maker = maker
-    method make mapping = match maker with
-      | Seq(vars, f) -> Seq.apply f (Seq.map (fun var -> List.assoc var mapping) vars)
-      | List(vars, f) -> f (List.map (fun var -> List.assoc var mapping) vars)
-  end
+  type generator = {
+    left : lpattern;
+    right : rpattern;
+    maker : (rpattern -> rterm) -> maker
+  }
 
-  class generator left right maker = object
-    method left : pattern = left
-    method right : rpattern = right
-    val maker : (rpattern, 'a) value_maker = maker
-    method maker f = new maker (match maker with
-                                  | Seq(vars, g) -> Seq(Seq.map f vars, g)
-                                  | List(vars, g) -> List(List.map f vars, g))
-  end
-
-  let make_generator left right maker = new generator left right maker
+  let make_generator left right args rest maker  = {
+    left = left;
+    right = right;
+    maker = fun f g ->
+      let h x = g (f x) in
+        maker (Seq.map h args) (List.map h rest)
+  }
 
   type sub = (var * rterm) list
 
@@ -66,7 +61,7 @@ struct
     | `Var v -> (List.assoc v sub)
     | `RTerm(name, args) -> `RTerm(name, List.map (substitute_right sub) args)
 
-  let rec substitute (sub : sub) : pattern -> term = function
+  let rec substitute (sub : sub) : lpattern -> term = function
     | `Var v -> ((List.assoc v sub) : rterm :> term)
     | `LTerm(name, args) -> `LTerm(name, List.map (substitute sub) args)
     | `RTerm(name, args) -> `RTerm(name, List.map (substitute_right sub) args)
@@ -129,12 +124,12 @@ struct
       let rec aux acc = function
         | generator :: generators -> begin
             try
-              let sub = unify generator#right b in
-              let left = substitute sub generator#left in
+              let sub = unify generator.right b in
+              let left = substitute sub generator.left in
                 match match_term a left with
-                  | [] -> Success((generator#maker (substitute_right []))#make [])
+                  | [] -> Success(generator.maker (substitute_right []) (fun _ -> assert false))
                   | eqns -> aux
-                      (System(generator#maker (substitute_right sub),
+                      (System(generator.maker (substitute_right sub),
                               [], eqns) :: acc) generators
             with
               | Cannot_unify -> aux acc generators
@@ -155,7 +150,7 @@ struct
             | Update(eqn) -> aux ((t, eqn) :: acc) mapping eqns
           end
         | [] -> begin match acc with
-            | [] -> Success(maker#make mapping)
+            | [] -> Success(maker (fun x -> List.assoc x mapping))
             | _ -> Update(System(maker, mapping, acc))
           end
       in

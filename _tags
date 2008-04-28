@@ -1,6 +1,7 @@
 <syntax/*>: camlp4of, use_camlp4
 "binder/dBus.ml": camlp4o, pa_seq
 "binder/lmap.ml": camlp4o, pa_seq
+"binder/make.ml": camlp4of, pa_seq
 "binder/caml.ml": camlp4of, pa_seq
 <binder/caml.*>: use_camlp4_full, use_dynlink
 <binder/*>: pkg_xml-light

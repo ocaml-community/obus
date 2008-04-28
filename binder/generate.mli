@@ -26,18 +26,17 @@ sig
   type rpattern =
       [ `RTerm of Term.right * rpattern list
       | `Var of Term.var ]
-  type pattern =
-      [ `LTerm of Term.left * pattern list
+  type lpattern =
+      [ `LTerm of Term.left * lpattern list
       | `RTerm of Term.right * rpattern list
       | `Var of Term.var ]
 
   type generator
 
-  type ('a, 'b) value_maker =
-    | Seq of ('a, Value.t, 'b, Value.t) Seq.t * 'b
-    | List of 'a list * (Value.t list -> Value.t)
+  type ('a, 'b) args = ('a, Value.t, 'b, Value.t list -> Value.t) Seq.t
 
-  val make_generator : pattern -> rpattern -> (rpattern, 'a) value_maker -> generator
+  val make_generator : lpattern -> rpattern -> (rpattern, 'a) args ->
+    rpattern list -> ((Value.t, 'a) args -> Value.t list -> Value.t) -> generator
 
   val generate : generator list -> lterm -> rterm  -> Value.t option
 end
