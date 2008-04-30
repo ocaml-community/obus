@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+include Common_util_implem
+
 let try_finally f close arg =
   let result =
     try

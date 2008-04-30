@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+include Common_util_interf.S
+
 val with_open_in : string -> (in_channel -> 'a) -> 'a
 val with_open_out : string -> (out_channel -> 'a) -> 'a
 
