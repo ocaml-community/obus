@@ -30,22 +30,22 @@ type dbus_id =
   | Variant
 type 'a dbus_type = (dbus_id, 'a) Type.term
 
-let dbyte = Type(Byte, [])
-let dboolean = Type(Boolean, [])
-let dint16 = Type(Int16, [])
-let dint32 = Type(Int32, [])
-let dint64 = Type(Int64, [])
-let duint16 = Type(Uint16, [])
-let duint32 = Type(Uint32, [])
-let duint64 = Type(Uint64, [])
-let ddouble = Type(Double, [])
-let dstring = Type(String, [])
-let dsignature = Type(Signature, [])
-let dobject_path = Type(Object_path, [])
-let darray t = Type(Array, [t])
-let ddict k v = Type(Dict, [k; v])
-let dstructure l = Type(Structure, [l])
-let dvariant = Type(Variant, [])
+let dbyte = typ Byte []
+let dboolean = typ Boolean []
+let dint16 = typ Int16 []
+let dint32 = typ Int32 []
+let dint64 = typ Int64 []
+let duint16 = typ Uint16 []
+let duint32 = typ Uint32 []
+let duint64 = typ Uint64 []
+let ddouble = typ Double []
+let dstring = typ String []
+let dsignature = typ Signature []
+let dobject_path = typ Object_path []
+let darray t = typ Array [t]
+let ddict k v = typ Dict [k; v]
+let dstructure l = typ Structure [l]
+let dvariant = typ Variant []
 
 let rec dbus_type_of_dtype = function
   | Tbyte -> dbyte

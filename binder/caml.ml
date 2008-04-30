@@ -27,29 +27,27 @@ open Type
 
 module Rules =
 struct
-  let t0 id = Type(id, [])
-  let t1 id a0 = Type(id, [a0])
-  let int = t0 "int"
-  let int32 = t0 "int32"
-  let int64 = t0 "int64"
-  let float = t0 "float"
-  let bool = t0 "bool"
-  let char = t0 "char"
-  let string = t0 "string"
-  let list x = t1 "list" x
-  let array x = t1 "array" x
-  let dbus_value = t0 "OBus.Values.value"
-  let dbus_types = t0 "OBus.Values.dtypes"
+  let int = typ "int" []
+  let int32 = typ "int32" []
+  let int64 = typ "int64" []
+  let float = typ "float" []
+  let bool = typ "bool" []
+  let char = typ "char" []
+  let string = typ "string" []
+  let list x = typ "list" [x]
+  let array x = typ "array" [x]
+  let dbus_value = typ "OBus.Values.value" []
+  let dbus_types = typ "OBus.Values.dtypes" []
 
   type rule_desc =
-    | Array of var caml_type * expr * expr * expr
-    | Dict of var caml_type * var caml_type * expr * expr * expr
-    | Record of (string * var caml_type) list
-    | Any of var caml_type * expr * expr
-  type convertion_rule = var caml_type * rule_desc
+    | Array of poly caml_type * expr * expr * expr
+    | Dict of poly caml_type * poly caml_type * expr * expr * expr
+    | Record of (string * poly caml_type) list
+    | Any of poly caml_type * expr * expr
+  type convertion_rule = poly caml_type * rule_desc
 
   let map key_type mod_name =
-    (t1 (mod_name ^ ".t") (v"x"),
+    (typ (mod_name ^ ".t") [v"x"],
      Dict(key_type, v"x",
           <:expr< $uid:mod_name$ . empty >>,
           <:expr< $uid:mod_name$ . add >>,
@@ -75,16 +73,13 @@ struct
 
   open Rules
 
-  let intern = section ()
-  let v x = Var(intern, x)
-
   let string_of_seq null b e sep = function
     | [] -> null
     | [t] -> t
     | t :: l ->
         b ^ t ^ List.fold_left (fun acc t -> acc ^ sep ^ t) "" l ^ e
 
-  let rec string_of_type : none caml_type -> string = function
+  let rec string_of_type : mono caml_type -> string = function
     | Nil ->
         "unit"
     | Cons _ as t ->
@@ -93,7 +88,7 @@ struct
         string_of_seq "" "(" ")" ", " (List.map string_of_type args) ^ (if args <> [] then " " else "") ^ t
     | Var _ -> assert false
 
-  let type_of_ctyp str typ =
+  let type_of_ctyp str t =
     let fail () = raise (Invalid_argument ("can not understand this caml type: " ^ str)) in
     let parse_id id =
       Util.ljoin "." (List.map (function
@@ -106,9 +101,9 @@ struct
       | _ -> fail ()
     and parse_type t = match t with
       | Ast.TyTup(_, t) -> tuple (List.map parse_type (Ast.list_of_ctyp t []))
-      | _ -> let args, id = parse_app [] t in Type(id, args)
+      | _ -> let args, id = parse_app [] t in typ id args
     in
-      parse_type typ
+      parse_type t
 
   let type_of_string str =
     type_of_ctyp str (Caml.Gram.parse Caml.ctyp _loc (Stream.of_string str))
@@ -358,7 +353,7 @@ struct
       | [e] -> f e
       | e :: l -> f e; List.iter (fun e -> print "\n"; f e) l
 
-    let rec print_type : none caml_type -> unit = function
+    let rec print_type : mono caml_type -> unit = function
       | Nil -> print "unit"
       | Cons _ as t -> print_seq "unit" "(" ")" " * " print_type (list_of_tuple t)
       | Type(t, args) ->

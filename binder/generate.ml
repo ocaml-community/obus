@@ -33,9 +33,8 @@ struct
   type ('a, 'b) args = ('a, value, 'b, value list -> value) Seq.t
   type dep = lpattern * rpattern
 
-  let intern = section ()
-  let first = Var(intern, "first")
-  let tail = Var(intern, "tail")
+  let first = fresh ()
+  let tail = fresh ()
   let first2 = (first, first)
   let tail2 = (tail, tail)
 
@@ -44,9 +43,9 @@ struct
 
   let rec map f =
     let rec aux = function
-      | Type(id, args) -> Type(id, List.map aux args)
-      | Cons(x, y) -> Cons(aux x, aux y)
-      | Nil -> Nil
+      | Type(id, args) -> typ id (List.map aux args)
+      | Cons(x, y) -> cons (aux x) (aux y)
+      | Nil -> nil
       | Var v -> f v
     in aux
 
@@ -58,25 +57,25 @@ struct
   }
 
   let rec insert_tail = function
-    | Cons(x, y) -> Cons(x, insert_tail y)
+    | Cons(x, y) -> cons x (insert_tail y)
     | Nil -> tail
-    | x -> Cons(x, tail)
+    | _ -> assert false
 
   let generators = ref
-    [ { left = Cons(first, Nil);
+    [ { left = cons first nil;
         right = first;
         deps = [first2];
         maker = fun f g ->
           let h x = g (f x) in
             [Value.flat (h first2)] };
-      { left = Cons(first, tail);
-        right = Cons(first, tail);
+      { left = cons first tail;
+        right = cons first tail;
         deps = [first2; tail2];
         maker = fun f g ->
           let h x = g (f x) in
             Value.flat (h first2) :: h tail2 };
-      { left = Nil;
-        right = Nil;
+      { left = nil;
+        right = nil;
         deps = [];
         maker = fun _ _ -> [] } ]
 
@@ -94,7 +93,7 @@ struct
              (Seq.apply maker (Seq.map h args)) (List.map h rest));
       match left with
         | Cons _ ->
-            aux (insert_tail left) (Cons(right, tail))
+            aux (insert_tail left) (cons right tail)
               (Seq.cons tail2 args) rest
               (fun f g ->
                  let h x = g (f x) in
@@ -102,7 +101,7 @@ struct
                    @ h tail2)
         | _ -> ()
 
-  type 'a sub = (var * 'a typ) list
+  type 'a sub = (poly * 'a typ) list
 
   let substitute sub = map (fun v -> List.assoc v sub)
 

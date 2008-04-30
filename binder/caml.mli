@@ -34,33 +34,33 @@ module Rules : sig
     (** functions for constructing standard caml types *)
 
   type rule_desc =
-    | Array of var caml_type * expr * expr * expr
+    | Array of poly caml_type * expr * expr * expr
         (** args:
             - element type
             - empty dict expression
             - adding element expression
             - folding expresssion *)
-    | Dict of var caml_type * var caml_type * expr * expr * expr
+    | Dict of poly caml_type * poly caml_type * expr * expr * expr
         (** args:
             - key type
             - values type
             - empty dict expression
             - adding element expression
             - folding expresssion *)
-    | Record of (string * var caml_type) list
+    | Record of (string * poly caml_type) list
         (** args:
             - the list of name and type of fields of the record *)
-    | Any of var caml_type * expr * expr
+    | Any of poly caml_type * expr * expr
         (** Very basic rule, describe how to convert from and to a caml type.
             args:
             - the source caml type
             - reading expression
             - writing expression *)
 
-  type convertion_rule = var caml_type * rule_desc
+  type convertion_rule = poly caml_type * rule_desc
       (** Describe how to read and write the given caml type *)
 
-  val map : var caml_type -> string -> convertion_rule
+  val map : poly caml_type -> string -> convertion_rule
     (** [map key_type name] special rule for map created with
         Map.Make. [name] is the module name *)
 
