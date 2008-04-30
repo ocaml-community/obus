@@ -30,3 +30,9 @@ type dtypes = dtype list
 
 val signature_of_dtype : dtype -> string
 val signature_of_dtypes : dtypes -> string
+val dtype_of_signature : string -> dtype
+val dtypes_of_signature : string -> dtypes
+
+val read_dtype : string -> int -> int * dtype
+val read_until : string -> char -> int -> int * dtypes
+val read_dtypes : string -> int -> int -> dtypes

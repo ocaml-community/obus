@@ -300,78 +300,10 @@ struct
   let values = List.fold_left value
 end
 
-let basic_of_char = function
-  | 'y' -> Tbyte
-  | 'b' -> Tboolean
-  | 'n' -> Tint16
-  | 'q' -> Tuint16
-  | 'i' -> Tint32
-  | 'u' -> Tuint32
-  | 'x' -> Tint64
-  | 't' -> Tuint64
-  | 'd' -> Tdouble
-  | 's' -> Tstring
-  | 'o' -> Tobject_path
-  | 'g' -> Tsignature
-  | c -> raise (Read_error (Printf.sprintf "unknown type code %c" c))
-
-let rec read_dtype str i =
-  match str.[i] with
-    | 'a' ->
-        if str.[i + 1] = '{'
-        then begin
-          let tkey = basic_of_char str.[i + 2] in
-          let i, tval = read_dtype str (i + 3) in
-            if str.[i] <> '}'
-            then raise (Read_error "'}' expected")
-            else (i + 1, Tdict(tkey, tval))
-        end else begin
-          let i, t = read_dtype str (i + 1) in
-            (i, Tarray(t))
-        end
-    | '(' ->
-        let i, t = read_until str ')' i in
-          (i, Tstructure(t))
-    | 'v' -> (i + 1, Tvariant)
-    | c -> (i + 1, basic_of_char c)
-
-and read_until str cend i =
-  if str.[i] = cend
-  then (i + 1, [])
-  else
-    let i, hd = read_dtype str i in
-    let i, tl = read_until str cend i in
-      (i, hd :: tl)
-
-let rec read_dtypes str limit i =
-  if i = limit
-  then []
-  else
-    let i, hd = read_dtype str i in
-      hd :: read_dtypes str limit i
-
-let dtype_of_signature signature = snd (read_dtype signature 0)
-let dtypes_of_signature signature = read_dtypes signature (String.length signature) 0
-
 module Reader(R : Reader) =
 struct
-  let basic_of_char = function
-    | 'y' -> Tbyte
-    | 'b' -> Tboolean
-    | 'n' -> Tint16
-    | 'q' -> Tuint16
-    | 'i' -> Tint32
-    | 'u' -> Tuint32
-    | 'x' -> Tint64
-    | 't' -> Tuint64
-    | 'd' -> Tdouble
-    | 's' -> Tstring
-    | 'o' -> Tobject_path
-    | 'g' -> Tsignature
-    | c -> raise (Read_error (Printf.sprintf "unknown type code %c" c))
-
   let dtype = read_dtype R.buffer
-  let dtypes = read_until R.buffer '\x00'
+  let dtypes = Common.read_until R.buffer '\x00'
 
   let rec value i = function
     | Tbyte -> (i + 1, Byte(R.buffer.[i]))

@@ -7,81 +7,66 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-type typ =
-  | Tbyte
-  | Tboolean
-  | Tint16
-  | Tint32
-  | Tint64
-  | Tuint16
-  | Tuint32
-  | Tuint64
-  | Tdouble
-  | Tstring
-  | Tsignature
-  | Tobject_path
-  | Tarray of typ
-  | Tdict of typ * typ
-  | Tstruct of typ list
-  | Tvariant
+include Common
 
-let rec string_of_type = function
-  | Tbyte -> "y"
-  | Tboolean -> "b"
-  | Tint16 -> "n"
-  | Tuint16 -> "q"
-  | Tint32 -> "i"
-  | Tuint32 -> "u"
-  | Tint64 -> "x"
-  | Tuint64 -> "t"
-  | Tdouble -> "d"
-  | Tstring -> "s"
-  | Tobject_path -> "o"
-  | Tsignature -> "g"
-  | Tarray(x) -> "a" ^ string_of_type x
-  | Tdict(k, v) -> "a{" ^ string_of_type k ^ string_of_type v ^ "}"
-  | Tstruct(l) -> "(" ^ List.fold_left (fun acc x -> string_of_type x ^ acc) "" l ^ ")"
-  | Tvariant -> "v"
+open Type
 
-let type_of_string dtyp =
-  let rec aux i = match dtyp.[i] with
-    | 'y' -> (i + 1, true, Tbyte)
-    | 'b' -> (i + 1, true, Tboolean)
-    | 'n' -> (i + 1, true, Tint16)
-    | 'q' -> (i + 1, true, Tuint16)
-    | 'i' -> (i + 1, true, Tint32)
-    | 'u' -> (i + 1, true, Tuint32)
-    | 'x' -> (i + 1, true, Tint64)
-    | 't' -> (i + 1, true, Tuint64)
-    | 'd' -> (i + 1, true, Tdouble)
-    | 's' -> (i + 1, true, Tstring)
-    | 'o' -> (i + 1, true, Tobject_path)
-    | 'g' -> (i + 1, true, Tsignature)
-    | 'a' -> begin match dtyp.[i + 1] with
-        | '{' ->
-            let j, is_basic, tk = aux (i + 2) in
-              if not is_basic
-              then raise (Invalid_argument (Printf.sprintf "dict key type must be a basic type: %s" dtyp));
-              let j, _, tv = aux j in
-                if dtyp.[j] <> '}'
-                then raise (Invalid_argument (Printf.sprintf "dict does not end with '}': %s" dtyp));
-                (j + 1, false, Tdict(tk, tv))
-        | _ -> let i, _, t = aux (i + 1) in
-            (i, false, Tarray(t))
-      end
-    | '(' -> let i, tl = aux_until ')' (i + 1) in
-        (i, false, Tstruct(tl))
-    | 'v' -> (i + 1, false, Tvariant)
-    | c -> raise (Invalid_argument (Printf.sprintf "invalid type code %c" c))
-  and aux_until ch i = match dtyp.[i] with
-    | c when c = ch -> (i + 1, [])
-    | _ -> let i, _, t = aux i in
-      let i, tl = aux_until ch i in
-        (i, t :: tl)
-  in
-  let _, _, t = aux 0 in t
+type dbus_id =
+  | Byte
+  | Boolean
+  | Int16
+  | Int32
+  | Int64
+  | Uint16
+  | Uint32
+  | Uint64
+  | Double
+  | String
+  | Signature
+  | Object_path
+  | Array
+  | Dict
+  | Structure
+  | Variant
+type 'a dbus_type = (dbus_id, 'a) Type.term
 
-type interface = typ Sig.t
+let dbyte = Type(Byte, [])
+let dboolean = Type(Boolean, [])
+let dint16 = Type(Int16, [])
+let dint32 = Type(Int32, [])
+let dint64 = Type(Int64, [])
+let duint16 = Type(Uint16, [])
+let duint32 = Type(Uint32, [])
+let duint64 = Type(Uint64, [])
+let ddouble = Type(Double, [])
+let dstring = Type(String, [])
+let dsignature = Type(Signature, [])
+let dobject_path = Type(Object_path, [])
+let darray t = Type(Array, [t])
+let ddict k v = Type(Dict, [k; v])
+let dstructure l = Type(Structure, [l])
+let dvariant = Type(Variant, [])
+
+let rec dbus_type_of_dtype = function
+  | Tbyte -> dbyte
+  | Tboolean -> dboolean
+  | Tint16 -> dint16
+  | Tint32 -> dint32
+  | Tint64 -> dint64
+  | Tuint16 -> duint16
+  | Tuint32 -> duint32
+  | Tuint64 -> duint64
+  | Tdouble -> ddouble
+  | Tstring -> dstring
+  | Tsignature -> dsignature
+  | Tobject_path -> dobject_path
+  | Tarray(t) -> darray (dbus_type_of_dtype t)
+  | Tdict(k, v) -> ddict (dbus_type_of_dtype k) (dbus_type_of_dtype v)
+  | Tstructure(l) -> dstructure (dbus_type_of_dtypes l)
+  | Tvariant -> dvariant
+and dbus_type_of_dtypes l = tuple (List.map dbus_type_of_dtype l)
+
+type interface = dtypes Sig.t
 
 open Xparser
 
@@ -93,6 +78,16 @@ let rename_args args =
       | "?" -> (i + 1, Sig.Arg("__unamed" ^ (string_of_int i), typ) :: l)
       | _ -> (i, Sig.Arg(name, typ) :: l)
   end args (0, []) end
+
+(*type value = string
+type annotation = Annotation of name * value
+type argument = Arg of name * Values.dtype
+type access = Read | Write | Read_write
+type definition =
+  | Method of name * (*in*) argument list * (*out*) argument list * annotation list
+  | Signal of name * argument list * annotation list
+  | Property of name * Values.dtype * access * annotation list
+type signature = Interface of name * definition list * annotation list*)
 
 let from_xml xml =
   parse (elt "node" [<>]
