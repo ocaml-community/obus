@@ -12,60 +12,55 @@
 
 type expr = Camlp4.PreCast.Ast.expr
 
+type caml_id = string
+type 'a caml_type = (caml_id, 'a) Type.term
+
 (** {6 Rules for converting types} *)
 
 module Rules : sig
-  type typ
+  open Type
 
-  val v : string -> typ
-  val int : typ
-  val int32 : typ
-  val int64 : typ
-  val float : typ
-  val bool : typ
-  val char : typ
-  val string : typ
-  val list : typ -> typ
-  val array : typ -> typ
-  val dbus_value : typ
-  val dbus_type : typ
-  val tuple : typ list -> typ
+  val int : 'a caml_type
+  val int32 : 'a caml_type
+  val int64 : 'a caml_type
+  val float : 'a caml_type
+  val bool : 'a caml_type
+  val char : 'a caml_type
+  val string : 'a caml_type
+  val list : 'a caml_type -> 'a caml_type
+  val array : 'a caml_type -> 'a caml_type
+  val dbus_value : 'a caml_type
+  val dbus_types : 'a caml_type
     (** functions for constructing standard caml types *)
 
-  val t0 : string -> typ
-  val t1 : string -> typ -> typ
-  val t2 : string -> typ -> typ -> typ
-  val t3 : string -> typ -> typ -> typ -> typ
-  val mkt : string -> typ list -> typ
-
   type rule_desc =
-    | Array of typ * expr * expr * expr
+    | Array of var caml_type * expr * expr * expr
         (** args:
             - element type
             - empty dict expression
             - adding element expression
             - folding expresssion *)
-    | Dict of typ * typ * expr * expr * expr
+    | Dict of var caml_type * var caml_type * expr * expr * expr
         (** args:
             - key type
             - values type
             - empty dict expression
             - adding element expression
             - folding expresssion *)
-    | Record of (string * typ) list
+    | Record of (string * var caml_type) list
         (** args:
             - the list of name and type of fields of the record *)
-    | Any of typ * expr * expr
+    | Any of var caml_type * expr * expr
         (** Very basic rule, describe how to convert from and to a caml type.
             args:
             - the source caml type
             - reading expression
             - writing expression *)
 
-  type convertion_rule = typ * rule_desc
+  type convertion_rule = var caml_type * rule_desc
       (** Describe how to read and write the given caml type *)
 
-  val map : typ -> string -> convertion_rule
+  val map : var caml_type -> string -> convertion_rule
     (** [map key_type name] special rule for map created with
         Map.Make. [name] is the module name *)
 

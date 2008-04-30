@@ -11,8 +11,11 @@ module type S = sig
   val name : string
     (** The language name *)
 
-  type typ
-    (** Represention of the language type *)
+  type id
+    (** Identifier for types *)
+
+  type typ = id Type.typ
+      (** Language types *)
 
   val correct_module_name : string -> string
   val correct_signal_name : string -> string
@@ -21,7 +24,7 @@ module type S = sig
     (** Convert a dbus identifier into a valid identifier of the
         destination language *)
 
-  val default_type : DBus.typ -> typ
+  val default_type : DBus.dtypes -> typ
     (** [default typ] The default type corresponding to a dbus type *)
 
   val string_of_type : typ -> string

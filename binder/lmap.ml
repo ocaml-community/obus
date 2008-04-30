@@ -38,7 +38,7 @@ let to_xml type_writer mapping =
     List.map2 begin fun (Sig.Arg(dname, dtype)) (Sig.Arg(lname, ltype)) ->
       Element("arg", names dname lname
                 @ (match dir with Some(d) -> [("direction", d)] | None -> [])
-                @ [("dtype", DBus.string_of_type dtype);
+                @ [("dtype", DBus.signature_of_dtypes dtype);
                    ("type", type_writer ltype)], [])
     end dargs largs
   in
@@ -82,12 +82,12 @@ let from_xml type_reader xml =
                                     (any (elt "arg" [< (P"dname"); (P"name"); (A("direction", "in", ["in"])); (P"dtype"); (P"type") >]
                                             s0
                                             (fun dname lname _ dtype ltype ->
-                                               (Sig.Arg(dname, DBus.type_of_string dtype),
+                                               (Sig.Arg(dname, DBus.dtypes_of_signature dtype),
                                                 Sig.Arg(lname, type_reader ltype)))))
                                     (any (elt "arg" [< (P"dname"); (P"name"); (A("direction", "in", ["out"])); (P"dtype"); (P"type") >]
                                             s0
                                             (fun dname lname _ dtype ltype ->
-                                               (Sig.Arg(dname, DBus.type_of_string dtype),
+                                               (Sig.Arg(dname, DBus.dtypes_of_signature dtype),
                                                 Sig.Arg(lname, type_reader ltype))))))
                                  (fun dname lname ins outs ->
                                     let dins, lins = List.split ins
@@ -98,7 +98,7 @@ let from_xml type_reader xml =
                                  (s1 (any (elt "arg" [< (P"dname"); (P"name"); (P"dtype"); (P"type") >]
                                              s0
                                              (fun dname lname dtype ltype ->
-                                                (Sig.Arg(dname, DBus.type_of_string dtype),
+                                                (Sig.Arg(dname, DBus.dtypes_of_signature dtype),
                                                  Sig.Arg(lname, type_reader ltype))))))
                                  (fun dname lname args ->
                                     let dargs, largs = List.split args in
