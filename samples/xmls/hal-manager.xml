@@ -8,10 +8,9 @@
     <method name="GetAllDevices">
       <arg name="devices" direction="out" type="ao"/>
     </method>
-<!-- currently not supported...
       <method name="GetAllDevicesWithProperties">
         <arg name="devices_with_props" direction="out" type="a(oa{sv})"/>
-      </method>-->
+      </method>
     <method name="DeviceExists">
       <arg name="does_it_exist" direction="out" type="b"/>
       <arg name="udi" direction="in" type="o"/>

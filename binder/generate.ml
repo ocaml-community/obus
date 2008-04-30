@@ -9,7 +9,6 @@
 
 module type TermType =
 sig
-  type var
   type left
   type right
 end
@@ -17,137 +16,159 @@ end
 module type ValueType =
 sig
   type t
+  val flat : t list -> t
 end
 
 module Make (Term : TermType) (Value : ValueType) =
 struct
   open Term
+  open Type
 
-  type lterm = [ `LTerm of Term.left * lterm list ]
-  type rterm = [ `RTerm of Term.right * rterm list ]
-  type term =
-      [ `LTerm of Term.left * term list
-      | `RTerm of Term.right * rterm list ]
-  type rpattern =
-      [ `RTerm of Term.right * rpattern list
-      | `Var of Term.var ]
-  type lpattern =
-      [ `LTerm of Term.left * lpattern list
-      | `RTerm of Term.right * rpattern list
-      | `Var of Term.var ]
+  type ltype = left typ
+  type rtype = right typ
+  type lpattern = left pattern
+  type rpattern = right pattern
 
-  type eqn = lterm * rterm
+  type value = Value.t list
+  type ('a, 'b) args = ('a, value, 'b, value list -> value) Seq.t
+  type dep = lpattern * rpattern
 
-  type ('a, 'b) args = ('a, Value.t, 'b, Value.t list -> Value.t) Seq.t
-  type maker = (rterm -> Value.t) -> Value.t
+  let intern = section ()
+  let first = Var(intern, "first")
+  let tail = Var(intern, "tail")
+  let first2 = (first, first)
+  let tail2 = (tail, tail)
+
+  type eqn = ltype * rtype
+  type maker = (eqn -> value) -> value
+
+  let rec map f =
+    let rec aux = function
+      | Type(id, args) -> Type(id, List.map aux args)
+      | Cons(x, y) -> Cons(aux x, aux y)
+      | Nil -> Nil
+      | Var v -> f v
+    in aux
 
   type generator = {
     left : lpattern;
     right : rpattern;
-    maker : (rpattern -> rterm) -> maker
+    deps : (lpattern * rpattern) list;
+    maker : (lpattern * rpattern -> eqn) -> maker
   }
 
-  let make_generator left right args rest maker  = {
-    left = left;
-    right = right;
-    maker = fun f g ->
-      let h x = g (f x) in
-        maker (Seq.map h args) (List.map h rest)
-  }
+  let rec insert_tail = function
+    | Cons(x, y) -> Cons(x, insert_tail y)
+    | Nil -> tail
+    | x -> Cons(x, tail)
 
-  type sub = (var * rterm) list
+  let generators = ref
+    [ { left = Cons(first, Nil);
+        right = first;
+        deps = [first2];
+        maker = fun f g ->
+          let h x = g (f x) in
+            [Value.flat (h first2)] };
+      { left = Cons(first, tail);
+        right = Cons(first, tail);
+        deps = [first2; tail2];
+        maker = fun f g ->
+          let h x = g (f x) in
+            Value.flat (h first2) :: h tail2 };
+      { left = Nil;
+        right = Nil;
+        deps = [];
+        maker = fun _ _ -> [] } ]
 
-  let rec substitute_right (sub : sub) : rpattern -> rterm = function
-    | `Var v -> (List.assoc v sub)
-    | `RTerm(name, args) -> `RTerm(name, List.map (substitute_right sub) args)
+  let add_rule left right args rest maker  =
+    let rec aux left right args rest maker =
+      generators := {
+        left = left;
+        right = right;
+        deps = Seq.to_list args @ rest;
+        maker = maker;
+      } :: !generators in
+      aux left right args rest
+        (fun f g ->
+           let h x = g (f x) in
+             (Seq.apply maker (Seq.map h args)) (List.map h rest));
+      match left with
+        | Cons _ ->
+            aux (insert_tail left) (Cons(right, tail))
+              (Seq.cons tail2 args) rest
+              (fun f g ->
+                 let h x = g (f x) in
+                   (Seq.apply maker (Seq.map h args)) (List.map h rest)
+                   @ h tail2)
+        | _ -> ()
 
-  let rec substitute (sub : sub) : lpattern -> term = function
-    | `Var v -> ((List.assoc v sub) : rterm :> term)
-    | `LTerm(name, args) -> `LTerm(name, List.map (substitute sub) args)
-    | `RTerm(name, args) -> `RTerm(name, List.map (substitute_right sub) args)
+  type 'a sub = (var * 'a typ) list
 
-  exception Cannot_unify
+  let substitute sub = map (fun v -> List.assoc v sub)
 
-  let unify pattern term =
-
+  let match_term t =
     let add var term sub =
       try
         if List.assoc var sub = term
         then sub
-        else raise Cannot_unify
+        else raise Exit
       with
         | Not_found -> (var, term) :: sub
     in
 
     let rec aux sub pattern term =
       match (pattern, term) with
-        | `Var v, t -> add v t sub
-        | `RTerm(ta, arga), `RTerm(tb, argb) when ta = tb ->
-            begin try
-              List.fold_left2 aux sub arga argb
-            with
-              | Invalid_argument _ -> raise Cannot_unify
-            end
-        | _ -> raise Cannot_unify
+        | Var v, t -> add v t sub
+        | Type(ta, arga), Type(tb, argb) when ta = tb -> List.fold_left2 aux sub arga argb
+        | Cons(xa, ya), Cons(xb, yb) -> aux (aux sub xa xb) ya yb
+        | Nil, Nil -> sub
+        | _ -> raise Exit
     in
-      aux [] pattern term
-
-  exception Cannot_generate
+      aux [] t
 
   type equation =
     | Equation of eqn
     | Branches of system list
 
-  and system = System of maker * (rterm * Value.t) list * (rterm * equation) list
+  and system = System of maker * (eqn * value) list * (eqn * equation) list
 
   type 'a result =
-    | Success of Value.t
+    | Success of value
     | Failure
     | Update of 'a
 
-  let match_term (a : lterm) (b : term) : (rterm * equation) list =
-    let rec aux (eqns : (rterm * equation) list) (a : lterm) (b : term) : (rterm * equation) list =
-      match (a, b) with
-        | `LTerm(ta, arga), `LTerm(tb, argb) when ta = tb -> begin try
-            List.fold_left2 aux eqns arga argb
-          with
-            | Invalid_argument _ -> raise Cannot_unify
-          end
-        | `LTerm _, `LTerm _ -> raise Cannot_unify
-        | a, (#rterm as b) -> (b, Equation(a, b)) :: eqns
-    in
-      aux [] a b
-
-  let generate generators =
+  let generate =
 
     let gen_branches (a, b) =
       let rec aux acc = function
         | generator :: generators -> begin
             try
-              let sub = unify generator.right b in
-              let left = substitute sub generator.left in
-                match match_term a left with
-                  | [] -> Success(generator.maker (substitute_right []) (fun _ -> assert false))
+              let subr = substitute (match_term generator.right b) in
+              let subl = substitute (match_term generator.left a) in
+                match List.map (fun (a, b) -> (subl a, subr b)) generator.deps with
+                  | [] ->
+                      let f _ = assert false in
+                        Success(generator.maker f f)
                   | eqns -> aux
-                      (System(generator.maker (substitute_right sub),
-                              [], eqns) :: acc) generators
+                      (System(generator.maker (fun (x, y) -> (subl x, subr y)),
+                              [], List.map (fun x -> (x, Equation x)) eqns) :: acc) generators
             with
-              | Cannot_unify -> aux acc generators
+                _ -> aux acc generators
           end
         | [] -> begin match acc with
             | [] -> Failure
             | _ -> Update(acc)
           end
       in
-        aux [] generators
+        aux [] !generators
     in
 
     let rec one_step_system (System(maker, mapping, eqns)) =
       let rec aux acc mapping = function
-        | (t, eqn) :: eqns -> begin match one_step_equation eqn with
-            | Success(v) -> aux acc ((t, v) :: mapping) eqns
+        | (id, eqn) :: eqns -> begin match one_step_equation eqn with
+            | Success(v) -> aux acc ((id, v) :: mapping) eqns
             | Failure -> Failure
-            | Update(eqn) -> aux ((t, eqn) :: acc) mapping eqns
+            | Update(eqn) -> aux ((id, eqn) :: acc) mapping eqns
           end
         | [] -> begin match acc with
             | [] -> Success(maker (fun x -> List.assoc x mapping))

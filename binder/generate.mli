@@ -9,7 +9,6 @@
 
 module type TermType =
 sig
-  type var
   type right
   type left
 end
@@ -17,26 +16,25 @@ end
 module type ValueType =
 sig
   type t
+  val flat : t list -> t
 end
 
 module Make (Term : TermType) (Value : ValueType) :
 sig
-  type lterm = [ `LTerm of Term.left * lterm list ]
-  type rterm = [ `RTerm of Term.right * rterm list ]
-  type rpattern =
-      [ `RTerm of Term.right * rpattern list
-      | `Var of Term.var ]
-  type lpattern =
-      [ `LTerm of Term.left * lpattern list
-      | `RTerm of Term.right * rpattern list
-      | `Var of Term.var ]
+  open Term
+  open Type
 
-  type generator
+  type ltype = left typ
+  type rtype = right typ
+  type lpattern = left pattern
+  type rpattern = right pattern
 
-  type ('a, 'b) args = ('a, Value.t, 'b, Value.t list -> Value.t) Seq.t
+  type value = Value.t list
 
-  val make_generator : lpattern -> rpattern -> (rpattern, 'a) args ->
-    rpattern list -> ((Value.t, 'a) args -> Value.t list -> Value.t) -> generator
+  type ('a, 'b) args = ('a, value, 'b, value list -> value) Seq.t
+  type dep = lpattern * rpattern
 
-  val generate : generator list -> lterm -> rterm  -> Value.t option
+  val add_rule : lpattern -> rpattern -> (dep, 'a) args -> dep list -> 'a -> unit
+
+  val generate : ltype -> rtype  -> value option
 end
