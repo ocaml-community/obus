@@ -8,3 +8,5 @@
  *)
 
 include Common_util_interf.S
+
+val with_mutex : ThreadImplem.Mutex.t -> (unit -> 'a) -> 'a

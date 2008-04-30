@@ -16,7 +16,6 @@ module SMap = Map.Make(struct type t = string let compare = compare end)
 module SSet = Set.Make(struct type t = string let compare = compare end)
 module IMap = Map.Make(struct type t = int32 let compare = compare end)
 
-module GuidMap = SMap
 module SerialMap = IMap
 module InterfMap = SMap
 module ObjectSet = SSet
@@ -74,13 +73,23 @@ type t = {
   interfaces : Interface.handlers InterfMap.t Protected.t;
 }
 
-(* Mapping from server guid to connection *)
-let guid_connection_map = Protected.make GuidMap.empty
+type connection = t
 
-(* Remove a connection from the mapping, for when a connection is
-   being garbage collected *)
-let remove_connection connection =
-  Protected.update (GuidMap.remove connection.guid) guid_connection_map
+(* Mapping from server guid to connection. *)
+module GuidTable = Weak.Make
+  (struct
+     type t = connection
+     let equal x y = x.guid = y.guid
+     let hash x = Hashtbl.hash x.guid
+   end)
+let guid_connection_table = GuidTable.create 4
+let guid_connection_table_m = Mutex.create ()
+
+let find_guid guid =
+  GuidTable.fold begin fun connection acc -> match acc with
+    | None -> if connection.guid = guid then Some(connection) else None
+    | x -> x
+  end guid_connection_table None
 
 type send_message = Header.send * body
 type recv_message = Header.recv * body
@@ -237,14 +246,15 @@ let of_transport transport priv =
         let connection = match priv with
           | true -> make ()
           | false ->
-              Protected.safe_process begin fun m -> try
-                (GuidMap.find guid m, m)
-              with
-                  Not_found ->
-                    let connection = make () in
-                      (try Gc.finalise remove_connection connection with _ -> ());
-                      (connection, GuidMap.add guid connection m)
-              end guid_connection_map
+              Util.with_mutex guid_connection_table_m begin fun () ->
+                match find_guid guid with
+                  | Some(connection) ->
+                      connection
+                  | None ->
+                      let connection = make () in
+                        GuidTable.add guid_connection_table connection;
+                        connection
+              end
         in
           (* Launch dispatcher *)
           ignore (Thread.create (fun () -> while true do internal_dispatch connection done) ());
@@ -255,10 +265,11 @@ let of_addresses addresses = function
   | false ->
       (* Try to find an guid that we already have *)
       let guids = Util.filter_map (fun (_, _, g) -> g) addresses in
-      let map = Protected.get guid_connection_map in
-        match Util.find_map (Util.exn_to_opt (fun guid -> GuidMap.find guid map)) guids with
-          | Some(connection) -> connection
-          | None -> of_transport (Transport.of_addresses addresses) false
+        Util.with_mutex guid_connection_table_m begin fun () ->
+          match Util.find_map find_guid guids with
+            | Some(connection) -> connection
+            | None -> of_transport (Transport.of_addresses addresses) false
+        end
 
 let rec wait_for_reply connection v = match !v with
   | None -> internal_dispatch connection; wait_for_reply connection v

@@ -8,3 +8,15 @@
  *)
 
 include Common_util_implem
+open ThreadImplem
+
+let with_mutex m f =
+  try
+    Mutex.lock m;
+    let result = f () in
+      Mutex.unlock m;
+      result
+  with
+      e ->
+        Mutex.unlock m;
+        raise e

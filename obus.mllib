@@ -3,5 +3,6 @@ common/Common_util_implem
 obus/without_threads/ThreadImplem
 obus/AuthLexer
 obus/AddrLexer
+obus/Util
 common/Common
 obus/OBus
