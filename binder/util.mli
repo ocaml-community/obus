@@ -17,3 +17,5 @@ val split_upper : string -> string list
 val part_map : ('a -> 'b option) -> 'a list -> 'b list * 'a list
 
 val parse_xml : string -> Xml.xml
+
+val gen_names : string -> 'a list -> string list

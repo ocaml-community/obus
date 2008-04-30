@@ -57,3 +57,7 @@ let _ = XmlParser.prove xml_parser false
 
 let parse_xml fname =
   XmlParser.parse xml_parser (XmlParser.SFile fname)
+
+let gen_names prefix l =
+  List.rev (snd (List.fold_left (fun (i, acc) _ -> (i + 1, (prefix ^ string_of_int i) :: acc)) (0, []) l))
+
