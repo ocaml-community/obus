@@ -6,6 +6,15 @@
  *)
 
 module type S = sig
+
+  type ('a, 'b) if_thread =
+    | With_thread of 'a
+    | Without_thread of 'b
+
+  val if_thread : (unit -> 'a) -> (unit -> 'b) -> ('a, 'b) if_thread
+    (** [if_thread then else] create an if_thread value, depending on
+        weather we are using thread *)
+
   module Protected : sig
     type 'a t
       (** A mutable value protected by a mutex *)

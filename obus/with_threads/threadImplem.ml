@@ -63,3 +63,9 @@ module ThreadConfig =
 struct
   let use_threads = true
 end
+
+type ('a, 'b) if_thread =
+  | With_thread of 'a
+  | Without_thread of 'b
+
+let if_thread f _ = With_thread (f ())
