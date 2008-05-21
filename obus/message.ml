@@ -31,7 +31,7 @@ let flags_of_hflags f =
 
 let method_call flags destination path interface member body =
   ({
-     byte_order = Little_endian;
+     byte_order = Info.native_byte_order;
      message_type = Method_call;
      flags = hflags_of_flags flags;
      serial = ();
@@ -47,7 +47,7 @@ let method_call flags destination path interface member body =
 
 let method_reply header body =
   ({
-     byte_order = Little_endian;
+     byte_order = Info.native_byte_order;
      message_type = Method_return;
      flags = { default_flags with no_reply_expected = true };
      serial = ();
@@ -68,7 +68,7 @@ let error header error_name error_message =
     | Some(msg) -> [Values.make_value Values.string msg]
   in
     ({
-       byte_order = Little_endian;
+       byte_order = Info.native_byte_order;
        message_type = Error;
        flags = { default_flags with no_reply_expected = true };
        serial = ();
@@ -86,7 +86,7 @@ let error header error_name error_message =
 
 let signal path interface member body =
   ({
-     byte_order = Little_endian;
+     byte_order = Info.native_byte_order;
      message_type = Signal;
      flags = { default_flags with no_reply_expected = true };
      serial = ();
