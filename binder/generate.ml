@@ -7,12 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-module type TermType =
-sig
-  type left
-  type right
-end
-
 module type ValueType =
 sig
   type t
@@ -21,25 +15,18 @@ end
 
 module Make (Term : TermType) (Value : ValueType) =
 struct
-  open Term
-  open Type
+  open Types
 
-  type ltype = left typ
-  type rtype = right typ
-  type lpattern = left pattern
-  type rpattern = right pattern
-
-  type value = Value.t list
   type ('a, 'b) args = ('a, value, 'b, value list -> value) Seq.t
-  type dep = lpattern * rpattern
+  type ('l, 'r) dep = 'l pattern * 'r pattern
 
   let first = fresh ()
   let tail = fresh ()
   let first2 = (first, first)
   let tail2 = (tail, tail)
 
-  type eqn = ltype * rtype
-  type maker = (eqn -> value) -> value
+  type ('l, 'r) eqn = 'l typ * 'r typ
+  type ('l, 'r) maker = (('l, 'r) eqn -> value) -> value
 
   let rec map f =
     let rec aux = function
@@ -49,19 +36,21 @@ struct
       | Var v -> f v
     in aux
 
-  type generator = {
-    left : lpattern;
-    right : rpattern;
-    deps : (lpattern * rpattern) list;
-    maker : (lpattern * rpattern -> eqn) -> maker
+  type ('l, 'r) generator = {
+    left : 'l pattern;
+    right : 'r pattern;
+    deps : ('l pattern * 'r pattern) list;
+    maker : ('l pattern * 'r pattern -> ('l, 'r) eqn) -> ('l, 'r) maker
   }
+
+  type ('l, 'r) rule = ('l, 'r) generator list
 
   let rec insert_tail = function
     | Cons(x, y) -> cons x (insert_tail y)
     | Nil -> tail
     | _ -> assert false
 
-  let generators = ref
+  let default_generators =
     [ { left = cons first nil;
         right = first;
         deps = [first2];
@@ -79,18 +68,18 @@ struct
         deps = [];
         maker = fun _ _ -> [] } ]
 
-  let add_rule left right args rest maker  =
+  let rule left right args rest maker =
     let rec aux left right args rest maker =
-      generators := {
+      {
         left = left;
         right = right;
         deps = Seq.to_list args @ rest;
         maker = maker;
-      } :: !generators in
-      aux left right args rest
-        (fun f g ->
-           let h x = g (f x) in
-             (Seq.apply maker (Seq.map h args)) (List.map h rest));
+      } in
+    let normal = [aux left right args rest
+                    (fun f g ->
+                       let h x = g (f x) in
+                         (Seq.apply maker (Seq.map h args)) (List.map h rest))] in
       match left with
         | Cons _ ->
             aux (insert_tail left) (cons right tail)
@@ -98,8 +87,8 @@ struct
               (fun f g ->
                  let h x = g (f x) in
                    (Seq.apply maker (Seq.map h args)) (List.map h rest)
-                   @ h tail2)
-        | _ -> ()
+                   @ h tail2) :: normal
+        | _ -> normal
 
   type 'a sub = (poly * 'a typ) list
 
@@ -125,18 +114,20 @@ struct
     in
       aux [] t
 
-  type equation =
-    | Equation of eqn
-    | Branches of system list
+  type ('l, 'r) equation =
+    | Equation of ('l, 'r) eqn
+    | Branches of ('l, 'r) system list
 
-  and system = System of maker * (eqn * value) list * (eqn * equation) list
+  and ('l, 'r) system = System of ('l, 'r) maker * (('l, 'r) eqn * value) list * (('l, 'r) eqn * ('l, 'r) equation) list
 
   type 'a result =
     | Success of value
     | Failure
     | Update of 'a
 
-  let generate =
+  let generate rules =
+
+    let generators = List.flatten (default_generators :: rules) in
 
     let gen_branches (a, b) =
       let rec aux acc = function
@@ -159,7 +150,7 @@ struct
             | _ -> Update(acc)
           end
       in
-        aux [] !generators
+        aux [] generators
     in
 
     let rec one_step_system (System(maker, mapping, eqns)) =
