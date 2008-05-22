@@ -21,6 +21,9 @@ type t
 val empty : t
   (** [empty] empty environment *)
 
+val init : int -> t
+  (** [init n] return an environment with exactly [n] identifier *)
+
 val size : t -> int
   (** [size env] current size of the environment *)
 
@@ -35,6 +38,10 @@ val nth : int -> t -> Types.ident
 val last : t -> Types.ident
   (** [last env] equivalent to [nth 0 env] *)
 
-val lasts : int -> t -> Types.ident
-  (** [lasts n env] return the last [n] identifier of the
+val lasts : int -> t -> Types.ident list
+  (** [lasts n env] return the lasts [n] identifier of the
       environment *)
+
+val slice : int -> int -> t -> Types.ident list
+  (** [slice n m env] return the lasts [m] identifier starting from
+      [n] of the environment *)

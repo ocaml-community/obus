@@ -13,10 +13,11 @@ sig
   val flat : t list -> t
 end
 
-module Make (Term : TermType) (Value : ValueType) =
+module Make (Value : ValueType) =
 struct
   open Types
 
+  type value = Value.t list
   type ('a, 'b) args = ('a, value, 'b, value list -> value) Seq.t
   type ('l, 'r) dep = 'l pattern * 'r pattern
 
@@ -50,7 +51,7 @@ struct
     | Nil -> tail
     | _ -> assert false
 
-  let default_generators =
+  let default_generators () =
     [ { left = cons first nil;
         right = first;
         deps = [first2];
@@ -127,7 +128,7 @@ struct
 
   let generate rules =
 
-    let generators = List.flatten (default_generators :: rules) in
+    let generators = List.flatten (default_generators () :: rules) in
 
     let gen_branches (a, b) =
       let rec aux acc = function

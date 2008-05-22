@@ -7,6 +7,20 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Camlp4.PreCast
+open Types
+open AbstractCode
+
+let _loc = Loc.ghost
+
+type optimize_result = {
+  opt_code : code;
+  opt_size : int option;
+  opt_initial_check : code;
+  opt_alignment : int;
+  opt_relative_position : int;
+}
+
 (* Replace Align instructions by Advance when possible. Return an
    optimized code plus the padding after the execution of the
    instruction with the given initial padding. It must be the first
@@ -24,16 +38,16 @@ let rec optimize_padding relative_pos padding = function
               then
                 (* Deduced informations are not sufficient to calculate
                    explicit padding, so we need dynamic padding *)
-                next [Pad n] 0 n
+                next [Align n] 0 n
               else
                 (* We have enough information to calculate the needed
                    padding *)
-                let diff = n - (relative_pos mod n)
-                  if diff = n
+                let diff = (n - relative_pos) land (n - 1) in
+                  if diff = 0
                   then
                     (* We are already padded to the wanted boundary,
                        nothing to do *)
-                    next relative_pos padding
+                    next [] relative_pos padding
                   else
                     next [Advance_fixed(diff, true)]
                       ((relative_pos + diff) mod padding) padding
@@ -41,13 +55,16 @@ let rec optimize_padding relative_pos padding = function
               next [] relative_pos padding
           | Advance_fixed(n, b) ->
               next [Advance_fixed(n, b)] ((relative_pos + n) mod padding) padding
-          |  _ -> next instr relative_pos padding
+          | Branches(expr, brs) ->
+              next
+                [Branches(expr,
+                           List.map
+                             (fun (patt, code, ret) ->
+                                (patt, (let (_, _, x) = optimize_padding relative_pos padding code in x), ret))
+                             brs)] relative_pos padding
+          | _ -> next [instr] relative_pos padding
         end
   | [] -> (relative_pos, padding, [])
-
-let ( ++ ) a b = match a with
-  | Some a -> Some (a + b)
-  | _ -> None
 
 let size code =
   List.fold_left
@@ -59,49 +76,65 @@ let size code =
        | Align _
        | Advance_dynamic _
        | Branches _ -> None
-       | _ -> acc) (Some 0)
+       | _ -> acc) (Some 0) code
 
 (* Factorise size-checkings *)
-let optimize_check_size instructions =
+let rec optimize_check_size instructions =
+  let insert_check count instr instrs = match count with
+    | 0 -> instr :: instrs
+    | n -> instr :: Check_size_fixed count :: instrs
+  in
   let rec simplify count = function
     | instr :: instrs -> begin match instr with
-        | Check(Chk_size_dynamic n) ->
+        | Check_size_dynamic n ->
             (* We can no more factorize checking *)
             let count_after, simplified = simplify 0 instrs in
-              (count, Check(Chk_size_dynamic (n + count_after)) :: simlplified)
+              (count, Check_size_dynamic (n + count_after) :: simplified)
         | Advance_fixed(n, _) ->
             let count_after, simplified = simplify (count + n) instrs in
               (count_after, instr :: simplified)
-        | Branches _
+        | Branches(expr, brs) ->
+            let count_after, simplified = simplify 0 instrs in
+              (count,
+               insert_check
+                 count_after
+                 (Branches(expr,
+                            List.map (fun (patt, code, ret) ->
+                                        (patt,
+                                         (let count, code = optimize_check_size code in
+                                            insert_check count Nothing code),
+                                         ret))
+                              brs))
+                 simplified)
         | Align _ ->
             let count_after, simplified = simplify 0 instrs in
-              begin match count_after with
-                | 0 -> (count, instr :: simlplified)
-                | _ -> (count, instr :: Check (Chk_size_fixed count_after) :: simplified)
-              end
+              (count, insert_check count_after instr simplified)
         | _ ->
             let count, simplified = simplify count instrs in
               (count, instr :: simplified)
       end
     | [] -> (count, [])
+  in
+    simplify 0 instructions
 
 (* Factorize advance instruction *)
 let optimize_advance code =
   let rec aux = function
-    | [] -> 0
+    | [] -> []
     | instr :: instrs -> match instr with
         | Advance_fixed(n, b) ->
             let m, instrs = aux2 0 b instrs in
               Advance_fixed(n + m, b) :: instrs
         | _ -> instr :: aux instrs
-  in
-  let rec aux2 n b code = match code with
+  and aux2 n b code = match code with
     | [] -> (n, [])
     | instr :: instrs ->
         match instr with
           | Advance_fixed(n', b') when b' = b ->
               aux2 (n + n') b instrs
-          | Check _
+          | Check_size_fixed _
+          | Check_size_dynamic _
+          | Check_array_size _
           | Advance_fixed _
           | Advance_dynamic _
           | Align _
@@ -114,12 +147,18 @@ let optimize_advance code =
   in
     aux code
 
-let optmize rel_pos padding code =
+let optimize rel_pos padding code =
   let (rel_pos_end, padding_end, code) = optimize_padding rel_pos padding code in
   let size = size code in
-  let count, code = optimize_size_check code in
-  let check_instrs = match count with
+  let count, code = optimize_check_size code in
+  let initial_check_instrs = match count with
     | 0 -> []
-    | _ -> [Check (Chk_size_fixed count)] in
-  let code = optimize_advance code with
-      (code, check_instr, size, rel_pos_end, padding_end)
+    | _ -> [Check_size_fixed count] in
+  let code = optimize_advance code in
+    {
+      opt_code = code;
+      opt_size = size;
+      opt_initial_check = initial_check_instrs;
+      opt_alignment = padding_end;
+      opt_relative_position = rel_pos_end;
+    }

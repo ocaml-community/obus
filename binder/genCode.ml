@@ -9,134 +9,136 @@
 
 open Camlp4.PreCast
 open Types
+open AbstractCode
 
 let _loc = Loc.ghost
 
-let rec generate_reader instructions for_array return_expr =
-  let check_size expr = match for_array with
+let rec generate_reader for_array env instructions return_expr =
+  let check_size expr next = match for_array with
     | true ->
         (<:expr<
            if i + $expr$ > limit
-           then raise (Data_error "invalid array size")
-             >>)
+           then raise (Data_error "invalid array size");
+         $next$
+         >>)
     | false ->
         (<:expr<
            if i + $expr$ > limit
-           then raise (Data_error "invalid message size")
-             >>)
+           then raise (Data_error "invalid message size");
+         $next$
+         >>)
   in
-  let rec aux instrs env = match instrs with
+  let rec aux env = function
     | [] ->
-        return_expr
+        return_expr env
+    | Update_env f :: instrs ->
+        aux (f env) instrs
     | instr :: instrs ->
-        let next = aux instrs in
+        let acc = aux env instrs in
           match instr with
             | Align n ->
                 (<:expr<
-                   let i = i + (($int:n$ - i) land $int:n - 1$) in
-                     $next env$
+                   let i = i + (($int:string_of_int n$ - i) land $int:string_of_int (n - 1)$) in
+                     $acc$
                      >>)
-            | Check chk ->
+            | Check_size_fixed n -> check_size <:expr< $int:string_of_int n$ >> acc
+            | Check_size_dynamic n -> check_size <:expr< len + $int:string_of_int n$ >> acc
+            | Check_array_size(gap, base_size) ->
                 (<:expr<
-                   $ match chk with
-                     | Chk_size_fixed n -> check_size <:expr< $int:n$ >>
-                     | Chk_size_dynamic _ -> check_size <:expr< len + $int:n$ >>
-                     | Chk_array_size(gap, base_size) ->
-                         (<:expr<
-                            if (len + $int:gap$) mod $int:base_size$ <> 0
-                            then raise (Data_error "invalid array size") >>) $ ;
-                         $next env$ >>)
+                   if (len + $int:string_of_int gap$) mod $int:string_of_int base_size$ <> 0
+                   then raise (Data_error "invalid array size");
+                 $acc$ >>)
             | Advance_fixed(x, _) ->
                 (<:expr<
-                   let i = i + $int:x$ in
-                     $next env$
+                   let i = i + $int:string_of_int x$ in
+                     $acc$
                      >>)
             | Advance_dynamic(x) ->
                 (<:expr<
-                   let i = i + len + $int:x$ in
-                     $next env$
+                   let i = i + len + $int:string_of_int x$ in
+                     $acc$
                      >>)
-            | Update_env f -> next (f env)
-            | Expr(_, f) -> f env (next env)
-            | Branches f ->
-                let e, brs = f env in
-                  (<:expr<
-                     let i, $Env.last env$ = match $e$ with
-                         $ Ast.mcOr_of_list
-                           (List.map
-                              (fun (patt, instrs, ret) ->
-                                 <:match_case< $patt$ -> $generate_reader instrs for_array <:expr< i, $ret$ >>$ >>)) $
-                         >>)
-            | Reset_padding _
-            | Nothing -> next env
+            | Expr(_, f) -> f env acc
+            | Branches(expr, brs) ->
+                (<:expr<
+                   let i, $id:Env.last env$ = match $expr env$ with
+                       $ Ast.mcOr_of_list
+                         (List.map
+                            (fun (patt, instrs, ret) ->
+                               <:match_case< $patt env$ -> $generate_reader for_array env instrs (fun env -> <:expr< i, $ret env$ >>) $ >>)
+                            brs) $
+                   in
+                     $acc$
+                     >>)
+            | _ -> acc
   in
-    aux instructions
+    aux env instructions
 
-let rec generate_writer instructions for_array return_expr =
-  let check_size expr = match for_array with
+let rec generate_writer for_array env instructions return_expr =
+  let check_size expr next = match for_array with
     | true ->
         (<:expr<
            if i + $expr$ > limit
-           then raise Out_of_bounds
-             >>)
+           then raise Out_of_bounds;
+         $next$
+         >>)
     | false ->
         (<:expr<
            if i + $expr$ > limit
-           then raise Out_of_bounds
-             >>)
+           then raise Out_of_bounds;
+         $next$
+         >>)
   in
-  let rec aux instrs env = match instrs with
+  let rec aux env = function
     | [] ->
-        return_expr
+        return_expr env
+    | Update_env f :: instrs ->
+        aux (f env) instrs
     | instr :: instrs ->
-        let next = aux instrs in
+        let acc = aux env instrs in
           match instr with
             | Align n ->
                 (<:expr<
-                   let i = $lid:"pad" ^ string_of_int n$ in
-                     $next env$
+                   let i = $lid:"pad" ^ string_of_int n$ i in
+                     $acc$
                      >>)
-            | Check chk ->
-                (<:expr<
-                   $ match chk with
-                     | Chk_size_fixed n -> check_size <:expr< $int:n$ >>
-                     | Chk_size_dynamic _ -> check_size <:expr< len + $int:n$ >>
-                     | Chk_array_size _ -> assert false $ ;
-                         $next env$ >>)
+            | Check_size_fixed n -> check_size <:expr< $int:string_of_int n$ >> acc
+            | Check_size_dynamic n -> check_size <:expr< len + $int:string_of_int n$ >> acc
+            | Check_array_size _ -> assert false
             | Advance_fixed(x, false) ->
                 (<:expr<
-                   let i = i + $int:x$ in
-                     $next env$
+                   let i = i + $int:string_of_int x$ in
+                     $acc$
                      >>)
             | Advance_fixed(1, true) ->
                 (<:expr<
                    String.unsafe_set buffer i '\x00';
                  let i = i + 1 in
-                   $next env$
+                   $acc$
                    >>)
             | Advance_fixed(n, true) ->
                 (<:expr<
-                   $lid:"zero" ^ n$;
-                 let i = i + $int:x$ in
-                   $next env$
+                   $lid:"zero" ^ string_of_int n$ i;
+                 let i = i + $int:string_of_int n$ in
+                   $acc$
                    >>)
             | Advance_dynamic(x) ->
                 (<:expr<
-                   let i = i + len + $int:x$ in
-                     $next env$
+                   let i = i + len + $int:string_of_int x$ in
+                     $acc$
                      >>)
-            | Update_env f -> next (f env)
-            | Expr(_, f) -> f env (next env)
-            | Branches f ->
-                let e, brs = f env in
-                  (<:expr<
-                     let i = match $e$ with
-                         $ Ast.mcOr_of_list
-                           (List.map
-                              (fun (patt, instrs, _) ->
-                                 <:match_case< $patt$ -> $generate_reader instrs for_array <:expr< i >>$ >>)) $
-                         >>)
-            | Reset_padding _
-            | Nothing -> next env
+            | Expr(_, f) -> f env acc
+            | Branches(expr, brs) ->
+                (<:expr<
+                   let i = match $expr env $ with
+                       $ Ast.mcOr_of_list
+                         (List.map
+                            (fun (patt, instrs, _) ->
+                               <:match_case< $patt env$ -> $generate_reader for_array env instrs (fun env -> <:expr< i >>)$ >>)
+                            brs) $
+                   in
+                     $acc$
+                     >>)
+            | _ -> acc
   in
-    aux instructions
+    aux env instructions

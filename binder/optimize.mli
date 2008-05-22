@@ -7,19 +7,27 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Types
 open AbstractCode
 
-val optimize : int -> int -> code -> code * code * int option * int * int
-  (** [optimize rel_pos padding code] optimize [code] by statically
-      deducing padding size when possible and factorising checking
-      instructions.
+type optimize_result = {
+  opt_code : code;
+  (** Optimized code *)
+  opt_size : int option;
+  (** Size of value readen/written if fixed and calculable *)
+  opt_initial_check : code;
+  (** Initial size checking instructions *)
+  opt_alignment : int;
+  (** Guarenteed pointer alignement after execution of the caml
+      expression *)
+  opt_relative_position : int;
+  (** Relative position of the pointer in relation to the alignment
+      after execution *)
+}
 
-      [rel_pos] and [padding] are the guaranted relative position and
-      padding at the beginning of code execution.
+val optimize : int -> int -> code -> optimize_result
+  (** [optimize rel_pos alignement code] optimize and compile the
+      given abstract code.
 
-      results are:
-      - the optimized instructions
-      - the instructions for initial size checking
-      - the size of marshaled values, if constant
-      - relative position at the end of code exectuion
-      - padding boundary at the end of code execution  *)
+      [rel_pos] and [alignement] are the guarenteed alignment and
+      relative position at the beginning of code execution *)
