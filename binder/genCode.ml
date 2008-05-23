@@ -17,14 +17,14 @@ let rec generate_reader for_array env instructions return_expr =
     | true ->
         (<:expr<
            if i + $expr$ > limit
-           then raise ($inconsistent_exn$ "invalid array size");
-         $next$
+           then raise ($inconsistent_exn$ "invalid array size")
+           else $next$
          >>)
     | false ->
         (<:expr<
-           if i + $expr$ > limit
-           then raise ($inconsistent_exn$ "invalid message size");
-         $next$
+           if i + $expr$ > String.length buffer
+           then raise ($inconsistent_exn$ "invalid message size")
+           else $next$
          >>)
   in
   let rec aux env = function
@@ -77,7 +77,7 @@ let rec generate_writer for_array env instructions return_expr =
   let check_size expr next =
     (<:expr<
        let buffer =
-         if i + $expr$ > limit
+         if i + $expr$ > String.length buffer
          then $realloc_buffer$
          else buffer
        in
