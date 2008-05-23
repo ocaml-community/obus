@@ -7,11 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Camlp4.PreCast
 open Types
 open AbstractCode
-
-let _loc = Loc.ghost
 
 type optimize_result = {
   opt_code : code;

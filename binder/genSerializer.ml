@@ -7,33 +7,48 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Camlp4.PreCast
 open Types
 open AbstractCode
 open Optimize
+open Helpers
 
-let _loc = Loc.ghost
+type dbus_id = string
 
-let dot_regexp = Str.regexp "\\."
+let dbyte = typ "byte" []
+let dboolean = typ "boolean" []
+let dint16 = typ "int16" []
+let dint32 = typ "int32" []
+let dint64 = typ "int64" []
+let duint16 = typ "uint16" []
+let duint32 = typ "uint32" []
+let duint64 = typ "uint64" []
+let ddouble = typ "double" []
+let dstring = typ "string" []
+let dsignature = typ "signature" []
+let dobject_path = typ "object_path" []
+let darray t = typ "array" [t]
+let ddict k v = typ "dict" [k; v]
+let dstructure l = typ "structure" [l]
+let dvariant = typ "variant" []
 
-let ident_of_string name =
-  Ast.idAcc_of_list
-    (List.map
-       (fun id ->
-          if id <> "" && Char.uppercase id.[0] <> id.[0]
-          then <:ident< $lid:id$ >>
-          else <:ident< $uid:id$ >>)
-       (Str.split dot_regexp name))
-
-let idexpr_of_string name =
-  if name.[0] = '`'
-  then Ast.ExVrn(_loc, name)
-  else (<:expr< $id:ident_of_string name$ >>)
-
-let idpatt_of_string name =
-  if name.[0] = '`'
-  then Ast.PaVrn(_loc, name)
-  else (<:patt< $id:ident_of_string name$ >>)
+let rec typ_of_dtype = function
+  | Tbyte -> dbyte
+  | Tboolean -> dboolean
+  | Tint16 -> dint16
+  | Tint32 -> dint32
+  | Tint64 -> dint64
+  | Tuint16 -> duint16
+  | Tuint32 -> duint32
+  | Tuint64 -> duint64
+  | Tdouble -> ddouble
+  | Tstring -> dstring
+  | Tsignature -> dsignature
+  | Tobject_path -> dobject_path
+  | Tarray(t) -> darray (typ_of_dtype t)
+  | Tdict(k, v) -> ddict (typ_of_dtype k) (typ_of_dtype v)
+  | Tstructure(l) -> dstructure (typ_of_dbus_type l)
+  | Tvariant -> dvariant
+and typ_of_dbus_type l = tuple (List.map typ_of_dtype l)
 
 (* Make a tuple reader from a list of reader *)
 let rflat readers =
@@ -43,11 +58,11 @@ let rflat readers =
       | 1 -> []
       | _ -> [Expr(false,
                    fun env next ->
-                     <:expr<
-                       let $id:Env.nth (count - 1) env$ =
-                         $ Ast.exCom_of_list
-                           (List.map (fun x -> <:expr< $id:x$ >>) (Env.lasts count env)) $ in
-                         $next$ >>);
+                     bind
+                       (Env.nth (count - 1) env)
+                       (Ast.exCom_of_list
+                          (List.map (fun x -> <:expr< $id:x$ >>) (Env.lasts count env)))
+                       next);
               Update_env (Env.add (1 - count))]
 
 (* Make a tuple writer from a list of writer *)
@@ -58,88 +73,75 @@ let wflat writers =
        | _ -> [Update_env (Env.add (count - 1));
                Expr(false,
                     fun env next ->
-                      <:expr<
-                        let $Ast.paCom_of_list
-                            (List.rev
-                               (List.map (fun x -> <:patt< $id:x$ >>)
-                                  (Env.lasts count env)))$ = $id:Env.nth (count - 1) env$ in
-                          $next$
-                          >>)])
+                      bind_patt
+                        (Ast.paCom_of_list
+                           (List.rev
+                              (List.map (fun x -> <:patt< $id:x$ >>)
+                                 (Env.lasts count env))))
+                        (expr_of_id (Env.nth (count - 1) env))
+                        next)])
     @ List.flatten writers
 
-module RG = Generate.Make(struct type t = code let flat = rflat end)
-module WG = Generate.Make(struct type t = code let flat = wflat end)
-
 type env = (ident * expr) list
-type rule = env ref -> (caml_id, dbus_id) RG.rule * (caml_id, dbus_id) WG.rule
+type rule = env ref -> code list Generate.rule * code list Generate.rule
 
 let rule caml_patt dbus_patt deps_seq deps_rest reader writer =
-  (RG.rule caml_patt dbus_patt deps_seq deps_rest reader,
-   WG.rule caml_patt dbus_patt deps_seq deps_rest writer)
+  (Generate.rule caml_patt dbus_patt deps_seq deps_rest reader,
+   Generate.rule caml_patt dbus_patt deps_seq deps_rest writer)
 
 let len_id = (<:ident< len >>)
 let typ_id = (<:ident< typ >>)
-
-let simple_reader_expr id func next =
-  (<:expr<
-     let $id:id$ = $lid:func$ buffer i in
-       $next$
-       >>)
-
-let uint8_reader_expr id next =
-  (<:expr<
-     let $id:id$ = Char.code (String.unsafe_get buffer i) in
-       $next$
-       >>)
-
-let simple_writer_expr id func next =
-  (<:expr< $lid:func$ buffer i $id:id$; $next$ >>)
-
-let uint8_writer_expr id next =
-  (<:expr< String.unsafe_set buffer i (Char.unsafe_chr $id:id$); $next$ >>)
-
-let fixed_reader expr len =
-  [Align len;
-   Update_env (Env.add 1);
-   Expr(true, expr);
-   Advance_fixed(len, false)]
-
-let fixed_writer expr len =
-  [Align len;
-   Expr(true, expr);
-   Update_env (Env.add (-1));
-   Advance_fixed(len, false)]
+let idx = (<:expr< i >>)
 
 (* Serialization of integers/booleans *)
-let simple_serializer func caml_type dbus_type len _ =
-  rule caml_type dbus_type Seq.nil []
-    (fun _ -> [fixed_reader (fun env next -> simple_reader_expr (Env.last env) func next) len])
-    (fun _ -> [fixed_writer (fun env next -> simple_writer_expr (Env.last env) func next) len])
+let simple_serializer caml_type dbus_type len _ =
+  rule (typ caml_type []) (typ dbus_type []) Seq.nil []
+    (fun _ ->
+       [[Align len;
+         Update_env (Env.add 1);
+         Expr(true, fun env next ->
+                bind
+                  (Env.last env)
+                  (CodeConstants.fixed_reader caml_type dbus_type idx)
+                  next);
+         Advance_fixed(len, false)]])
+    (fun _ ->
+       [[Align len;
+         Expr(true,
+              fun env next ->
+                seq
+                  [CodeConstants.fixed_writer caml_type dbus_type idx (expr_of_id (Env.last env));
+                   next]);
+         Update_env (Env.add (-1));
+         Advance_fixed(len, false)]])
 
 type string_type =
   | Str_big
   | Str_small
+
+let dbus_type_for_len = function
+  | Str_big -> "uint32"
+  | Str_small -> "byte"
+
+let len_reader string_type idx = CodeConstants.fixed_reader "int" (dbus_type_for_len string_type) idx
+let len_writer string_type idx len = CodeConstants.fixed_writer "int" (dbus_type_for_len string_type) idx len
 
 let string_reader string_type =
   let len_size = match string_type with
     | Str_big -> 4
     | Str_small -> 1 in
     [Align len_size;
-     Expr(true,
-          fun _ next ->
-            match string_type with
-              | Str_big -> simple_reader_expr len_id "int_uint32" next
-              | Str_small -> uint8_reader_expr len_id next);
+     Expr(true, fun _ -> bind len_id (len_reader string_type idx));
      Advance_fixed(len_size, false);
      Check_size_dynamic 1;
      Update_env (Env.add 1);
      Expr(true,
           fun env next ->
-            <:expr<
-              let $id:Env.last env$ = String.create $id:len_id$ in
-                String.unsafe_blit buffer i $id:Env.last env$ 0 $id:len_id$;
-                $next$
-                >>);
+            bind
+              (Env.last env)
+              (<:expr< String.create $id:len_id$ >>)
+              (seq [CodeConstants.string_reader idx (expr_of_id (Env.last env)) (expr_of_id len_id);
+                    next]));
      Reset_padding(0, 1);
      Advance_dynamic 1]
 
@@ -148,25 +150,16 @@ let string_writer string_type =
     | Str_big -> 4
     | Str_small -> 1 in
     [Expr(false,
-          fun env next ->
-            <:expr<
-              let $id:len_id$ = String.length $id:Env.last env$ in
-                $next$
-                >>);
+          fun env -> bind len_id <:expr< String.length $id:Env.last env$ >>);
      Align len_size;
      Expr(true,
-          fun _ next ->
-            match string_type with
-              | Str_big -> simple_writer_expr len_id "int_uint32" next
-              | Str_small -> uint8_writer_expr len_id next);
+          fun _ next -> seq [len_writer string_type idx (expr_of_id len_id); next]);
      Advance_fixed(len_size, false);
      Check_size_dynamic 1;
      Expr(true,
           fun env next ->
-            <:expr<
-              String.unsafe_blit $id:Env.last env$ 0 buffer i $id:len_id$;
-            $next$
-            >>);
+            seq [CodeConstants.string_writer idx (expr_of_id (Env.last env)) (expr_of_id len_id);
+                 next]);
      Update_env (Env.add (-1));
      Reset_padding(0, 1);
      Advance_dynamic 1]
@@ -195,17 +188,16 @@ let rule_convert ta tb a_of_b b_of_a _ =
     (fun b_reader _ ->
        [rflat b_reader
         @ [Expr(false,
-                fun env next ->
-                  <:expr<
-                    let $id:Env.last env$ = $a_of_b$ $id:Env.last env$ in
-                      $next$
-                      >>)]])
+                fun env ->
+                  bind
+                    (Env.last env)
+                    (app a_of_b (expr_of_id (Env.last env))))]])
     (fun b_writer _ ->
        [Expr(false,
-             fun env next ->
-               <:expr<
-                 let $id:Env.last env$ = $b_of_a$ $id:Env.last env$ in
-                   $next$ >>)
+             fun env ->
+               bind
+                 (Env.last env)
+                 (app b_of_a (expr_of_id (Env.last env))))
         :: wflat b_writer])
 
 let padding instrs =
@@ -275,9 +267,11 @@ let array_reader instrs reverse empty add env =
       [Align 4;
        Expr(true,
             fun env next ->
-              simple_reader_expr len_id "int_uint32"
+              bind
+                len_id
+                (CodeConstants.fixed_reader "int" "uint32" idx)
                 (<:expr<
-                   if len > $int:string_of_int Constant.max_array_size$
+                   if len > $expr_of_int Constant.max_array_size$
                    then raise Read_error "array too big!";
                  $next$
                  >>));
@@ -290,11 +284,10 @@ let array_reader instrs reverse empty add env =
        Align padding;
        Update_env (Env.add 1);
        Expr(true,
-            fun env next ->
-              <:expr<
-                let $id:Env.last env$ = $id:id$ i (i + len) in
-                  $next$
-                  >>);
+            fun env ->
+              bind
+                (Env.last env)
+                (<:expr< $id:id$ i (i + len) >>));
        (match opt2.opt_size with
           | Some n when n mod padding = 0 -> Reset_padding(0, padding)
           | Some n when n land 1 = 1 -> Reset_padding(0, 1)
@@ -313,10 +306,10 @@ let array_writer instrs fold make_func nbval env =
        opt.opt_initial_check @ opt.opt_code
   in
   let id = id_for_expr
-    (make_func (<:ident< i >>)
+    (make_func (<:patt< (buffer, i) >>)
        (<:expr<
           $ (GenCode.generate_writer true (Env.init nbval) instrs
-               (fun env -> <:expr< i >>)) $
+               (fun env -> <:expr< (buffer, i) >>)) $
         >>)) env in
     [Align 4;
      Expr(true,
@@ -331,8 +324,8 @@ let array_writer instrs fold make_func nbval env =
           fun env next ->
             <:expr<
               let k = i in
-                $fold <:expr< $id:id$ >> <:expr< i >> <:expr< $id:Env.last env$ >>$;
-                int_uint32 j (i - k);
+              let (buffer, i) = $fold (expr_of_id id) <:expr< (buffer, i) >> (expr_of_id (Env.last env))$ in
+                $CodeConstants.fixed_writer "int" "uint32" <:expr< j >> <:expr< i - k >>$;
                 $next$
                 >>);
      Update_env (Env.add (-1));
@@ -346,7 +339,7 @@ let array_writer instrs fold make_func nbval env =
 let rule_array typ elt_type reverse empty add fold make_func env =
   rule typ (darray (v"x")) [< (elt_type, v"x") >] []
     (fun elt_reader _ -> [array_reader (rflat elt_reader) reverse empty (add <:expr< v0 >>) env])
-    (fun elt_writer _ -> [array_writer (wflat elt_writer) fold (make_func <:ident< v0 >>) 1 env])
+    (fun elt_writer _ -> [array_writer (wflat elt_writer) fold (make_func <:patt< v0 >>) 1 env])
 
 let rule_dict typ key_type val_type reverse empty add fold make_func env =
   rule typ (ddict (v"k") (v"v")) [< (key_type, v"k"); (val_type, v"v") >] []
@@ -355,7 +348,7 @@ let rule_dict typ key_type val_type reverse empty add fold make_func env =
           reverse empty (add <:expr< v0 >> <:expr< v1 >>) env])
     (fun key_writer val_writer _ ->
        [array_writer (Align 8 :: wflat key_writer @ wflat val_writer)
-          fold (make_func <:ident< v0 >> <:ident< v1 >>) 2 env])
+          fold (make_func <:patt< v0 >> <:patt< v1 >>) 2 env])
 
 let rule_set module_name elt_type =
   let id = (<:ident< $lid:module_name$ >>) in
@@ -363,7 +356,7 @@ let rule_set module_name elt_type =
       (<:expr< $id:id$ . empty >>)
       (fun x acc -> <:expr< $id:id$ . add $x$ $acc$ >>)
       (fun f l x -> <:expr< $id:id$ . fold $f$ $l$ $x$ >>)
-      (fun x i e -> <:expr< fun $id:x$ $id:i$ -> $e$ >>)
+      (fun x i e -> <:expr< fun $x$ $i$ -> $e$ >>)
 
 let rule_map module_name key_type =
   let id = (<:ident< $lid:module_name$ >>) in
@@ -371,7 +364,7 @@ let rule_map module_name key_type =
       (<:expr< $id:id$ . empty >>)
       (fun k v acc -> <:expr< $id:id$ . add $k$ $v$ $acc$ >>)
       (fun f l x -> <:expr< $id:id$ . fold $f$ $l$ $x$ >>)
-      (fun k v i e -> <:expr< fun $id:k$ $id:v$ $id:i$ -> $e$ >>)
+      (fun k v i e -> <:expr< fun $k$ $v$ $i$ -> $e$ >>)
 
 let rule_record typ fields _ =
   let count = List.length fields in
@@ -380,55 +373,51 @@ let rule_record typ fields _ =
       (fun readers ->
          [List.flatten (List.map rflat readers)
           @ [Expr(false,
-                  fun env next ->
-                    <:expr<
-                      let $id:Env.nth (count - 1) env$ =
-                        $ Ast.ExRec(_loc,
-                                    Ast.rbSem_of_list
-                                      (List.map2 (fun (name, _) id -> <:rec_binding< $ident_of_string name$ = $id:id$ >>)
-                                         fields (Env.lasts count env)),
-                                    Ast.ExNil _loc) $ in
-                        $next$ >>);
+                  fun env ->
+                    bind
+                      (Env.nth (count - 1) env)
+                      (expr_record
+                         (List.map2
+                            (fun (name, _) id -> (ident_of_string name, expr_of_id id))
+                            fields (Env.lasts count env))));
              Update_env (Env.add (1 - count))]])
       (fun writers ->
          [Update_env (Env.add (count - 1))
           :: Expr(false,
-                  fun env next ->
-                    <:expr<
-                      let $ Ast.PaRec(_loc,
-                                      Ast.paSem_of_list
-                                        (List.map2 (fun (name, _) id -> <:patt< $ident_of_string name$ = $id:id$ >>)
-                                           fields (Env.lasts count env))) $ = $id:Env.nth (count - 1) env$ in
-                        $next$ >>)
+                  fun env ->
+                    bind_patt
+                      (patt_record
+                         (List.map2
+                            (fun (name, _) id -> (ident_of_string name, patt_of_id id))
+                            fields (Env.lasts count env)))
+                      (expr_of_id (Env.nth (count - 1) env)))
           :: List.flatten (List.map wflat writers)])
 
 let sig_matcher dbust =
-  let dbus_sig = signature_of_dtypes dbust in
-  let total_sig = Printf.sprintf "%c%s\x00" (char_of_int (String.length dbus_sig)) dbus_sig in
-  let len = String.length total_sig in
+  let dbus_sig = signature_of_dbus_type dbust in
     [Expr(true,
           fun env next ->
-            <:expr<
-              if not string_match buffer i $str:total_sig$ $int:string_of_int len$
-              then raise Data_error "unexpected variant signature"
-                $next$
-                >>);
-     Advance_fixed(len, false)]
+            seq
+              [CodeConstants.signature_checker dbus_sig idx;
+               next]);
+     Advance_fixed(String.length dbus_sig + 2, false)]
 
 let sig_writer dbust =
-  let dbus_sig = signature_of_dtypes dbust in
+  let dbus_sig = signature_of_dbus_type dbust in
   let total_sig = Printf.sprintf "%c%s\x00" (char_of_int (String.length dbus_sig)) dbus_sig in
   let len = String.length total_sig in
     [Expr(true,
           fun _ next ->
-            <:expr<
-              String.blit $str:total_sig$ 0 buffer i $int:string_of_int len$
-            >>);
+            seq
+              [CodeConstants.string_writer idx
+                 (expr_of_str total_sig)
+                 (expr_of_int len);
+               next]);
      Advance_fixed(len, false)]
 
 let rule_variant typ key_type variants env =
   rule typ (tuple [v"x"; dvariant]) [< (key_type, v"x") >]
-    (List.map (fun (_, _, _, cts, dt) -> (tuple cts, dbus_type_of_dtypes dt)) variants)
+    (List.map (fun (_, _, _, cts, dt) -> (tuple cts, typ_of_dbus_type dt)) variants)
     (fun key_reader readers ->
        [rflat key_reader
         @ [Branches((fun env -> <:expr< $id:Env.last env$ >>),
@@ -455,12 +444,7 @@ let rule_variant typ key_type variants env =
                              (<:patt< $idpatt_of_string name$ >>)
                              (List.rev (List.map (fun x -> <:patt< $id:x$ >>) (Env.slice 0 (List.length camlts) env)))),
                         Update_env (Env.add (List.length camlts + 1))
-                        :: Expr(false,
-                                fun env next ->
-                                  <:expr<
-                                    let $id:Env.last env$ = $expr$ in
-                                      $next$
-                                      >>)
+                        :: Expr(false, fun env -> bind (Env.last env) expr)
                         :: wflat key_writer
                         @ sig_writer dbust
                         @ List.flatten writer,
@@ -470,7 +454,7 @@ let rule_variant typ key_type variants env =
 
 let rule_record_option typ key_type fields env =
   rule typ (darray (dstructure (tuple [v"x"; dvariant]))) [< (key_type, v"x") >]
-    (List.map (fun (_, _, _, ct, dt) -> (tuple [ct], dbus_type_of_dtypes dt)) fields)
+    (List.map (fun (_, _, _, ct, dt) -> (tuple [ct], typ_of_dbus_type dt)) fields)
     (fun key_reader readers ->
        [array_reader
           (Align 8
@@ -486,11 +470,7 @@ let rule_record_option typ key_type fields env =
                          fields readers);
               Reset_padding(0, 1)])
           false
-          (Ast.ExRec(_loc,
-                     <:expr< $Ast.rbSem_of_list
-                       (List.map (fun (_, _, name, _, _) -> <:rec_binding< $ident_of_string name$ = None >>) fields)$
-                     >>,
-                     Ast.ExNil _loc))
+          (expr_record (List.map (fun (_, _, name, _, _) -> (ident_of_string name, <:expr< None >>)) fields))
           (fun acc -> acc)
           env])
     (fun key_writer writers ->
@@ -524,16 +504,15 @@ let rule_record_option typ key_type fields env =
                            let opt = optimize 0 1 instrs in
                            let instrs = opt.opt_initial_check @ opt.opt_code in
                              <:expr<
-                               let i = match $id:Env.last env$.$ident_of_string name$ with
-                                 | None -> i
+                               let (buffer, i) = match $id:Env.last env$.$ident_of_string name$ with
+                                 | None -> (buffer, i)
                                  | Some($id:Env.nth (-1) env$) ->
-                                     $GenCode.generate_writer true env instrs (fun env -> <:expr< i >>)$
+                                     $GenCode.generate_writer true env instrs (fun env -> <:expr< (buffer, i) >>)$
                                in $acc$
                                   >>)
                         fields writers
-                        (<:expr<
-                           int_uint32 j (i - k);
-                         $next$ >>))$ >>);
+                        (seq [CodeConstants.fixed_writer "int" "uint32" <:expr< j >> <:expr< i - k >>;
+                              next]))$ >>);
          Update_env (Env.add (-1));
          Reset_padding(0, 1)]])
 
@@ -542,21 +521,26 @@ let default_rules =
   [ (fun _ -> rule (v"x") (dstructure (v"x")) [< (v"x", v"x") >] []
        (fun reader _ -> [Align 8 :: rflat reader])
        (fun writer _ -> [Align 8 :: wflat writer]));
-    (fun _ -> rule char dbyte Seq.nil []
-       (fun _ -> [fixed_reader (fun env next -> uint8_reader_expr (Env.last env) next) 1])
-       (fun _ -> [fixed_writer (fun env next -> uint8_writer_expr (Env.last env) next) 1]));
-    simple_serializer "int_uint32" int dboolean 4;
-    simple_serializer "int_int16" int dint16 2;
-    simple_serializer "int_uint16" int duint16 2;
-    simple_serializer "int_int32" int dint32 4;
-    simple_serializer "int_uint32" int duint32 4;
-    simple_serializer "int32_int32" int32 dint32 4;
-    simple_serializer "int32_uint32" int32 duint32 4;
-    simple_serializer "int_int64" int dint64 8;
-    simple_serializer "int_uint64" int duint64 8;
-    simple_serializer "int64_int64" int64 dint64 8;
-    simple_serializer "int64_uint64" int64 duint64 8;
-    simple_serializer "float_double" float ddouble 8;
+    (fun _ -> rule (cons (v"x") (v"y")) (cons (v"x") (v"y")) [< (v"x", v"x"); (v"y", v"y") >] []
+       (fun x_reader y_reader _ -> x_reader @ y_reader)
+       (fun x_writer y_writer _ -> x_writer @ y_writer));
+    (fun _ -> rule nil nil  [<>] []
+       (fun _ -> [])
+       (fun _ -> []));
+    simple_serializer "char" "byte" 1;
+    simple_serializer "int" "byte" 1;
+    simple_serializer "int" "boolean" 4;
+    simple_serializer "int" "int16" 2;
+    simple_serializer "int" "uint16" 2;
+    simple_serializer "int" "int32" 4;
+    simple_serializer "int" "uint32" 4;
+    simple_serializer "int32" "int32" 4;
+    simple_serializer "int32" "uint32" 4;
+    simple_serializer "int" "int64" 8;
+    simple_serializer "int" "uint64" 8;
+    simple_serializer "int64" "int64" 8;
+    simple_serializer "int64" "uint64" 8;
+    simple_serializer "float" "double" 8;
     string_serializer string dstring Str_big;
     string_serializer string dobject_path Str_big;
     string_serializer string dsignature Str_small;
@@ -570,38 +554,27 @@ let default_rules =
       (<:expr< (function
                   | false -> 0
                   | true -> 1) >>);
-    rule_convert int bool
-      (<:expr< (function
-                  | false -> 0
-                  | true -> 1) >>)
-      (<:expr< (function
-                  | 0 -> false
-                  | 1 -> true
-                  | n -> raise Data_error ("invalid boolean value: " ^ string_of_int n)) >>);
     rule_array (list (v"x")) (v"x") true
       (<:expr< [] >>)
       (fun x acc -> <:expr< $x$ :: $acc$ >>)
       (fun f l x -> <:expr< List.fold_left $f$ $x$ $l$ >>)
-      (fun x i e -> <:expr< fun $id:i$ $id:x$ -> $e$ >>);
+      (fun x i e -> <:expr< fun $i$ $x$ -> $e$ >>);
     rule_dict (list (tuple [v"x"; v"y"])) (v"x") (v"y") false
       (<:expr< [] >>)
       (fun k v acc -> <:expr< ($k$, $v$) :: $acc$ >>)
       (fun f l x -> <:expr< List.fold_left $f$ $x$ $l$ >>)
-      (fun k v i e -> <:expr< fun $id:i$ ($id:k$, $id:v$) -> $e$ >>);
+      (fun k v i e -> <:expr< fun $i$ ($k$, $v$) -> $e$ >>);
     rule_dict (typ "Hashtbl.t" [v"x"; v"y"]) (v"x") (v"y") false
       (<:expr< Hashtbl.create 42 >>)
       (fun k v acc -> <:expr< Hashtbl.add $acc$ $k$ $v$; $acc$ >>)
       (fun f l x -> <:expr< Hashtbl.fold $f$ $l$ $x$ >>)
-      (fun k v i e -> <:expr< fun $id:k$ $id:v$ $id:i$ -> $e$ >>) ]
+      (fun k v i e -> <:expr< fun $k$ $v$ $i$ -> $e$ >>) ]
 
-let gen generator part rules camlt dbust env =
+let gen part trace rules camlt dbust env =
   let env = ref env in
-    match generator (List.map (fun f -> part (f env)) rules) camlt dbust with
+    match Generate.generate ~trace:trace (List.map (fun f -> part (f env)) rules) camlt (typ_of_dbus_type dbust) with
       | None -> assert false
       | Some x -> (!env, List.flatten x)
 
-let gen_reader rules camlt dbust env =
-  gen RG.generate fst rules camlt dbust env
-
-let gen_writer rules camlt dbust env =
-  gen WG.generate snd rules camlt dbust env
+let gen_reader = gen fst
+let gen_writer = gen snd

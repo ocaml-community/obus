@@ -7,24 +7,23 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Camlp4.PreCast
 open Types
 open AbstractCode
-
-let _loc = Loc.ghost
+open CodeConstants
+open Helpers
 
 let rec generate_reader for_array env instructions return_expr =
   let check_size expr next = match for_array with
     | true ->
         (<:expr<
            if i + $expr$ > limit
-           then raise (Data_error "invalid array size");
+           then raise ($inconsistent_exn$ "invalid array size");
          $next$
          >>)
     | false ->
         (<:expr<
            if i + $expr$ > limit
-           then raise (Data_error "invalid message size");
+           then raise ($inconsistent_exn$ "invalid message size");
          $next$
          >>)
   in
@@ -38,24 +37,24 @@ let rec generate_reader for_array env instructions return_expr =
           match instr with
             | Align n ->
                 (<:expr<
-                   let i = i + (($int:string_of_int n$ - i) land $int:string_of_int (n - 1)$) in
+                   let i = i + (($expr_of_int n$ - i) land $expr_of_int (n - 1)$) in
                      $acc$
                      >>)
-            | Check_size_fixed n -> check_size <:expr< $int:string_of_int n$ >> acc
-            | Check_size_dynamic n -> check_size <:expr< len + $int:string_of_int n$ >> acc
+            | Check_size_fixed n -> check_size <:expr< $expr_of_int n$ >> acc
+            | Check_size_dynamic n -> check_size <:expr< len + $expr_of_int n$ >> acc
             | Check_array_size(gap, base_size) ->
                 (<:expr<
-                   if (len + $int:string_of_int gap$) mod $int:string_of_int base_size$ <> 0
-                   then raise (Data_error "invalid array size");
+                   if (len + $expr_of_int gap$) mod $expr_of_int base_size$ <> 0
+                   then raise ($inconsistent_exn$ "invalid array size");
                  $acc$ >>)
             | Advance_fixed(x, _) ->
                 (<:expr<
-                   let i = i + $int:string_of_int x$ in
+                   let i = i + $expr_of_int x$ in
                      $acc$
                      >>)
             | Advance_dynamic(x) ->
                 (<:expr<
-                   let i = i + len + $int:string_of_int x$ in
+                   let i = i + len + $expr_of_int x$ in
                      $acc$
                      >>)
             | Expr(_, f) -> f env acc
@@ -75,17 +74,13 @@ let rec generate_reader for_array env instructions return_expr =
     aux env instructions
 
 let rec generate_writer for_array env instructions return_expr =
-  let check_size expr next = match for_array with
-    | true ->
-        (<:expr<
-           if i + $expr$ > limit
-           then raise Out_of_bounds;
-         $next$
-         >>)
-    | false ->
-        (<:expr<
-           if i + $expr$ > limit
-           then raise Out_of_bounds;
+  let check_size expr next =
+    (<:expr<
+       let buffer =
+         if i + $expr$ > limit
+         then $realloc_buffer$
+         else buffer
+       in
          $next$
          >>)
   in
@@ -102,12 +97,12 @@ let rec generate_writer for_array env instructions return_expr =
                    let i = $lid:"pad" ^ string_of_int n$ i in
                      $acc$
                      >>)
-            | Check_size_fixed n -> check_size <:expr< $int:string_of_int n$ >> acc
-            | Check_size_dynamic n -> check_size <:expr< len + $int:string_of_int n$ >> acc
+            | Check_size_fixed n -> check_size <:expr< $expr_of_int n$ >> acc
+            | Check_size_dynamic n -> check_size <:expr< len + $expr_of_int n$ >> acc
             | Check_array_size _ -> assert false
             | Advance_fixed(x, false) ->
                 (<:expr<
-                   let i = i + $int:string_of_int x$ in
+                   let i = i + $expr_of_int x$ in
                      $acc$
                      >>)
             | Advance_fixed(1, true) ->
@@ -119,18 +114,18 @@ let rec generate_writer for_array env instructions return_expr =
             | Advance_fixed(n, true) ->
                 (<:expr<
                    $lid:"zero" ^ string_of_int n$ i;
-                 let i = i + $int:string_of_int n$ in
+                 let i = i + $expr_of_int n$ in
                    $acc$
                    >>)
             | Advance_dynamic(x) ->
                 (<:expr<
-                   let i = i + len + $int:string_of_int x$ in
+                   let i = i + len + $expr_of_int x$ in
                      $acc$
                      >>)
             | Expr(_, f) -> f env acc
             | Branches(expr, brs) ->
                 (<:expr<
-                   let i = match $expr env $ with
+                   let (buffer, i) = match $expr env $ with
                        $ Ast.mcOr_of_list
                          (List.map
                             (fun (patt, instrs, _) ->
