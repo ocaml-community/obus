@@ -7,11 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Camlp4.PreCast
-
 type t = int
-
-let _loc = Loc.ghost
 
 let var_id n = (<:ident< $lid:"v" ^ string_of_int n$ >>)
 let var_ids n count = List.map var_id (Util.gen_list ((+) 1) n count)
