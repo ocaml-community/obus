@@ -200,6 +200,26 @@ let rule_convert ta tb a_of_b b_of_a _ =
                  (app b_of_a (expr_of_id (Env.last env))))
         :: wflat b_writer])
 
+let rule_constant fake_type typ value error _ =
+  rule fake_type (v"x") [< (typ, v"x") >] []
+    (fun reader _ ->
+       [rflat reader
+        @ [Expr(false,
+                fun env next ->
+                  <:expr<
+                    if $id:Env.last env$ <> $value$
+                    then $app error (expr_of_id (Env.last env))$
+                    else $next$ >>);
+           Update_env (Env.add (-1))]])
+    (fun writer _ ->
+       [Update_env (Env.add 1)
+        :: Expr(false,
+                fun env ->
+                  bind
+                    (Env.last env)
+                    value)
+        :: wflat writer])
+
 let padding instrs =
   match Util.find_map (function
                          | Align n -> Some n
@@ -366,32 +386,64 @@ let rule_map module_name key_type =
       (fun f l x -> <:expr< $id:id$ . fold $f$ $l$ $x$ >>)
       (fun k v i e -> <:expr< fun $k$ $v$ $i$ -> $e$ >>)
 
+type record_field =
+  | F of string
+  | Fake of expr * expr
+
 let rule_record typ fields _ =
-  let count = List.length fields in
   let vars = Util.gen_names "field" fields in
+  let names = List.map fst fields in
+  let reals = Util.filter_map (function
+                                 | F(name) -> Some(name)
+                                 | Fake _ -> None) names in
+  let count = List.length reals in
     rule typ (tuple (List.map v vars)) [<>] (List.map2 (fun (_, t) x -> (t, v x)) fields vars)
       (fun readers ->
-         [List.flatten (List.map rflat readers)
-          @ [Expr(false,
-                  fun env ->
-                    bind
-                      (Env.nth (count - 1) env)
-                      (expr_record
-                         (List.map2
-                            (fun (name, _) id -> (ident_of_string name, expr_of_id id))
-                            fields (Env.lasts count env))));
-             Update_env (Env.add (1 - count))]])
+         let rec flat names readers = match names, readers with
+           | [], readers -> List.flatten readers
+           | F n :: names, reader :: readers ->
+               reader @ flat names readers
+           | Fake(value, error) :: names, reader :: readers ->
+               reader
+               @ [Expr(false,
+                       fun env next ->
+                         <:expr<
+                           if $id:Env.last env$ <> $value$
+                           then $app error (expr_of_id (Env.last env))$
+                           else $next$ >>);
+                  Update_env (Env.add (-1))]
+               @ flat names readers
+           | _ -> assert false in
+           [flat names (List.map rflat readers)
+            @ [Expr(false,
+                    fun env ->
+                      bind
+                        (Env.nth (count - 1) env)
+                        (expr_record
+                           (List.map2
+                              (fun name id -> (ident_of_string name, expr_of_id id))
+                              reals (Env.lasts count env))));
+               Update_env (Env.add (1 - count))]])
       (fun writers ->
-         [Update_env (Env.add (count - 1))
-          :: Expr(false,
-                  fun env ->
-                    bind_patt
-                      (patt_record
-                         (List.map2
-                            (fun (name, _) id -> (ident_of_string name, patt_of_id id))
-                            fields (Env.lasts count env)))
-                      (expr_of_id (Env.nth (count - 1) env)))
-          :: List.flatten (List.map wflat writers)])
+         let rec flat names writers = match names, writers with
+           | [], writers -> List.flatten writers
+           | F n :: names, writer :: writers ->
+               writer @ flat names writers
+           | Fake(value, error) :: names, writer :: writers ->
+               Update_env (Env.add 1)
+               :: Expr(false, fun env -> bind (Env.last env) value)
+               :: writer @ flat names writers
+           | _ -> assert false in
+           [Update_env (Env.add (count - 1))
+            :: Expr(false,
+                    fun env ->
+                      bind_patt
+                        (patt_record
+                           (List.map2
+                              (fun name id -> (ident_of_string name, patt_of_id id))
+                              reals (Env.lasts count env)))
+                        (expr_of_id (Env.nth (count - 1) env)))
+            :: flat names (List.map wflat writers)])
 
 let sig_matcher dbust =
   let dbus_sig = signature_of_dbus_type dbust in
@@ -571,9 +623,14 @@ let default_rules =
       (fun k v i e -> <:expr< fun $k$ $v$ $i$ -> $e$ >>) ]
 
 let gen part trace rules camlt dbust env =
+  let dbust = typ_of_dbus_type dbust in
   let env = ref env in
-    match Generate.generate ~trace:trace (List.map (fun f -> part (f env)) rules) camlt (typ_of_dbus_type dbust) with
-      | None -> assert false
+    match Generate.generate ~trace:trace (List.map (fun f -> part (f env)) rules) camlt dbust with
+      | None -> failwith
+          (Printf.sprintf
+             "cannot find a convertion between this caml type: %s and this dbus type: %s"
+             (string_of_type camlt)
+             (string_of_type dbust))
       | Some x -> (!env, List.flatten x)
 
 let gen_reader = gen fst

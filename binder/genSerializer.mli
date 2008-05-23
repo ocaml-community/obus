@@ -24,6 +24,12 @@ val rule_convert : caml_type -> caml_type -> expr -> expr -> rule
   (** [rule_convert typea typeb a_of_b b_of_a] rule for doing convertion
       between caml values of types [typea] and [typeb]. *)
 
+val rule_constant : caml_type -> caml_type -> expr -> expr -> rule
+  (** [rule_constant fake_type typ value error] rule for introduction
+      a fake variable. When reading the value will be compared to
+      [value] and [error readed_value] will be raised if they are not
+      equal, and when writing [value] will be written. *)
+
 val rule_array : caml_type -> caml_type -> bool -> expr -> (expr -> expr -> expr)
   -> (expr -> expr -> expr -> expr) -> (patt -> patt -> expr -> expr) -> rule
     (** [rule_array typ elt_type reverse empty_expr add_expr fold_expr
@@ -62,7 +68,14 @@ val rule_map : string -> caml_type -> rule
   (** [rule_map module_name key_type] shorthand for map created with
       [Map.Make] *)
 
-val rule_record : caml_type -> (string * caml_type) list -> rule
+type record_field =
+    (** A record field description *)
+  | F of string
+      (** A real field *)
+  | Fake of expr * expr
+      (** [Fake(value, error)] same as [rule_constant] *)
+
+val rule_record : caml_type -> (record_field * caml_type) list -> rule
   (** [rule_record typ fields] rule for reading/writing a sequence of
       dbus marshaled values into/from this caml record *)
 
