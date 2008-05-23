@@ -7,24 +7,13 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-module type ValueType =
-sig
-  type t
-  val flat : t list -> t
-end
+open Types
 
-module Make (Value : ValueType) :
-sig
-  open Types
+type ('a, 'b, 'v) args = ('a, 'v, 'b, 'v list -> 'v) Seq.t
+type dependency = typ * typ
 
-  type value = Value.t list
+type 'v rule
 
-  type ('a, 'b) args = ('a, value, 'b, value list -> value) Seq.t
-  type ('l, 'r) dep = 'l pattern * 'r pattern
+val rule : typ -> typ -> (dependency, 'a, 'v) args -> dependency list -> 'a -> 'v rule
 
-  type ('l, 'r) rule
-
-  val rule : 'l pattern -> 'r pattern -> (('l, 'r) dep, 'a) args -> ('l, 'r) dep list -> 'a -> ('l, 'r) rule
-
-  val generate : ('l, 'r) rule list -> 'l typ -> 'r typ -> value option
-end
+val generate : ?trace:bool -> 'v rule list -> typ -> typ -> 'v option
