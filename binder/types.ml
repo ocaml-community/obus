@@ -33,13 +33,19 @@ let rec list_of_tuple = function
   | Nil -> []
   | x -> [x]
 
-let rec string_of_type = function
-  | Type(t, args) ->
-      t ^ String.concat "" (List.map (fun t -> " " ^ string_of_type t) args)
-  | Cons _ as l ->
-      "(" ^ String.concat " * " (List.map string_of_type (list_of_tuple l)) ^ ")"
-  | Nil -> "()"
-  | Var(x) -> "'" ^ x
+let string_of_type =
+  let at_top x = x
+  and not_at_top x = "(" ^ x ^ ")" in
+  let rec aux top = function
+    | Type(t, []) -> t
+    | Type(t, args) ->
+        top (t ^ String.concat "" (List.map (fun t -> " " ^ aux not_at_top t) args))
+    | Cons _ as l ->
+        top (String.concat " * " (List.map (aux at_top) (list_of_tuple l)))
+    | Nil -> "()"
+    | Var(x) -> "'" ^ x
+  in
+    aux at_top
 
 include Common
 
