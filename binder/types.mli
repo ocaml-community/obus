@@ -7,59 +7,58 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-type mono
-  (** mono is an empty type *)
-type poly
+type var = string
 
-type (+'t, +'var) term =
+type typ =
     private
-  | Type of 't * ('t, 'var) term list
-  | Cons of ('t, 'var) term * ('t, 'var) term
+  | Type of string * typ list
+  | Cons of typ * typ
   | Nil
-  | Var of 'var
+  | Var of var
 
-type 'a typ = ('a, mono) term
-type 'a pattern = ('a, poly) term
+(** Note: all creation functions ensures that a value of type typ
+    has never the form [Cons(t, Nil)], because it represent the same
+    type as [t]. *)
 
-val fresh : unit -> ('a, poly) term
-  (** [fresh ()] create a fresh new variable *)
-
-val v : string -> ('a, poly) term
+val v : string -> typ
   (** [v x] create a variable *)
 
-val typ : 'a -> ('a, 'b) term list -> ('a, 'b) term
+val typ : string -> typ list -> typ
   (** [typ id args] create a new type *)
 
-val cons : ('a, 'b) term -> ('a, 'b) term -> ('a, 'b) term
-  (** [cons x y] create a cons containing [x] and [y]. [y] must be a
-      variable of [nil] *)
-val nil : ('a, 'b) term
+val cons : typ -> typ -> typ
+  (** [cons x y] create a cons containing [x] and [y]. If [y] is [Nil]
+      then [cons x y] is [x]. *)
+val nil : typ
 
-val tuple : ('a, 'b) term list -> ('a, 'b) term
+val tuple : typ list -> typ
   (** [tuple l] create a tuple from a list of types *)
 
-val list_of_tuple : ('a, 'b) term -> ('a, 'b) term list
+val list_of_tuple : typ -> typ list
   (** [list_of_tuple tup] return the list of types contained in
       [tup]. *)
+
+val string_of_type : typ -> string
+  (** [string_of_type typ] return a string representation of the
+      type *)
 
 type ident = Camlp4.PreCast.Ast.ident
 type expr = Camlp4.PreCast.Ast.expr
 type patt = Camlp4.PreCast.Ast.patt
 
-type caml_id = string
-type 'a caml_type = (caml_id, 'a) term
+type caml_type = typ
 
-val int : 'a caml_type
-val int32 : 'a caml_type
-val int64 : 'a caml_type
-val float : 'a caml_type
-val bool : 'a caml_type
-val char : 'a caml_type
-val string : 'a caml_type
-val list : 'a caml_type -> 'a caml_type
-val array : 'a caml_type -> 'a caml_type
-val dbus_value : 'a caml_type
-val dbus_types : 'a caml_type
+val int : caml_type
+val int32 : caml_type
+val int64 : caml_type
+val float : caml_type
+val bool : caml_type
+val char : caml_type
+val string : caml_type
+val list : caml_type -> caml_type
+val array : caml_type -> caml_type
+val dbus_value : caml_type
+val dbus_types : caml_type
 
 type dtype =
   | Tbyte
@@ -78,29 +77,8 @@ type dtype =
   | Tdict of dtype * dtype
   | Tstructure of dtype list
   | Tvariant
-type dtypes = dtype list
 
-type dbus_id
-type 'a dbus_type = (dbus_id, 'a) term
+type dbus_type = dtype list
 
-val dbyte : 'a dbus_type
-val dboolean : 'a dbus_type
-val dint16 : 'a dbus_type
-val dint32 : 'a dbus_type
-val dint64 : 'a dbus_type
-val duint16 : 'a dbus_type
-val duint32 : 'a dbus_type
-val duint64 : 'a dbus_type
-val ddouble : 'a dbus_type
-val dstring : 'a dbus_type
-val dsignature : 'a dbus_type
-val dobject_path : 'a dbus_type
-val darray : 'a dbus_type -> 'a dbus_type
-val ddict : 'a dbus_type -> 'a dbus_type -> 'a dbus_type
-val dstructure : 'a dbus_type -> 'a dbus_type
-val dvariant : 'a dbus_type
-
-val dtypes_of_signature : string -> dtypes
-val signature_of_dtypes : dtypes -> string
-
-val dbus_type_of_dtypes : dtypes -> 'a dbus_type
+val dbus_type_of_signature : string -> dbus_type
+val signature_of_dbus_type : dbus_type -> string
