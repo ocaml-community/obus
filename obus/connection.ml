@@ -226,7 +226,7 @@ let dispatch connection =
 let transport connection = connection.transport
 let guid connection = connection.guid
 
-let of_transport transport priv =
+let of_transport ?(shared=true) transport =
   match Auth.launch transport with
     | None -> raise (Failure "cannot authentificate on the given transport")
     | Some(guid) ->
@@ -243,7 +243,7 @@ let of_transport transport priv =
             guid = guid
           }
         in
-        let connection = match priv with
+        let connection = match shared with
           | true -> make ()
           | false ->
               Util.with_mutex guid_connection_table_m begin fun () ->
@@ -260,7 +260,7 @@ let of_transport transport priv =
           ignore (Thread.create (fun () -> while true do internal_dispatch connection done) ());
           connection
 
-let of_addresses addresses = function
+let of_addresses ?(shared=true) addresses = match shared with
   | true -> of_transport (Transport.of_addresses addresses) true
   | false ->
       (* Try to find an guid that we already have *)

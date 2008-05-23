@@ -17,14 +17,14 @@ type guid = Address.guid
 
 (** {6 Creation} *)
 
-val of_transport : Transport.t -> bool -> t
-  (** [of_transport transport private] create a dbus connection over
-      the given transport. If [private] is false and a connection to
-      the same server is already open, then it is used instead of
-      [transport] *)
+val of_transport : ?shared:bool -> Transport.t -> t
+  (** [of_transport shared transport] create a dbus connection over
+      the given transport. If [shared] is true and a connection to the
+      same server is already open, then it is used instead of
+      [transport], this is the default behaviour. *)
 
-val of_addresses : Address.t list -> bool -> t
-  (** [of_addresses addresses private] shorthand for obtaining
+val of_addresses : ?shared:bool -> Address.t list -> t
+  (** [of_addresses shared addresses] shorthand for obtaining
       transport and doing [of_transport] *)
 
 (** {6 Sending messages} *)
