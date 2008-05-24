@@ -1,10 +1,15 @@
+# Syntaxes
 <syntax/*>: camlp4of, use_camlp4
-<binder/*>: pkg_xml-light, use_camlp4
-<binder/binder.*>: pkg_str
-<binder/*.*>: pkg_str
-<binder/obus-caml-*.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
-<samples/*.{byte,native}>: pkg_unix
-<samples/**>: pkg_unix, samples, camlp4o, pa_dbus_typval
+# Shared code between obus library and binder
 "common": include
-"obus/threadsigs": include
+# This let modules of the library to have access to thread module
+# signatures
+<obus/**>: threadsigs
+# Real thread modules need the thread library
 <obus/with_threads/*>: thread
+# Tags for the binder and the binding plugin library
+<binder/*.*>: pkg_xml-light, pkg_str, use_camlp4
+# Tests and samples
+<samples/**>: pkg_unix, samples, camlp4o, pa_dbus_typval
+<test/**>: samples-binding, use_camlp4, pkg_str, pkg_xml-light
+<test/*.ml>: camlp4of, pa_gen_code

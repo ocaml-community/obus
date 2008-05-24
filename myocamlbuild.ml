@@ -96,9 +96,21 @@ let _ =
           dep ["ocaml"; "ocamldep"; ext] ["syntax/"^ext^".cmo"];
         end (myexts ());
 
+        (* For compiling the library without knowing the
+           implementation of thread modules *)
+        flag ["ocaml"; "compile"; "threadsigs"] & S[A"-I"; A"obus/threadsigs"];
+
         (* For samples to find .cmi files *)
         flag ["ocaml"; "compile"; "samples"] & S[A"-I"; A"obus"];
         flag ["ocaml"; "link"; "samples"] (A"obus.cma");
         dep ["ocaml"; "samples"] ["obus.cma"];
+
+        flag ["ocaml"; "compile"; "samples-binding"] & S[A"-I"; A"binder"];
+        flag ["ocaml"; "link"; "samples-binding"] (A"obus-binding.cma");
+        dep ["ocaml"; "samples-binding"] ["obus-binding.cma"];
+
+        (* For testing programs, let them access to all modules *)
+        flag ["ocaml"; "compile"; "test"] & S[A"-I"; A"obus"; A"-I"; A"binder"];
+        flag ["ocaml"; "link"; "test"] & S[A"-I"; A"obus"; A"-I"; A"binder"];
     | _ -> ()
   end
