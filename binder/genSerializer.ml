@@ -229,101 +229,116 @@ let padding instrs =
 
 let array_reader instrs reverse empty add env =
   let padding = padding instrs in
-  let opt1 = optimize 0 padding instrs in
-  let opt2 = optimize opt1.opt_relative_position opt1.opt_alignment instrs in
-    assert (opt1.opt_relative_position = opt2.opt_relative_position
-        && opt1.opt_alignment = opt2.opt_alignment
-        && ((opt1.opt_size = None) = (opt2.opt_size = None)));
-    let init_instrs = match opt1.opt_size with
-      | None -> opt1.opt_initial_check @ opt1.opt_code
-      | Some _ -> opt1.opt_code
-    and loop_instrs = match opt2.opt_size with
-      | None -> opt2.opt_initial_check @ opt2.opt_code
-      | Some _ -> opt2.opt_code in
-    let id = id_for_expr
-      (match reverse with
-         | false ->
+  let opt = optimize false 0 padding instrs in
+  let gap =
+    if opt.opt_alignment >= padding
+    then (padding - opt.opt_relative_position) land (padding - 1)
+    else 0 in
+
+  let instrs = match opt.opt_size with
+    | None -> opt.opt_code
+    | Some _ -> opt.opt_without_initial_check in
+
+  let expr ret = GenCode.generate_reader true Env.empty instrs (fun _ -> ret) in
+
+  let id = id_for_expr
+    (match reverse with
+       | false ->
+           if gap <> 0
+           then
              (<:expr<
-                fun i limit ->
+                fun buffer i limit ->
                   let rec aux i acc =
-                    if i = limit
-                    then acc
-                    else begin
-                      $GenCode.generate_reader true Env.empty loop_instrs
-                        (fun env -> <:expr< aux i $add <:expr< acc >>$ >>)$
-                    end in
+                    let i = i + $expr_of_int gap$ in
+                      $expr
+                        (<:expr<
+                           let acc = $add <:expr< acc >>$ in
+                             if i = limit
+                             then acc
+                             else aux i acc >>)$
+                  in
                     if i = limit
                     then $empty$
-                    else begin
-                      $GenCode.generate_reader true Env.empty init_instrs
-                        (fun env -> <:expr< aux i $add empty$ >>)$
-                    end
-                      >>)
-         | true ->
+                    else aux (i - $expr_of_int gap$) $empty$ >>)
+           else (<:expr<
+                   fun buffer i limit ->
+                     let rec aux i acc =
+                       if i = limit
+                       then acc
+                       else $expr (<:expr< aux i $add <:expr< acc >>$ >>)$
+                     in
+                       aux i $empty$ >>)
+       | true ->
+           if gap <> 0
+           then
              (<:expr<
-                fun i limit ->
+                fun buffer i limit ->
                   let rec aux i =
+                    let i = i + $expr_of_int gap$ in
+                      $expr (<:expr<
+                               let acc =
+                                 if i = limit
+                                 then $empty$
+                                 else aux i
+                               in
+                                 $add <:expr< acc >>$
+                                 >>)$
+                  in
                     if i = limit
                     then $empty$
-                    else begin
-                      $GenCode.generate_reader true Env.empty loop_instrs
-                        (fun env ->
-                           <:expr<
-                             let acc = aux i in
-                               $add <:expr< acc >>$
-                               >>)$
-                    end in
-                    if i = limit
-                    then $empty$
-                    else begin
-                      $GenCode.generate_reader true Env.empty init_instrs
-                        (fun env ->
-                           <:expr<
-                             let acc = aux i in
-                               $add empty$
-                               >>)$
-                    end
-                      >>)) env in
-      [Align 4;
-       Expr(true,
-            fun env next ->
-              bind
-                len_id
-                (CodeConstants.fixed_reader "int" "uint32" idx)
-                (<:expr<
-                   if len > $expr_of_int Constant.max_array_size$
-                   then raise Read_error "array too big!";
-                 $next$
-                 >>));
-       Advance_fixed(4, false);
-       Check_size_dynamic 0;
-       (match opt1.opt_size, opt2.opt_size with
-          | Some a, Some b ->
-              Check_array_size(b - a, b)
-          | _ -> Nothing);
-       Align padding;
-       Update_env (Env.add 1);
-       Expr(true,
-            fun env ->
-              bind
-                (Env.last env)
-                (<:expr< $id:id$ i (i + len) >>));
-       (match opt2.opt_size with
-          | Some n when n mod padding = 0 -> Reset_padding(0, padding)
-          | Some n when n land 1 = 1 -> Reset_padding(0, 1)
-          | Some n when n land 3 = 2 -> Reset_padding(0, 2)
-          | Some n when n land 7 = 4 -> Reset_padding(0, 4)
-          | _ -> Reset_padding(0, 1))]
+                    else aux (i - $expr_of_int gap$) >>)
+           else (<:expr<
+                   fun buffer i limit ->
+                     let rec aux i =
+                       if i = limit
+                       then $empty$
+                       else
+                         $expr (<:expr<
+                                  let acc = aux i in
+                                    $add <:expr< acc >>$
+                                    >>)$
+                     in
+                       aux i >>)) env
+  in
+    [Align 4;
+     Expr(true,
+          fun env next ->
+            bind
+              len_id
+              (CodeConstants.fixed_reader "int" "uint32" idx)
+              (<:expr<
+                 if len > $expr_of_int Constant.max_array_size$
+                 then raise Reading.Array_too_big
+                 else $next$
+                   >>));
+     Advance_fixed(4, false);
+     Align padding;
+     Check_size_dynamic 0;
+     (match opt.opt_size with
+        | Some(size) -> Check_array_size(gap, size)
+        | _ -> Nothing);
+     Update_env (Env.add 1);
+     Expr(true,
+          fun env ->
+            bind
+              (Env.last env)
+              (<:expr< $id:id$ i (i + len) >>));
+     (match opt.opt_size with
+        | Some n when n mod padding = 0 -> Reset_padding(0, padding)
+        | Some n when n land 1 = 1 -> Reset_padding(0, 1)
+        | Some n when n land 3 = 2 -> Reset_padding(0, 2)
+        | Some n when n land 7 = 4 -> Reset_padding(0, 4)
+        | _ -> Reset_padding(0, 1))]
 
 let array_writer instrs fold make_func nbval env =
   let padding = padding instrs in
-  let opt = Optimize.optimize 0 padding instrs in
+  let opt = Optimize.optimize true 0 padding instrs in
   let instrs =
     if opt.opt_relative_position = 0 && opt.opt_alignment >= padding
-    then opt.opt_initial_check @ opt.opt_code
+    then opt.opt_code
     else
-      let opt = optimize 0 1 (Align padding :: instrs) in
-       opt.opt_initial_check @ opt.opt_code
+      let opt = optimize true 0 1 (Align padding :: instrs) in
+        opt.opt_code
   in
   let id = id_for_expr
     (make_func (<:patt< (buffer, i) >>)
