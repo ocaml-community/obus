@@ -345,8 +345,13 @@ let array_writer instrs fold make_func nbval env =
             <:expr<
               let k = i in
               let (buffer, i) = $fold (expr_of_id id) <:expr< (buffer, i) >> (expr_of_id (Env.last env))$ in
-                $CodeConstants.fixed_writer "int" "uint32" <:expr< j >> <:expr< i - k >>$;
-                $next$
+              let len = k - i in
+                if len > $expr_of_int Constant.max_array_size$
+                then raise Writing.Array_too_big
+                else begin
+                  $CodeConstants.fixed_writer "int" "uint32" <:expr< j >> <:expr< len >>$;
+                  $next$
+                end
                 >>);
      Update_env (Env.add (-1));
      (match opt.opt_size with
@@ -563,8 +568,14 @@ let rule_record_option typ key_type fields env =
                                in $acc$
                                   >>)
                         fields writers
-                        (seq [CodeConstants.fixed_writer "int" "uint32" <:expr< j >> <:expr< i - k >>;
-                              next]))$ >>);
+                        (<:expr<
+                           let len = k - i in
+                             if len > $expr_of_int Constant.max_array_size$
+                             then raise Writing.Array_too_big
+                             else begin
+                               $CodeConstants.fixed_writer "int" "uint32" <:expr< j >> <:expr< len >>$;
+                               $next$
+                             end >>))$ >>);
          Update_env (Env.add (-1));
          Reset_padding(0, 1)]])
 
@@ -602,7 +613,7 @@ let default_rules =
       (<:expr< (function
                   | 0 -> false
                   | 1 -> true
-                  | n -> raise Data_error ("invalid boolean value: " ^ string_of_int n)) >>)
+                  | n -> raise Content_error ("invalid boolean value: " ^ string_of_int n)) >>)
       (<:expr< (function
                   | false -> 0
                   | true -> 1) >>);

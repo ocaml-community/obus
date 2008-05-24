@@ -32,13 +32,6 @@ val signature_checker : string -> expr -> expr
   (** [signature_checker idx_expr signature] expression which check
       that the readed signature correspond to this hardcorded one *)
 
-val inconsistent_exn : expr
-  (** Exception to raise in case of inconsistent message *)
-
-val content_exn : expr
-  (** Exception to raise if there is something wrong in the content of
-      the message *)
-
 val realloc_buffer : expr
   (** [realloc_buffer] expression for reallocating a bigger buffer and
       copying already marshaled content *)

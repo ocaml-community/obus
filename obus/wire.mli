@@ -15,10 +15,37 @@ type ptr = int
 type buffer = string
     (** A buffer containing a marshaled value *)
 
-exception Out_of_bounds
-exception Write_error of string
-exception Read_error of string
-exception Data_error of string
+exception Content_error of string
+  (** This exception must be raised by convertion functions if a value
+      is invalid *)
+
+(** Exceptions that can be raised by auto-generated
+    marshaling/unmarshaling functions *)
+
+module Reading : sig
+
+  (** Consistency errors, the message is an invalid dbus message *)
+
+  exception Array_too_big
+    (** The marshaled representation of an array is bigger than
+        allowed by the dbus specification *)
+  exception Invalid_array_size
+    (** The anounced size of an array does not match is real size *)
+  exception Invalid_message_size
+    (** The anounced size of the message is incorrent *)
+
+  (** Content errors *)
+
+  exception Invalid_signature
+    (** The signature for a variant does not correspond to what we
+        expect *)
+end
+
+module Writing : sig
+  exception Array_too_big
+    (** The marhaled representation of an array is too big to be
+        sent *)
+end
 
 external native_byte_order : unit -> int = "caml_native_byte_order"
 

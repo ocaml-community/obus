@@ -17,13 +17,13 @@ let rec generate_reader for_array env instructions return_expr =
     | true ->
         (<:expr<
            if i + $expr$ > limit
-           then raise ($inconsistent_exn$ "invalid array size")
+           then raise Reading.Invalid_array_size
            else $next$
          >>)
     | false ->
         (<:expr<
            if i + $expr$ > String.length buffer
-           then raise ($inconsistent_exn$ "invalid message size")
+           then raise Reading.Invalid_message_size
            else $next$
          >>)
   in
@@ -44,9 +44,9 @@ let rec generate_reader for_array env instructions return_expr =
             | Check_size_dynamic n -> check_size <:expr< len + $expr_of_int n$ >> acc
             | Check_array_size(gap, base_size) ->
                 (<:expr<
-                   if (len + $expr_of_int gap$) mod $expr_of_int base_size$ <> 0
-                   then raise ($inconsistent_exn$ "invalid array size");
-                 $acc$ >>)
+                   if ($len_plus gap$) mod $expr_of_int base_size$ <> 0
+                   then raise Reading.Invalid_array_size
+                   else $acc$ >>)
             | Advance_fixed(x, _) ->
                 (<:expr<
                    let i = i + $expr_of_int x$ in

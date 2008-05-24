@@ -30,15 +30,12 @@ let string_reader buf idx len =
 let string_writer buf idx len =
   (<:expr< String.unsafe_blit $buf$ 0 buffer $idx$ $len$ >>)
 
-let content_exn = (<:expr< Content_error >>)
-let inconsistent_exn = (<:expr< Format_error >>)
-
 let signature_checker signature idx =
   let len = String.length signature in
   let sig_expr = expr_of_str (Printf.sprintf "%c%s\x00" (char_of_int len) signature) in
     (<:expr<
        if not string_match buffer $idx$ $sig_expr$ $expr_of_int (len + 2)$
-       then raise ($content_exn$ "unexpected variant signature")
+       then raise Reading.Invalid_signature
          >>)
 
 let realloc_buffer = (<:expr< Internal.realloc_buffer buffer i >>)
