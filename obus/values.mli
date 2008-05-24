@@ -51,7 +51,7 @@ type value =
   | Uint64 of int64
   | Double of float
   | String of string
-  | Signature of dtype list
+  | Signature of dtypes
   | Object_path of string
   | Array of dtype * value list
       (** Array and dict must also contain types information because
@@ -62,9 +62,9 @@ type value =
 type values = value list
 
 val string_of_value : value -> string
-val string_of_values : value list -> string
+val string_of_values : values -> string
 val dtype_of_value : value -> dtype
-val dtype_of_values : value list -> dtype list
+val dtypes_of_values : values -> dtypes
 
 (** {6 DBus types/values construction} *)
 
@@ -73,50 +73,57 @@ type yes
 type no
 type 'a seq_cstr
 
-val byte : (char, yes) cstr
-val boolean : (bool, yes) cstr
-val int16 : (int, yes) cstr
-val int32 : (int32, yes) cstr
-val int64 : (int64, yes) cstr
-val uint16 : (int, yes) cstr
-val uint32 : (int32, yes) cstr
-val uint64 : (int64, yes) cstr
-val double : (float, yes) cstr
-val string : (string, yes) cstr
-val signature : (dtype list, yes) cstr
-val object_path : (string, yes) cstr
+val byte : (char, _) cstr
+val boolean : (bool, _) cstr
+val int16 : (int, _) cstr
+val int32 : (int32, _) cstr
+val int64 : (int64, _) cstr
+val uint16 : (int, _) cstr
+val uint32 : (int32, _) cstr
+val uint64 : (int64, _) cstr
+val double : (float, _) cstr
+val string : (string, _) cstr
+val signature : (dtypes, _) cstr
+val object_path : (string, _) cstr
 val array : ('a, _) cstr -> ('a list, no) cstr
 val dict : ('a, yes) cstr -> ('b, _) cstr -> (('a * 'b) list, no) cstr
 val structure : 'a seq_cstr  -> ('a, no) cstr
-val variant : (value, yes) cstr
+val variant : (value, no) cstr
 val cons : ('a, _) cstr -> 'b seq_cstr -> ('a * 'b) seq_cstr
 val nil : unit seq_cstr
 
 val make_dtype : (_, _) cstr -> dtype
 val make_value : ('a, _) cstr -> 'a -> value
-val make_dtypes : 'a seq_cstr -> dtype list
-val make_values : 'a seq_cstr -> 'a -> value list
+val make_dtypes : _ seq_cstr -> dtypes
+val make_values : 'a seq_cstr -> 'a -> values
 
 val get_value : ('a, _) cstr -> value -> 'a
-val get_values : 'a seq_cstr -> value list -> 'a
+val get_values : 'a seq_cstr -> values -> 'a
   (** [get] and [get_list] raise an [Invalid_argument] if the value
       has not the valid type *)
 
 (** Marshaling (for auto-generated code) *)
 
-val read_values : Header.recv -> Wire.buffer -> Wire.ptr -> value list
-val write_values : value list -> Header.byte_order -> Wire.buffer -> Wire.ptr -> int
+open Wire
 
-module Writer(W : Wire.Writer) : sig
-  val dtype : Wire.ptr -> dtype -> Wire.ptr
-  val dtypes : Wire.ptr -> dtypes -> Wire.ptr
-  val value : Wire.ptr -> value -> Wire.ptr
-  val values : Wire.ptr -> values -> Wire.ptr
+val dtype_signature_size : dtype -> int
+val dtypes_signature_size : dtypes -> int
+val read_dtype : buffer -> ptr -> dtype
+val read_dtypes : buffer -> ptr -> dtypes
+val write_dtype : buffer -> ptr -> dtype -> unit
+val write_dtypes : buffer -> ptr -> dtypes -> unit
+
+module type Reader = sig
+  val read_value : buffer -> ptr -> dtype -> value
+  val read_values : buffer -> ptr -> dtypes -> values
 end
 
-module Reader(R : Wire.Reader) : sig
-  val dtype : Wire.ptr -> Wire.ptr * dtype
-  val dtypes : Wire.ptr -> Wire.ptr * dtypes
-  val value : Wire.ptr -> dtype -> Wire.ptr * value
-  val values : Wire.ptr -> dtypes -> Wire.ptr * values
+module type Writer = sig
+  val write_value : buffer -> ptr -> value -> buffer * ptr
+  val write_values : buffer -> ptr -> values -> buffer * ptr
 end
+
+module LEReader : Reader
+module BEReader : Reader
+module LEWriter : Writer
+module BEWriter : Writer

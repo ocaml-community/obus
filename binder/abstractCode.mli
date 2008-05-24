@@ -35,7 +35,9 @@ type instruction =
   | Align of int
       (** Align the pointer to the given boundary *)
   | Reset_padding of int * int
-      (** Forgot everything about padding *)
+      (** Forget everything about padding *)
+  | Reset_all
+      (** Forget everything *)
   | Advance_fixed of int * bool
       (** Advance the pointer by a fixed number of bytes. The
           boolean tell weather it is for padding or not *)

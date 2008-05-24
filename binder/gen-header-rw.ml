@@ -7,7 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(* This file is used to generate the marshaling/unmarshaling functions for header fields *)
+(* This file is used to generate the marshaling/unmarshaling functions
+   for header fields *)
 
 open Types
 open GenSerializer

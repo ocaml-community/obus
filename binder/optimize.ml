@@ -50,6 +50,8 @@ let rec optimize_padding padding_important relative_pos padding = function
                       ((relative_pos + diff) mod padding) padding
           | Reset_padding(relative_pos, padding) ->
               next [] relative_pos padding
+          | Reset_all ->
+              next [Reset_all] 0 1
           | Advance_fixed(n, b) ->
               next [Advance_fixed(n, b)] ((relative_pos + n) mod padding) padding
           | Branches(expr, brs) ->
@@ -70,6 +72,7 @@ let size code =
            | Some x -> Some (x + n)
            | None -> None
          end
+       | Reset_all
        | Align _
        | Advance_dynamic _
        | Branches _ -> None
@@ -103,6 +106,7 @@ let rec optimize_check_size instructions =
                                          ret))
                               brs))
                  simplified)
+        | Reset_all
         | Align _ ->
             let count_after, simplified = simplify 0 instrs in
               (count, insert_check count_after instr simplified)
@@ -129,6 +133,7 @@ let optimize_advance code =
         match instr with
           | Advance_fixed(n', b') when b' = b ->
               aux2 (n + n') b instrs
+          | Reset_all
           | Check_size_fixed _
           | Check_size_dynamic _
           | Check_array_size _

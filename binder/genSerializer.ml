@@ -321,7 +321,7 @@ let array_reader instrs reverse empty add env =
           fun env ->
             bind
               (Env.last env)
-              (<:expr< $id:id$ i (i + len) >>));
+              (<:expr< $ List.fold_left app (expr_of_id id) (List.map expr_of_id (Env.Type.all env))$ buffer i (i + len) >>));
      (match opt.opt_size with
         | Some n when n mod padding = 0 -> Reset_padding(0, padding)
         | Some n when n land 1 = 1 -> Reset_padding(0, 1)
@@ -591,6 +591,85 @@ let rule_record_option typ key_type fields env =
          Update_env (Env.add (-1));
          Reset_padding(0, 1)]])
 
+let signature_reader name =
+  let module Make(Env : Env.S) =
+      struct
+        let reader =
+          [Align 1;
+           Expr(true, fun _ -> bind len_id (len_reader Str_small idx));
+           Advance_fixed(1, false);
+           Check_size_dynamic 1;
+           Update_env (Env.add 1);
+           Expr(true,
+                fun env next ->
+                  <:expr<
+                    if $CodeConstants.fixed_reader "char" "byte"  <:expr< i + len >>$ <> $expr_of_chr '\x00'$
+                    then raise Reading.Invalid_signature
+                    else
+                      let $id:Env.last env$ = $lid:"read_" ^ name$ buffer i in
+                        $next$ >>);
+           Reset_padding(0, 1);
+           Advance_dynamic 1]
+      end in
+    function
+      | true -> let module M = Make(Env.Type) in M.reader
+      | false -> let module M = Make(Env) in M.reader
+
+let signature_writer name =
+  let module Make(Env : Env.S) =
+      struct
+        let writer =
+          [Expr(false,
+                fun env -> bind len_id <:expr< $lid:name ^ "_signature_size"$ (Env.last env) >>);
+           Align 1;
+           Expr(true,
+                fun _ next -> seq [len_writer Str_small idx (expr_of_id len_id); next]);
+           Advance_fixed(1, false);
+           Check_size_dynamic 1;
+           Expr(true,
+                fun env next ->
+                  <:expr<
+                    $lid:"write_" ^ name$ buffer i $id:Env.last env$;
+                  $next$>>);
+           Update_env (Env.add (-1));
+           Reset_padding(0, 1);
+           Advance_dynamic 1]
+      end in
+    function
+      | true -> let module M = Make(Env.Type) in M.writer
+      | false -> let module M = Make(Env) in M.writer
+
+let signature_serializer name =
+  (fun _ -> rule (typ ("OBus.Values." ^ name) []) dsignature [<>] []
+     (fun _ -> [signature_reader name false])
+     (fun _ -> [signature_writer name false]))
+
+let value_reader name =
+  [Align 1;
+   Update_env (Env.add 1);
+   Expr(true,
+        fun env next ->
+          <:expr<
+            let i, $id:Env.last env$ = $lid:"read_" ^ name$ buffer i $id:Env.Type.last env$ in
+              $next$ >>);
+   Update_env (Env.Type.add (-1));
+   Reset_all]
+
+let value_writer name =
+  [Align 1;
+   Expr(true,
+        fun env next ->
+          <:expr<
+            let buffer, i = $lid:"write_" ^ name$ buffer i $id:Env.Type.last env$ in
+              $next$ >>);
+   Update_env (Env.add (-1));
+   Reset_all]
+
+let value_serializer name =
+  (fun _ -> rule (typ ("$" ^ name) []) (v"x") [<>] []
+     (fun _ -> [value_reader name])
+     (fun _ -> [value_writer name]))
+
 (* Serialization of all basic types *)
 let default_rules =
   [ (fun _ -> rule (v"x") (dstructure (v"x")) [< (v"x", v"x") >] []
@@ -625,13 +704,17 @@ let default_rules =
     string_serializer string dstring Str_big;
     string_serializer string dobject_path Str_big;
     string_serializer string dsignature Str_small;
+    signature_serializer "dtypes";
+    (fun _ -> rule obus_value dvariant [<>] []
+       (fun _ -> [signature_reader "dtype" true @ value_reader "value"])
+       (fun _ -> [signature_writer "dtype" true @ value_writer "value"]));
     rule_convert int char
       (<:expr< int_of_char >>) (<:expr< char_of_int >>);
     rule_convert bool int
       (<:expr< (function
                   | 0 -> false
                   | 1 -> true
-                  | n -> raise Content_error ("invalid boolean value: " ^ string_of_int n)) >>)
+                  | n -> raise (Content_error ("invalid boolean value: " ^ string_of_int n))) >>)
       (<:expr< (function
                   | false -> 0
                   | true -> 1) >>);
@@ -650,6 +733,11 @@ let default_rules =
       (fun k v acc -> <:expr< Hashtbl.add $acc$ $k$ $v$; $acc$ >>)
       (fun f l x -> <:expr< Hashtbl.fold $f$ $l$ $x$ >>)
       (fun k v i e -> <:expr< fun $k$ $v$ $i$ -> $e$ >>) ]
+
+let intern_rules =
+  [ signature_serializer "dtype";
+    value_serializer "value";
+    value_serializer "values" ]
 
 let rec longest_tuple t =
   let rec aux len = function

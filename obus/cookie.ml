@@ -32,7 +32,7 @@ let raw_send_message_with_cookie connection header writer reader =
     end
 
 let send_message_with_cookie connection (header, body) =
-  raw_send_message_async_with_cookie connection header (Wire.write_value body) Wire.read_value
+  raw_send_message_async_with_cookie connection header (Connection.write_values body) Connection.read_values
 
 let rec get x = match !x with
   | Waiting x ->

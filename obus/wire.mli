@@ -33,10 +33,12 @@ module Reading : sig
     (** The anounced size of an array does not match is real size *)
   exception Invalid_message_size
     (** The anounced size of the message is incorrent *)
+  exception Invalid_signature
+    (** A marshaled signature is invalid *)
 
   (** Content errors *)
 
-  exception Invalid_signature
+  exception Unexpected_signature
     (** The signature for a variant does not correspond to what we
         expect *)
 end
@@ -50,33 +52,31 @@ end
 external native_byte_order : unit -> int = "caml_native_byte_order"
 
 module LEWriter : sig
-  type 'a t = buffer -> ptr -> 'a -> unit
-  external int_int16 : int t = "caml_writer_le_int_int16"
-  external int_int32 : int t = "caml_writer_le_int_int32"
-  external int_int64 : int t = "caml_writer_le_int_int64"
-  external int_uint16 : int t = "caml_writer_le_int_uint16"
-  external int_uint32 : int t = "caml_writer_le_int_uint32"
-  external int_uint64 : int t = "caml_writer_le_int_uint64"
-  external int32_int32 : int32 t = "caml_writer_le_int32_int32"
-  external int64_int64 : int64 t = "caml_writer_le_int64_int64"
-  external int32_uint32 : int32 t = "caml_writer_le_int32_uint32"
-  external int64_uint64 : int64 t = "caml_writer_le_int64_uint64"
-  external float_double : float t = "caml_writer_le_float_double"
+  external int_int16 : buffer -> ptr -> int -> unit = "caml_writer_le_int_int16"
+  external int_int32 : buffer -> ptr -> int -> unit = "caml_writer_le_int_int32"
+  external int_int64 : buffer -> ptr -> int -> unit = "caml_writer_le_int_int64"
+  external int_uint16 : buffer -> ptr -> int -> unit = "caml_writer_le_int_uint16"
+  external int_uint32 : buffer -> ptr -> int -> unit = "caml_writer_le_int_uint32"
+  external int_uint64 : buffer -> ptr -> int -> unit = "caml_writer_le_int_uint64"
+  external int32_int32 : buffer -> ptr -> int32 -> unit = "caml_writer_le_int32_int32"
+  external int64_int64 : buffer -> ptr -> int64 -> unit = "caml_writer_le_int64_int64"
+  external int32_uint32 : buffer -> ptr -> int32 -> unit = "caml_writer_le_int32_uint32"
+  external int64_uint64 : buffer -> ptr -> int64 -> unit = "caml_writer_le_int64_uint64"
+  external float_double : buffer -> ptr -> float -> unit = "caml_writer_le_float_double"
 end
 
 module BEWriter : sig
-  type 'a t = buffer -> ptr -> 'a -> unit
-  external int_int16 : int t = "caml_writer_be_int_int16"
-  external int_int32 : int t = "caml_writer_be_int_int32"
-  external int_int64 : int t = "caml_writer_be_int_int64"
-  external int_uint16 : int t = "caml_writer_be_int_uint16"
-  external int_uint32 : int t = "caml_writer_be_int_uint32"
-  external int_uint64 : int t = "caml_writer_be_int_uint64"
-  external int32_int32 : int32 t = "caml_writer_be_int32_int32"
-  external int64_int64 : int64 t = "caml_writer_be_int64_int64"
-  external int32_uint32 : int32 t = "caml_writer_be_int32_uint32"
-  external int64_uint64 : int64 t = "caml_writer_be_int64_uint64"
-  external float_double : float t = "caml_writer_be_float_double"
+  external int_int16 : buffer -> ptr -> int -> unit = "caml_writer_be_int_int16"
+  external int_int32 : buffer -> ptr -> int -> unit = "caml_writer_be_int_int32"
+  external int_int64 : buffer -> ptr -> int -> unit = "caml_writer_be_int_int64"
+  external int_uint16 : buffer -> ptr -> int -> unit = "caml_writer_be_int_uint16"
+  external int_uint32 : buffer -> ptr -> int -> unit = "caml_writer_be_int_uint32"
+  external int_uint64 : buffer -> ptr -> int -> unit = "caml_writer_be_int_uint64"
+  external int32_int32 : buffer -> ptr -> int32 -> unit = "caml_writer_be_int32_int32"
+  external int64_int64 : buffer -> ptr -> int64 -> unit = "caml_writer_be_int64_int64"
+  external int32_uint32 : buffer -> ptr -> int32 -> unit = "caml_writer_be_int32_uint32"
+  external int64_uint64 : buffer -> ptr -> int64 -> unit = "caml_writer_be_int64_uint64"
+  external float_double : buffer -> ptr -> float -> unit = "caml_writer_be_float_double"
 end
 
 external pad2 : buffer -> ptr -> ptr = "caml_pad2"
@@ -90,34 +90,32 @@ external zero5 : buffer -> ptr -> unit = "caml_zero5"
 external zero6 : buffer -> ptr -> unit = "caml_zero6"
 external zero7 : buffer -> ptr -> unit = "caml_zero7"
 
-module LEReader = sig
-  type 'a t = buffer -> ptr -> 'a
-  external int_int16 : int t = "caml_reader_le_int_int16"
-  external int_int32 : int t = "caml_reader_le_int_int32"
-  external int_int64 : int t = "caml_reader_le_int_int64"
-  external int_uint16 : int t = "caml_reader_le_int_uint16"
-  external int_uint32 : int t = "caml_reader_le_int_uint32"
-  external int_uint64 : int t = "caml_reader_le_int_uint64"
-  external int32_int32 : int32 t = "caml_reader_le_int32_int32"
-  external int64_int64 : int64 t = "caml_reader_le_int64_int64"
-  external int32_uint32 : int32 t = "caml_reader_le_int32_uint32"
-  external int64_uint64 : int64 t = "caml_reader_le_int64_uint64"
-  external float_double : float t = "caml_reader_le_float_double"
+module LEReader : sig
+  external int_int16 : buffer -> ptr -> int = "caml_reader_le_int_int16"
+  external int_int32 : buffer -> ptr -> int = "caml_reader_le_int_int32"
+  external int_int64 : buffer -> ptr -> int = "caml_reader_le_int_int64"
+  external int_uint16 : buffer -> ptr -> int = "caml_reader_le_int_uint16"
+  external int_uint32 : buffer -> ptr -> int = "caml_reader_le_int_uint32"
+  external int_uint64 : buffer -> ptr -> int = "caml_reader_le_int_uint64"
+  external int32_int32 : buffer -> ptr -> int32 = "caml_reader_le_int32_int32"
+  external int64_int64 : buffer -> ptr -> int64 = "caml_reader_le_int64_int64"
+  external int32_uint32 : buffer -> ptr -> int32 = "caml_reader_le_int32_uint32"
+  external int64_uint64 : buffer -> ptr -> int64 = "caml_reader_le_int64_uint64"
+  external float_double : buffer -> ptr -> float = "caml_reader_le_float_double"
 end
 
 module BEReader : sig
-  type 'a t = buffer -> ptr -> 'a
-  external int_int16 : int t = "caml_reader_be_int_int16"
-  external int_int32 : int t = "caml_reader_be_int_int32"
-  external int_int64 : int t = "caml_reader_be_int_int64"
-  external int_uint16 : int t = "caml_reader_be_int_uint16"
-  external int_uint32 : int t = "caml_reader_be_int_uint32"
-  external int_uint64 : int t = "caml_reader_be_int_uint64"
-  external int32_int32 : int32 t = "caml_reader_be_int32_int32"
-  external int64_int64 : int64 t = "caml_reader_be_int64_int64"
-  external int32_uint32 : int32 t = "caml_reader_be_int32_uint32"
-  external int64_uint64 : int64 t = "caml_reader_be_int64_uint64"
-  external float_double : float t = "caml_reader_be_float_double"
+  external int_int16 : buffer -> ptr -> int = "caml_reader_be_int_int16"
+  external int_int32 : buffer -> ptr -> int = "caml_reader_be_int_int32"
+  external int_int64 : buffer -> ptr -> int = "caml_reader_be_int_int64"
+  external int_uint16 : buffer -> ptr -> int = "caml_reader_be_int_uint16"
+  external int_uint32 : buffer -> ptr -> int = "caml_reader_be_int_uint32"
+  external int_uint64 : buffer -> ptr -> int = "caml_reader_be_int_uint64"
+  external int32_int32 : buffer -> ptr -> int32 = "caml_reader_be_int32_int32"
+  external int64_int64 : buffer -> ptr -> int64 = "caml_reader_be_int64_int64"
+  external int32_uint32 : buffer -> ptr -> int32 = "caml_reader_be_int32_uint32"
+  external int64_uint64 : buffer -> ptr -> int64 = "caml_reader_be_int64_uint64"
+  external float_double : buffer -> ptr -> float = "caml_reader_be_float_double"
 end
 
 external string_match : buffer -> ptr -> string -> int -> bool = "caml_match_string"

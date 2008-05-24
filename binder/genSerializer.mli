@@ -17,6 +17,9 @@ type rule
 val default_rules : rule list
   (** [default_rules] all default rules *)
 
+val intern_rules : rule list
+  (** used to generate some part of the OBus library *)
+
 val rule_alias : caml_type -> caml_type -> rule
   (** [rule_alias typ1 typ2] define a type aliasing *)
 

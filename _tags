@@ -1,3 +1,4 @@
+# -*- conf-mode -*-
 # Syntaxes
 <syntax/*>: camlp4of, use_camlp4
 # Shared code between obus library and binder

@@ -24,10 +24,10 @@ let rec fixed_writer caml_type dbus_type idx expr =
     | "int", "boolean" -> (<:expr< int_uint32 buffer $idx$ $expr$ >>)
     | _ -> (<:expr< $lid:caml_type ^ "_" ^ dbus_type$ buffer  $idx$ $expr$ >>)
 
-let string_reader buf idx len =
+let string_reader idx buf len =
   (<:expr< String.unsafe_blit buffer $idx$ $buf$ 0 $len$ >>)
 
-let string_writer buf idx len =
+let string_writer idx buf len =
   (<:expr< String.unsafe_blit $buf$ 0 buffer $idx$ $len$ >>)
 
 let signature_checker signature idx =
@@ -35,7 +35,7 @@ let signature_checker signature idx =
   let sig_expr = expr_of_str (Printf.sprintf "%c%s\x00" (char_of_int len) signature) in
     (<:expr<
        if not string_match buffer $idx$ $sig_expr$ $expr_of_int (len + 2)$
-       then raise Reading.Invalid_signature
+       then raise Reading.Unexpected_signature
          >>)
 
 let realloc_buffer = (<:expr< realloc_buffer buffer i >>)

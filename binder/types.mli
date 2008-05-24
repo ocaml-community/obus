@@ -47,8 +47,10 @@ val char : caml_type
 val string : caml_type
 val list : caml_type -> caml_type
 val array : caml_type -> caml_type
-val dbus_value : caml_type
-val dbus_types : caml_type
+val obus_value : caml_type
+val obus_values : caml_type
+val obus_dtype : caml_type
+val obus_dtypes : caml_type
 
 type dtype =
   | Tbyte

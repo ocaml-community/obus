@@ -29,25 +29,6 @@ let rec string_of_dtype = function
 
 and string_of_dtypes types = "[" ^ String.concat "; " (List.map string_of_dtype types) ^ "]"
 
-type value =
-  | Byte of char
-  | Boolean of bool
-  | Int16 of int
-  | Int32 of int32
-  | Int64 of int64
-  | Uint16 of int
-  | Uint32 of int32
-  | Uint64 of int64
-  | Double of float
-  | String of string
-  | Signature of dtypes
-  | Object_path of string
-  | Array of dtype * value list
-  | Dict of dtype * dtype * (value * value) list
-  | Structure of value list
-  | Variant of value
-type values = value list
-
 let rec string_of_value = function
   | Byte(c) -> "Byte('" ^ Char.escaped c ^ "')"
   | Boolean(b) -> "Boolean(" ^ (if b then "true" else "false") ^ ")"
@@ -85,10 +66,10 @@ let rec dtype_of_value = function
   | Object_path _ -> Tobject_path
   | Array(t, _) -> Tarray(t)
   | Dict(tk, tv, _) -> Tdict(tk, tv)
-  | Structure(l) -> Tstructure(dtype_of_values l)
+  | Structure(l) -> Tstructure(dtypes_of_values l)
   | Variant _ -> Tvariant
 
-and dtype_of_values values = List.map dtype_of_value values
+and dtypes_of_values values = List.map dtype_of_value values
 
 (** {6 DBus types/values construction} *)
 
@@ -99,63 +80,80 @@ type 'a seq_cstr = dtypes * ('a -> values) * (values -> 'a)
 
 let invalid_type () = raise (Failure "invalid type")
 
+let vbyte x = Byte x
+let vboolean x = Boolean x
+let vint16 x = Int16 x
+let vint32 x = Int32 x
+let vint64 x = Int64 x
+let vuint16 x = Uint16 x
+let vuint32 x = Uint32 x
+let vuint64 x = Uint64 x
+let vdouble x = Double x
+let vstring x = String x
+let vsignature x = Signature x
+let vobject_path x = Object_path x
+let varray t x = Array(t, x)
+let vdict tk tv x = Dict(tk, tv, x)
+let vstructure x = Structure x
+let vvariant x = Variant x
+
 let byte = (Tbyte,
-            (fun x -> Byte x),
+            vbyte,
             (function
                | Byte x -> x
                | _ -> invalid_type ()))
 let boolean = (Tboolean,
-               (fun x -> Boolean x),
+               vboolean,
                (function
                   | Boolean x -> x
                   | _ -> invalid_type ()))
 let int16 = (Tint16,
-             (fun x -> Int16 x),
+             vint16,
              (function
                 | Int16 x -> x
                 | _ -> invalid_type ()))
 let int32 = (Tint32,
-             (fun x -> Int32 x),
+             vint32,
              (function
                 | Int32 x -> x
                 | _ -> invalid_type ()))
 let int64 = (Tint64,
-             (fun x -> Int64 x),
+             vint64,
              (function
                 | Int64 x -> x
                 | _ -> invalid_type ()))
 let uint16 = (Tuint16,
-              (fun x -> Uint16 x),
+              vuint16,
               (function
                  | Uint16 x -> x
                  | _ -> invalid_type ()))
 let uint32 = (Tuint32,
-              (fun x -> Uint32 x),
+              vuint32,
               (function
                  | Uint32 x -> x
                  | _ -> invalid_type ()))
 let uint64 = (Tuint64,
-              (fun x -> Uint64 x),
+              vuint64,
               (function
                  | Uint64 x -> x
                  | _ -> invalid_type ()))
 let double = (Tdouble,
-              (fun x -> Double x),
+              vdouble,
               (function
                  | Double x -> x
                  | _ -> invalid_type ()))
 let string = (Tstring,
-              (fun x -> String x),
+              vstring,
               (function
                  | String x -> x
                  | _ -> invalid_type ()))
 let signature = (Tsignature,
-                 (fun x -> Signature x),
+                 vsignature,
                  (function
                     | Signature x -> x
                     | _ -> invalid_type ()))
 let object_path = (Tobject_path,
-                   (fun x -> Object_path x),
+                   vobject_path,
                    (function
                       | Object_path x -> x
                       | _ -> invalid_type ()))
@@ -175,7 +173,7 @@ let structure (t, f, g) = (Tstructure t,
                               | Structure x -> g x
                               | _ -> invalid_type ()))
 let variant = (Tvariant,
-               (fun x -> Variant x),
+               vvariant,
                (function
                   | Variant x -> x
                   | _ -> invalid_type ()))
@@ -197,191 +195,14 @@ let make_values = make_value
 let get_value (_, _, g) = g
 let get_values = get_value
 
-open Wire
-
-module Writer(W : Writer) =
-struct
-  let rec aux i = function
-    | Tbyte -> W.buffer.[i] <- 'y'; i + 1
-    | Tboolean -> W.buffer.[i] <- 'b'; i + 1
-    | Tint16 -> W.buffer.[i] <- 'n'; i + 1
-    | Tuint16 -> W.buffer.[i] <- 'q'; i + 1
-    | Tint32 -> W.buffer.[i] <- 'i'; i + 1
-    | Tuint32 -> W.buffer.[i] <- 'u'; i + 1
-    | Tint64 -> W.buffer.[i] <- 'x'; i + 1
-    | Tuint64 -> W.buffer.[i] <- 't'; i + 1
-    | Tdouble -> W.buffer.[i] <- 'd'; i + 1
-    | Tstring -> W.buffer.[i] <- 's'; i + 1
-    | Tobject_path -> W.buffer.[i] <- 'o'; i + 1
-    | Tsignature -> W.buffer.[i] <- 'g'; i + 1
-    | Tarray(t) ->
-        W.buffer.[i] <- 'a';
-        aux (i + 1) t
-    | Tdict(tk, tv) ->
-        W.buffer.[i] <- 'a';
-        W.buffer.[i + 1] <- '{';
-        let i = aux (i + 2) tk in
-        let i = aux i tv in
-          W.buffer.[i] <- '}';
-          i + 1
-    | Tstructure(t) ->
-        W.buffer.[i] <- '(';
-        let i = List.fold_left aux i t in
-          W.buffer.[i] <- ')';
-          i + 1
-    | Tvariant ->
-        W.buffer.[i] <- 'v';
-        i + 1
-
-
-  let dtype i t =
-    let j = aux (i + 1) t in
-      W.buffer.[i] <- char_of_int (j - i);
-      W.buffer.[j] <- '\x00';
-      i + 1
-
-  let dtypes i t =
-    let j = List.fold_left aux (i + 1) t in
-      W.buffer.[i] <- char_of_int (j - i);
-      W.buffer.[j] <- '\x00';
-      i + 1
-
-  let rec write_array f i j =
-    let i = W.pad4 i in
-    let k = f j in
-    let len = k - j in
-      if len > Constant.max_array_size
-      then raise (Write_error "array too big!")
-      else begin
-        W.int_int32 i len;
-        k
-      end
-
-  let pad1 x = x
-    (* The length of an array start after alignement padding of the
-       first element, so we must pad before calculate the end of an
-       array *)
-  let pad = function
-    | Tbyte -> pad1
-    | Tboolean -> W.pad4
-    | Tint16 -> W.pad2
-    | Tint32 -> W.pad4
-    | Tint64 -> W.pad8
-    | Tuint16 -> W.pad2
-    | Tuint32 -> W.pad4
-    | Tuint64 -> W.pad8
-    | Tdouble -> W.pad8
-    | Tstring -> W.pad4
-    | Tsignature -> pad1
-    | Tobject_path -> W.pad4
-    | Tarray _ -> W.pad4
-    | Tdict _ -> W.pad4
-    | Tstructure _ -> W.pad8
-    | Tvariant -> pad1
-
-  let rec value i = function
-    | Byte(v) -> W.buffer.[i] <- v; i + 1
-    | Boolean(v) -> let i = W.pad4 i in W.bool_boolean i v; i + 4
-    | Int16(v) -> let i = W.pad2 i in W.int_int16 i v; i + 2
-    | Int32(v) -> let i = W.pad4 i in W.int32_int32 i v; i + 4
-    | Int64(v) -> let i = W.pad8 i in W.int64_int64 i v; i + 8
-    | Uint16(v) -> let i = W.pad2 i in W.int_uint16 i v; i + 2
-    | Uint32(v) -> let i = W.pad4 i in W.int32_uint32 i v; i + 4
-    | Uint64(v) -> let i = W.pad8 i in W.int64_uint64 i v; i + 8
-    | Double(v) -> let i = W.pad8 i in W.float_double i v; i + 8
-    | String(v) -> W.string_string (W.pad4 i) v
-    | Signature(t) -> dtypes i t
-    | Object_path(v) -> W.string_string (W.pad4 i) v
-    | Array(t, v) -> write_array (fun i -> List.fold_left value i v) i (pad t (i + 4))
-    | Dict(_, _, v) -> write_array (fun i -> List.fold_left (fun i (k, v) -> value (value (W.pad8 i) k) v) i v) i (W.pad8 (i + 4))
-    | Structure(v) -> List.fold_left value (W.pad8 i) v
-    | Variant(v) -> let i = dtype i (dtype_of_value v) in value i v
-
-  let values = List.fold_left value
+module type Reader = sig
+  val read_value : buffer -> ptr -> dtype -> value
+  val read_values : buffer -> ptr -> dtypes -> values
 end
 
-module Reader(R : Reader) =
-struct
-  let dtype = read_dtype R.buffer
-  let dtypes = Common.read_until R.buffer '\x00'
-
-  let rec value i = function
-    | Tbyte -> (i + 1, Byte(R.buffer.[i]))
-    | Tboolean -> let i = R.pad4 i in (i + 4, Boolean(R.bool_boolean i))
-    | Tint16 -> let i = R.pad2 i in (i + 2, Int16(R.int_int16 i))
-    | Tint32 -> let i = R.pad4 i in (i + 4, Int32(R.int32_int32 i))
-    | Tint64 -> let i = R.pad8 i in (i + 8, Int64(R.int64_int64 i))
-    | Tuint16 -> let i = R.pad2 i in (i + 2, Uint16(R.int_uint16 i))
-    | Tuint32 -> let i = R.pad4 i in (i + 4, Uint32(R.int32_uint32 i))
-    | Tuint64 -> let i = R.pad8 i in (i + 8, Uint64(R.int64_uint64 i))
-    | Tdouble -> let i = R.pad8 i in (i + 8, Double(R.float_double i))
-    | Tstring -> let i, v = R.string_string (R.pad4 i) in (i, String(v))
-    | Tsignature -> let len = int_of_char R.buffer.[i] in (i + 1 + len, Signature(snd (dtypes (i + 1))))
-    | Tobject_path -> let i, v = R.string_string (R.pad4 i) in (i, Object_path(v))
-    | Tarray(t) ->
-        let i = R.pad4 i in
-        let len = R.int_uint32 i in
-        let i = i + 4 in
-          if len > Constant.max_array_size
-          then raise (Read_error "array too big!")
-          else
-            let i, v = Wire.read_until begin fun i acc ->
-              let i, v = value i t in
-                (i, v :: acc)
-            end [] (i + len) i in
-              (i, Array(t, List.rev v))
-    | Tdict(tk, tv) ->
-        let i = R.pad4 i in
-        let len = R.int_uint32 i in
-        let i = i + 4 in
-          if len > Constant.max_array_size
-          then raise (Read_error "array too big!")
-          else
-            let i = R.pad8 i in
-            let i, v = Wire.read_until begin fun i acc ->
-              let i, k = value (R.pad8 i) tk in
-              let i, v = value i tv in
-                (i, (k, v) :: acc)
-            end [] (i + len) i in
-              (i, Dict(tk, tv, List.rev v))
-    | Tstructure(t) ->
-        let i , v = List.fold_left begin fun (i, acc) t ->
-          let i, v = value i t in
-            (i, v :: acc)
-        end (R.pad8 i, []) t in
-          (i, Structure(List.rev v))
-    | Tvariant ->
-        let len = int_of_char R.buffer.[i] in
-        let _, t = dtype (i + 1) in
-        let i, v = value (i + 2 + len) t in
-          (i, Variant(v))
-
-  let values i t =
-    let i, v = List.fold_left begin fun (i,acc) t ->
-      let i, v = value i t in
-        (i, v :: acc)
-    end (i, []) t in
-      (i, List.rev v)
+module type Writer = sig
+  val write_value : buffer -> ptr -> value -> buffer * ptr
+  val write_values : buffer -> ptr -> values -> buffer * ptr
 end
 
-let write_values value byte_order buffer ptr =
-  match byte_order with
-    | Header.Little_endian ->
-        let module W = Writer(LEWriter(struct let buffer = buffer end)) in
-          W.values ptr value
-    | Header.Big_endian ->
-        let module W = Writer(BEWriter(struct let buffer = buffer end)) in
-          W.values ptr value
-
-let read_values header buffer ptr =
-  let t = (match header.Header.fields.Header.signature with
-             | Some s -> dtypes_of_signature s
-             | _ -> []) in
-    snd (match header.Header.byte_order with
-           | Header.Little_endian ->
-               let module R = Reader(LEReader(struct let buffer = buffer end)) in
-                 R.values ptr t
-           | Header.Big_endian ->
-               let module R = Reader(BEReader(struct let buffer = buffer end)) in
-                 R.values ptr t)
-
+include ValuesRW

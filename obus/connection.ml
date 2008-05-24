@@ -179,11 +179,23 @@ let raw_send_message_no_reply connection header body_writer =
 let raw_add_filter connection reader =
   Protected.update (fun l -> (Raw(reader), Wait_async) :: l) connection.filters
 
+let read_values header byte_order buffer ptr =
+  let t = (match header.fields.Header.signature with
+             | Some s -> Values.dtypes_of_signature s
+             | _ -> []) in
+    match header.byte_order with
+      | Little_endian -> Values.read_values_le buffer ptr
+      | Big_endian -> Values.read_values_be buffer ptr
+
+let write_values body byte_order buffer ptr = match byte_order with
+  | Little_endian -> Values.write_values_le buffer ptr body
+  | Big_endian -> Values.write_values_be buffer ptr body
+
 let send_message_async connection (header, body) f =
-  raw_send_message_async connection header (Values.write_values body)
-    (fun header buffer ptr -> f (header, Values.read_values header buffer ptr))
+  raw_send_message_async connection header (write_values body)
+    (fun header buffer ptr -> f (header, read_values header buffer ptr))
 let send_message_no_reply connection (header, body) =
-  raw_send_message_no_reply connection header (Values.write_values body)
+  raw_send_message_no_reply connection header (write_values body)
 let add_filter connection filter =
   Protected.update (fun l -> (User(filter), Wait_async) :: l) connection.filters
 let add_interface connection interface =
@@ -357,4 +369,4 @@ let raw_send_message_sync connection header body_writer body_reader =
 
 let send_message_sync connection (header, body) =
   raw_send_message_sync connection header
-    (Values.write_values body) (fun header buffer ptr -> (header, Values.read_values header buffer ptr))
+    (write_values body) (fun header buffer ptr -> (header, read_values header buffer ptr))
