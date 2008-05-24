@@ -26,41 +26,61 @@ type dtype =
   | Tvariant
 type dtypes = dtype list
 
-let rec signature_of_dtype_aux buf = function
-  | Tbyte -> Buffer.add_char buf 'y'
-  | Tboolean -> Buffer.add_char buf 'b'
-  | Tint16 -> Buffer.add_char buf 'n'
-  | Tuint16 -> Buffer.add_char buf 'q'
-  | Tint32 -> Buffer.add_char buf 'i'
-  | Tuint32 -> Buffer.add_char buf 'u'
-  | Tint64 -> Buffer.add_char buf 'x'
-  | Tuint64 -> Buffer.add_char buf 't'
-  | Tdouble -> Buffer.add_char buf 'd'
-  | Tstring -> Buffer.add_char buf 's'
-  | Tobject_path -> Buffer.add_char buf 'o'
-  | Tsignature -> Buffer.add_char buf 'g'
-  | Tarray(x) -> Buffer.add_char buf 'a'; signature_of_dtype_aux buf x
-  | Tdict(k, v) ->
-      Buffer.add_char buf 'a';
-      Buffer.add_char buf '{';
-      signature_of_dtype_aux buf k;
-      signature_of_dtype_aux buf v;
-      Buffer.add_char buf '}'
-  | Tstructure(l) ->
-      Buffer.add_char buf '(';
-      List.iter (signature_of_dtype_aux buf) l;
-      Buffer.add_char buf ')'
-  | Tvariant -> Buffer.add_char buf 'v'
+let rec _dtype_signature_size acc = function
+  | Tarray(t) -> _dtype_signature_size (acc + 1) t
+  | Tdict(_, t) -> _dtype_signature_size (acc + 4) t
+  | Tstructure ts-> _dtypes_signature_size (acc + 2) ts
+  | _ -> acc + 1
+and _dtypes_signature_size acc ts = List.fold_left _dtype_signature_size acc ts
 
-let signature_of_dtype dtype =
-  let buf = Buffer.create 42 in
-    signature_of_dtype_aux buf dtype;
-    Buffer.contents buf
+let dtype_signature_size = _dtype_signature_size 0
+let dtypes_signature_size = _dtypes_signature_size 0
 
-let signature_of_dtypes dtypes =
-  let buf = Buffer.create 42 in
-    List.iter (signature_of_dtype_aux buf) dtypes;
-    Buffer.contents buf
+let rec _write_dtype buffer i = function
+  | Tbyte -> String.unsafe_set buffer i 'y'; i + 1
+  | Tboolean -> String.unsafe_set buffer i 'b'; i + 1
+  | Tint16 -> String.unsafe_set buffer i 'n'; i + 1
+  | Tuint16 -> String.unsafe_set buffer i 'q'; i + 1
+  | Tint32 -> String.unsafe_set buffer i 'i'; i + 1
+  | Tuint32 -> String.unsafe_set buffer i 'u'; i + 1
+  | Tint64 -> String.unsafe_set buffer i 'x'; i + 1
+  | Tuint64 -> String.unsafe_set buffer i 't'; i + 1
+  | Tdouble -> String.unsafe_set buffer i 'd'; i + 1
+  | Tstring -> String.unsafe_set buffer i 's'; i + 1
+  | Tobject_path -> String.unsafe_set buffer i 'o'; i + 1
+  | Tsignature -> String.unsafe_set buffer i 'g'; i + 1
+  | Tarray(t) ->
+      String.unsafe_set buffer i 'a';
+      _write_dtype buffer (i + 1) t
+  | Tdict(tk, tv) ->
+      String.unsafe_set buffer i 'a';
+      String.unsafe_set buffer (i + 1) '{';
+      let i = _write_dtype buffer (i + 2) tk in
+      let i = _write_dtype buffer i tv in
+        String.unsafe_set buffer i '}';
+        i + 1
+  | Tstructure(ts) ->
+      String.unsafe_set buffer (i + 1) '(';
+      let i = _write_dtypes buffer i ts in
+        String.unsafe_set buffer i ')';
+        i + 1
+  | Tvariant ->  String.unsafe_set buffer i 'v'; i + 1
+and _write_dtypes buffer = List.fold_left (_write_dtype buffer)
+
+let write_dtype buffer i t = String.unsafe_set buffer (_write_dtype buffer i t) '\x00'
+let write_dtypes buffer i ts = String.unsafe_set buffer (_write_dtypes buffer i ts) '\x00'
+
+let signature_of_dtype t =
+  let len = dtype_signature_size t in
+  let str = String.create len in
+    ignore (_write_dtype str 0 t);
+    str
+
+let signature_of_dtypes ts =
+  let len = dtypes_signature_size ts in
+  let str = String.create len in
+    ignore (_write_dtypes str 0 ts);
+    str
 
 let basic_of_char = function
   | 'y' -> Tbyte
@@ -77,40 +97,40 @@ let basic_of_char = function
   | 'g' -> Tsignature
   | c -> raise (Failure (Printf.sprintf "unknown type code %c" c))
 
-let rec read_dtype str i =
-  match str.[i] with
+let rec _read_dtype buffer i =
+  match String.unsafe_get buffer i with
     | 'a' ->
-        if str.[i + 1] = '{'
+        if String.unsafe_get buffer (i + 1) = '{'
         then begin
-          let tkey = basic_of_char str.[i + 2] in
-          let i, tval = read_dtype str (i + 3) in
-            if str.[i] <> '}'
+          let tk = basic_of_char (String.unsafe_get buffer (i + 2)) in
+          let i, tv = _read_dtype buffer (i + 3) in
+            if String.unsafe_get buffer i <> '}'
             then raise (Failure "'}' expected")
-            else (i + 1, Tdict(tkey, tval))
+            else (i + 1, Tdict(tk, tv))
         end else begin
-          let i, t = read_dtype str (i + 1) in
+          let i, t = _read_dtype buffer (i + 1) in
             (i, Tarray(t))
         end
     | '(' ->
-        let i, t = read_until str ')' (i + 1) in
+        let i, t = read_until ')' buffer (i + 1) in
           (i, Tstructure(t))
     | 'v' -> (i + 1, Tvariant)
     | c -> (i + 1, basic_of_char c)
 
-and read_until str cend i =
-  if str.[i] = cend
+and read_until cend buffer i =
+  if String.unsafe_get buffer i = cend
   then (i + 1, [])
   else
-    let i, hd = read_dtype str i in
-    let i, tl = read_until str cend i in
+    let i, hd = _read_dtype buffer i in
+    let i, tl = read_until cend buffer i in
       (i, hd :: tl)
 
-let rec read_dtypes str limit i =
-  if i = limit
-  then []
-  else
-    let i, hd = read_dtype str i in
-      hd :: read_dtypes str limit i
+let read_dtype buffer i =
+  let i, t = _read_dtype buffer i in
+    if String.unsafe_get buffer i = '\x00'
+    then t
+    else raise (Failure "null char missing after signature of single type")
+let read_dtypes buffer i = snd (read_until '\x00' buffer i)
 
-let dtype_of_signature signature = snd (read_dtype signature 0)
-let dtypes_of_signature signature = read_dtypes signature (String.length signature) 0
+let dtype_of_signature signature = read_dtype (signature ^ "\x00") 0
+let dtypes_of_signature signature = read_dtypes (signature ^ "\x00") 0
