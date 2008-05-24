@@ -38,4 +38,4 @@ let signature_checker signature idx =
        then raise Reading.Invalid_signature
          >>)
 
-let realloc_buffer = (<:expr< Internal.realloc_buffer buffer i >>)
+let realloc_buffer = (<:expr< realloc_buffer buffer i >>)

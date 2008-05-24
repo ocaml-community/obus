@@ -4,5 +4,6 @@ obus/without_threads/ThreadImplem
 obus/AuthLexer
 obus/AddrLexer
 obus/Util
+obus/HeaderRW
 common/Common
 obus/OBus

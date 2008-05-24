@@ -96,10 +96,71 @@ type recv_message = Header.recv * body
 
 let gen_serial connection = Protected.process (fun x -> (x, Int32.succ x)) connection.next_serial
 
+let align i = i + ((8 - i) land 7)
+
+let read_one_message transport buffer =
+  (* Read the minimum for knowing the total size of the message *)
+  assert (transport.Transport.recv !buffer 0 16 = 16);
+  (* We immediatly look for the byte order, then read the header *)
+  let (constant_part_reader,
+       fields_reader,
+       byte_order) = match !buffer.[0] with
+    | 'l' -> (HeaderRW.read_constant_part_le,
+              HeaderRW.read_fields_le,
+              Little_endian)
+    | 'B' -> (HeaderRW.read_constant_part_be,
+              HeaderRW.read_fields_be,
+              Big_endian)
+    | _ -> raise (Wire.Content_error "invalid byte order")
+  in
+  let (message_type,
+       flags,
+       length,
+       fields_length) = constant_part_reader !buffer in
+    (* Header fields array start on byte #16 and message start aligned
+       on a 8-boundary after it, so we have: *)
+  let total_length = align fields_length + length in
+    (* Safety checking *)
+    if fields_length > Constant.max_array_size then
+      raise Wire.Reading.Array_too_big;
+    if total_length > Constant.max_message_size then
+      raise Invalid_argument "message too big";
+
+    assert (transport.Transport.recv !buffer 0 total_length = total_length);
+
+    let i, fields = fields_reader !buffer fields_length in
+      ({ byte_order = byte_order;
+         message_type = message_type;
+         flags = flags;
+         serial = serial;
+         length = length;
+         fields = fields }, align i)
+
+let write_one_message transport buffer header serial body_writer =
+  let (constant_part_writer,
+       fields_writer,
+       byte_order_code) =
+    match header.byte_order with
+      | Little_endian -> (HeaderRW.write_constant_part_le,
+                          HeaderRW.write_fields_le,
+                          'l')
+      | Big_endian -> (HeaderRW.write_constant_part_be,
+                       HeaderRW.write_fields_be,
+                       'B')
+  in
+  let i, new_buffer = fields_writer !buffer header.fields in
+  let length, new_buffer = body_writer new_buffer (align i) in
+    constant_part_writer new_buffer
+      header.message_type
+      header.flags
+      header.serial
+      length;
+    buffer := new_buffer
+
 let write_message connection header serial body_writer =
   Mutex.lock connection.outgoing_buffer_m;
   try
-    MessageRW.write connection.transport connection.outgoing_buffer header serial body_writer;
+    write_one_message connection.transport connection.outgoing_buffer header serial body_writer;
     Mutex.unlock connection.outgoing_buffer_m
   with
       e ->
@@ -142,7 +203,7 @@ let read connection (reader, mode) header body_start =
   wakeup mode
 
 let internal_dispatch connection =
-  let header, body_start = MessageRW.read connection.transport connection.incoming_buffer in
+  let header, body_start = read_one_message connection.transport connection.incoming_buffer in
     (* The body is a lazy value so it is computed at most one time *)
   let body = Lazy.lazy_from_fun (fun () -> Values.read_values header !(connection.incoming_buffer) body_start) in
   let rec aux = function

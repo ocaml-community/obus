@@ -10,7 +10,7 @@ struct
     ["genCode";
      "genSerializer";
      "env";
-     "gen-message-rw";
+     "gen-header-rw";
      "codeConstants";
      "helpers"]
 
@@ -112,5 +112,14 @@ let _ =
         (* For testing programs, let them access to all modules *)
         flag ["ocaml"; "compile"; "test"] & S[A"-I"; A"obus"; A"-I"; A"binder"];
         flag ["ocaml"; "link"; "test"] & S[A"-I"; A"obus"; A"-I"; A"binder"];
+
+        (* Rule for automatically generating some files of the obus
+           library using the binder tool *)
+        rule "obus-header-serializer"
+          ~prod:"obus/headerRW.ml"
+          ~dep:"binder/gen-header-rw.byte"
+          (fun env builder ->
+             (Cmd (Sh "./binder/gen-header-rw.byte > obus/headerRW.ml")))
+
     | _ -> ()
   end

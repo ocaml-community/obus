@@ -121,3 +121,7 @@ module BEReader : sig
 end
 
 external string_match : buffer -> ptr -> string -> int -> bool = "caml_match_string"
+
+val realloc_buffer : string -> int -> string
+  (** [realloc buffer n] return a new buffer bigger than [buffer] with
+      same first [n] bytes *)
