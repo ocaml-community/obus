@@ -584,6 +584,12 @@ let default_rules =
   [ (fun _ -> rule (v"x") (dstructure (v"x")) [< (v"x", v"x") >] []
        (fun reader _ -> [Align 8 :: rflat reader])
        (fun writer _ -> [Align 8 :: wflat writer]));
+    (fun _ -> rule (v"x") (cons (v"x") nil) [< (v"x", v"x") >] []
+       (fun x_reader _ -> x_reader)
+       (fun x_writer _ -> x_writer));
+    (fun _ -> rule (cons (v"x") nil) (v"x") [< (v"x", v"x") >] []
+       (fun x_reader _ -> x_reader)
+       (fun x_writer _ -> x_writer));
     (fun _ -> rule (cons (v"x") (v"y")) (cons (v"x") (v"y")) [< (v"x", v"x"); (v"y", v"y") >] []
        (fun x_reader y_reader _ -> x_reader @ y_reader)
        (fun x_writer y_writer _ -> x_writer @ y_writer));
@@ -633,10 +639,35 @@ let default_rules =
       (fun f l x -> <:expr< Hashtbl.fold $f$ $l$ $x$ >>)
       (fun k v i e -> <:expr< fun $k$ $v$ $i$ -> $e$ >>) ]
 
-let gen part trace rules camlt dbust env =
+let rec longest_tuple t =
+  let rec aux len = function
+    | Type(_, args) -> List.fold_left aux len args
+    | Var _ -> len
+    | Nil -> len
+    | Cons(x, y) as t -> let l = list_of_tuple t in
+        List.fold_left aux (max len (List.length l)) l
+  in
+    aux 0 t
+
+(* Rules for inlining tuples *)
+let dynamic_rules flat ta tb =
+  Util.gen_list
+    (fun n ->
+       let vars = Util.gen_list (fun n -> v (string_of_int n)) 0 n in
+         Generate.rule
+           (cons (v"x") (v"y"))
+           (tuple (vars @ [v"y"])) [< (v"x", tuple vars); (v"y", v"y") >] []
+           (fun x y _ -> flat x :: y))
+    0 (max (longest_tuple ta) (longest_tuple tb))
+
+let gen part flat trace rules camlt dbust env =
   let dbust = typ_of_dbus_type dbust in
   let env = ref env in
-    match Generate.generate ~trace:trace (List.map (fun f -> part (f env)) rules) camlt dbust with
+    match
+      Generate.generate ~trace:trace
+        (dynamic_rules flat camlt dbust @ List.map (fun f -> part (f env)) rules)
+        camlt dbust
+    with
       | None -> failwith
           (Printf.sprintf
              "cannot find a convertion between this caml type: %s and this dbus type: %s"
@@ -644,5 +675,5 @@ let gen part trace rules camlt dbust env =
              (string_of_type dbust))
       | Some x -> (!env, List.flatten x)
 
-let gen_reader = gen fst
-let gen_writer = gen snd
+let gen_reader = gen fst rflat
+let gen_writer = gen snd wflat

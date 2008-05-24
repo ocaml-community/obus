@@ -21,13 +21,9 @@ type typ =
 
 let typ id args = Type(id, args)
 let v x = Var(x)
-let cons x = function
-  | Nil -> x
-  | y -> Cons(x, y)
+let rec cons x y = Cons(x, y)
 let nil = Nil
-let tuple = function
-  | [t] -> t
-  | l ->  List.fold_right (fun x acc -> Cons(x, acc)) l Nil
+let tuple l = List.fold_right (fun x y -> Cons(x, y)) l Nil
 let rec list_of_tuple = function
   | Cons(x, y) -> x :: list_of_tuple y
   | Nil -> []
@@ -36,16 +32,16 @@ let rec list_of_tuple = function
 let string_of_type =
   let at_top x = x
   and not_at_top x = "(" ^ x ^ ")" in
-  let rec aux top = function
+  let rec aux typtop tuptop = function
     | Type(t, []) -> t
     | Type(t, args) ->
-        top (t ^ String.concat "" (List.map (fun t -> " " ^ aux not_at_top t) args))
+        typtop (t ^ String.concat "" (List.map (fun t -> " " ^ aux not_at_top not_at_top t) args))
     | Cons _ as l ->
-        top (String.concat " * " (List.map (aux at_top) (list_of_tuple l)))
+        tuptop (String.concat " * " (List.map (aux at_top not_at_top) (list_of_tuple l)))
     | Nil -> "()"
     | Var(x) -> "'" ^ x
   in
-    aux at_top
+    aux at_top at_top
 
 include Common
 
@@ -56,6 +52,7 @@ let signature_of_dbus_type = signature_of_dtypes
 
 type caml_type = typ
 
+let unit = typ "unit" []
 let int = typ "int" []
 let int32 = typ "int32" []
 let int64 = typ "int64" []

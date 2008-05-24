@@ -10,33 +10,22 @@
 type var = string
 
 type typ =
-    private
   | Type of string * typ list
   | Cons of typ * typ
   | Nil
   | Var of var
 
-(** Note: all creation functions ensures that a value of type typ
-    has never the form [Cons(t, Nil)], because it represent the same
-    type as [t]. *)
-
 val v : string -> typ
-  (** [v x] create a variable *)
-
 val typ : string -> typ list -> typ
-  (** [typ id args] create a new type *)
-
 val cons : typ -> typ -> typ
-  (** [cons x y] create a cons containing [x] and [y]. If [y] is [Nil]
-      then [cons x y] is [x]. *)
 val nil : typ
-
 val tuple : typ list -> typ
-  (** [tuple l] create a tuple from a list of types *)
+  (** Fonctionnal version of typ constructors *)
 
 val list_of_tuple : typ -> typ list
   (** [list_of_tuple tup] return the list of types contained in
-      [tup]. *)
+      [tup]. Return a list containing only [tup] if it is not a
+      tuple. *)
 
 val string_of_type : typ -> string
   (** [string_of_type typ] return a string representation of the
@@ -48,6 +37,7 @@ type patt = Camlp4.PreCast.Ast.patt
 
 type caml_type = typ
 
+val unit : caml_type
 val int : caml_type
 val int32 : caml_type
 val int64 : caml_type
