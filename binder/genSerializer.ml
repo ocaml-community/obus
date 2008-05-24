@@ -411,14 +411,13 @@ type record_field =
   | Fake of expr * expr
 
 let rule_record typ fields _ =
-  let vars = Util.gen_names "field" fields in
   let names = List.map fst fields in
   let reals = Util.filter_map (function
                                  | F(name) -> Some(name)
                                  | Fake _ -> None) names in
   let count = List.length reals in
-    rule typ (tuple (List.map v vars)) [<>] (List.map2 (fun (_, t) x -> (t, v x)) fields vars)
-      (fun readers ->
+    rule typ (v"x") [< (tuple (List.map snd fields), v"x") >] []
+      (fun readers _ ->
          let rec flat names readers = match names, readers with
            | [], readers -> List.flatten readers
            | F n :: names, reader :: readers ->
@@ -434,7 +433,7 @@ let rule_record typ fields _ =
                   Update_env (Env.add (-1))]
                @ flat names readers
            | _ -> assert false in
-           [flat names (List.map rflat readers)
+           [flat names readers
             @ [Expr(false,
                     fun env ->
                       bind
@@ -444,7 +443,7 @@ let rule_record typ fields _ =
                               (fun name id -> (ident_of_string name, expr_of_id id))
                               reals (Env.lasts count env))));
                Update_env (Env.add (1 - count))]])
-      (fun writers ->
+      (fun writers _ ->
          let rec flat names writers = match names, writers with
            | [], writers -> List.flatten writers
            | F n :: names, writer :: writers ->
@@ -463,7 +462,7 @@ let rule_record typ fields _ =
                               (fun name id -> (ident_of_string name, patt_of_id id))
                               reals (Env.lasts count env)))
                         (expr_of_id (Env.nth (count - 1) env)))
-            :: flat names (List.map wflat writers)])
+            :: flat names writers])
 
 let sig_matcher dbust =
   let dbus_sig = signature_of_dbus_type dbust in
