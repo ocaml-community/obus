@@ -45,3 +45,6 @@ val lasts : int -> t -> Types.ident list
 val slice : int -> int -> t -> Types.ident list
   (** [slice n m env] return the lasts [m] identifier starting from
       [n] of the environment *)
+
+val all : t -> Types.ident list
+  (** [all env] return all identifier in the environment *)

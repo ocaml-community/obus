@@ -22,4 +22,4 @@ val parse_xml : string -> Xml.xml
 
 val gen_names : string -> 'a list -> string list
 
-val gen_list : ('a -> 'a) -> 'a -> int -> 'a list
+val gen_list : (int -> 'a) -> int -> int -> 'a list

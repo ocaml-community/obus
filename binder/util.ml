@@ -63,9 +63,9 @@ let parse_xml fname =
 let gen_names prefix l =
   List.rev (snd (List.fold_left (fun (i, acc) _ -> (i + 1, (prefix ^ string_of_int i) :: acc)) (0, []) l))
 
-let gen_list f x count =
-  let rec aux x = function
-    | 0 -> []
-    | n -> x :: aux (f x) (n - 1)
+let gen_list f from count =
+  let rec aux acc = function
+    | 0 -> acc
+    | n -> aux (f (n + from - 1) :: acc) (n - 1)
   in
-    aux x count
+    aux [] count

@@ -37,7 +37,9 @@ let idpatt_of_string name =
   then Ast.PaVrn(_loc, name)
   else (patt_of_id (ident_of_string name))
 
-let bind_patt patt value expr = (<:expr< let $patt$ = $value$ in $expr$ >>)
+let bind_patt patt value expr = match patt, value with
+  | (<:patt< $id:a$ >>, <:expr< $id:b$ >>) when a = b -> expr
+  | _ -> (<:expr< let $patt$ = $value$ in $expr$ >>)
 let bind id = bind_patt (patt_of_id id)
 let seq exprs = Ast.exSem_of_list exprs
 let app a b = match a with

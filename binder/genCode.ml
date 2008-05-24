@@ -12,6 +12,10 @@ open AbstractCode
 open CodeConstants
 open Helpers
 
+let len_plus = function
+  | 0 -> (<:expr< len >>)
+  | n -> (<:expr< len + $expr_of_int n$ >>)
+
 let rec generate_reader for_array env instructions return_expr =
   let check_size expr next = match for_array with
     | true ->
@@ -41,7 +45,7 @@ let rec generate_reader for_array env instructions return_expr =
                      $acc$
                      >>)
             | Check_size_fixed n -> check_size <:expr< $expr_of_int n$ >> acc
-            | Check_size_dynamic n -> check_size <:expr< len + $expr_of_int n$ >> acc
+            | Check_size_dynamic n -> check_size (len_plus n) acc
             | Check_array_size(gap, base_size) ->
                 (<:expr<
                    if ($len_plus gap$) mod $expr_of_int base_size$ <> 0
@@ -54,7 +58,7 @@ let rec generate_reader for_array env instructions return_expr =
                      >>)
             | Advance_dynamic(x) ->
                 (<:expr<
-                   let i = i + len + $expr_of_int x$ in
+                   let i = i + $len_plus x$ in
                      $acc$
                      >>)
             | Expr(_, f) -> f env acc
@@ -98,7 +102,7 @@ let rec generate_writer for_array env instructions return_expr =
                      $acc$
                      >>)
             | Check_size_fixed n -> check_size <:expr< $expr_of_int n$ >> acc
-            | Check_size_dynamic n -> check_size <:expr< len + $expr_of_int n$ >> acc
+            | Check_size_dynamic n -> check_size (len_plus n) acc
             | Check_array_size _ -> assert false
             | Advance_fixed(x, false) ->
                 (<:expr<
@@ -119,7 +123,7 @@ let rec generate_writer for_array env instructions return_expr =
                    >>)
             | Advance_dynamic(x) ->
                 (<:expr<
-                   let i = i + len + $expr_of_int x$ in
+                   let i = i + $len_plus x$ in
                      $acc$
                      >>)
             | Expr(_, f) -> f env acc

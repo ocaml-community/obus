@@ -14,15 +14,15 @@ let rec fixed_reader caml_type dbus_type idx =
   match caml_type, dbus_type with
     | "char", "byte" -> (<:expr< String.unsafe_get buffer $idx$ >>)
     | "int", "byte" -> (<:expr< Char.code (String.unsafe_get buffer $idx$) >>)
-    | "int", "boolean" -> (<:expr< int_uint32 $idx$ >>)
-    | _ -> (<:expr< $lid:caml_type ^ "_" ^ dbus_type$ $idx$ >>)
+    | "int", "boolean" -> (<:expr< int_uint32 buffer $idx$ >>)
+    | _ -> (<:expr< $lid:caml_type ^ "_" ^ dbus_type$ buffer $idx$ >>)
 
 let rec fixed_writer caml_type dbus_type idx expr =
   match caml_type, dbus_type with
     | "char", "byte" -> (<:expr< String.unsafe_set buffer $idx$ $expr$ >>)
     | "int", "byte" -> (<:expr< String.unsafe_set buffer $idx$ (Char.unsafe_chr $expr$) >>)
-    | "int", "boolean" -> (<:expr< int_uint32 $idx$ $expr$ >>)
-    | _ -> (<:expr< $lid:caml_type ^ "_" ^ dbus_type$ $idx$ $expr$ >>)
+    | "int", "boolean" -> (<:expr< int_uint32 buffer $idx$ $expr$ >>)
+    | _ -> (<:expr< $lid:caml_type ^ "_" ^ dbus_type$ buffer  $idx$ $expr$ >>)
 
 let string_reader buf idx len =
   (<:expr< String.unsafe_blit buffer $idx$ $buf$ 0 $len$ >>)

@@ -61,7 +61,7 @@ let rflat readers =
                      bind
                        (Env.nth (count - 1) env)
                        (Ast.exCom_of_list
-                          (List.map (fun x -> <:expr< $id:x$ >>) (Env.lasts count env)))
+                          (List.map expr_of_id (Env.lasts count env)))
                        next);
               Update_env (Env.add (1 - count))]
 
@@ -76,8 +76,7 @@ let wflat writers =
                       bind_patt
                         (Ast.paCom_of_list
                            (List.rev
-                              (List.map (fun x -> <:patt< $id:x$ >>)
-                                 (Env.lasts count env))))
+                              (List.map patt_of_id (Env.lasts count env))))
                         (expr_of_id (Env.nth (count - 1) env))
                         next)])
     @ List.flatten writers
@@ -572,13 +571,12 @@ let rule_record_option typ key_type fields env =
                               :: wflat key_writer
                               @ sig_writer dbust
                               @ wflat writer) in
-                           let opt = optimize 0 1 instrs in
-                           let instrs = opt.opt_initial_check @ opt.opt_code in
+                           let opt = optimize true 0 1 instrs in
                              <:expr<
                                let (buffer, i) = match $id:Env.last env$.$ident_of_string name$ with
                                  | None -> (buffer, i)
                                  | Some($id:Env.nth (-1) env$) ->
-                                     $GenCode.generate_writer true env instrs (fun env -> <:expr< (buffer, i) >>)$
+                                     $GenCode.generate_writer true env opt.opt_code (fun env -> <:expr< (buffer, i) >>)$
                                in $acc$
                                   >>)
                         fields writers
