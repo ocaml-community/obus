@@ -13,7 +13,7 @@ open AbstractCode
 type optimize_result = {
   opt_code : code;
   opt_size : int option;
-  opt_initial_check : code;
+  opt_without_initial_check : code;
   opt_alignment : int;
   opt_relative_position : int;
 }
@@ -22,10 +22,10 @@ type optimize_result = {
    optimized code plus the padding after the execution of the
    instruction with the given initial padding. It must be the first
    optimization. *)
-let rec optimize_padding relative_pos padding = function
+let rec optimize_padding padding_important relative_pos padding = function
   | instr :: instrs ->
       let next is relative_pos padding =
-        let (relative_pos, padding, instrs) = optimize_padding relative_pos padding instrs in
+        let (relative_pos, padding, instrs) = optimize_padding padding_important relative_pos padding instrs in
           (relative_pos, padding, is @ instrs) in
         begin match instr with
           | Align 1 ->
@@ -46,7 +46,7 @@ let rec optimize_padding relative_pos padding = function
                        nothing to do *)
                     next [] relative_pos padding
                   else
-                    next [Advance_fixed(diff, true)]
+                    next [Advance_fixed(diff, padding_important)]
                       ((relative_pos + diff) mod padding) padding
           | Reset_padding(relative_pos, padding) ->
               next [] relative_pos padding
@@ -57,7 +57,7 @@ let rec optimize_padding relative_pos padding = function
                 [Branches(expr,
                            List.map
                              (fun (patt, code, ret) ->
-                                (patt, (let (_, _, x) = optimize_padding relative_pos padding code in x), ret))
+                                (patt, (let (_, _, x) = optimize_padding padding_important relative_pos padding code in x), ret))
                              brs)] relative_pos padding
           | _ -> next [instr] relative_pos padding
         end
@@ -144,18 +144,18 @@ let optimize_advance code =
   in
     aux code
 
-let optimize rel_pos padding code =
-  let (rel_pos_end, padding_end, code) = optimize_padding rel_pos padding code in
+let optimize padding_important rel_pos padding code =
+  let (rel_pos_end, padding_end, code) = optimize_padding padding_important rel_pos padding code in
   let size = size code in
   let count, code = optimize_check_size code in
-  let initial_check_instrs = match count with
-    | 0 -> []
-    | _ -> [Check_size_fixed count] in
   let code = optimize_advance code in
+  let with_initial_check = match count with
+    | 0 -> code
+    | _ -> Check_size_fixed count :: code in
     {
-      opt_code = code;
+      opt_code = with_initial_check;
       opt_size = size;
-      opt_initial_check = initial_check_instrs;
+      opt_without_initial_check = code;
       opt_alignment = padding_end;
       opt_relative_position = rel_pos_end;
     }

@@ -15,8 +15,9 @@ type optimize_result = {
   (** Optimized code *)
   opt_size : int option;
   (** Size of value readen/written if fixed and calculable *)
-  opt_initial_check : code;
-  (** Initial size checking instructions *)
+  opt_without_initial_check : code;
+  (** Same as [opt_code] but without the initial instruction for size
+      checking *)
   opt_alignment : int;
   (** Guarenteed pointer alignement after execution of the caml
       expression *)
@@ -25,9 +26,12 @@ type optimize_result = {
       after execution *)
 }
 
-val optimize : int -> int -> code -> optimize_result
-  (** [optimize rel_pos alignement code] optimize and compile the
-      given abstract code.
+val optimize : bool -> int -> int -> code -> optimize_result
+  (** [optimize padding_important rel_pos alignement code] optimize
+      and compile the given abstract code.
+
+      [padding_important] tell weather make a difference between real
+      Advance instructions and ones generated for padding.
 
       [rel_pos] and [alignement] are the guarenteed alignment and
       relative position at the beginning of code execution *)
