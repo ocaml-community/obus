@@ -1,16 +1,17 @@
-# -*- conf-mode -*-
+# -*- conf -*-
 # Syntaxes
 <syntax/*>: camlp4of, use_camlp4
 # Shared code between obus library and binder
 "common": include
-# This let modules of the library to have access to thread module
-# signatures
-<obus/**>: threadsigs
+# Thread module signatures
+"obus/threadsigs": include
 # Real thread modules need the thread library
 <obus/with_threads/*>: thread
+# Link OBus with the C stubs (depends on Config.use_c_stubs in myocamlbuild.ml)
+<obus{-thread,}.cm{x,}a>: wire_stubs
 # Tags for the binder and the binding plugin library
 <binder/*.*>: pkg_xml-light, pkg_str, use_camlp4
 # Tests and samples
-<samples/**>: pkg_unix, samples, camlp4o, pa_dbus_typval
-<test/**>: samples-binding, use_camlp4, pkg_str, pkg_xml-light
-<test/*.ml>: camlp4of, pa_gen_code
+<samples/**>: pkg_unix, use_obus, camlp4o, pa_dbus_typval
+<test/**>: use_obus, use_obus-bingind, use_camlp4, pkg_str, pkg_xml-light
+<test/*.ml>: camlp4of

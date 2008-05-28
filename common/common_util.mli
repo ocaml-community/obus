@@ -1,6 +1,6 @@
 (*
- * common_util_interf.mli
- * ----------------------
+ * common_util.mli
+ * ---------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -15,3 +15,5 @@ module type S = sig
   val select : 'a -> ('a -> 'b option) list -> 'b list
   val exn_to_opt : ('a -> 'b) -> 'a -> 'b option
 end
+
+include S

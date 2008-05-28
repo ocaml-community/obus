@@ -58,3 +58,18 @@ type ('a, 'b) t = {
 }
 type send = (unit, unit) t
 type recv = (int, serial) t
+
+open Wire
+
+module type Reader = sig
+  val read_constant_part : buffer -> message_type * flags * int * serial * int
+  val read_fields : buffer -> int -> fields
+end
+
+module type Writer = sig
+  val write_constant_part : buffer -> message_type -> flags -> int -> serial -> unit
+  val write_fields : buffer -> fields -> buffer * int
+end
+
+;;
+INCLUDE "obus/header-generated.ml"

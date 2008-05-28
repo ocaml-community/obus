@@ -7,6 +7,9 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Camlp4.PreCast
+let _loc = Loc.ghost
+
 type t = {
   value : int;
   index : int;

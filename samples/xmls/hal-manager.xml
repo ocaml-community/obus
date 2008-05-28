@@ -1,12 +1,19 @@
 <node>
-  <interface name="org.freedesktop.DBus.Introspectable">
+  <variant name="truc" polymorphe="true">
+    <constructor name="Truc" type="s" ctype="string"/>
+  </variant>
+  <exception name="machin" type="int"/>
+  <record name="truc">
+    <field name="machin" ctype="bidule"/>
+  </record>
+  <interface name="org.freedesktop.DBus.Introspectable" cname="Org.Freedesktop.DBus.Introspectable">
     <method name="Introspect">
       <arg name="data" direction="out" type="s"/>
     </method>
   </interface>
   <interface name="org.freedesktop.Hal.Manager">
-    <method name="GetAllDevices">
-      <arg name="devices" direction="out" type="ao"/>
+    <method name="GetAllDevices" cname="get_all_devices" ctype="string -> string -> string -> unit">
+      <arg name="devices" direction="out" type="ao" ctype="string array"/>
     </method>
       <method name="GetAllDevicesWithProperties">
         <arg name="devices_with_props" direction="out" type="a(oa{sv})"/>

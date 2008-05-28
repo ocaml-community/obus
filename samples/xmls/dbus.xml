@@ -5,6 +5,11 @@
     </method>
   </interface>
   <interface name="org.freedesktop.DBus">
+
+    <flag name="set_name_reply">
+      <def name="truc" key="0"/>
+    </flag>
+
     <method name="Hello">
       <arg direction="out" type="s"/>
     </method>
@@ -26,11 +31,11 @@
       <arg direction="in" type="s"/>
       <arg direction="out" type="b"/>
     </method>
-    <method name="ListNames">
-      <arg direction="out" type="as"/>
+    <method name="ListNames" cname="list_names">
+      <arg direction="out" type="as" ctype="string array"/>
     </method>
     <method name="ListActivatableNames">
-      <arg direction="out" type="as"/>
+      <arg direction="out" type="as" ctype="string array"/>
     </method>
     <method name="AddMatch">
       <arg direction="in" type="s"/>

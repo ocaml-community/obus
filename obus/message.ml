@@ -41,7 +41,7 @@ let method_call flags destination path interface member body =
                   path = Some(path);
                   interface = Some(interface);
                   member = Some(member);
-                  signature = Some(Values.signature_of_dtypes (Values.dtype_of_values body)) }
+                  signature = Some(Values.signature_of_dtypes (Values.dtypes_of_values body)) }
    },
    body)
 
@@ -58,7 +58,7 @@ let method_reply header body =
                   path = header.fields.path;
                   interface = header.fields.interface;
                   member = header.fields.member;
-                  signature = Some(Values.signature_of_dtypes (Values.dtype_of_values body)) }
+                  signature = Some(Values.signature_of_dtypes (Values.dtypes_of_values body)) }
    },
    body)
 
@@ -80,7 +80,7 @@ let error header error_name error_message =
                     interface = header.fields.interface;
                     member = header.fields.member;
                     error_name = Some(error_name);
-                    signature = Some(Values.signature_of_dtypes (Values.dtype_of_values body)) }
+                    signature = Some(Values.signature_of_dtypes (Values.dtypes_of_values body)) }
      },
      body)
 
@@ -95,6 +95,6 @@ let signal path interface member body =
                   path = Some(path);
                   interface = Some(interface);
                   member = Some(member);
-                  signature = Some(Values.signature_of_dtypes (Values.dtype_of_values body)) }
+                  signature = Some(Values.signature_of_dtypes (Values.dtypes_of_values body)) }
    },
    body)

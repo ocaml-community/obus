@@ -16,7 +16,7 @@ open Values
 
 let _ =
   (* Open a connection with the message bus *)
-  let connection = Connection.of_addresses (Address.session ()) false in
+  let connection = Connection.of_addresses (Address.session ()) in
     (* Now send a "Hello", this is required before sending any other
        messages. The message bus send us a unique connection name that
        is valid for the lifetime of the message bus. *)

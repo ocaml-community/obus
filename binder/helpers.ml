@@ -7,6 +7,10 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Camlp4.PreCast
+
+let _loc = Loc.ghost
+
 let dot_regexp = Str.regexp "\\."
 
 let ident_of_string name =

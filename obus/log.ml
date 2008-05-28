@@ -27,17 +27,19 @@ module Make(What : sig val var : string end) =
 struct
   let (authentification,
        transport,
-       connection) =
+       connection,
+       serialization) =
   try
     let s = Sys.getenv What.var in
       if String.contains s '*'
-      then (true, true, true)
+      then (true, true, true, true)
       else let sections = split s in
         (List.mem "authentification" sections,
          List.mem "transport" sections,
-         List.mem "connection" sections)
+         List.mem "connection" sections,
+         List.mem "serialization" sections)
   with
-      Not_found -> (false, false, false)
+      Not_found -> (false, false, false, false)
 end
 
 module Verbose = Make(struct let var = "OBUSLOG" end)

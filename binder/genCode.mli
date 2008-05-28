@@ -10,10 +10,15 @@
 open AbstractCode
 open Types
 
-val generate_reader : bool -> Env.t -> code -> (Env.t -> expr) -> expr
-  (** [generate_reader for_array env code return_expr] generate caml
-      expression from abstract code for unmarshaling *)
+val generate_reader : bool -> bool -> Env.t -> code -> (Env.t -> expr) -> expr
+  (** [generate_reader for_array remove_final_adv env code
+      return_expr] generate caml expression from abstract code for
+      unmarshaling.
 
-val generate_writer : bool -> Env.t -> code -> (Env.t -> expr) -> expr
-  (** [generate_writer for_array env code return_expr] generate caml
-      expression from abstract code for marshaling *)
+      [remove_final_adv] tell weather to keep or not the final [let i =
+      ... in ...] *)
+
+val generate_writer : bool -> bool -> Env.t -> code -> (Env.t -> expr) -> expr
+  (** [generate_writer for_array remove_final_adv env code
+      return_expr] generate caml expression from abstract code for
+      marshaling *)

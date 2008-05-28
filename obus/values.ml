@@ -9,6 +9,44 @@
 
 include Common
 
+type value =
+  | Byte of char
+  | Boolean of bool
+  | Int16 of int
+  | Int32 of int32
+  | Int64 of int64
+  | Uint16 of int
+  | Uint32 of int32
+  | Uint64 of int64
+  | Double of float
+  | String of string
+  | Signature of dtypes
+  | Object_path of string
+  | Array of dtype * value list
+  | Dict of dtype * dtype * (value * value) list
+  | Structure of value list
+  | Variant of value
+type values = value list
+
+let rec dtype_of_value = function
+  | Byte _ -> Tbyte
+  | Boolean _ -> Tboolean
+  | Int16 _ -> Tint16
+  | Int32 _ -> Tint32
+  | Int64 _ -> Tint64
+  | Uint16 _ -> Tuint16
+  | Uint32 _ -> Tuint32
+  | Uint64 _ -> Tuint64
+  | Double _ -> Tdouble
+  | String _ -> Tstring
+  | Signature _ -> Tsignature
+  | Object_path _ -> Tobject_path
+  | Array(t, _) -> Tarray(t)
+  | Dict(tk, tv, _) -> Tdict(tk, tv)
+  | Structure(l) -> Tstructure(dtypes_of_values l)
+  | Variant _ -> Tvariant
+and dtypes_of_values values = List.map dtype_of_value values
+
 let rec string_of_dtype = function
   | Tbyte -> "Byte"
   | Tboolean -> "Boolean"
@@ -26,7 +64,6 @@ let rec string_of_dtype = function
   | Tdict(tk, tv) -> "Dict(" ^ string_of_dtype tk ^ ", " ^ string_of_dtype tv ^ ")"
   | Tstructure(t) -> "Structure(" ^ string_of_dtypes t ^ ")"
   | Tvariant -> "Variant"
-
 and string_of_dtypes types = "[" ^ String.concat "; " (List.map string_of_dtype types) ^ "]"
 
 let rec string_of_value = function
@@ -48,28 +85,7 @@ let rec string_of_value = function
         (List.map (fun (k, v) -> string_of_value k ^ ", " ^ string_of_value v) vs) ^ "])"
   | Structure(t) -> "Structure(" ^ string_of_values t ^ ")"
   | Variant(x) -> "Variant(" ^ string_of_value x ^ ")"
-
 and string_of_values values = "[" ^ String.concat "; " (List.map string_of_value values) ^ "]"
-
-let rec dtype_of_value = function
-  | Byte _ -> Tbyte
-  | Boolean _ -> Tboolean
-  | Int16 _ -> Tint16
-  | Int32 _ -> Tint32
-  | Int64 _ -> Tint64
-  | Uint16 _ -> Tuint16
-  | Uint32 _ -> Tuint32
-  | Uint64 _ -> Tuint64
-  | Double _ -> Tdouble
-  | String _ -> Tstring
-  | Signature _ -> Tsignature
-  | Object_path _ -> Tobject_path
-  | Array(t, _) -> Tarray(t)
-  | Dict(tk, tv, _) -> Tdict(tk, tv)
-  | Structure(l) -> Tstructure(dtypes_of_values l)
-  | Variant _ -> Tvariant
-
-and dtypes_of_values values = List.map dtype_of_value values
 
 (** {6 DBus types/values construction} *)
 
@@ -195,6 +211,8 @@ let make_values = make_value
 let get_value (_, _, g) = g
 let get_values = get_value
 
+open Wire
+
 module type Reader = sig
   val read_value : buffer -> ptr -> dtype -> value
   val read_values : buffer -> ptr -> dtypes -> values
@@ -205,4 +223,5 @@ module type Writer = sig
   val write_values : buffer -> ptr -> values -> buffer * ptr
 end
 
-include ValuesRW
+;;
+INCLUDE "obus/values-generated.ml"

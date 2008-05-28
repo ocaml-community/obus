@@ -23,7 +23,7 @@ module ObjectSet = SSet
 type guid = Address.guid
 
 type 'a reader = Header.recv -> string -> int -> 'a
-type writer = byte_order -> string -> int -> int
+type writer = byte_order -> string -> int -> string * int
 
 type waiting_mode =
   | Wait_sync of Mutex.t
@@ -105,57 +105,61 @@ let read_one_message transport buffer =
   let (constant_part_reader,
        fields_reader,
        byte_order) = match !buffer.[0] with
-    | 'l' -> (HeaderRW.read_constant_part_le,
-              HeaderRW.read_fields_le,
+    | 'l' -> (Header.LEReader.read_constant_part,
+              Header.LEReader.read_fields,
               Little_endian)
-    | 'B' -> (HeaderRW.read_constant_part_be,
-              HeaderRW.read_fields_be,
+    | 'B' -> (Header.BEReader.read_constant_part,
+              Header.BEReader.read_fields,
               Big_endian)
     | _ -> raise (Wire.Content_error "invalid byte order")
   in
   let (message_type,
        flags,
        length,
+       serial,
        fields_length) = constant_part_reader !buffer in
     (* Header fields array start on byte #16 and message start aligned
        on a 8-boundary after it, so we have: *)
-  let total_length = align fields_length + length in
+  let body_start = align fields_length in
+  let total_length = body_start + length in
     (* Safety checking *)
     if fields_length > Constant.max_array_size then
       raise Wire.Reading.Array_too_big;
     if total_length > Constant.max_message_size then
-      raise Invalid_argument "message too big";
+      raise (Invalid_argument "message too big");
 
     assert (transport.Transport.recv !buffer 0 total_length = total_length);
 
-    let i, fields = fields_reader !buffer fields_length in
+    let fields = fields_reader !buffer fields_length in
       ({ byte_order = byte_order;
          message_type = message_type;
          flags = flags;
          serial = serial;
          length = length;
-         fields = fields }, align i)
+         fields = fields }, body_start)
 
 let write_one_message transport buffer header serial body_writer =
   let (constant_part_writer,
        fields_writer,
        byte_order_code) =
     match header.byte_order with
-      | Little_endian -> (HeaderRW.write_constant_part_le,
-                          HeaderRW.write_fields_le,
+      | Little_endian -> (Header.LEWriter.write_constant_part,
+                          Header.LEWriter.write_fields,
                           'l')
-      | Big_endian -> (HeaderRW.write_constant_part_be,
-                       HeaderRW.write_fields_be,
+      | Big_endian -> (Header.BEWriter.write_constant_part,
+                       Header.BEWriter.write_fields,
                        'B')
   in
-  let i, new_buffer = fields_writer !buffer header.fields in
-  let length, new_buffer = body_writer new_buffer (align i) in
+  let (new_buffer, i) = fields_writer !buffer header.fields in
+  let (new_buffer, j) = body_writer header.byte_order new_buffer i in
+    !buffer.[0] <- byte_order_code;
     constant_part_writer new_buffer
       header.message_type
       header.flags
-      header.serial
-      length;
-    buffer := new_buffer
+      (j - i)
+      serial;
+    buffer := new_buffer;
+    assert (transport.Transport.send !buffer 0 j = j)
 
 let write_message connection header serial body_writer =
   Mutex.lock connection.outgoing_buffer_m;
@@ -179,17 +183,17 @@ let raw_send_message_no_reply connection header body_writer =
 let raw_add_filter connection reader =
   Protected.update (fun l -> (Raw(reader), Wait_async) :: l) connection.filters
 
-let read_values header byte_order buffer ptr =
-  let t = (match header.fields.Header.signature with
-             | Some s -> Values.dtypes_of_signature s
-             | _ -> []) in
+let read_values header buffer ptr =
+  let ts = (match header.fields.signature with
+              | Some s -> Values.dtypes_of_signature s
+              | _ -> []) in
     match header.byte_order with
-      | Little_endian -> Values.read_values_le buffer ptr
-      | Big_endian -> Values.read_values_be buffer ptr
+      | Little_endian -> Values.LEReader.read_values buffer ptr ts
+      | Big_endian -> Values.BEReader.read_values buffer ptr ts
 
 let write_values body byte_order buffer ptr = match byte_order with
-  | Little_endian -> Values.write_values_le buffer ptr body
-  | Big_endian -> Values.write_values_be buffer ptr body
+  | Little_endian -> Values.LEWriter.write_values buffer ptr body
+  | Big_endian -> Values.BEWriter.write_values buffer ptr body
 
 let send_message_async connection (header, body) f =
   raw_send_message_async connection header (write_values body)
@@ -217,7 +221,7 @@ let read connection (reader, mode) header body_start =
 let internal_dispatch connection =
   let header, body_start = read_one_message connection.transport connection.incoming_buffer in
     (* The body is a lazy value so it is computed at most one time *)
-  let body = Lazy.lazy_from_fun (fun () -> Values.read_values header !(connection.incoming_buffer) body_start) in
+  let body = Lazy.lazy_from_fun (fun () -> read_values header !(connection.incoming_buffer) body_start) in
   let rec aux = function
     | (filter, mode) :: l ->
         begin try
@@ -334,14 +338,14 @@ let of_transport ?(shared=true) transport =
           connection
 
 let of_addresses ?(shared=true) addresses = match shared with
-  | true -> of_transport (Transport.of_addresses addresses) true
+  | true -> of_transport (Transport.of_addresses addresses) ~shared:true
   | false ->
       (* Try to find an guid that we already have *)
       let guids = Util.filter_map (fun (_, _, g) -> g) addresses in
         Util.with_mutex guid_connection_table_m begin fun () ->
           match Util.find_map find_guid guids with
             | Some(connection) -> connection
-            | None -> of_transport (Transport.of_addresses addresses) false
+            | None -> of_transport (Transport.of_addresses addresses) ~shared:false
         end
 
 let rec wait_for_reply connection v = match !v with

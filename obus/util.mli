@@ -7,6 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-include Common_util_interf.S
+include Common_util.S
 
 val with_mutex : ThreadImplem.Mutex.t -> (unit -> 'a) -> 'a

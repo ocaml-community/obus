@@ -10,10 +10,13 @@
 (* This file is used to generate the marshaling/unmarshaling functions
    for header fields *)
 
+open Camlp4.PreCast
 open Types
 open GenSerializer
 open Optimize
 open Helpers
+
+let _loc = Loc.ghost
 
 let trace = false
 
@@ -30,14 +33,14 @@ let protocol_version = typ "protocol_version" []
 let rules =
   rule_record_option
     fields  char
-    [field 1 "path" string [Tstring];
-     field 2 "member" string [Tstring];
-     field 3 "interface" string [Tstring];
-     field 4 "error" string [Tstring];
-     field 5 "reply" int32 [Tuint32];
+    [field 1 "path" string [Tobject_path];
+     field 2 "interface" string [Tstring];
+     field 3 "member" string [Tstring];
+     field 4 "error_name" string [Tstring];
+     field 5 "reply_serial" int32 [Tuint32];
      field 6 "destination" string [Tstring];
      field 7 "sender" string [Tstring];
-     field 8 "signature" string [Tstring]]
+     field 8 "signature" string [Tsignature]]
   :: rule_convert message_type int
     (<:expr< function
        | 0 -> Invalid
@@ -64,7 +67,7 @@ let rules =
     (<:expr<
        (fun p ->
           failwith
-            (Printf.printf
+            (Printf.sprintf
                "invalid protocol version : %d (obus support only %d)"
                p Constant.protocol_version)) >>)
   :: default_rules
@@ -86,60 +89,67 @@ let renv, fields_reader_code = gen_reader trace rules fields [Tarray(Tstructure 
 let wenv, fields_writer_code = gen_writer trace rules fields [Tarray(Tstructure [Tbyte; Tvariant])] []
 
 let header_reader_expr =
-  GenCode.generate_reader false (Env.init 0)
+  GenCode.generate_reader false true (Env.init 0)
     (optimize false 1 8 header_reader_code).opt_code (fun _ -> <:expr< (v0, v1, v2, v3, v4) >>)
 
 let header_writer_expr =
-  GenCode.generate_writer false (Env.init 5)
-    (optimize true 1 8 header_writer_code).opt_code (fun _ -> <:expr< >>)
+  GenCode.generate_writer false true (Env.init 4)
+    (optimize true 1 8 header_writer_code).opt_code (fun _ -> <:expr< () >>)
 
 let fields_reader_expr =
   (<:expr< $id:match renv with
      | [(id, _)] -> id
-     | _ -> assert false$ 0 limit >>)
+     | _ -> assert false$ buffer 0 limit >>)
 
 let fields_writer_expr =
-  GenCode.generate_writer false (Env.init 1)
-    (optimize true 4 8 fields_writer_code).opt_code (fun _ -> <:expr< buffer >>)
+  GenCode.generate_writer false false (Env.init 1)
+    ((optimize true 4 8 fields_writer_code).opt_code
+     @ [AbstractCode.Align 8]) (fun _ -> <:expr< (buffer, i) >>)
 
 let implem bo =
   (<:str_item<
-   open Wire.$uid:String.uppercase bo ^ "Reader"$
+   module $uid:bo ^ "Reader"$ =
+   struct
+     open Wire.$uid:bo ^ "Reader"$
 
-   $ Ast.stSem_of_list
-   (List.map (fun (id, expr) ->
-                <:str_item<
-                  let $id:id$ = $expr$
-                    >>) renv) $
+       $ Ast.stSem_of_list
+       (List.map (fun (id, expr) ->
+                    <:str_item<
+                      let $id:id$ = $expr$
+                        >>) renv) $
 
-   let $lid:"read_constant_part_" ^ bo$ buffer =
-     let i = 1 in
-       $header_reader_expr$
+     let read_constant_part buffer =
+       let i = 1 in
+         $header_reader_expr$
 
-   let $lid:"read_fields_" ^ bo$ buffer limit =
-     $fields_reader_expr$
+     let read_fields buffer limit =
+       $fields_reader_expr$
+   end
 
-   open Wire.$uid:String.uppercase bo ^ "Writer"$
+   module $uid:bo ^ "Writer"$ =
+   struct
+     open Wire.$uid:bo ^ "Writer"$
 
-   $ Ast.stSem_of_list
-   (List.map (fun (id, expr) ->
-                <:str_item<
-                  let $id:id$ = $expr$
-                    >>) wenv) $
+       $ Ast.stSem_of_list
+       (List.map (fun (id, expr) ->
+                    <:str_item<
+                      let $id:id$ = $expr$
+                        >>) wenv) $
 
-   let $lid:"write_constant_part_" ^ bo$ buffer v3 v2 v1 v0 =
-     let i = 1 in
-       $header_writer_expr$
+     let write_constant_part buffer v3 v2 v1 v0 =
+       let i = 1 in
+         $header_writer_expr$
 
-   let $lid:"write_fields_" ^ bo$ buffer v0 =
-     let i = 12 in
-       $fields_writer_expr$
-  >>)
+     let write_fields buffer v0 =
+       let i = 12 in
+         $fields_writer_expr$
+   end
+     >>)
 
 let _ =
   Printers.OCaml.print_implem
     (<:str_item<
      open Wire
-     $implem "le"$;;
-     $implem "be"$
+     $implem "LE"$;;
+     $implem "BE"$
      >>)

@@ -7,8 +7,11 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Camlp4.PreCast
 open Types
 open Helpers
+
+let _loc = Loc.ghost
 
 let rec fixed_reader caml_type dbus_type idx =
   match caml_type, dbus_type with
@@ -34,7 +37,7 @@ let signature_checker signature idx =
   let len = String.length signature in
   let sig_expr = expr_of_str (Printf.sprintf "%c%s\x00" (char_of_int len) signature) in
     (<:expr<
-       if not string_match buffer $idx$ $sig_expr$ $expr_of_int (len + 2)$
+       if not (string_match buffer $idx$ $sig_expr$ $expr_of_int (len + 2)$)
        then raise Reading.Unexpected_signature
          >>)
 

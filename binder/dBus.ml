@@ -90,28 +90,33 @@ type definition =
 type signature = Interface of name * definition list * annotation list*)
 
 let from_xml xml =
-  parse (elt "node" [<>]
-           (s2
-              (any (elt "interface"  [< (P"name") >]
-                      (s1 (union
-                             [elt "method" [< (P"name") >]
-                                (s2
-                                   (any (elt "arg" [< (D("name","?")); (A("direction", "in", ["in"])); (P"type") >]
-                                           s0
-                                           (fun name _ typ ->
-                                              (name, type_of_string typ))))
-                                   (any (elt "arg" [< (D("name","?")); (A("direction", "in", ["out"])); (P"type") >]
-                                           s0
-                                           (fun name _ typ ->
-                                              (name, type_of_string typ)))))
-                                (fun name ins outs -> Sig.Method(name, rename_args ins, rename_args outs));
-                              elt "signal" [< (P"name") >]
-                                (s1 (any (elt "arg" [< (D("name","?")); (P"type") >]
-                                            s0
-                                            (fun name typ -> (name, type_of_string typ)))))
-                                (fun name args -> Sig.Signal(name, rename_args args))]))
-                      (fun name defs -> Sig.Sig(name, defs))))
-              (any (elt "node" [< (P"name") >]
-                      s0
-                      (fun x -> x))))
-           (fun interfs _ -> interfs)) xml
+  let annotation =
+    (any (elt "annotation" [< (P"name") (P"value") >]
+            s0
+            (fun _ _ -> ())))
+  in
+    parse (elt "node" [<>]
+             (s2
+                (any (elt "interface"  [< (P"name") >]
+                        (s1 (union
+                               [elt "method" [< (P"name") >]
+                                  (s2
+                                     (any (elt "arg" [< (D("name","?")); (A("direction", "in", ["in"])); (P"type") >]
+                                             s0
+                                             (fun name _ typ ->
+                                                (name, dtypes_of_signature typ))))
+                                     (any (elt "arg" [< (D("name","?")); (A("direction", "in", ["out"])); (P"type") >]
+                                             s0
+                                             (fun name _ typ ->
+                                                (name, dtypes_of_signature typ)))))
+                                  (fun name ins outs -> Sig.Method(name, rename_args ins, rename_args outs));
+                                elt "signal" [< (P"name") >]
+                                  (s1 (any (elt "arg" [< (D("name","?")); (P"type") >]
+                                              s0
+                                              (fun name typ -> (name, dtypes_of_signature typ)))))
+                                  (fun name args -> Sig.Signal(name, rename_args args))]))
+                        (fun name defs -> Sig.Sig(name, defs))))
+                (any (elt "node" [< (P"name") >]
+                        s0
+                        (fun x -> x))))
+             (fun interfs _ -> interfs)) xml

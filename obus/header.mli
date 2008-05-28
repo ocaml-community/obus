@@ -68,3 +68,22 @@ type recv = (int, serial) t
         automatically by the library. Or a 'recv' header, which mean
         that the message has been received, so we can look at these
         informations. *)
+
+(**/**)
+
+open Wire
+
+module type Reader = sig
+  val read_constant_part : buffer -> message_type * flags * int * serial * int
+  val read_fields : buffer -> int -> fields
+end
+
+module type Writer = sig
+  val write_constant_part : buffer -> message_type -> flags -> int -> serial -> unit
+  val write_fields : buffer -> fields -> buffer * int
+end
+
+module LEReader : Reader
+module BEReader : Reader
+module LEWriter : Writer
+module BEWriter : Writer

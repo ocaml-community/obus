@@ -7,10 +7,13 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Camlp4.PreCast
 open Types
 open AbstractCode
 open Optimize
 open Helpers
+
+let _loc = Loc.ghost
 
 type dbus_id = string
 
@@ -88,6 +91,11 @@ let rule caml_patt dbus_patt deps_seq deps_rest reader writer =
   (Generate.rule caml_patt dbus_patt deps_seq deps_rest reader,
    Generate.rule caml_patt dbus_patt deps_seq deps_rest writer)
 
+let simul_env code =
+  List.fold_left (fun env instr -> match instr with
+                    | Update_env f -> f env
+                    | _ -> env) Env.empty code
+
 let len_id = (<:ident< len >>)
 let typ_id = (<:ident< typ >>)
 let idx = (<:expr< i >>)
@@ -158,6 +166,7 @@ let string_writer string_type =
      Expr(true,
           fun env next ->
             seq [CodeConstants.string_writer idx (expr_of_id (Env.last env)) (expr_of_id len_id);
+                 CodeConstants.fixed_writer "char" "byte" <:expr< i + len >> (expr_of_chr '\x00');
                  next]);
      Update_env (Env.add (-1));
      Reset_padding(0, 1);
@@ -229,18 +238,19 @@ let padding instrs =
 let array_reader instrs reverse empty add env =
   let padding = padding instrs in
   let opt = optimize false 0 padding instrs in
+  let opt = optimize false opt.opt_relative_position opt.opt_alignment instrs in
   let gap =
     if opt.opt_alignment >= padding
     then (padding - opt.opt_relative_position) land (padding - 1)
     else 0 in
-
   let instrs = match opt.opt_size with
     | None -> opt.opt_code
     | Some _ -> opt.opt_without_initial_check in
-
-  let expr ret = GenCode.generate_reader true Env.empty instrs (fun _ -> ret) in
-
-  let id = id_for_expr
+  let used_type_vars = - (Env.Type.size (simul_env instrs)) in
+  let instrs = Update_env (Env.Type.add used_type_vars) :: instrs in
+  let make_expr ret = GenCode.generate_reader true false Env.empty instrs (fun _ -> ret) in
+  let expr = List.fold_left
+    (fun acc id -> <:expr< fun $id:id$ -> $acc$ >>)
     (match reverse with
        | false ->
            if gap <> 0
@@ -248,13 +258,12 @@ let array_reader instrs reverse empty add env =
              (<:expr<
                 fun buffer i limit ->
                   let rec aux i acc =
-                    let i = i + $expr_of_int gap$ in
-                      $expr
-                        (<:expr<
-                           let acc = $add <:expr< acc >>$ in
-                             if i = limit
-                             then acc
-                             else aux i acc >>)$
+                    $make_expr
+                      (<:expr<
+                         let acc = $add <:expr< acc >>$ in
+                           if i = limit
+                           then acc
+                           else aux i acc >>)$
                   in
                     if i = limit
                     then $empty$
@@ -264,7 +273,7 @@ let array_reader instrs reverse empty add env =
                      let rec aux i acc =
                        if i = limit
                        then acc
-                       else $expr (<:expr< aux i $add <:expr< acc >>$ >>)$
+                       else $make_expr (<:expr< aux i $add <:expr< acc >>$ >>)$
                      in
                        aux i $empty$ >>)
        | true ->
@@ -274,14 +283,15 @@ let array_reader instrs reverse empty add env =
                 fun buffer i limit ->
                   let rec aux i =
                     let i = i + $expr_of_int gap$ in
-                      $expr (<:expr<
-                               let acc =
-                                 if i = limit
-                                 then $empty$
-                                 else aux i
-                               in
-                                 $add <:expr< acc >>$
-                                 >>)$
+                      $make_expr
+                        (<:expr<
+                           let acc =
+                             if i = limit
+                             then $empty$
+                             else aux i
+                           in
+                             $add <:expr< acc >>$
+                             >>)$
                   in
                     if i = limit
                     then $empty$
@@ -292,13 +302,16 @@ let array_reader instrs reverse empty add env =
                        if i = limit
                        then $empty$
                        else
-                         $expr (<:expr<
-                                  let acc = aux i in
-                                    $add <:expr< acc >>$
-                                    >>)$
+                         $make_expr
+                           (<:expr<
+                              let acc = aux i in
+                                $add <:expr< acc >>$
+                                >>)$
                      in
-                       aux i >>)) env
+                       aux i >>))
+    (Env.Type.all (Env.Type.add used_type_vars Env.empty))
   in
+  let id = id_for_expr expr env in
     [Align 4;
      Expr(true,
           fun env next ->
@@ -342,7 +355,7 @@ let array_writer instrs fold make_func nbval env =
   let id = id_for_expr
     (make_func (<:patt< (buffer, i) >>)
        (<:expr<
-          $ (GenCode.generate_writer true (Env.init nbval) instrs
+          $ (GenCode.generate_writer true false (Env.init nbval) instrs
                (fun env -> <:expr< (buffer, i) >>)) $
         >>)) env in
     [Align 4;
@@ -358,8 +371,8 @@ let array_writer instrs fold make_func nbval env =
           fun env next ->
             <:expr<
               let k = i in
-              let (buffer, i) = $fold (expr_of_id id) <:expr< (buffer, i) >> (expr_of_id (Env.last env))$ in
-              let len = k - i in
+              let (buffer, i) = $fold (expr_of_id id) (expr_of_id (Env.last env)) <:expr< (buffer, i) >>$ in
+              let len = i - k in
                 if len > $expr_of_int Constant.max_array_size$
                 then raise Writing.Array_too_big
                 else begin
@@ -387,7 +400,7 @@ let rule_dict typ key_type val_type reverse empty add fold make_func env =
           reverse empty (add <:expr< v0 >> <:expr< v1 >>) env])
     (fun key_writer val_writer _ ->
        [array_writer (Align 8 :: wflat key_writer @ wflat val_writer)
-          fold (make_func <:patt< v0 >> <:patt< v1 >>) 2 env])
+          fold (make_func <:patt< v1 >> <:patt< v0 >>) 2 env])
 
 let rule_set module_name elt_type =
   let id = (<:ident< $lid:module_name$ >>) in
@@ -491,18 +504,23 @@ let rule_variant typ key_type variants env =
     (fun key_reader readers ->
        [rflat key_reader
         @ [Branches((fun env -> <:expr< $id:Env.last env$ >>),
-                    List.map2
-                      (fun (patt, _, name, camlts, dbust) reader ->
-                         ((fun env -> patt),
-                          Update_env (Env.add (-1))
-                          :: sig_matcher dbust
-                          @ List.flatten reader,
-                          (fun env ->
-                             List.fold_left
-                               (fun acc x -> Ast.ExApp(_loc, acc, <:expr< $id:x$ >>))
-                               (<:expr< $idexpr_of_string name$ >>)
-                               (Env.lasts (List.length camlts) env))))
-                      variants readers);
+                    (List.map2
+                       (fun (patt, _, name, camlts, dbust) reader ->
+                          ((fun env -> patt),
+                           Update_env (Env.add (-1))
+                           :: sig_matcher dbust
+                           @ List.flatten reader,
+                           (fun env ->
+                              List.fold_left
+                                (fun acc x -> Ast.ExApp(_loc, acc, <:expr< $id:x$ >>))
+                                (<:expr< $idexpr_of_string name$ >>)
+                                (Env.lasts (List.length camlts) env))))
+                       variants readers)
+                    @ [((fun env -> <:patt< _ >>),
+                        [Expr(false,
+                              fun env _ ->
+                                <:expr< raise Reading.Unexpected_key >>)],
+                        (fun env -> <:expr< >>))]);
            Reset_padding(0, 1)]])
     (fun key_writer writers ->
        [[Branches((fun env -> <:expr< $id:Env.last env$ >>),
@@ -530,18 +548,23 @@ let rule_record_option typ key_type fields env =
           (Align 8
            :: rflat key_reader
            @ [Branches((fun env -> <:expr< $id:Env.last env$ >>),
-                       List.map2
+                       (List.map2
                          (fun (patt, _, name, _, dbust) reader ->
                             ((fun env -> patt),
                              Update_env (Env.add (-1))
                              :: sig_matcher dbust
                              @ rflat reader,
                              (fun env -> <:expr< { acc with $ident_of_string name$ = Some($id:Env.last env$) } >>)))
-                         fields readers);
+                         fields readers)
+                       @ [((fun env -> <:patt< _ >>),
+                           [Expr(false,
+                                 fun env _ ->
+                                   <:expr< raise Reading.Unexpected_key >>)],
+                           (fun env -> <:expr< >>))]);
               Reset_padding(0, 1)])
           false
           (expr_record (List.map (fun (_, _, name, _, _) -> (ident_of_string name, <:expr< None >>)) fields))
-          (fun acc -> acc)
+          (fun acc -> <:expr< v0 >>)
           env])
     (fun key_writer writers ->
        [[Align 4;
@@ -576,12 +599,12 @@ let rule_record_option typ key_type fields env =
                                let (buffer, i) = match $id:Env.last env$.$ident_of_string name$ with
                                  | None -> (buffer, i)
                                  | Some($id:Env.nth (-1) env$) ->
-                                     $GenCode.generate_writer true env opt.opt_code (fun env -> <:expr< (buffer, i) >>)$
+                                     $GenCode.generate_writer true false env opt.opt_code (fun env -> <:expr< (buffer, i) >>)$
                                in $acc$
                                   >>)
                         fields writers
                         (<:expr<
-                           let len = k - i in
+                           let len = i - k in
                              if len > $expr_of_int Constant.max_array_size$
                              then raise Writing.Array_too_big
                              else begin
@@ -620,7 +643,7 @@ let signature_writer name =
       struct
         let writer =
           [Expr(false,
-                fun env -> bind len_id <:expr< $lid:name ^ "_signature_size"$ (Env.last env) >>);
+                fun env -> bind len_id <:expr< $lid:name ^ "_signature_size"$ $id:Env.last env$ >>);
            Align 1;
            Expr(true,
                 fun _ next -> seq [len_writer Str_small idx (expr_of_id len_id); next]);
@@ -644,31 +667,31 @@ let signature_serializer name =
      (fun _ -> [signature_reader name false])
      (fun _ -> [signature_writer name false]))
 
-let value_reader name =
-  [Align 1;
+let value_reader padding name =
+  [Align padding;
    Update_env (Env.add 1);
    Expr(true,
         fun env next ->
           <:expr<
-            let i, $id:Env.last env$ = $lid:"read_" ^ name$ buffer i $id:Env.Type.last env$ in
+            let i, $id:Env.last env$ = $lid:"_read_" ^ name$ buffer i $id:Env.Type.last env$ in
               $next$ >>);
    Update_env (Env.Type.add (-1));
    Reset_all]
 
-let value_writer name =
-  [Align 1;
+let value_writer padding name =
+  [Align padding;
    Expr(true,
         fun env next ->
           <:expr<
-            let buffer, i = $lid:"write_" ^ name$ buffer i $id:Env.Type.last env$ in
+            let buffer, i = $lid:"write_" ^ name$ buffer i $id:Env.last env$ in
               $next$ >>);
    Update_env (Env.add (-1));
    Reset_all]
 
-let value_serializer name =
-  (fun _ -> rule (typ ("$" ^ name) []) (v"x") [<>] []
-     (fun _ -> [value_reader name])
-     (fun _ -> [value_writer name]))
+let value_serializer padding name =
+  (fun _ -> rule (typ ("$" ^ string_of_int padding ^ name) []) (v"x") [<>] []
+     (fun _ -> [value_reader padding name])
+     (fun _ -> [value_writer padding name]))
 
 (* Serialization of all basic types *)
 let default_rules =
@@ -706,8 +729,15 @@ let default_rules =
     string_serializer string dsignature Str_small;
     signature_serializer "dtypes";
     (fun _ -> rule obus_value dvariant [<>] []
-       (fun _ -> [signature_reader "dtype" true @ value_reader "value"])
-       (fun _ -> [signature_writer "dtype" true @ value_writer "value"]));
+       (fun _ -> [signature_reader "dtype" true @ value_reader 1 "value"])
+       (fun _ -> [Update_env (Env.Type.add 1)
+                  :: Expr(false,
+                          fun env ->
+                            bind
+                              (Env.Type.last env)
+                              (<:expr< dtype_of_value $id:Env.last env$ >>))
+                  :: signature_writer "dtype" true
+                  @ value_writer 1 "value"]));
     rule_convert int char
       (<:expr< int_of_char >>) (<:expr< char_of_int >>);
     rule_convert bool int
@@ -736,8 +766,10 @@ let default_rules =
 
 let intern_rules =
   [ signature_serializer "dtype";
-    value_serializer "value";
-    value_serializer "values" ]
+    value_serializer 1 "value";
+    value_serializer 1 "values";
+    value_serializer 8 "value";
+    value_serializer 8 "values" ]
 
 let rec longest_tuple t =
   let rec aux len = function
