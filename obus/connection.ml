@@ -104,7 +104,7 @@ let read_one_message transport buffer =
   (* We immediatly look for the byte order, then read the header *)
   let (constant_part_reader,
        fields_reader,
-       byte_order) = match !buffer.[0] with
+       byte_order) = match String.unsafe_get !buffer 0 with
     | 'l' -> (Header.LEReader.read_constant_part,
               Header.LEReader.read_fields,
               Little_endian)
@@ -152,14 +152,14 @@ let write_one_message transport buffer header serial body_writer =
   in
   let (new_buffer, i) = fields_writer !buffer header.fields in
   let (new_buffer, j) = body_writer header.byte_order new_buffer i in
-    !buffer.[0] <- byte_order_code;
+    String.unsafe_set new_buffer 0  byte_order_code;
     constant_part_writer new_buffer
       header.message_type
       header.flags
       (j - i)
       serial;
     buffer := new_buffer;
-    assert (transport.Transport.send !buffer 0 j = j)
+    assert (transport.Transport.send new_buffer 0 j = j)
 
 let write_message connection header serial body_writer =
   Mutex.lock connection.outgoing_buffer_m;
