@@ -95,15 +95,15 @@ type env = (ident * expr) list
     (** Environment for generating a module implementation, it record
         all auxiliary generated functions *)
 
-val gen_reader : bool -> rule list -> caml_type -> dbus_type -> env -> env * code
-  (** [gen_reader trace rules caml_type dbus_type env] generate a
-      function that read a dbus serialized value of type [dbus_type]
+val gen_reader : bool -> rule list -> caml_type -> dbus_type list -> env -> env * code
+  (** [gen_reader trace rules caml_type dbus_types env] generate a
+      function that read a dbus serialized value of type [dbus_types]
       into a caml value of type [caml_type].
 
       If [trace] is true then the trace of generation will be printed.
 
       It can generate auxiliary functions which are added to [env]. *)
 
-val gen_writer : bool -> rule list -> caml_type -> dbus_type -> env -> env * code
-  (** [gen_writer trace rules dbus_type caml_type env] like
+val gen_writer : bool -> rule list -> caml_type -> dbus_type list -> env -> env * code
+  (** [gen_writer trace rules caml_type dbus_types env] like
       [gen_reader] but for writing *)

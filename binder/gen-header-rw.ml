@@ -33,14 +33,14 @@ let protocol_version = typ "protocol_version" []
 let rules =
   rule_record_option
     fields  char
-    [field 1 "path" string [Tobject_path];
-     field 2 "interface" string [Tstring];
-     field 3 "member" string [Tstring];
-     field 4 "error_name" string [Tstring];
-     field 5 "reply_serial" int32 [Tuint32];
-     field 6 "destination" string [Tstring];
-     field 7 "sender" string [Tstring];
-     field 8 "signature" string [Tsignature]]
+    [field 1 "path" string Tobject_path;
+     field 2 "interface" string Tstring;
+     field 3 "member" string Tstring;
+     field 4 "error_name" string Tstring;
+     field 5 "reply_serial" int32 Tuint32;
+     field 6 "destination" string Tstring;
+     field 7 "sender" string Tstring;
+     field 8 "signature" string Tsignature]
   :: rule_convert message_type int
     (<:expr< function
        | 0 -> Invalid

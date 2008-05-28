@@ -14,29 +14,37 @@ type 'a content =
   | Value of 'a
   | Exn of exn
 
-type 'a t = 'a ref
+type 'a t = 'a content ref
 
 let raw_send_message_with_cookie connection header writer reader =
-  let cookie = ref (Waiting (if_thread Mutex.create (fun () -> connection))) in
-    Mutex.lock m;
+  let w = if_thread
+    (fun () ->
+       let m = Mutex.create () in
+         Mutex.lock m;
+         m)
+    (fun () -> connection) in
+  let cookie = ref (Waiting w) in
     Connection.raw_send_message_async connection header writer begin fun header buf ptr ->
-      let old = !cookie in
-        cookie := begin try
-          Value (reader header buf ptr)
-        with
-            e -> Exn e
-        end;
-        match v with
-          | With_thread m -> Mutex.unlock m
-          | Without_thread _ -> ()
-    end
+      cookie := begin try
+        Value (reader header buf ptr)
+      with
+          e -> Exn e
+      end;
+      match w with
+        | With_thread m -> Mutex.unlock m
+        | Without_thread _ -> ()
+    end;
+    cookie
 
 let send_message_with_cookie connection (header, body) =
-  raw_send_message_async_with_cookie connection header (Connection.write_values body) Connection.read_values
+  raw_send_message_with_cookie connection header (Connection.write_values body)
+    (fun header buf ptr ->
+       let values = Connection.read_values header buf ptr in
+         (header, values))
 
 let rec get x = match !x with
-  | Waiting x ->
-      begin match x with
+  | Waiting w ->
+      begin match w with
         | With_thread m ->
             Mutex.lock m;
             Mutex.unlock m

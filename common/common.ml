@@ -60,8 +60,8 @@ let rec _write_dtype buffer i = function
         String.unsafe_set buffer i '}';
         i + 1
   | Tstructure(ts) ->
-      String.unsafe_set buffer (i + 1) '(';
-      let i = _write_dtypes buffer i ts in
+      String.unsafe_set buffer i '(';
+      let i = _write_dtypes buffer (i + 1) ts in
         String.unsafe_set buffer i ')';
         i + 1
   | Tvariant ->  String.unsafe_set buffer i 'v'; i + 1

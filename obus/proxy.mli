@@ -12,7 +12,7 @@ type 'a t
 type name = string
 type path = string
 
-val make : Connection.t -> 'a Interface.t -> name option -> path -> 'a t
+val make : Connection.t -> 'a Interface.t -> ?destination:name -> path -> 'a t
   (** [make connection interface destination path] create a proxy with
       interface [interface] and [connection] as backend. If
       [destination] is not [None] then it will be used as destination
@@ -23,3 +23,6 @@ val path : 'a t -> path
 
 val name : 'a t -> name option
   (** [name proxy] get the connection bus name of [proxy] *)
+
+val connection : 'a t -> Connection.t
+  (** [connection proxy] return the connection used for [proxy] *)

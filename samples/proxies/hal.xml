@@ -1,10 +1,66 @@
 <node>
-  <interface name="org.freedesktop.DBus.Introspectable">
-    <method name="Introspect">
-      <arg name="data" direction="out" type="s"/>
+  <interface name="org.freedesktop.Hal.Manager" cname="Manager">
+    <method name="GetAllDevices">
+      <arg name="devices" direction="out" type="ao"/>
     </method>
+    <method name="GetAllDevicesWithProperties">
+      <arg name="devices_with_props" direction="out" type="a(oa{sv})"/>
+    </method>
+    <method name="DeviceExists">
+      <arg name="does_it_exist" direction="out" type="b"/>
+      <arg name="udi" direction="in" type="o"/>
+    </method>
+    <method name="FindDeviceStringMatch">
+      <arg name="devices" direction="out" type="ao"/>
+      <arg name="key" direction="in" type="s"/>
+      <arg name="value" direction="in" type="s"/>
+    </method>
+    <method name="FindDeviceByCapability">
+      <arg name="devices" direction="out" type="as"/>
+      <arg name="capability" direction="in" type="s"/>
+    </method>
+    <method name="NewDevice">
+      <arg name="temporary_udi" direction="out" type="s"/>
+    </method>
+    <method name="Remove">
+      <arg name="udi" direction="in" type="s"/>
+    </method>
+    <method name="CommitToGdl">
+      <arg name="temporary_udi" direction="in" type="s"/>
+      <arg name="global_udi" direction="in" type="s"/>
+    </method>
+    <method name="AcquireGlobalInterfaceLock">
+      <arg name="interface_name" direction="in" type="s"/>
+      <arg name="exclusive" direction="in" type="b"/>
+    </method>
+    <method name="ReleaseGlobalInterfaceLock">
+      <arg name="interface_name" direction="in" type="s"/>
+    </method>
+    <method name="SingletonAddonIsReady">
+      <arg name="command_line" direction="in" type="s"/>
+    </method>
+    <signal name="DeviceAdded">
+      <arg name="udi" type="s"/>
+    </signal>
+    <signal name="DeviceRemoved">
+      <arg name="udi" type="s"/>
+    </signal>
+    <signal name="NewCapability">
+      <arg name="udi" type="s"/>
+      <arg name="cap_name" type="s"/>
+    </signal>
+    <signal name="GlobalInterfaceLockAcquired">
+      <arg name="interface_name" type="s"/>
+      <arg name="lock_holder" type="s"/>
+      <arg name="num_locks" type="i"/>
+    </signal>
+    <signal name="GlobalInterfaceLockReleased">
+      <arg name="interface_name" type="s"/>
+      <arg name="lock_holder" type="s"/>
+      <arg name="num_locks" type="i"/>
+    </signal>
   </interface>
-  <interface name="org.freedesktop.Hal.Device">
+  <interface name="org.freedesktop.Hal.Device" cname="Device">
     <method name="GetAllProperties">
       <arg name="properties" direction="out" type="a{sv}"/>
     </method>
@@ -156,7 +212,53 @@
       <arg name="num_locks" type="i"/>
     </signal>
   </interface>
-  <interface name="org.freedesktop.Hal.Device.Volume">
+  <interface name="org.freedesktop.Hal.Device.SystemPowerManagement" cname="Device.SystemPowerManagement">
+    <method name="Suspend">
+      <arg name="num_seconds_to_sleep" direction="in" type="i"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="SuspendHybrid">
+      <arg name="num_seconds_to_sleep" direction="in" type="i"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="Hibernate">
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="Shutdown">
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="Reboot">
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="SetPowerSave">
+      <arg name="enable_power_save" direction="in" type="b"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.CPUFreq" cname="Device.CPUFreq">
+    <method name="SetCPUFreqGovernor">
+      <arg name="governor_string" direction="in" type="s"/>
+    </method>
+    <method name="SetCPUFreqPerformance">
+      <arg name="value" direction="in" type="i"/>
+    </method>
+    <method name="SetCPUFreqConsiderNice">
+      <arg name="value" direction="in" type="b"/>
+    </method>
+    <method name="GetCPUFreqGovernor">
+      <arg name="return_code" direction="out" type="s"/>
+    </method>
+    <method name="GetCPUFreqPerformance">
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="GetCPUFreqConsiderNice">
+      <arg name="return_code" direction="out" type="b"/>
+    </method>
+    <method name="GetCPUFreqAvailableGovernors">
+      <arg name="return_code" direction="out" type="as"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.Volume" cname="Device.Volume">
     <method name="Mount">
       <arg name="mount_point" direction="in" type="s"/>
       <arg name="fstype" direction="in" type="s"/>
@@ -172,7 +274,7 @@
       <arg name="return_code" direction="out" type="i"/>
     </method>
   </interface>
-  <interface name="org.freedesktop.Hal.Device.Storage">
+  <interface name="org.freedesktop.Hal.Device.Storage" cname="Device.Storage">
     <method name="Eject">
       <arg name="extra_options" direction="in" type="as"/>
       <arg name="return_code" direction="out" type="i"/>
@@ -182,17 +284,7 @@
       <arg name="return_code" direction="out" type="i"/>
     </method>
   </interface>
-  <interface name="org.freedesktop.Hal.Device.Storage">
-    <method name="Eject">
-      <arg name="extra_options" direction="in" type="as"/>
-      <arg name="return_code" direction="out" type="i"/>
-    </method>
-    <method name="CloseTray">
-      <arg name="extra_options" direction="in" type="as"/>
-      <arg name="return_code" direction="out" type="i"/>
-    </method>
-  </interface>
-  <interface name="org.freedesktop.Hal.Device.Storage.Removable">
+  <interface name="org.freedesktop.Hal.Device.Storage.Removable" cname="Device.Storage.Removable">
     <method name="CheckForMedia">
       <arg name="call_had_sideeffect" direction="out" type="b"/>
     </method>

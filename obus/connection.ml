@@ -188,8 +188,8 @@ let read_values header buffer ptr =
               | Some s -> Values.dtypes_of_signature s
               | _ -> []) in
     match header.byte_order with
-      | Little_endian -> Values.LEReader.read_values buffer ptr ts
-      | Big_endian -> Values.BEReader.read_values buffer ptr ts
+      | Little_endian -> snd (Values.LEReader.read_values buffer ptr ts)
+      | Big_endian -> snd (Values.BEReader.read_values buffer ptr ts)
 
 let write_values body byte_order buffer ptr = match byte_order with
   | Little_endian -> Values.LEWriter.write_values buffer ptr body

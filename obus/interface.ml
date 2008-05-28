@@ -32,14 +32,19 @@ type handlers = {
 
 type 'a t = {
   name : name;
-  handlers : handlers;
+  handlers : handlers option;
 }
 
-let make_interface _ name handlers =
+let make_interface_for_proxy _ name =
   { name = name;
-    handlers = handlers }
+    handlers = None }
+let make_interface_for_server _ name handlers =
+  { name = name;
+    handlers = Some handlers }
 let name i = i.name
-let get_handlers i = i.handlers
+let get_handlers = function
+  | { handlers = None } -> raise (Invalid_argument "Interface.get_handlers")
+  | { handlers = Some handlers } -> handlers
 
 let print_xml buf (Interface(name, definitions, annotations)) =
   let print fmt = Printf.bprintf buf fmt in

@@ -18,11 +18,12 @@ type 'a t = {
   path : path;
 }
 
-let make connection interface name path =
+let make connection interface ?destination path =
   { connection = connection;
     interface = interface;
-    name = name;
+    name = destination;
     path = path }
 
 let path { path = x } = x
 let name { name = x } = x
+let connection { connection = x } = x

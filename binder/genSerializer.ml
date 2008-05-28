@@ -500,7 +500,7 @@ let sig_writer dbust =
 
 let rule_variant typ key_type variants env =
   rule typ (tuple [v"x"; dvariant]) [< (key_type, v"x") >]
-    (List.map (fun (_, _, _, cts, dt) -> (tuple cts, typ_of_dbus_type dt)) variants)
+    (List.map (fun (_, _, _, cts, dt) -> (tuple cts, typ_of_dbus_type [dt])) variants)
     (fun key_reader readers ->
        [rflat key_reader
         @ [Branches((fun env -> <:expr< $id:Env.last env$ >>),
@@ -542,7 +542,7 @@ let rule_variant typ key_type variants env =
 
 let rule_record_option typ key_type fields env =
   rule typ (darray (dstructure (tuple [v"x"; dvariant]))) [< (key_type, v"x") >]
-    (List.map (fun (_, _, _, ct, dt) -> (tuple [ct], typ_of_dbus_type dt)) fields)
+    (List.map (fun (_, _, _, ct, dt) -> (tuple [ct], typ_of_dbus_type [dt])) fields)
     (fun key_reader readers ->
        [array_reader
           (Align 8
@@ -673,7 +673,7 @@ let value_reader padding name =
    Expr(true,
         fun env next ->
           <:expr<
-            let i, $id:Env.last env$ = $lid:"_read_" ^ name$ buffer i $id:Env.Type.last env$ in
+            let i, $id:Env.last env$ = $lid:"read_" ^ name$ buffer i $id:Env.Type.last env$ in
               $next$ >>);
    Update_env (Env.Type.add (-1));
    Reset_all]
@@ -803,8 +803,8 @@ let gen part flat trace rules camlt dbust env =
       | None -> failwith
           (Printf.sprintf
              "cannot find a convertion between this caml type: %s and this dbus type: %s"
-             (string_of_type camlt)
-             (string_of_type dbust))
+             (string_of_type "unit" camlt)
+             (string_of_type "<nil>" dbust))
       | Some x -> (!env, List.flatten x)
 
 let gen_reader = gen fst rflat

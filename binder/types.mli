@@ -27,9 +27,23 @@ val list_of_tuple : typ -> typ list
       [tup]. Return a list containing only [tup] if it is not a
       tuple. *)
 
-val string_of_type : typ -> string
-  (** [string_of_type typ] return a string representation of the
-      type *)
+val string_of_type : string -> typ -> string
+  (** [string_of_type empty typ] return a string representation of the
+      type. [empty] is the string representation of the empty
+      tuple. *)
+
+val ctyp_of_type : typ -> Camlp4.PreCast.Ast.ctyp
+  (** [ctyp_of_type typ] return a camlp4 ast representation op
+      [typ] *)
+
+val ctyp_func_of_types : typ list -> Camlp4.PreCast.Ast.ctyp -> Camlp4.PreCast.Ast.ctyp
+  (** [ctyp_func_of_types types acc] return the camlp4 representation
+      of the type [t1 -> t2 -> ... -> tn -> acc] where [types] = [t1;
+      t2; ...; tn] *)
+
+val type_of_string : string -> string -> typ
+  (** [type_of_string str empty] parse a string representation of a
+      string *)
 
 type ident = Camlp4.PreCast.Ast.ident
 type expr = Camlp4.PreCast.Ast.expr
@@ -70,7 +84,9 @@ type dtype =
   | Tstructure of dtype list
   | Tvariant
 
-type dbus_type = dtype list
+type dbus_type = dtype
 
 val dbus_type_of_signature : string -> dbus_type
 val signature_of_dbus_type : dbus_type -> string
+val dbus_types_of_signature : string -> dbus_type list
+val signature_of_dbus_types : dbus_type list -> string

@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Types
+open Camlp4.PreCast.Ast
 
 val ident_of_string : string -> ident
 val idexpr_of_string : string -> expr
@@ -29,3 +29,5 @@ val bind : ident -> expr -> expr -> expr
 val bind_patt : patt -> expr -> expr -> expr
 val seq : expr list -> expr
 val app : expr -> expr -> expr
+val appn : expr -> ident list -> expr
+val func : ident list -> expr -> expr

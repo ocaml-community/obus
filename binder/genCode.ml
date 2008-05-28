@@ -62,13 +62,13 @@ let rec generate_reader for_array remove_final_adv env instructions return_expr 
                    let i = i + $expr_of_int x$ in
                      $acc$
                      >>)
-            | Advance_dynamic(x) ->
+            | Advance_dynamic(x) when not final ->
                 (false,
                  <:expr<
                    let i = i + $len_plus x$ in
                      $acc$
                      >>)
-            | Expr(_, f) -> (false, f env acc)
+            | Expr(need_ptr, f) -> (not need_ptr && final, f env acc)
             | Branches(expr, brs) ->
                 (false,
                  <:expr<
@@ -142,7 +142,7 @@ let rec generate_writer for_array remove_final_adv env instructions return_expr 
                    let i = i + $len_plus x$ in
                      $acc$
                      >>)
-            | Expr(_, f) -> (false, f env acc)
+            | Expr(need_ptr, f) -> (not need_ptr && final, f env acc)
             | Branches(expr, brs) ->
                 (false,
                  <:expr<

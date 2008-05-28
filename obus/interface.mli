@@ -54,5 +54,6 @@ type handlers = {
      org.freedesktop.DBus.Properties *)
 }
 
-val make_interface : 'a -> name -> handlers -> 'a t
+val make_interface_for_proxy : 'a -> name -> 'a t
+val make_interface_for_server : 'a -> name -> handlers -> 'a t
 val get_handlers : 'a t -> handlers

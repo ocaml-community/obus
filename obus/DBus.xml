@@ -1,15 +1,5 @@
 <node>
-  <interface name="org.freedesktop.DBus.Introspectable">
-    <method name="Introspect">
-      <arg name="data" direction="out" type="s"/>
-    </method>
-  </interface>
-  <interface name="org.freedesktop.DBus">
-
-    <flag name="set_name_reply">
-      <def name="truc" key="0"/>
-    </flag>
-
+  <interface name="org.freedesktop.DBus" cname="">
     <method name="Hello">
       <arg direction="out" type="s"/>
     </method>
@@ -31,11 +21,11 @@
       <arg direction="in" type="s"/>
       <arg direction="out" type="b"/>
     </method>
-    <method name="ListNames" cname="list_names">
-      <arg direction="out" type="as" ctype="string array"/>
+    <method name="ListNames">
+      <arg direction="out" type="as"/>
     </method>
     <method name="ListActivatableNames">
-      <arg direction="out" type="as" ctype="string array"/>
+      <arg direction="out" type="as"/>
     </method>
     <method name="AddMatch">
       <arg direction="in" type="s"/>
@@ -81,3 +71,4 @@
     </signal>
   </interface>
 </node>
+

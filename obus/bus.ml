@@ -47,4 +47,4 @@ let dispatch bus = Connection.dispatch bus.connection
 let name { name = x } = x
 let connection { connection = x } = x
 let make_proxy bus interface name path =
-  Proxy.make bus.connection interface (Some name) path
+  Proxy.make bus.connection interface ~destination:name path

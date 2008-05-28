@@ -69,7 +69,7 @@ let implem bo =
      let rec $id:rarray1_id$ = $rarray1_expr$
      and $id:rarray8_id$ = $rarray1_expr$
      and $id:rdict_id$ = $rdict_expr$
-     and _read_value buffer i = function
+     and read_value buffer i = function
        | Tbyte -> $genr char Tbyte "Byte" 0$
        | Tboolean -> $genr bool Tboolean "Boolean" 0$
        | Tint16 -> $genr int Tint16 "Int16" 0$
@@ -92,14 +92,12 @@ let implem bo =
        | Tdict(typ0, typ1) -> $compr rdict_code 0 2 (<:expr< (i, Dict(typ0, typ1, v0)) >>)$
        | Tstructure(typ0) -> $genr fakes8 Tvariant "Structure" 1$
        | Tvariant -> $genr obus_value Tvariant "Variant" 0$
-     and _read_values buffer i = function
+     and read_values buffer i = function
        | t :: ts ->
-           let (i, v) = _read_value buffer i t in
-           let (i, vs) = _read_values buffer i ts in
+           let (i, v) = read_value buffer i t in
+           let (i, vs) = read_values buffer i ts in
              (i, v :: vs)
        | [] -> (i, [])
-     let read_value buffer i typ = snd (_read_value buffer i typ)
-     let read_values buffer i typs = snd (_read_values buffer i typs)
    end
 
    module $uid:bo ^ "Writer"$ =

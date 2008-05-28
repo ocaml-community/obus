@@ -114,8 +114,8 @@ val write_dtype : buffer -> ptr -> dtype -> unit
 val write_dtypes : buffer -> ptr -> dtypes -> unit
 
 module type Reader = sig
-  val read_value : buffer -> ptr -> dtype -> value
-  val read_values : buffer -> ptr -> dtypes -> values
+  val read_value : buffer -> ptr -> dtype -> ptr * value
+  val read_values : buffer -> ptr -> dtypes -> ptr * values
 end
 
 module type Writer = sig

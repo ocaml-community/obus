@@ -73,8 +73,8 @@ let rec print_equation indent = function
   | Equation(a, b) ->
       Printf.printf "%s%s = %s\n"
         indent
-        (string_of_type a)
-        (string_of_type b)
+        (string_of_type "()" a)
+        (string_of_type "()" b)
   | Branches(systems) ->
       List.iter
         (function
@@ -84,15 +84,15 @@ let rec print_equation indent = function
                  (fun ((a, b), _) ->
                     Printf.printf "%s| %s = %s (solved)\n"
                       indent
-                      (string_of_type a)
-                      (string_of_type b))
+                      (string_of_type "()" a)
+                      (string_of_type "()" b))
                  solved;
                List.iter
                  (fun ((a, b), br) ->
                     Printf.printf "%s| %s = %s\n"
                       indent
-                      (string_of_type a)
-                      (string_of_type b);
+                      (string_of_type "()" a)
+                      (string_of_type "()" b);
                     print_equation (indent ^ "|-> ") br)
                  non_solved;
                Printf.printf "%s\\-----\n" indent)

@@ -214,8 +214,8 @@ let get_values = get_value
 open Wire
 
 module type Reader = sig
-  val read_value : buffer -> ptr -> dtype -> value
-  val read_values : buffer -> ptr -> dtypes -> values
+  val read_value : buffer -> ptr -> dtype -> ptr * value
+  val read_values : buffer -> ptr -> dtypes -> ptr * values
 end
 
 module type Writer = sig
