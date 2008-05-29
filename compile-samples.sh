@@ -1,6 +1,6 @@
 #!/bin/sh
 LOWLEVELS="hello hello2 notify"
-PROXIES="eject"
+PROXIES="eject bus-functions"
 samples=""
 for i in $LOWLEVELS; do
     samples+=" samples/lowlevels/$i.byte"
