@@ -51,7 +51,7 @@ let int64_int64 buffer i v =
   String.unsafe_set buffer (i + (BIT(64, 1))) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 8) land 0xff));
   String.unsafe_set buffer (i + (BIT(64, 2))) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 16) land 0xff));
   String.unsafe_set buffer (i + (BIT(64, 3))) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 24) land 0xff));
-  String.unsafe_set buffer (i + (BIT(64, 4))) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 64) land 0xff));
+  String.unsafe_set buffer (i + (BIT(64, 4))) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 32) land 0xff));
   String.unsafe_set buffer (i + (BIT(64, 5))) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 40) land 0xff));
   String.unsafe_set buffer (i + (BIT(64, 6))) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 48) land 0xff));
   String.unsafe_set buffer (i + (BIT(64, 7))) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 56) land 0xff))
