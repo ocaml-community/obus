@@ -172,6 +172,12 @@ let _ =
           (fun _ _ -> Echo(List.map (fun s -> String.capitalize s ^ "\n")
                              Config.obus_pack_files, "obus/OBus.mlpack"));
 
+        rule "obus_doc"
+          ~prod:"obus.odocl"
+          (fun _ _ -> Echo(List.map (fun s -> "obus/" ^ String.capitalize s ^ "\n")
+                             (List.filter (fun s -> s <> "wire") Config.obus_pack_files),
+                           "obus.odocl"));
+
         (* Rule for automatically generating some files of the obus
            library using the binder tool *)
         List.iter

@@ -9,21 +9,17 @@
 
 (** Interface to DBus message bus *)
 
-type t
-  (** Abstract type for a message bus.
+(** A DBus connection is just a connection with another application
+    "speaking" dbus. A message bus is a connection with a application
+    which routes messages between several DBus connections. *)
 
-      Note: A DBus connection is just a connection with another
-      application "speaking" dbus. A message bus is a connection with
-      a application which routes messages between several DBus
-      connections. *)
+type t
+  (** Abstract type for a message bus *)
 
 type name = string
     (** A bus name *)
 
 (** {6 Connection} *)
-
-(** The following function raise a [Connection.Failed] if they can
-    establish a connection to the message bus *)
 
 val session : unit -> t
   (** [session ()] open the session message bus *)

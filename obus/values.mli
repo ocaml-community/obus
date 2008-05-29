@@ -102,7 +102,7 @@ val get_values : 'a seq_cstr -> values -> 'a
   (** [get] and [get_list] raise an [Invalid_argument] if the value
       has not the valid type *)
 
-(** Marshaling (for auto-generated code) *)
+(**/**)
 
 open Wire
 

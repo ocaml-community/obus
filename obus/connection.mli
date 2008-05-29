@@ -7,7 +7,11 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** Interface for dbus connection *)
+(** DBus connection *)
+
+(** A DBus connection is a channel opened with another application
+    which also implement the DBus protocol. It is used to exchange
+    DBus messages. *)
 
 type t
   (** Abstract type for a connection *)

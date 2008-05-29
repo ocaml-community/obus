@@ -7,7 +7,15 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+(** Representation of DBus proxies *)
+
+(** A proxy is an object on which live on a different processus, but
+    which behave as a native ocaml value.
+
+    Operation on this object are handled by the low-level api. *)
+
 type 'a t
+  (** Representation of proxy for a value of type ['a] *)
 
 type name = string
 type path = string

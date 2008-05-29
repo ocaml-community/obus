@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+(** Handling of DBus addresses *)
+
 type name = string
 type key = string
 type value = string

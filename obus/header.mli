@@ -19,17 +19,17 @@ type message_type =
 type serial = int32
   (** Message identifier *)
 
+(** Optionnal flags *)
 type flags = {
-  (** Optionnal flags *)
   no_reply_expected : bool;
   no_auto_start : bool;
 }
 
 val default_flags : flags
-  (** Defaults flags (all is false) *)
+  (** Defaults flags (all false) *)
 
+(** Optionnal headers fields *)
 type fields = {
-  (** Optionnal headers fields *)
   path : string option;
   member : string option;
   interface : string option;
@@ -43,22 +43,22 @@ type fields = {
 val empty_fields : fields
   (** Fields where each entry is [None] *)
 
+(** Message byte order *)
 type byte_order = Little_endian | Big_endian
-    (** Message byte order *)
 
+(** Header description *)
 type ('length, 'serial)  t = {
-  (** Header description *)
   byte_order : byte_order;
   message_type : message_type;
   flags : flags;
   length : 'length;
   serial : 'serial;
   fields : fields;
-(** Note: The protocol version is not represented here because it is
-    added/checked automatically by OBus. You can not communicate with
-    an application that does not have the same protocol version as
-    you. *)
 }
+    (** Note: The protocol version is not represented here because it
+        is added/checked automatically by OBus. You can not
+        communicate with an application that does not have the same
+        protocol version as you. *)
 
 type send = (unit, unit) t
 type recv = (int, serial) t

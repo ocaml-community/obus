@@ -9,6 +9,12 @@
 
 (** DBus transport *)
 
+(** A transport is basically a pair of functions for sending and
+    receiving data. OBus implement by default unix transport, with
+    communication over socket and know how to create it according to
+    DBus addresses, but you can define your own transport and let OBus
+    use it *)
+
 (** {6 Errors handling} *)
 
 type error =
@@ -17,7 +23,7 @@ type error =
   | Closed
 
 exception Error of error * exn option
-  (** An transport error contain the error type and the original
+  (** A transport error contain the error type and the original
       exception if any. For example for unix transport this can be a
       [Unix_error]. *)
 
@@ -38,14 +44,13 @@ type t = {
 
   close : unit -> unit;
   (** [close ()] shutdown the transport *)
-
-(** If something wrong appened, [Error.Error] must be raised *)
 }
+    (** If something wrong appened, [Error.Error] must be raised *)
 
 val fd : t -> Unix.file_descr
   (** [fd transport] return the file descriptor used by the transport,
       usefull for doing a select for example. If the transport does
-      not a file descriptor then it raise an [Invalid_argument] *)
+      not a file descriptor then it raise an [Invalid_argument]. *)
 
 (** {6 Creation} *)
 

@@ -7,8 +7,11 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+(** Various informations *)
+
 val native_byte_order : Header.byte_order
-  (** byte order of the current architecture *)
+  (** Byte order of the current architecture. It is used as default
+      for sended message. *)
 
 val protocol_version : int
-  (** The version of the protocol implemented by the library *)
+  (** The version of the DBus protocol implemented by the library *)

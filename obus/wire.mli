@@ -53,6 +53,12 @@ end
 
 val native_byte_order : unit -> int
 
+(** All the following functions assumes that there is enough space in
+    the buffer to read/write something.
+
+    The names of functions for reading/writing are of the form
+    dbus-type_caml-type *)
+
 module type Writer = sig
   type 'a t = buffer -> ptr -> 'a -> unit
   val int_int16 : int t
@@ -89,6 +95,8 @@ module LEReader : Reader
 module BEReader : Reader
 
 val string_match : buffer -> ptr -> string -> int -> bool
+  (** [string_match buffer ptr str len] compare the [len] first char
+      of [str] with the content of [buffer] starting at [ptr] *)
 
 val realloc_buffer : buffer -> ptr -> buffer
   (** [realloc buffer n] return a new buffer bigger than [buffer] with

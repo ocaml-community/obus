@@ -32,7 +32,7 @@ type signature = Interface of name * definition list * annotation list
 val print_xml : Buffer.t -> signature -> unit
   (** Marshal a interface into introspection data *)
 
-(** For auto-generated code *)
+(**/**)
 
 type property_handlers = {
   property_set : string -> Header.recv -> string -> int -> unit;
