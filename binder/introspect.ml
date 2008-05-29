@@ -18,6 +18,8 @@ type declaration =
   | Method of name * name * arguments * arguments
   | Signal of name * name * arguments
   | Property of name * name * dbus_type * access
+  | Proxy of name * [ `Bus | `Connection ] * string option * string option
+  | Flag of name * (int * name) list
 type module_tree = Node of name * declaration list * (name * module_tree) list
 
 (* Camelization of names *)
@@ -54,6 +56,10 @@ let rec default_caml_type = function
 let mktyp dtyp = function
   | "" -> default_caml_type dtyp
   | ctyp -> type_of_string ctyp "unit"
+
+let mkopt = function
+  | "" -> None
+  | s -> Some s
 
 (* Skip annotations *)
 let annotations =
@@ -98,9 +104,28 @@ let signal_decl =
                then type_of_string ctyp "unit"
                else tuple (List.map snd args))))
 
+let proxy_decl =
+  elt "proxy" [< (P"name"); (F("type", ["bus"; "connection"])); (D("destination", "")); (D("path", "")) >]
+    s0
+    (fun name typ dest path ->
+       Proxy(name, (match typ with
+                      | "bus" -> `Bus
+                      | "connection" -> `Connection
+                      | _ -> assert false), mkopt dest, mkopt path))
+
+let flag_decl =
+  elt "flag" [< (P"name") >]
+    (s1 (any (elt "value" [< (P"key"); (P"name") >]
+                s0
+                (fun key name -> (int_of_string key, name)))))
+    (fun name values -> Flag(name, values))
+
 let interface =
   elt "interface" [< (P"name"); (D("cname", "!")) >]
-    (s1 (union [method_decl; signal_decl]))
+    (s1 (union [method_decl;
+                signal_decl;
+                proxy_decl;
+                flag_decl]))
     (fun dname cname decls ->
        (dname, mkuids dname cname, decls))
 
@@ -126,3 +151,9 @@ and insert_in_sons cname x = function
 let parse_xmls xmls =
   let interfs = List.flatten (List.map (parse node) xmls) in
     List.fold_left insert (Node("", [], [])) interfs
+
+let contain_dbus_declaration = List.exists (function
+                                              | Method _
+                                              | Signal _
+                                              | Property _ -> true
+                                              | _ -> false)

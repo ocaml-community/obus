@@ -36,6 +36,10 @@ type declaration =
       (** [Signal(dbus_name, caml_name, args)] *)
   | Property of name * name * dbus_type * access
       (** [Property(dbus_name, caml_name, dbus_type, access)] *)
+  | Proxy of name * [ `Bus | `Connection ] * string option * string option
+      (** [Proxy(caml_name, typ, destination, path)] proxy creation helper
+          function *)
+  | Flag of name * (int * name) list
 
 type module_tree = Node of name * declaration list * (name * module_tree) list
   (** [Node(dbus_interface_name, content, sons) A hierarchy of ocaml
@@ -43,3 +47,7 @@ type module_tree = Node of name * declaration list * (name * module_tree) list
 
 val parse_xmls : Xml.xml list -> module_tree
   (** [parse_xmls xmls] construct a module hierarchy from xmls *)
+
+val contain_dbus_declaration : declaration list -> bool
+  (** [contain_dbus_declaration decls] return [true] if [decls]
+      containt at leat one of [Method], [Signal] or [Property] *)

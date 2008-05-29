@@ -33,12 +33,12 @@ let patt_of_chr x = Ast.PaChr(_loc, String.escaped (String.make 1 x))
 
 let idexpr_of_string name =
   if name.[0] = '`'
-  then Ast.ExVrn(_loc, name)
+  then Ast.ExVrn(_loc, String.sub name 1 (String.length name - 1))
   else (expr_of_id (ident_of_string name))
 
 let idpatt_of_string name =
   if name.[0] = '`'
-  then Ast.PaVrn(_loc, name)
+  then Ast.PaVrn(_loc, String.sub name 1 (String.length name - 1))
   else (patt_of_id (ident_of_string name))
 
 let bind_patt patt value expr = match patt, value with

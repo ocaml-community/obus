@@ -1,5 +1,8 @@
 <node>
   <interface name="org.freedesktop.Hal.Manager" cname="Manager">
+    <proxy name="proxy" type="bus"
+           destination="org.freedesktop.Hal"
+           path="/org/freedesktop/Hal/Manager"/>
     <method name="GetAllDevices">
       <arg name="devices" direction="out" type="ao"/>
     </method>
@@ -61,6 +64,8 @@
     </signal>
   </interface>
   <interface name="org.freedesktop.Hal.Device" cname="Device">
+    <proxy name="proxy" type="bus"
+           destination="org.freedesktop.Hal"/>
     <method name="GetAllProperties">
       <arg name="properties" direction="out" type="a{sv}"/>
     </method>
@@ -213,6 +218,8 @@
     </signal>
   </interface>
   <interface name="org.freedesktop.Hal.Device.SystemPowerManagement" cname="Device.SystemPowerManagement">
+    <proxy name="proxy" type="bus"
+           destination="org.freedesktop.Hal"/>
     <method name="Suspend">
       <arg name="num_seconds_to_sleep" direction="in" type="i"/>
       <arg name="return_code" direction="out" type="i"/>
@@ -236,6 +243,8 @@
     </method>
   </interface>
   <interface name="org.freedesktop.Hal.Device.CPUFreq" cname="Device.CPUFreq">
+    <proxy name="proxy" type="bus"
+           destination="org.freedesktop.Hal"/>
     <method name="SetCPUFreqGovernor">
       <arg name="governor_string" direction="in" type="s"/>
     </method>
@@ -259,6 +268,8 @@
     </method>
   </interface>
   <interface name="org.freedesktop.Hal.Device.Volume" cname="Device.Volume">
+    <proxy name="proxy" type="bus"
+           destination="org.freedesktop.Hal"/>
     <method name="Mount">
       <arg name="mount_point" direction="in" type="s"/>
       <arg name="fstype" direction="in" type="s"/>
@@ -275,6 +286,8 @@
     </method>
   </interface>
   <interface name="org.freedesktop.Hal.Device.Storage" cname="Device.Storage">
+    <proxy name="proxy" type="bus"
+           destination="org.freedesktop.Hal"/>
     <method name="Eject">
       <arg name="extra_options" direction="in" type="as"/>
       <arg name="return_code" direction="out" type="i"/>
@@ -285,6 +298,8 @@
     </method>
   </interface>
   <interface name="org.freedesktop.Hal.Device.Storage.Removable" cname="Device.Storage.Removable">
+    <proxy name="proxy" type="bus"
+           destination="org.freedesktop.Hal"/>
     <method name="CheckForMedia">
       <arg name="call_had_sideeffect" direction="out" type="b"/>
     </method>

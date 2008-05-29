@@ -35,6 +35,55 @@ let find_or_add name expr env mapping =
       | None -> let id = (<:ident< $lid:"__intern_" ^ string_of_int (List.length env)$ >>) in
           ((id, expr) :: env, (name, id) :: mapping)
 
+let make_module name sts =
+  (<:str_item<
+   module $uid:name$ = struct
+     $ Ast.stSem_of_list sts $
+   end
+     >>)
+
+let empty_st = (<:str_item< >>)
+
+let types_module_name mods = Util.rjoin "_" ("Internal_types" :: mods)
+
+let rec gen_types prefix (Node(interf_name, interf_content, sons)) =
+  make_module (types_module_name prefix)
+    (List.map begin function
+       | Flag(name, values) ->
+           let is_poly = List.exists (fun (_, name) -> name.[0] = '`') values in
+           let typ =
+             if is_poly
+             then Ast.TyVrnEq(_loc, Ast.tyOr_of_list (List.map (fun (_, name) -> Ast.TyVrn(_loc, String.sub name 1 (String.length name - 1))) values))
+             else Ast.sum_type_of_list (List.map (fun (_, name) -> (_loc, name, [])) values) in
+             (<:str_item<
+              type $lid:name$ = $typ$;;
+              let $lid:name ^ "_of_int"$ = function
+                  $ Ast.mcOr_of_list
+                    (List.map
+                       (fun (key, name) ->
+                          <:match_case< $patt_of_int key$ -> $idexpr_of_string name$ >>)
+                       values
+                     @ [ <:match_case< _ -> raise Reading.Unexpected_key >> ]) $
+              let $lid:"int_of_" ^ name$ = function
+                  $ Ast.mcOr_of_list
+                    (List.map
+                       (fun (key, name) ->
+                          <:match_case< $idpatt_of_string name$ -> $expr_of_int key$ >>)
+                       values) $
+                  >>)
+       | _ -> empty_st
+     end interf_content)
+  :: List.flatten (List.map (fun (name, node) -> gen_types (name :: prefix) node) sons)
+
+let add_rule prefix rules env mapping = function
+    | Flag(name, values) ->
+        (rule_convert (typ name []) int
+           (<:expr< $uid:types_module_name prefix$ . $lid:name ^ "_of_int"$ >>)
+           (<:expr< $uid:types_module_name prefix$ . $lid:"int_of_" ^ name$ >>) :: rules,
+         env,
+         mapping)
+    | _ -> (rules, env, mapping)
+
 let rec gen_writers rules env mapping prefix (Node(interf_name, interf_content, sons)) =
   let (rules, env, mapping) = List.fold_left begin fun (rules, env, mapping) -> function
     | Method(dname, cname, (in_args, in_caml_type), _) ->
@@ -55,7 +104,7 @@ let rec gen_writers rules env mapping prefix (Node(interf_name, interf_content, 
           (rules,
            env,
            mapping)
-    | _ -> (rules, env, mapping)
+    | x -> add_rule prefix rules env mapping x
   end (rules, env, mapping) interf_content in
     List.fold_left
       (fun (rules, env, mapping) (name, node) ->
@@ -83,7 +132,7 @@ let rec gen_readers rules env mapping prefix (Node(interf_name, interf_content, 
           (rules,
            env,
            mapping)
-    | _ -> (rules, env, mapping)
+    | x -> add_rule prefix rules env mapping x
   end (rules, env, mapping) interf_content in
     List.fold_left
       (fun (rules, env, mapping) (name, node) ->
@@ -147,13 +196,26 @@ let gen_funcs wmapping rmapping node =
                (appn <:expr< $id:intern$ Connection.raw_send_message_async handler proxy >> in_args_names) $
            let $lid:cname ^ "_cookie"$ = $id:intern$ Cookie.raw_send_message_with_cookie $make_tuple_of_out_args$
              >>)
+      | Proxy(name, typ, dest, path) ->
+          let arg0, expr0 = match typ with
+            | `Bus -> (Some "bus", <:expr< Bus.make_proxy bus interface >>)
+            | `Connection -> (Some "connection", <:expr< Proxy.make connection interface >>)
+          and arg1, expr1 = match dest with
+            | Some s -> (None, expr_of_str s)
+            | None -> (Some "dest", <:expr< dest >>)
+          and arg2, expr2 = match path with
+            | Some s -> (None, expr_of_str s)
+            | None -> (Some "path", <:expr< path >>)
+          in
+
+          let args = List.map ident_of_string (Util.filter_map (fun x -> x) [arg0; arg1; arg2]) in
+            (<:str_item<
+               let $lid:name$ = $func args <:expr< $expr0$ $ match typ with
+                 | `Bus -> expr1
+                 | `Connection -> <:expr< ~destination:$expr1$ >> $ $expr2$ >> $ >>)
       | _ -> st
-    end (<:str_item< >>) interf_content in
-    let st = match List.exists (function
-                                  | Method _
-                                  | Signal _
-                                  | Property _ -> true
-                                  | _ -> false) interf_content with
+    end empty_st interf_content in
+    let st = match contain_dbus_declaration interf_content with
       | false -> st
       | true -> (<:str_item<
                  type t = unit
@@ -161,13 +223,18 @@ let gen_funcs wmapping rmapping node =
                  let interface = Interface.make_interface_for_proxy () $expr_of_str interf_name$;;
                  $st$
                  >>) in
+    let st =
+      (<:str_item<
+       include $uid:types_module_name prefix$;;
+       $st$
+       >>) in
       Ast.stSem_of_list
         (st :: List.map (fun (name, node) ->
                            (<:str_item<
-                          module $uid:name$ =
-                          struct
-                            $aux (name :: prefix) node$
-                          end >>)) sons)
+                            module $uid:name$ =
+                            struct
+                              $aux (name :: prefix) node$
+                            end >>)) sons)
   in
     aux [] node
 
@@ -183,10 +250,12 @@ let rec collect_tuple_maker set (Node(_, interf_content, sons)) =
       (fun set (_, node) -> collect_tuple_maker set node) set sons
 
 let gen rules node =
+  let types_st = Ast.stSem_of_list (gen_types [] node) in
   let (_, writers, wmapping) = gen_writers rules [] [] [] node
   and (_, readers, rmapping) = gen_readers rules [] [] [] node in
   let funcs = gen_funcs wmapping rmapping node in
     (<:str_item<
+       $types_st$;;
      module LocalLEWriter = struct
        open Values.LEWriter;;
        open Wire.LEWriter;;

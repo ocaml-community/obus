@@ -17,11 +17,7 @@ let print_for_doc oc interf =
   let newline () = output_string oc "\n" in
   let rec aux indent (Node(_, content, sons)) =
     let print fmt = print_string indent; Printf.fprintf oc (fmt ^^ "\n") in
-      begin match List.exists (function
-                                 | Method _
-                                 | Signal _
-                                 | Property _ -> true
-                                 | _ -> false) content with
+      begin match contain_dbus_declaration content with
         | false -> ()
         | true ->
             print "type t";
@@ -60,13 +56,32 @@ let rec gen (Node(_, content, sons)) =
            val $lid:cname ^ "_cookie"$ : $ctyp_func_of_types ctypes
              (ctyp_of_type (typ "Cookie.t" [out_caml_type]))$
              >>)
+    | Proxy(name, proxy_typ, dest, path) ->
+        let args = Util.filter_map (fun x -> x)
+          [ (match proxy_typ with
+               | `Bus -> Some (typ "Bus.t" [])
+               | `Connection -> Some (typ "Connection.t" []));
+            (match dest with
+               | Some _ -> None
+               | None -> Some (typ "Proxy.name" []));
+            (match path with
+               | Some _ -> None
+               | None -> Some (typ "Proxy.path" [])) ] in
+        (<:sig_item<
+           val $lid:name$ : $ctyp_func_of_types args <:ctyp< t Proxy.t >>$
+             >>)
+    | Flag(name, values) ->
+        let is_poly = List.exists (fun (_, name) -> name.[0] = '`') values in
+        let typ =
+          if is_poly
+          then Ast.TyVrnEq(_loc, Ast.tyOr_of_list (List.map (fun (_, name) -> Ast.TyVrn(_loc, String.sub name 1 (String.length name - 1))) values))
+          else Ast.sum_type_of_list (List.map (fun (_, name) -> (_loc, name, [])) values) in
+          (<:sig_item<
+           type $lid:name$ = $typ$
+               >>)
     | _ -> (<:sig_item< >>)
   end content end in
-  let sg = match List.exists (function
-                                | Method _
-                                | Signal _
-                                | Property _ -> true
-                                | _ -> false) content with
+  let sg = match contain_dbus_declaration content with
     | false -> sg
     | true -> (<:sig_item<
                type t

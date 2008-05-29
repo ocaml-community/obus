@@ -1,5 +1,8 @@
 <node>
   <interface name="org.freedesktop.DBus" cname="">
+    <proxy name="proxy" type="bus"
+           destination="org.freedesktop.DBus"
+           path="/org/freedesktop/DBus"/>
     <method name="Hello">
       <arg direction="out" type="s"/>
     </method>
@@ -12,10 +15,14 @@
       <arg direction="in" type="s"/>
       <arg direction="out" type="u"/>
     </method>
+    <flag name="start_service_by_name_result">
+      <value key="1" name="`Success"/>
+      <value key="2" name="`Already_running"/>
+    </flag>
     <method name="StartServiceByName">
       <arg direction="in" type="s"/>
       <arg direction="in" type="u"/>
-      <arg direction="out" type="u"/>
+      <arg direction="out" type="u" ctype="start_service_by_name_result"/>
     </method>
     <method name="NameHasOwner">
       <arg direction="in" type="s"/>
