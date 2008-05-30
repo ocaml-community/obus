@@ -14,7 +14,7 @@ open Types
 
 type name = string
 
-type argument = name * name * dbus_type
+type argument = name option * name option * dbus_type
     (** Description of a method/signal argument, with
 
         - its dbus name
@@ -45,8 +45,8 @@ type module_tree = Node of name * declaration list * (name * module_tree) list
   (** [Node(dbus_interface_name, content, sons) A hierarchy of ocaml
       modules for DBus interfaces *)
 
-val parse_xmls : Xml.xml list -> module_tree
-  (** [parse_xmls xmls] construct a module hierarchy from xmls *)
+val parse_files : string list -> module_tree
+  (** [parse_files files] construct a module hierarchy from xml files *)
 
 val contain_dbus_declaration : declaration list -> bool
   (** [contain_dbus_declaration decls] return [true] if [decls]

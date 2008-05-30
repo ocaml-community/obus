@@ -51,7 +51,7 @@ let _ =
   then Arg.usage args usage_msg;
 
   let output_file_prefix = choose_output_file_prefix () in
-  let node = parse_xmls (List.map Util.parse_xml !xml_files) in
+  let node = parse_files !xml_files in
   let implem = GenImplem.gen GenSerializer.default_rules node
   and interf = GenInterf.gen node in
 

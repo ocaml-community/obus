@@ -64,7 +64,7 @@ struct
 
   (* Files using each syntax *)
   let use_syntax =
-    ["seq", ["binder/introspect.ml"; "binder/genSerializer.ml"];
+    ["seq", ["binder/genSerializer.ml"];
      "log", prepend "obus" ["auth.ml"; "address.ml"; "transport.ml"; "connection.ml"];
      "macro", prepend "obus" ["values.ml"; "header.ml"; "wire_backend_ml.ml"];
      "dbus_typval", []]

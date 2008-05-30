@@ -63,7 +63,7 @@ module Caml =
        (Camlp4OCamlRevisedParser.Make
           (Camlp4.OCamlInitSyntax.Make(Ast)(Gram)(Quotation))))
 
-let type_of_string str empty =
+let type_of_string empty str =
   let fail () = failwith ("can not understand this caml type: " ^ str) in
   let parse_id id =
     Util.ljoin "." (List.map (function

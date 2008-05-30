@@ -42,7 +42,7 @@ val ctyp_func_of_types : typ list -> Camlp4.PreCast.Ast.ctyp -> Camlp4.PreCast.A
       t2; ...; tn] *)
 
 val type_of_string : string -> string -> typ
-  (** [type_of_string str empty] parse a string representation of a
+  (** [type_of_string empty str] parse a string representation of a
       string *)
 
 type ident = Camlp4.PreCast.Ast.ident
