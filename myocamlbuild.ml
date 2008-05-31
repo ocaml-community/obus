@@ -124,6 +124,14 @@ let _ =
         Options.ocamldoc := ocamlfind & A"ocamldoc"
 
     | After_rules ->
+        Pathname.define_context "obus/with_threads" [ "obus/threadsigs" ];
+        Pathname.define_context "obus/without_threads" [ "obus/threadsigs" ];
+        Pathname.define_context "obus" [ "obus/threadsigs"; "common" ];
+        Pathname.define_context "binder" [ "common" ];
+        Pathname.define_context "samples/proxies" [ "samples/interfaces" ];
+        Pathname.define_context "samples/threaded" [ "samples/interfaces" ];
+        Pathname.define_context "samples/interfaces" [ "obus" ];
+
         (* rule for building dbus interface binding *)
         rule "obus-binding"
           ~prods:["%.ml"; "%.mli"]

@@ -1,6 +1,6 @@
 (*
- * signals.ml
- * ----------
+ * signals-thr.ml
+ * --------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -35,12 +35,10 @@ let _ =
   let system = Bus.system () in
     Signal.bus_register session DBus.signals bus_handler;
     Signal.bus_register system Hal.Device.signals hal_handler;
-    let fd_map =
-      [ get_fd session, session;
-        get_fd system, system ] in
-      while true do
-        let (fds, _, _) = Unix.select (List.map fst fd_map) [] [] (-1.0) in
-          List.iter
-            (fun fd -> Bus.dispatch (List.assoc fd fd_map))
-            fds
-      done
+    for i = 1 to 10 do
+      Thread.delay 3.0;
+      ignore (DBus.request_name session "org.truc.bidule" []);
+      Thread.delay 3.0;
+      ignore (DBus.release_name session "org.truc.bidule")
+    done;
+    Thread.delay 300.0
