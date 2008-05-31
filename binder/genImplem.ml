@@ -149,7 +149,8 @@ let rec gen_writers rules env mapping prefix (Node(interf_name, interf_content, 
 
 let rec gen_readers rules env mapping prefix (Node(interf_name, interf_content, sons)) =
   let (rules, env, mapping) = List.fold_left begin fun (rules, env, mapping) -> function
-    | Method(_, dname, cname, _, (out_args, out_caml_type)) ->
+    | Method(_, dname, cname, _, (out_args, out_caml_type))
+    | Signal(_, dname, cname, (out_args, out_caml_type)) ->
         let out_dbus_types = dbus_types out_args in
         let env, reader_code = gen_reader false rules out_caml_type out_dbus_types env in
         let reader_expr =
@@ -256,6 +257,55 @@ let gen_funcs internal wmapping rmapping node =
       | _ -> empty_st
     end interf_content in
     let st = Ast.stSem_of_list sts in
+
+    let signals = Util.filter_map (function
+                                     | Signal(doc, dname, cname, (args, ctype)) ->
+                                         Some(dname, cname, args, ctype)
+                                     | _ -> None) interf_content in
+    let st = match signals with
+      | [] -> st
+      | _ ->
+          (<:str_item<
+             $st$;;
+           let signals =
+             Signal.make_set interface
+               (fun connection handler header buffer i -> match header with
+                  | { Header.message_type = Header.Signal;
+                      Header.fields =
+                        { Header.interface = Some $str:interf_name$;
+                          Header.member = Some member;
+                          Header.signature = signature } } ->
+                      let signature = match signature with
+                        | Some s -> s
+                        | None -> ""
+                      in
+                        begin match member, signature with
+                            $ Ast.mcOr_of_list
+                              (List.map begin fun (dname, cname, args, ctype) ->
+                                 let names = args_names (args_count ctype) in
+                                 let dbus_sig = signature_of_dbus_types (dbus_types args) in
+                                 let reader_id = List.assoc (cname :: prefix) rmapping in
+                                   (<:match_case< $str:dname$, $str:dbus_sig$ ->
+                                     handler
+                                       (match header.Header.fields.Header.path with
+                                          | Some p ->
+                                              Some (Proxy.make connection interface
+                                                      ?destination:header.Header.fields.Header.sender p)
+                                          | None -> None)
+                                       ((match header.Header.byte_order with
+                                           | Header.Little_endian ->
+                                               LocalLEReader.$id:reader_id$
+                                           | Header.Big_endian ->
+                                               LocalBEReader.$id:reader_id$)
+                                          buffer i
+                                           $ func names (appn (idexpr_of_string cname) names) $) >>)
+                               end signals
+                               @ [ <:match_case< _ -> false >> ]) $
+                        end
+                  | _ -> false)
+             >>)
+    in
+
     let st = match contain_dbus_declaration interf_content with
       | false -> st
       | true ->

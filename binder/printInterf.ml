@@ -154,7 +154,9 @@ let print internal oc node =
             if doc = []
             then pn "      (** Representation of signal %s *)\n" dname
             else print_doc 6 doc
-          end signals
+          end signals;
+          n ();
+          pn "val signals : (t, signal) Signal.set\n"
         end;
 
         (* And finally sub-modules *)

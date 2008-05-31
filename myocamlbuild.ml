@@ -48,6 +48,7 @@ struct
      "proxy";
      "rules";
      "bus";
+     "signal";
      "DBus"]
 
   (* Files of binder which use camlp4 quotation for caml ast *)
