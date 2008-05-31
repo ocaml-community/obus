@@ -34,7 +34,7 @@ let from_connection connection =
   }
 
 let connect addresses =
-  from_connection (Connection.of_addresses addresses ~shared:false)
+  from_connection (Connection.of_addresses addresses ~shared:true)
 
 let session () = connect (Address.session ())
 let system () = connect (Address.system ())

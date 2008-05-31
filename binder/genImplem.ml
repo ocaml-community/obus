@@ -287,11 +287,7 @@ let gen_funcs internal wmapping rmapping node =
                                  let reader_id = List.assoc (cname :: prefix) rmapping in
                                    (<:match_case< $str:dname$, $str:dbus_sig$ ->
                                      handler
-                                       (match header.Header.fields.Header.path with
-                                          | Some p ->
-                                              Some (Proxy.make connection interface
-                                                      ?destination:header.Header.fields.Header.sender p)
-                                          | None -> None)
+                                       (__make_proxy connection interface header)
                                        ((match header.Header.byte_order with
                                            | Header.Little_endian ->
                                                LocalLEReader.$id:reader_id$
@@ -436,5 +432,10 @@ let gen internal rules node =
        (collect_tuple_maker IntSet.empty node)
        (<:str_item< >>) $;;
      $method_call_func$;;
+     let __make_proxy connection interface header = match header.Header.fields.Header.path with
+       | Some p ->
+           Some (Proxy.make connection interface
+                   ?destination:header.Header.fields.Header.sender p)
+       | None -> None;;
      $funcs$
      >>)

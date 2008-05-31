@@ -35,7 +35,7 @@
     </flag>
     <method name="ReleaseName">
       <arg direction="in" type="s"/>
-      <arg direction="out" type="u"/>
+      <arg direction="out" type="u" ctype="release_name_result"/>
     </method>
     <flag name="start_service_flag" bitwise="true">
       <doc>

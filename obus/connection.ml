@@ -321,8 +321,8 @@ let of_transport ?(shared=true) transport =
           }
         in
         let connection = match shared with
-          | true -> make ()
-          | false ->
+          | false -> make ()
+          | true ->
               Util.with_mutex guid_connection_table_m begin fun () ->
                 match find_guid guid with
                   | Some(connection) ->
@@ -338,15 +338,16 @@ let of_transport ?(shared=true) transport =
           connection
 
 let of_addresses ?(shared=true) addresses = match shared with
-  | true -> of_transport (Transport.of_addresses addresses) ~shared:true
-  | false ->
+  | false -> of_transport (Transport.of_addresses addresses) ~shared:false
+  | true ->
       (* Try to find an guid that we already have *)
       let guids = Util.filter_map (fun (_, _, g) -> g) addresses in
-        Util.with_mutex guid_connection_table_m begin fun () ->
-          match Util.find_map find_guid guids with
-            | Some(connection) -> connection
-            | None -> of_transport (Transport.of_addresses addresses) ~shared:false
-        end
+        match
+          Util.with_mutex guid_connection_table_m
+            (fun () -> Util.find_map find_guid guids)
+        with
+          | Some(connection) -> connection
+          | None -> of_transport (Transport.of_addresses addresses) ~shared:true
 
 let rec wait_for_reply connection v = match !v with
   | None -> internal_dispatch connection; wait_for_reply connection v
