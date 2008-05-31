@@ -9,8 +9,6 @@
 
 (** Facilities for parsing xml *)
 
-exception Parse_failed
-
 type 'a xml_parser
 
 (** {6 Parsing attributes} *)

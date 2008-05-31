@@ -21,7 +21,6 @@ type error =
   | Element_unknown of xml
   | Child_invalid_number of string * parser_type
 
-exception Parse_failed
 exception Error of (string * attributes) list * error
 
 let fail err = raise (Error([], err))
@@ -141,9 +140,9 @@ let print_error filename stack err =
     | Attribute_missing(name) ->
         print "argument '%s' missing\n" name
     | Attribute_invalid(key, value, field) ->
-        print "unexpected value for '%s' (=%s), must be one of %s\n"
+        print "unexpected value for '%s' (%s), must be one of %s\n"
           key value
-          (String.concat " " field)
+          (String.concat ", " field)
     | Element_unknown(elt) ->
         print "unexpected element:\n%s\n" (Xml.to_string_fmt elt)
     | Child_invalid_number(msg, typ) ->
@@ -161,7 +160,7 @@ let parse xml_parser ?filename xml =
   with
       Error(stack, err) ->
         print_error filename stack err;
-        raise Parse_failed
+        exit 2
 
 let s0 = sn
 let s1 x1 = sc x1 (sn)

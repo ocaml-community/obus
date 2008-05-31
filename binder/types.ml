@@ -37,16 +37,17 @@ let rec list_of_tuple = function
 let string_of_type empty =
   let at_top x = x
   and not_at_top x = "(" ^ x ^ ")" in
-  let rec aux typtop tuptop = function
+  let rec aux top = function
     | Type(t, []) -> t
+    | Type(t, [arg]) -> aux not_at_top arg ^ " " ^ t
     | Type(t, args) ->
-        typtop (t ^ String.concat "" (List.map (fun t -> " " ^ aux not_at_top not_at_top t) args))
+        "(" ^ String.concat ", " (List.map (aux at_top) args) ^ ") " ^ t
     | Cons _ as l ->
-        tuptop (String.concat " * " (List.map (aux at_top not_at_top) (list_of_tuple l)))
+        top (String.concat " * " (List.map (aux not_at_top) (list_of_tuple l)))
     | Nil -> empty
     | Var(x) -> "'" ^ x
   in
-    aux at_top at_top
+    aux at_top
 
 let rec ctyp_of_type = function
   | Type(t, args) ->
@@ -110,3 +111,5 @@ let obus_value = typ "OBus.Values.value" []
 let obus_values = typ "OBus.Values.values" []
 let obus_dtype = typ "OBus.Values.dtype" []
 let obus_dtypes = typ "OBus.Values.dtypes" []
+let caml_type_of_string = type_of_string "unit"
+let string_of_caml_type = string_of_type "unit"

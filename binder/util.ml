@@ -49,6 +49,11 @@ let split_upper name =
   in
     split 0
 
+let dot_regexp = Str.regexp "\\."
+let split_dot str = Str.split dot_regexp str
+let newline_regexp = Str.regexp "\n"
+let split_lines str = Str.split newline_regexp str
+
 let part_map f l =
   List.fold_right (fun x (success, failure) -> match f x with
                      | None -> (success, x :: failure)
@@ -58,7 +63,12 @@ let xml_parser = XmlParser.make ()
 let _ = XmlParser.prove xml_parser false
 
 let parse_xml fname =
-  XmlParser.parse xml_parser (XmlParser.SFile fname)
+  try
+    XmlParser.parse xml_parser (XmlParser.SFile fname)
+  with
+      Xml.Error err ->
+        Log.print "error while parsing file \"%s\": %s\n" fname (Xml.error err);
+        exit 2
 
 let gen_names prefix l =
   List.rev (snd (List.fold_left (fun (i, acc) _ -> (i + 1, (prefix ^ string_of_int i) :: acc)) (0, []) l))

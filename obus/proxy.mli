@@ -20,14 +20,17 @@ type 'a t
 type name = string
 type path = string
 
-val make : Connection.t -> 'a Interface.t -> ?destination:name -> path -> 'a t
+val make : Connection.t -> 'a Interface.t -> ?sender:name -> ?destination:name -> path -> 'a t
   (** [make connection interface destination path] create a proxy with
-      interface [interface] and [connection] as backend. If
-      [destination] is not [None] then it will be used as destination
-      when sending messages *)
+      interface [interface] and [connection] as backend.  If [sender]
+      and/or [destination] are provided they will be used in sent
+      messages *)
 
 val path : 'a t -> path
   (** [path proxy] get the path of a proxy *)
+
+val sender : 'a t -> name option
+  (** [sender proxy] get the sender name of [proxy] *)
 
 val name : 'a t -> name option
   (** [name proxy] get the connection bus name of [proxy] *)

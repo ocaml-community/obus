@@ -34,13 +34,28 @@ let choose_output_file_prefix () = match !output_file_prefix with
       | [f] -> begin
           try
             let i = String.rindex f '.' in
-              if String.sub f i (String.length f - i) = ".xml"
+              if String.lowercase (Str.string_after f i) = ".xml"
               then String.sub f 0 i
               else f
           with
               Not_found -> f
         end
       | _ -> "obus.out"
+
+let open_print_header fname =
+  let oc = open_out fname in
+  let fname = Filename.basename fname in
+    Printf.fprintf oc "\
+(*
+ * %s
+ * %s
+ *
+ * File generated with obus-binder.
+ *)
+" fname (String.make (String.length fname) '-');
+    oc
+
+module Printer = Camlp4.Printers.OCaml.Make(Syntax)
 
 let _ =
   Arg.parse args
@@ -52,10 +67,15 @@ let _ =
 
   let output_file_prefix = choose_output_file_prefix () in
   let node = parse_files !xml_files in
-  let implem = GenImplem.gen GenSerializer.default_rules node
-  and interf = GenInterf.gen node in
+  let implem = GenImplem.gen !internal GenSerializer.default_rules node in
 
-    Printers.OCaml.print_implem ~output_file:(output_file_prefix ^ ".ml")
+  let implem_fname = output_file_prefix ^ ".ml"
+  and interf_fname = output_file_prefix ^ ".mli" in
+
+  let printer = new Printer.printer () in
+  let oc = open_print_header implem_fname in
+
+    printer#str_item (Format.formatter_of_out_channel oc)
       (if !internal
        then (<:str_item<
              open Values;;
@@ -66,9 +86,8 @@ let _ =
              open Values;;
              open Wire;;
              $implem$>>));
-    Printers.OCaml.print_interf ~output_file:(output_file_prefix ^ ".mli")
-      (if !internal
-       then interf
-       else (<:sig_item<
-             open OBus
-             $interf$>>))
+
+    let oc = open_print_header interf_fname in
+      if not !internal
+      then output_string oc "\nopen OBus\n";
+      PrintInterf.print !internal oc node

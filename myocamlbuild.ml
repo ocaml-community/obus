@@ -46,6 +46,7 @@ struct
      "connection";
      "cookie";
      "proxy";
+     "rules";
      "bus";
      "DBus"]
 

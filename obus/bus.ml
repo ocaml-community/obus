@@ -14,27 +14,24 @@ type name = string
 type t = {
   name : name;
   connection : Connection.t;
-(*  message_bus : DBus.t Proxy.t;*)
 }
 
 let from_connection connection =
-(*  let message_bus = Proxy.make connection DBus.interface "org.freedesktop.DBus" "/org/freedesktop/DBus" in*)
-    {
-      name = begin
-        let (_, body) =
-          Connection.send_message_sync connection
-            (Message.method_call []
-               "org.freedesktop.DBus"
-               "/org/freedesktop/DBus"
-               "org.freedesktop.DBus" "Hello"
-               []) in
-        let (name, _) =
-          (get_values (cons string nil) body) in
-          name
-      end;
-      connection = connection;
-(*      message_bus = message_bus;*)
-    }
+  {
+    name = begin
+      let (_, body) =
+        Connection.send_message_sync connection
+          (Message.method_call []
+             "org.freedesktop.DBus"
+             "/org/freedesktop/DBus"
+             "org.freedesktop.DBus" "Hello"
+             []) in
+        match body with
+          | [String name] -> name
+          | _ -> raise Wire.Reading.Unexpected_signature
+    end;
+    connection = connection;
+  }
 
 let connect addresses =
   from_connection (Connection.of_addresses addresses ~shared:false)
@@ -46,5 +43,5 @@ let dispatch bus = Connection.dispatch bus.connection
 
 let name { name = x } = x
 let connection { connection = x } = x
-let make_proxy bus interface name path =
-  Proxy.make bus.connection interface ~destination:name path
+let make_proxy bus interface destination path =
+  Proxy.make (connection bus) interface ~sender:(name bus) ~destination:destination path

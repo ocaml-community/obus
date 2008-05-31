@@ -66,6 +66,9 @@ val obus_values : caml_type
 val obus_dtype : caml_type
 val obus_dtypes : caml_type
 
+val caml_type_of_string : string -> caml_type
+val string_of_caml_type : caml_type -> string
+
 type dtype =
   | Tbyte
   | Tboolean

@@ -91,7 +91,7 @@ val guid : t -> guid
 open Wire
 
 type 'a reader = Header.recv -> buffer -> ptr -> 'a
-type writer = Header.byte_order -> buffer -> ptr -> buffer * ptr
+type writer = buffer -> ptr -> buffer * ptr
 
 val raw_send_message_sync : t -> Header.send -> writer -> 'a reader -> 'a
 val raw_send_message_async : t -> Header.send -> writer -> unit reader -> unit
@@ -99,4 +99,4 @@ val raw_send_message_no_reply : t -> Header.send -> writer -> unit
 val raw_add_filter : t -> bool reader -> unit
 
 val read_values : Values.values reader
-val write_values : Values.values -> writer
+val write_values : Values.values -> Header.byte_order -> writer

@@ -1,27 +1,54 @@
 <node>
   <interface name="org.freedesktop.DBus" cname="">
-    <proxy name="proxy" type="bus"
-           destination="org.freedesktop.DBus"
-           path="/org/freedesktop/DBus"/>
+    <doc>
+      This interface describe the functions available on the message
+      bus.
+    </doc>
+    <doc>
+      You can find a complete description of each function and their
+      parameters in the
+      @see &lt;http://dbus.freedesktop.org/doc/dbus-specification.html&gt; DBus specification.
+    </doc>
     <method name="Hello">
       <arg direction="out" type="s"/>
     </method>
+    <flag name="dbus_name_flag" mode="poly" bitwise="true">
+      <value key="1" name="allow_replacement"/>
+      <value key="2" name="replace_existing"/>
+      <value key="3" name="do_not_queue"/>
+    </flag>
+    <flag name="request_name_result" mode="poly">
+      <value key="1" name="primary_owner"/>
+      <value key="2" name="in_queue"/>
+      <value key="3" name="exists"/>
+      <value key="4" name="already_owner"/>
+    </flag>
     <method name="RequestName">
       <arg direction="in" type="s"/>
-      <arg direction="in" type="u"/>
-      <arg direction="out" type="u"/>
+      <arg direction="in" type="u" ctype="dbus_name_flag list"/>
+      <arg direction="out" type="u" ctype="request_name_result"/>
     </method>
+    <flag name="release_name_result" mode="poly">
+      <value key="1" name="released"/>
+      <value key="2" name="non_existent"/>
+      <value key="3" name="not_owner"/>
+    </flag>
     <method name="ReleaseName">
       <arg direction="in" type="s"/>
       <arg direction="out" type="u"/>
     </method>
-    <flag name="start_service_by_name_result">
-      <value key="1" name="`Success"/>
-      <value key="2" name="`Already_running"/>
+    <flag name="start_service_flag" bitwise="true">
+      <doc>
+        These flags are currently unused.
+      </doc>
+    </flag>
+    <flag name="start_service_by_name_result" mode="poly">
+      <value key="1" name="success"/>
+      <value key="2" name="already_running"/>
     </flag>
     <method name="StartServiceByName">
       <arg direction="in" type="s"/>
-      <arg direction="in" type="u"/>
+      <arg direction="in" type="u" ctype="start_service_flag list"/>
       <arg direction="out" type="u" ctype="start_service_by_name_result"/>
     </method>
     <method name="NameHasOwner">
@@ -34,8 +61,10 @@
     <method name="ListActivatableNames">
       <arg direction="out" type="as"/>
     </method>
+    <convert a="Rules.t" b="string"
+             b_of_a="Rules.to_string"/>
     <method name="AddMatch">
-      <arg direction="in" type="s"/>
+      <arg direction="in" type="s" ctype="Rules.t"/>
     </method>
     <method name="RemoveMatch">
       <arg direction="in" type="s"/>

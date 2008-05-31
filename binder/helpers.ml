@@ -11,8 +11,6 @@ open Camlp4.PreCast
 
 let _loc = Loc.ghost
 
-let dot_regexp = Str.regexp "\\."
-
 let ident_of_string name =
   Ast.idAcc_of_list
     (List.map
@@ -20,7 +18,7 @@ let ident_of_string name =
           if id <> "" && Char.uppercase id.[0] <> id.[0]
           then <:ident< $lid:id$ >>
           else <:ident< $uid:id$ >>)
-       (Str.split dot_regexp name))
+       (Util.split_dot name))
 
 let expr_of_id id = (<:expr< $id:id$ >>)
 let patt_of_id id = (<:patt< $id:id$ >>)
@@ -32,12 +30,12 @@ let expr_of_chr x = Ast.ExChr(_loc, String.escaped (String.make 1 x))
 let patt_of_chr x = Ast.PaChr(_loc, String.escaped (String.make 1 x))
 
 let idexpr_of_string name =
-  if name.[0] = '`'
+  if name <> "" && name.[0] = '`'
   then Ast.ExVrn(_loc, String.sub name 1 (String.length name - 1))
   else (expr_of_id (ident_of_string name))
 
 let idpatt_of_string name =
-  if name.[0] = '`'
+  if name <> "" && name.[0] = '`'
   then Ast.PaVrn(_loc, String.sub name 1 (String.length name - 1))
   else (patt_of_id (ident_of_string name))
 

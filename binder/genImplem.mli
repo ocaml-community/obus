@@ -9,5 +9,5 @@
 
 (** Generate a module implementation *)
 
-val gen : GenSerializer.rule list -> Introspect.module_tree -> Camlp4.PreCast.Ast.str_item
+val gen : bool -> GenSerializer.rule list -> Introspect.module_tree -> Camlp4.PreCast.Ast.str_item
 

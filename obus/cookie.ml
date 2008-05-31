@@ -37,7 +37,8 @@ let raw_send_message_with_cookie connection header writer reader =
     cookie
 
 let send_message_with_cookie connection (header, body) =
-  raw_send_message_with_cookie connection header (Connection.write_values body)
+  raw_send_message_with_cookie connection header
+    (Connection.write_values body header.Header.byte_order)
     (fun header buf ptr ->
        let values = Connection.read_values header buf ptr in
          (header, values))

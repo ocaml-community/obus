@@ -15,6 +15,10 @@ val with_open_out : string -> (out_channel -> 'a) -> 'a
 val ljoin : string -> string list -> string
 val rjoin : string -> string list -> string
 val split_upper : string -> string list
+val dot_regexp : Str.regexp
+val newline_regexp : Str.regexp
+val split_dot : string -> string list
+val split_lines : string -> string list
 
 val part_map : ('a -> 'b option) -> 'a list -> 'b list * 'a list
 

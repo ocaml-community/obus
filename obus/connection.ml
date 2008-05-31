@@ -23,7 +23,7 @@ module ObjectSet = SSet
 type guid = Address.guid
 
 type 'a reader = Header.recv -> string -> int -> 'a
-type writer = byte_order -> string -> int -> string * int
+type writer = string -> int -> string * int
 
 type waiting_mode =
   | Wait_sync of Mutex.t
@@ -151,7 +151,7 @@ let write_one_message transport buffer header serial body_writer =
                        'B')
   in
   let (new_buffer, i) = fields_writer !buffer header.fields in
-  let (new_buffer, j) = body_writer header.byte_order new_buffer i in
+  let (new_buffer, j) = body_writer new_buffer i in
     String.unsafe_set new_buffer 0  byte_order_code;
     constant_part_writer new_buffer
       header.message_type
@@ -196,10 +196,10 @@ let write_values body byte_order buffer ptr = match byte_order with
   | Big_endian -> Values.BEWriter.write_values buffer ptr body
 
 let send_message_async connection (header, body) f =
-  raw_send_message_async connection header (write_values body)
+  raw_send_message_async connection header (write_values body header.byte_order)
     (fun header buffer ptr -> f (header, read_values header buffer ptr))
 let send_message_no_reply connection (header, body) =
-  raw_send_message_no_reply connection header (write_values body)
+  raw_send_message_no_reply connection header (write_values body header.byte_order)
 let add_filter connection filter =
   Protected.update (fun l -> (User(filter), Wait_async) :: l) connection.filters
 let add_interface connection interface =
@@ -373,4 +373,5 @@ let raw_send_message_sync connection header body_writer body_reader =
 
 let send_message_sync connection (header, body) =
   raw_send_message_sync connection header
-    (write_values body) (fun header buffer ptr -> (header, read_values header buffer ptr))
+    (write_values body header.byte_order)
+    (fun header buffer ptr -> (header, read_values header buffer ptr))

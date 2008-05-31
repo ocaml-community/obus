@@ -11,7 +11,7 @@
 
 val native_byte_order : Header.byte_order
   (** Byte order of the current architecture. It is used as default
-      for sended message. *)
+      for sent message. *)
 
 val protocol_version : int
   (** The version of the DBus protocol implemented by the library *)
