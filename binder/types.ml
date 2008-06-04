@@ -18,23 +18,19 @@ type patt = Ast.patt
 
 type var = string
 
-type typ =
-  | Type of string * typ list
-  | Cons of typ * typ
-  | Nil
+type caml_type =
+  | Type of string * caml_type list
+  | Tuple of caml_type list
   | Var of var
 
 let typ id args = Type(id, args)
-let v x = Var(x)
-let rec cons x y = Cons(x, y)
-let nil = Nil
-let tuple l = List.fold_right (fun x y -> Cons(x, y)) l Nil
-let rec list_of_tuple = function
-  | Cons(x, y) -> x :: list_of_tuple y
-  | Nil -> []
+let v x = Var x
+let tuple l = Tuple l
+let list_of_tuple = function
+  | Tuple l -> l
   | x -> [x]
 
-let string_of_type empty =
+let string_of_caml_type =
   let at_top x = x
   and not_at_top x = "(" ^ x ^ ")" in
   let rec aux top = function
@@ -42,21 +38,21 @@ let string_of_type empty =
     | Type(t, [arg]) -> aux not_at_top arg ^ " " ^ t
     | Type(t, args) ->
         "(" ^ String.concat ", " (List.map (aux at_top) args) ^ ") " ^ t
-    | Cons _ as l ->
-        top (String.concat " * " (List.map (aux not_at_top) (list_of_tuple l)))
-    | Nil -> empty
+    | Tuple [] -> "unit"
+    | Tuple l ->
+        top (String.concat " * " (List.map (aux not_at_top) l))
     | Var(x) -> "'" ^ x
   in
     aux at_top
 
-let rec ctyp_of_type = function
+let rec ctyp_of_caml_type = function
   | Type(t, args) ->
-      List.fold_left (fun acc t -> <:ctyp< $ctyp_of_type t$ $acc$ >>) (<:ctyp< $id:ident_of_string t$ >>) args
-  | Nil -> (<:ctyp< unit >>)
-  | Cons _ as ts -> Ast.TyTup(_loc, Ast.tySta_of_list (List.map ctyp_of_type (list_of_tuple ts)))
+      List.fold_left (fun acc t -> <:ctyp< $ctyp_of_caml_type t$ $acc$ >>) (<:ctyp< $id:ident_of_string t$ >>) args
+  | Tuple [] -> (<:ctyp< unit >>)
+  | Tuple l -> Ast.TyTup(_loc, Ast.tySta_of_list (List.map ctyp_of_caml_type l))
   | Var x -> (<:ctyp< '$x$ >>)
 
-let ctyp_func_of_types types acc = List.fold_right (fun t acc -> <:ctyp< $ctyp_of_type t$ -> $acc$ >>) types acc
+let ctyp_func_of_caml_types types acc = List.fold_right (fun t acc -> <:ctyp< $ctyp_of_caml_type t$ -> $acc$ >>) types acc
 
 module Caml =
   Camlp4.Printers.OCaml.Make
@@ -64,7 +60,7 @@ module Caml =
        (Camlp4OCamlRevisedParser.Make
           (Camlp4.OCamlInitSyntax.Make(Ast)(Gram)(Quotation))))
 
-let type_of_string empty str =
+let caml_type_of_string str =
   let fail () = failwith ("can not understand this caml type: " ^ str) in
   let parse_id id =
     Util.ljoin "." (List.map (function
@@ -79,7 +75,7 @@ let type_of_string empty str =
     | Ast.TyTup(_, t) -> tuple (List.map parse_type (Ast.list_of_ctyp t []))
     | (<:ctyp< '$x$ >>) -> v x
     | (<:ctyp< $_$ -> $_$ >>) -> tuple (parse_fun t)
-    | _ -> let args, id = parse_app [] t in if id = empty then nil else typ id args
+    | _ -> let args, id = parse_app [] t in if id = "unit" then Tuple [] else typ id args
   and parse_fun = function
     | (<:ctyp< $a$ -> $b$ >>) -> parse_type a :: parse_fun b
     | t -> [parse_type t]
@@ -92,12 +88,8 @@ type dbus_type = dtype
 
 let dbus_type_of_signature = dtype_of_signature
 let signature_of_dbus_type = signature_of_dtype
-let dbus_types_of_signature = dtypes_of_signature
-let signature_of_dbus_types = signature_of_dtypes
 
-type caml_type = typ
-
-let unit = Nil
+let unit = tuple []
 let int = typ "int" []
 let int32 = typ "int32" []
 let int64 = typ "int64" []
@@ -106,10 +98,10 @@ let bool = typ "bool" []
 let char = typ "char" []
 let string = typ "string" []
 let list x = typ "list" [x]
-let array x = typ "array" [x]
 let obus_value = typ "OBus.Values.value" []
 let obus_values = typ "OBus.Values.values" []
 let obus_dtype = typ "OBus.Values.dtype" []
 let obus_dtypes = typ "OBus.Values.dtypes" []
-let caml_type_of_string = type_of_string "unit"
-let string_of_caml_type = string_of_type "unit"
+
+let string_of_eqn (ct, dt) =
+  string_of_caml_type ct ^ " = " ^ signature_of_dbus_type dt

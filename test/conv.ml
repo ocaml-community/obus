@@ -7,86 +7,99 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open GenSerializer
+open Camlp4.PreCast
 open Types
-open Helpers
-open Optimize
+open Solver
+open Instruction
+open GenSerializer
+
+let _loc = Loc.ghost
 
 let foo = typ "foo" []
 let bar = typ "bar" []
 
-let rules =
-  rule_convert foo (tuple [int; int])
-    (<:expr< fun (x,y) -> Foo(x, y) >>)
-    (<:expr< function Foo(x, y) -> (x, y) >>)
-  :: rule_record bar
-    [F"a", int;
-     F"b", foo;
-     F"c", string]
-  :: default_rules
+let common_rules =
+  [ rule_record bar
+      ["a", int;
+       "b", foo;
+       "c", string] ]
 
-let test env a b =
-  Printf.printf "testing: %s <-> %s => %!"
-    (string_of_type a)
-    (signature_of_dbus_type b);
-  try
-    let result = gen_reader false rules a b env in
-      Printf.printf "OK\n";
-      Some result
-  with
-      Failure _ ->
+let rrules =
+  (function
+     | Type("foo", []), x ->
+         dep [< (tuple [int; int], x) >]
+           (fun is -> is @ [Iconvert(<:expr< fun (x, y) -> Foo(x, y) >>)])
+     | _ -> fail)
+  :: common_rules
+  @ Reading.default_rules
+
+let wrules =
+  (function
+     | Type("foo", []), x ->
+         dep [< (tuple [int; int], x) >]
+           (fun is -> [Iconvert(<:expr< fun (Foo(x, y)) -> (x, y) >>)] @ is)
+     | _ -> fail)
+  :: common_rules
+  @ Writing.default_rules
+
+let test eqn =
+  Printf.printf "testing: %s => %!" (string_of_eqn eqn);
+  match solve rrules eqn with
+    | Some sol ->
+        Printf.printf "OK\n"
+    | None  ->
         Printf.printf "Failure\nHere is the trace:\n%!";
-        begin try
-          ignore (gen_reader true rules a b []);
-        with _ -> ()
-        end;
-        print_newline ();
-        None
+        ignore (solve ~printer:string_of_eqn rrules eqn);
+        print_newline ()
 
 module Printer = Camlp4.Printers.OCaml.Make(Syntax)
 
 let tests =
-  [int, [Tuint32];
-   list int, [Tarray Tint16];
-   list (tuple [int; int]), [Tarray (Tstructure [Tuint32; Tbyte])];
-   tuple [int; int; int], [Tint32; Tuint32; Tint32];
-   tuple [bool; list (tuple [string; string])], [Tboolean; Tdict(Tstring, Tstring)];
-   tuple [tuple [int; int]], [Tint32; Tuint32];
-   tuple [int; tuple [int; int; int]; int], [Tint32; Tint32; Tuint32; Tuint32; Tint32];
-   bar, [Tint32; Tuint32; Tbyte; Tstring]]
+  [int, Tuint32;
+   list int, Tstructure [Tarray Tint16];
+   list (tuple [int; int]), Tstructure [Tarray (Tstructure [Tuint32; Tbyte])];
+   tuple [int; int; int], Tstructure [Tint32; Tuint32; Tint32];
+   tuple [bool; list (tuple [string; string])], Tstructure [Tboolean; Tdict(Tstring, Tstring)];
+   tuple [bool; list (tuple [string; string])], Tstructure [Tboolean; Tdict(Tstring, Tstring)];
+   tuple [tuple [int; int]], Tstructure [Tint32; Tuint32];
+   tuple [int; tuple [int; int; int]; int], Tstructure [Tint32; Tint32; Tuint32; Tuint32; Tint32];
+   tuple [int; foo; string], Tstructure [Tuint32; Tint32; Tuint32; Tstring];
+   bar, Tstructure [Tint32; Tbyte; Tuint32; Tstring]]
 
 let _ =
-  let env, funcs =
+  List.iter test tests;
+
+  let renv =
     List.fold_left
-      (fun (env, funcs) (a, b) ->
-         match test env a b with
-           | None -> (env, funcs)
-           | Some(env, code) ->
-               let opt = optimize false 0 8 code in
-               let expr = GenCode.generate_reader false Env.empty opt.opt_code
-                 (fun env -> Ast.exCom_of_list (List.map expr_of_id (Env.all env))) in
-                 (env, (a, b, expr) :: funcs))
-      ([], []) tests in
+      (fun env instrs ->
+         let expr, env = Compile.compile_reader instrs Ast.exCom_of_list env in
+           snd (Compile.lookup expr env))
+      Compile.empty_env
+      (Util.filter_map (solve rrules) tests)
+
+  and wenv =
+    List.fold_left
+      (fun env instrs ->
+         let vars, expr, env = Compile.compile_writer instrs <:expr< () >> env in
+           snd (Compile.lookup (List.fold_right (fun x e -> <:expr< fun $x$ -> $e$ >>) vars expr) env))
+      Compile.empty_env
+      (Util.filter_map (solve wrules) tests)
+
+  in
 
   let printer = new Printer.printer () in
   let oc = open_out "/tmp/result.ml" in
   let formatter = Format.formatter_of_out_channel oc in
+  let print_sols env =
     List.iter (fun (id, expr) ->
                  printer#str_item formatter
                    (<:str_item<
                       let $id:id$ = $expr$
                         >>);
                  Format.pp_print_newline formatter ();
-                 Format.pp_print_newline formatter ()) env;
-    List.iter (fun (a, b, expr) ->
-                 Printf.fprintf oc "(* reading function for: %s -> %s *)\n%!"
-                   (signature_of_dbus_type b)
-                   (string_of_type a);
-                 printer#str_item formatter
-                   (<:str_item<
-                      let reader buffer i = $expr$
-                        >>);
-                 Format.pp_print_newline formatter ();
-                 Format.pp_print_newline formatter ()) (List.rev funcs);
+                 Format.pp_print_newline formatter ()) (Compile.dump_env env)
+  in
+    print_sols renv;
+    print_sols wenv;
     close_out oc;
     Printf.printf "result saved in /tmp/result.ml\n"

@@ -9,47 +9,16 @@
 
 type var = string
 
-type typ =
-  | Type of string * typ list
-  | Cons of typ * typ
-  | Nil
+type caml_type =
+    (** The subset of caml types that we handle *)
+  | Type of string * caml_type list
+  | Tuple of caml_type list
   | Var of var
 
-val v : string -> typ
-val typ : string -> typ list -> typ
-val cons : typ -> typ -> typ
-val nil : typ
-val tuple : typ list -> typ
+val v : string -> caml_type
+val typ : string -> caml_type list -> caml_type
+val tuple : caml_type list -> caml_type
   (** Fonctionnal version of typ constructors *)
-
-val list_of_tuple : typ -> typ list
-  (** [list_of_tuple tup] return the list of types contained in
-      [tup]. Return a list containing only [tup] if it is not a
-      tuple. *)
-
-val string_of_type : string -> typ -> string
-  (** [string_of_type empty typ] return a string representation of the
-      type. [empty] is the string representation of the empty
-      tuple. *)
-
-val ctyp_of_type : typ -> Camlp4.PreCast.Ast.ctyp
-  (** [ctyp_of_type typ] return a camlp4 ast representation op
-      [typ] *)
-
-val ctyp_func_of_types : typ list -> Camlp4.PreCast.Ast.ctyp -> Camlp4.PreCast.Ast.ctyp
-  (** [ctyp_func_of_types types acc] return the camlp4 representation
-      of the type [t1 -> t2 -> ... -> tn -> acc] where [types] = [t1;
-      t2; ...; tn] *)
-
-val type_of_string : string -> string -> typ
-  (** [type_of_string empty str] parse a string representation of a
-      string *)
-
-type ident = Camlp4.PreCast.Ast.ident
-type expr = Camlp4.PreCast.Ast.expr
-type patt = Camlp4.PreCast.Ast.patt
-
-type caml_type = typ
 
 val unit : caml_type
 val int : caml_type
@@ -60,14 +29,37 @@ val bool : caml_type
 val char : caml_type
 val string : caml_type
 val list : caml_type -> caml_type
-val array : caml_type -> caml_type
+  (** Standart caml types *)
 val obus_value : caml_type
 val obus_values : caml_type
 val obus_dtype : caml_type
 val obus_dtypes : caml_type
+  (** Types specific to obus *)
+
+val list_of_tuple : caml_type -> caml_type list
+  (** [list_of_tuple tup] return the list of types contained in
+      [tup]. Return a list containing only [tup] if it is not a
+      tuple. *)
+
+val string_of_caml_type : caml_type -> string
+  (** [string_of_type typ] return a string representation of
+      [typ] *)
+
+val ctyp_of_caml_type : caml_type -> Camlp4.PreCast.Ast.ctyp
+  (** [ctyp_of_type typ] return a camlp4 ast representation of
+      [typ] *)
+
+val ctyp_func_of_caml_types : caml_type list -> Camlp4.PreCast.Ast.ctyp -> Camlp4.PreCast.Ast.ctyp
+  (** [ctyp_func_of_types types acc] return the camlp4 representation
+      of the type [t1 -> t2 -> ... -> tn -> acc] where [types] = [t1;
+      t2; ...; tn] *)
 
 val caml_type_of_string : string -> caml_type
-val string_of_caml_type : caml_type -> string
+  (** [type_of_string str] parse a string representation of a type *)
+
+type ident = Camlp4.PreCast.Ast.ident
+type expr = Camlp4.PreCast.Ast.expr
+type patt = Camlp4.PreCast.Ast.patt
 
 type dtype =
   | Tbyte
@@ -91,5 +83,8 @@ type dbus_type = dtype
 
 val dbus_type_of_signature : string -> dbus_type
 val signature_of_dbus_type : dbus_type -> string
-val dbus_types_of_signature : string -> dbus_type list
-val signature_of_dbus_types : dbus_type list -> string
+  (** Read/write a signature for dbus single type *)
+
+val string_of_eqn : caml_type * dbus_type -> string
+  (** [string_of_eqn eqn] return a string describing a
+      [GenSerializer.eqn] equation *)
