@@ -28,7 +28,7 @@ let from_connection connection =
              []) in
         match body with
           | [String name] -> name
-          | _ -> raise Wire.Reading.Unexpected_signature
+          | _ -> raise (Wire.Content_error "unexpected signature")
     end;
     connection = connection;
   }

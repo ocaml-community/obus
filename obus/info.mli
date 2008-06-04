@@ -9,7 +9,7 @@
 
 (** Various informations *)
 
-val native_byte_order : Header.byte_order
+val native_byte_order : Wire.byte_order
   (** Byte order of the current architecture. It is used as default
       for sent message. *)
 

@@ -219,9 +219,143 @@ module type Reader = sig
 end
 
 module type Writer = sig
-  val write_value : buffer -> ptr -> value -> buffer * ptr
-  val write_values : buffer -> ptr -> values -> buffer * ptr
+  val write_value : buffer -> ptr -> value -> ptr
+  val write_values : buffer -> ptr -> values -> ptr
 end
 
-;;
-INCLUDE "obus/values-generated.ml"
+let read_dtype buffer i =
+  let i, len = read_int_byte buffer i in
+    if len < 0 || i + len > String.length buffer then raise Out_of_bounds;
+    if String.unsafe_get buffer (i + len) <> '\x00'
+    then raise (Reading_error "signature does not end with a null byte");
+    let i, t = unsafe_read_dtype buffer i in
+      (i + 1, t)
+
+let read_dtypes buffer i =
+  let i, len = read_int_byte buffer i in
+    if len < 0 || i + len > String.length buffer then raise Out_of_bounds;
+    if String.unsafe_get buffer (i + len) <> '\x00'
+    then raise (Reading_error "signature does not end with a null byte");
+    unsafe_read_dtypes buffer i
+
+let write_dtype buffer i t =
+  let len = dtype_signature_size t in
+  let i = write_int_byte buffer i len in
+    if i + len > String.length buffer then raise Out_of_bounds;
+    let i = unsafe_write_dtype buffer i t in
+      String.unsafe_set buffer i '\x00';
+      i + 1
+
+let write_dtypes buffer i ts =
+  let len = dtypes_signature_size ts in
+  let i = write_int_byte buffer i len in
+    if i + len > String.length buffer then raise Out_of_bounds;
+    let i = unsafe_write_dtypes buffer i ts in
+      String.unsafe_set buffer i '\x00';
+      i + 1
+
+module MakeReader(Reader : Wire.Reader) =
+struct
+  open Reader
+
+  let rec read_value buffer i = function
+    | Tbyte -> let i, v = read_char_byte buffer i in (i, Byte(v))
+    | Tboolean -> let i, v = read_bool_boolean buffer i in (i, Boolean v)
+    | Tint16 -> let i, v = read_int_int16 buffer i in (i, Int16 v)
+    | Tint32 -> let i, v = read_int32_int32 buffer i in (i, Int32 v)
+    | Tint64 -> let i, v = read_int64_int64 buffer i in (i, Int64 v)
+    | Tuint16 -> let i, v = read_int_uint16 buffer i in (i, Uint16 v)
+    | Tuint32 -> let i, v = read_int32_uint32 buffer i in (i, Uint32 v)
+    | Tuint64 -> let i, v = read_int64_uint64 buffer i in (i, Uint64 v)
+    | Tdouble -> let i, v = read_float_double buffer i in (i, Double v)
+    | Tstring -> let i, v = read_string_string buffer i in (i, String v)
+    | Tsignature -> let i, v = read_dtypes buffer i in (i, Signature v)
+    | Tobject_path -> let i, v = read_string_object_path buffer i in (i, Object_path v)
+    | Tarray t ->
+        let i, v =
+          (match t with
+             | Tint64
+             | Tuint64
+             | Tdouble
+             | Tstructure _ -> read_array8
+             | _ -> read_array4) (read_until_rev
+                                    (fun i cont ->
+                                       let i, v = read_value buffer i t in
+                                         v :: cont i) []) buffer i
+        in
+          (i, Array(t, v))
+    | Tdict(tk, tv) ->
+        let i, v =
+          read_array8 (read_until
+                         (fun i acc cont ->
+                            let i = rpad8 i in
+                            let i, k = read_value buffer i tk in
+                            let i, v = read_value buffer i tv in
+                              cont i ((k, v) :: acc)) []) buffer i
+        in
+          (i, Dict(tk, tv, v))
+    | Tstructure tl ->
+        let i, v = read_values buffer (rpad8 i) tl in
+          (i, Structure v)
+    | Tvariant ->
+        let i, t = read_dtype buffer i in
+        let i, v = read_value buffer i t in
+          (i, Variant v)
+  and read_values buffer i = function
+    | [] -> (i, [])
+    | t :: tl ->
+        let i, v = read_value buffer i t in
+        let i, vl = read_values buffer i tl in
+          (i, v :: vl)
+end
+
+module MakeWriter(Writer : Wire.Writer) =
+struct
+  open Writer
+
+  let rec write_value buffer i = function
+    | Byte v -> write_char_byte buffer i v
+    | Boolean v -> write_bool_boolean buffer i v
+    | Int16 v -> write_int_int16 buffer i v
+    | Int32 v -> write_int32_int32 buffer i v
+    | Int64 v -> write_int64_int64 buffer i v
+    | Uint16 v -> write_int_uint16 buffer i v
+    | Uint32 v -> write_int32_uint32 buffer i v
+    | Uint64 v -> write_int64_uint64 buffer i v
+    | Double v -> write_float_double buffer i v
+    | String v -> write_string_string buffer i v
+    | Signature v -> write_dtypes buffer i v
+    | Object_path v -> write_string_object_path buffer i v
+    | Array(t, vs) ->
+        (match t with
+           | Tint64
+           | Tuint64
+           | Tdouble
+           | Tstructure _ -> write_array8
+           | _ -> write_array4)
+          (fun i -> List.fold_left (write_value buffer) i vs)
+          buffer i
+    | Dict(_, _, vs) ->
+        write_array8
+          (fun i ->
+             List.fold_left
+               (fun i (k, v) ->
+                  let i = wpad8 buffer i in
+                  let i = write_value buffer i k in
+                    write_value buffer i v) i vs)
+          buffer i
+    | Structure vs -> write_values buffer (wpad8 buffer i) vs
+    | Variant v ->
+        let i = write_dtype buffer i (dtype_of_value v) in
+          write_value buffer i v
+  and write_values buffer i = function
+    | [] -> i
+    | v :: vs ->
+        let i = write_value buffer i v in
+          write_values buffer i vs
+end
+
+module LEWriter = MakeWriter(Wire.LEWriter)
+module BEWriter = MakeWriter(Wire.BEWriter)
+module LEReader = MakeReader(Wire.LEReader)
+module BEReader = MakeReader(Wire.BEReader)

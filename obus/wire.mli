@@ -15,78 +15,89 @@ type ptr = int
 type buffer = string
     (** A buffer containing a marshaled value *)
 
+type byte_order = Little_endian | Big_endian
+    (** Message byte order *)
+
+(** {6 Errors} *)
+
+exception Out_of_bounds
+  (** Exception raised when the end of the buffer is reached. We do
+      not that exception instead of the one traditionally raised by
+      string functions [Invalid_argument "out of bounds"] to make a
+      difference between out of bounds of serialization functions and
+      ones of convertions functions. *)
+
 exception Content_error of string
-  (** This exception must be raised by convertion functions if a value
-      is invalid *)
+  (** This exception must be raised by convertion functions a value is
+      invalid. *)
 
-(** Exceptions that can be raised by auto-generated
-    marshaling/unmarshaling functions *)
+exception Convertion_failed of exn
+  (** Exception raised while reading/writing if one of the convertion
+      function fail. *)
 
-module Reading : sig
+exception Reading_error of string
+  (** Exception raised if a dbus marshaled message is invalid. In this
+      case the connection will be closed. *)
 
-  (** Consistency errors, the message is an invalid dbus message *)
+exception Writing_error of string
+  (** Exception which can be raised if a message cannot be
+      written. Possible reason are that an array exceed the maximum
+      size, or the message is too big *)
 
-  exception Array_too_big
-    (** The marshaled representation of an array is bigger than
-        allowed by the dbus specification *)
-  exception Invalid_array_size
-    (** The anounced size of an array does not match is real size *)
-  exception Invalid_message_size
-    (** The anounced size of the message is incorrent *)
-  exception Invalid_signature
-    (** A marshaled signature is invalid *)
+(** {6 Basics writing/reading functions which depends on byte
+    order} *)
 
-  (** Content errors *)
+(** The names of functions for reading/writing are of the form
+    action-caml-type_dbus-type *)
 
-  exception Unexpected_signature
-    (** The signature for a variant does not correspond to what we
-        expect *)
-  exception Unexpected_key
-    (** The key for a variant is invalid *)
-end
-
-module Writing : sig
-  exception Array_too_big
-    (** The marhaled representation of an array is too big to be
-        sent *)
-end
-
-val native_byte_order : unit -> int
-
-(** All the following functions assumes that there is enough space in
-    the buffer to read/write something.
-
-    The names of functions for reading/writing are of the form
-    dbus-type_caml-type *)
+type 'a writer = buffer -> ptr -> 'a -> ptr
 
 module type Writer = sig
-  type 'a t = buffer -> ptr -> 'a -> unit
-  val int_int16 : int t
-  val int_int32 : int t
-  val int_int64 : int t
-  val int_uint16 : int t
-  val int_uint32 : int t
-  val int_uint64 : int t
-  val int32_int32 : int32 t
-  val int64_int64 : int64 t
-  val int32_uint32 : int32 t
-  val int64_uint64 : int64 t
-  val float_double : float t
+  val byte_order : byte_order
+  val write_int_int16 : int writer
+  val write_int_int32 : int writer
+  val write_int_int64 : int writer
+  val write_int_uint16 : int writer
+  val write_int_uint32 : int writer
+  val write_int_uint64 : int writer
+  val write_int32_int32 : int32 writer
+  val write_int64_int64 : int64 writer
+  val write_int32_uint32 : int32 writer
+  val write_int64_uint64 : int64 writer
+  val write_float_double : float writer
+  val write_bool_boolean : bool writer
+  val write_string_string : string writer
+  val write_string_object_path : string writer
+    (** There is two cases for arrays: elements are padded on an 4
+        boundary, so there is nothing special to do since the length
+        need a 4 boundary alignment. Or elements are padded on a 8
+        boundary so there is possibly 4 bytes of padding after the
+        length (which are always present, even if the array is empty,
+        and ignored in the array length). *)
+  val write_array4 : (ptr -> ptr) -> buffer -> ptr -> ptr
+  val write_array8 : (ptr -> ptr) -> buffer -> ptr -> ptr
 end
 
+type 'a reader = buffer -> ptr -> ptr * 'a
+
 module type Reader = sig
-  type 'a t = buffer -> ptr -> 'a
-  val int_int16 : int t
-  val int_int32 : int t
-  val int_int64 : int t
-  val int_uint16 : int t
-  val int_uint32 : int t
-  val int_uint64 : int t
-  val int32_int32 : int32 t
-  val int64_int64 : int64 t
-  val int32_uint32 : int32 t
-  val int64_uint64 : int64 t
-  val float_double : float t
+  val byte_order : byte_order
+  val read_int_int16 : int reader
+  val read_int_int32 : int reader
+  val read_int_int64 : int reader
+  val read_int_uint16 : int reader
+  val read_int_uint32 : int reader
+  val read_int_uint64 : int reader
+  val read_int32_int32 : int32 reader
+  val read_int64_int64 : int64 reader
+  val read_int32_uint32 : int32 reader
+  val read_int64_uint64 : int64 reader
+  val read_float_double : float reader
+  val read_bool_boolean : bool reader
+  val read_string_string : string reader
+  val read_string_object_path : string reader
+  val read_array4 : (ptr -> ptr -> 'a) -> 'a reader
+  val read_array8 : (ptr -> ptr -> 'a) -> 'a reader
 end
 
 module LEWriter : Writer
@@ -94,10 +105,47 @@ module BEWriter : Writer
 module LEReader : Reader
 module BEReader : Reader
 
-val string_match : buffer -> ptr -> string -> int -> bool
-  (** [string_match buffer ptr str len] compare the [len] first char
-      of [str] with the content of [buffer] starting at [ptr] *)
+(** {6 Other functions which does not depends on byte order} *)
 
-val realloc_buffer : buffer -> ptr -> buffer
-  (** [realloc buffer n] return a new buffer bigger than [buffer] with
-      same first [n] bytes *)
+val write_char_byte : char writer
+val write_int_byte : int writer
+val write_string_signature : string writer
+
+val read_char_byte : char reader
+val read_int_byte : int reader
+val read_string_signature : string reader
+
+val check_signature : buffer -> ptr -> string -> unit
+  (** [check_signature buffer ptr sig] compare the marshaled signature
+      at pos [ptr] in [buffer] with [sig]. If it match do nothing,
+      if not raise an [Content_error]. *)
+
+val read_until : (ptr -> 'a -> (ptr -> 'a -> 'a) -> 'a) -> 'a -> ptr -> ptr -> 'a
+  (** [read_until reader acc ptr limit] read values with [reader]
+      until it reach [limit]. [reader] take a pointer, an accumulator
+      and a continuation. For example to read a array of int32 into a
+      list:
+
+      [read_array4 (read_until (fun i acc cont -> let i, v =
+      read_int_int32 buffer i in cont i (v :: acc)) []) buffer i]
+
+      Note that this way the resulting list is in reverse order. *)
+
+val read_until_rev : (ptr -> (ptr -> 'a) -> 'a) -> 'a -> ptr -> ptr -> 'a
+  (** [read_until_rev reader acc ptr limit] Used to read arrays and
+      add element in reverse order. So to read a list in right order:
+
+      [read_array4 (read_until (fun i cont -> let i, v =
+      read_int_int32 buffer i in v :: cont i)) buffer i] *)
+
+(** {6 Padding} *)
+
+(** Note: paddings function assumes that the length of the buffer is a
+    multiple of 8 *)
+
+val wpad2 : buffer -> ptr -> ptr
+val wpad4 : buffer -> ptr -> ptr
+val wpad8 : buffer -> ptr -> ptr
+val rpad2 : ptr -> ptr
+val rpad4 : ptr -> ptr
+val rpad8 : ptr -> ptr

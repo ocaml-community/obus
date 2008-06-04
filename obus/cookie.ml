@@ -36,11 +36,11 @@ let raw_send_message_with_cookie connection header writer reader =
     end;
     cookie
 
-let send_message_with_cookie connection (header, body) =
+let send_message_with_cookie connection ?(raise_exn=true) (header, body) =
   raw_send_message_with_cookie connection header
     (Connection.write_values body header.Header.byte_order)
     (fun header buf ptr ->
-       let values = Connection.read_values header buf ptr in
+       let values = Connection.read_values raise_exn header buf ptr in
          (header, values))
 
 let rec get x = match !x with

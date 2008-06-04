@@ -9,21 +9,56 @@
 
 open ThreadImplem
 
-type error =
-  | Read_error
-  | Write_error
-  | Closed
-exception Error of error * exn option
+exception Error of string * exn option
 type backend =
   | Unix of Unix.file_descr
-  | Unknown
+  | Other
+type recv = string -> int -> int -> int
+type send = string -> int -> int -> int
+type close = unit -> unit
 
 type t = {
   backend : backend;
-  recv : string -> int -> int -> int;
-  send : string -> int -> int -> int;
-  close : unit -> unit;
+  recv : recv;
+  send : send;
+  close : close;
 }
+
+let make ~backend ~recv ~send ?close () = {
+  backend = backend;
+  recv = recv;
+  send = send;
+  close = match close with
+    | None -> (fun _ -> ())
+    | Some f -> f
+}
+
+let backend t = t.backend
+let close t = t.close
+
+open Printf
+
+let recv { recv = recv } buffer ofs len =
+  try
+    recv buffer ofs len
+  with
+      exn -> raise (Error(sprintf "recv(%d)" len, Some exn))
+
+let send { send = send } buffer ofs len =
+  try
+    send buffer ofs len
+  with
+      exn -> raise (Error(sprintf "send(%d)" len, Some exn))
+
+let recv_exactly t buffer ofs len =
+  let count = recv t buffer ofs len in
+    if count <> len
+    then raise (Error(sprintf "tried to receive %d, receive effectively %d" len count, None))
+
+let send_exactly t buffer ofs len =
+  let count = send t buffer ofs len in
+    if count <> len
+    then raise (Error(sprintf "tried to send %d, send effectively %d" len count, None))
 
 let fd transport = match transport.backend with
   | Unix fd -> fd

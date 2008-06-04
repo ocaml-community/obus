@@ -108,10 +108,10 @@ open Wire
 
 val dtype_signature_size : dtype -> int
 val dtypes_signature_size : dtypes -> int
-val read_dtype : buffer -> ptr -> dtype
-val read_dtypes : buffer -> ptr -> dtypes
-val write_dtype : buffer -> ptr -> dtype -> unit
-val write_dtypes : buffer -> ptr -> dtypes -> unit
+val read_dtype : buffer -> ptr -> ptr * dtype
+val read_dtypes : buffer -> ptr -> ptr * dtypes
+val write_dtype : buffer -> ptr -> dtype -> ptr
+val write_dtypes : buffer -> ptr -> dtypes -> ptr
 
 module type Reader = sig
   val read_value : buffer -> ptr -> dtype -> ptr * value
@@ -119,8 +119,8 @@ module type Reader = sig
 end
 
 module type Writer = sig
-  val write_value : buffer -> ptr -> value -> buffer * ptr
-  val write_values : buffer -> ptr -> values -> buffer * ptr
+  val write_value : buffer -> ptr -> value -> ptr
+  val write_values : buffer -> ptr -> values -> ptr
 end
 
 module LEReader : Reader

@@ -16,21 +16,23 @@
 type 'a t
   (** A non retreived message content *)
 
-val send_message_with_cookie : Connection.t -> Connection.send_message -> Connection.recv_message t
-  (** [send_message_sync connection message] send a message over a
-      DBus connection, and return immediatly a cookie for getting back
-      the result later *)
+val send_message_with_cookie : Connection.t -> ?raise_exn:bool -> Connection.send_message -> Connection.recv_message t
+  (** [send_message_sync connection raise_exn message] send a message
+      over a DBus connection, and return immediatly a cookie for
+      getting back the result later *)
 
 val get : 'a t -> 'a
-  (** [get cookie] get the value associated with a cookie,
-      eventually waiting for it *)
+  (** [get cookie] get the value associated with a cookie, eventually
+      waiting for it. If an exception was raised at the reception of
+      the reply, then it is raised now. *)
 
 val is_ready : 'a t -> bool
-  (** [is_ready cookie] return true is the cookie is evaluated *)
+  (** [is_ready cookie] return true if the cookie is evaluated *)
 
 val get_if_ready : 'a t -> 'a option
   (** [get_if_ready cookie] return Some(v) where v is the value of
-      [cookie] if it is ready, of None if not *)
+      [cookie] if it is ready, of None if not, and raise an exception
+      like [get]. *)
 
 (**/**)
 

@@ -9,14 +9,15 @@
 
 open Transport
 
-let make_transport fd = {
-  backend = Unix fd;
-  recv = Unix.read fd;
-  send = Unix.write fd;
-  close = (fun () ->
-             Unix.shutdown fd Unix.SHUTDOWN_ALL;
-             Unix.close fd);
-}
+let make_transport fd =
+  make
+    ~backend:(Unix fd)
+    ~send:(Unix.write fd)
+    ~recv:(Unix.read fd)
+    ~close:(fun () ->
+              Unix.shutdown fd Unix.SHUTDOWN_ALL;
+              Unix.close fd)
+    ()
 
 let _ =
   register_maker begin fun (_, known, _) -> match known with

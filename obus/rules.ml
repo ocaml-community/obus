@@ -31,7 +31,6 @@ let to_string l =
           | Type(x) ->
               ("type",
                match x with
-                 | Invalid -> "invalid"
                  | Method_call -> "method_call"
                  | Method_return -> "method_return"
                  | Error -> "error"

@@ -37,3 +37,20 @@ val name : 'a t -> name option
 
 val connection : 'a t -> Connection.t
   (** [connection proxy] return the connection used for [proxy] *)
+
+(**/**)
+
+type ('a, 'b, 'c) method_call_desc = {
+  method_interface : 'a Interface.t;
+  method_member : string;
+  method_in_sig : string;
+  method_out_sig : string;
+  method_le_writer : Connection.writer;
+  method_be_writer : Connection.writer;
+  method_le_reader : ('b -> 'c Connection.reader);
+  method_be_reader : ('b -> 'c Connection.reader);
+}
+
+val proxy_call_sync : Connection.t -> ('a, 'b, 'c) method_call_desc -> 'b -> 'a t -> 'c
+val proxy_call_async : Connection.t -> ('a, 'b, unit) method_call_desc -> 'b -> 'a t -> unit
+val proxy_call_with_cookie : Connection.t -> ('a, 'b, 'c) method_call_desc -> 'b -> 'a t -> 'c Cookie.t

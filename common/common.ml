@@ -29,14 +29,14 @@ type dtypes = dtype list
 let rec _dtype_signature_size acc = function
   | Tarray(t) -> _dtype_signature_size (acc + 1) t
   | Tdict(_, t) -> _dtype_signature_size (acc + 4) t
-  | Tstructure ts-> _dtypes_signature_size (acc + 2) ts
+  | Tstructure ts -> _dtypes_signature_size (acc + 2) ts
   | _ -> acc + 1
 and _dtypes_signature_size acc ts = List.fold_left _dtype_signature_size acc ts
 
 let dtype_signature_size = _dtype_signature_size 0
 let dtypes_signature_size = _dtypes_signature_size 0
 
-let rec _write_dtype buffer i = function
+let rec unsafe_write_dtype buffer i = function
   | Tbyte -> String.unsafe_set buffer i 'y'; i + 1
   | Tboolean -> String.unsafe_set buffer i 'b'; i + 1
   | Tint16 -> String.unsafe_set buffer i 'n'; i + 1
@@ -51,35 +51,32 @@ let rec _write_dtype buffer i = function
   | Tsignature -> String.unsafe_set buffer i 'g'; i + 1
   | Tarray(t) ->
       String.unsafe_set buffer i 'a';
-      _write_dtype buffer (i + 1) t
+      unsafe_write_dtype buffer (i + 1) t
   | Tdict(tk, tv) ->
       String.unsafe_set buffer i 'a';
       String.unsafe_set buffer (i + 1) '{';
-      let i = _write_dtype buffer (i + 2) tk in
-      let i = _write_dtype buffer i tv in
+      let i = unsafe_write_dtype buffer (i + 2) tk in
+      let i = unsafe_write_dtype buffer i tv in
         String.unsafe_set buffer i '}';
         i + 1
   | Tstructure(ts) ->
       String.unsafe_set buffer i '(';
-      let i = _write_dtypes buffer (i + 1) ts in
+      let i = unsafe_write_dtypes buffer (i + 1) ts in
         String.unsafe_set buffer i ')';
         i + 1
   | Tvariant ->  String.unsafe_set buffer i 'v'; i + 1
-and _write_dtypes buffer = List.fold_left (_write_dtype buffer)
-
-let write_dtype buffer i t = String.unsafe_set buffer (_write_dtype buffer i t) '\x00'
-let write_dtypes buffer i ts = String.unsafe_set buffer (_write_dtypes buffer i ts) '\x00'
+and unsafe_write_dtypes buffer = List.fold_left (unsafe_write_dtype buffer)
 
 let signature_of_dtype t =
   let len = dtype_signature_size t in
   let str = String.create len in
-    ignore (_write_dtype str 0 t);
+    ignore (unsafe_write_dtype str 0 t);
     str
 
 let signature_of_dtypes ts =
   let len = dtypes_signature_size ts in
   let str = String.create len in
-    ignore (_write_dtypes str 0 ts);
+    ignore (unsafe_write_dtypes str 0 ts);
     str
 
 let basic_of_char = function
@@ -97,18 +94,18 @@ let basic_of_char = function
   | 'g' -> Tsignature
   | c -> raise (Failure (Printf.sprintf "unknown type code %c" c))
 
-let rec _read_dtype buffer i =
+let rec unsafe_read_dtype buffer i =
   match String.unsafe_get buffer i with
     | 'a' ->
         if String.unsafe_get buffer (i + 1) = '{'
         then begin
           let tk = basic_of_char (String.unsafe_get buffer (i + 2)) in
-          let i, tv = _read_dtype buffer (i + 3) in
+          let i, tv = unsafe_read_dtype buffer (i + 3) in
             if String.unsafe_get buffer i <> '}'
-            then raise (Failure "'}' expected")
+            then raise (Failure "'}' missing")
             else (i + 1, Tdict(tk, tv))
         end else begin
-          let i, t = _read_dtype buffer (i + 1) in
+          let i, t = unsafe_read_dtype buffer (i + 1) in
             (i, Tarray(t))
         end
     | '(' ->
@@ -121,16 +118,11 @@ and read_until cend buffer i =
   if String.unsafe_get buffer i = cend
   then (i + 1, [])
   else
-    let i, hd = _read_dtype buffer i in
+    let i, hd = unsafe_read_dtype buffer i in
     let i, tl = read_until cend buffer i in
       (i, hd :: tl)
 
-let read_dtype buffer i =
-  let i, t = _read_dtype buffer i in
-    if String.unsafe_get buffer i = '\x00'
-    then t
-    else raise (Failure "null char missing after signature of single type")
-let read_dtypes buffer i = snd (read_until '\x00' buffer i)
+let unsafe_read_dtypes buffer i = read_until '\x00' buffer i
 
-let dtype_of_signature signature = read_dtype (signature ^ "\x00") 0
-let dtypes_of_signature signature = read_dtypes (signature ^ "\x00") 0
+let dtype_of_signature signature = snd (unsafe_read_dtype (signature ^ "\x00") 0)
+let dtypes_of_signature signature = snd (unsafe_read_dtypes (signature ^ "\x00") 0)

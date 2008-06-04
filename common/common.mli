@@ -42,14 +42,13 @@ val dtype_signature_size : dtype -> int
 val dtypes_signature_size : dtypes -> int
   (** Compute the size that a signature will take *)
 
-val read_dtype : string -> int -> dtype
-val read_dtypes : string -> int -> dtypes
+val unsafe_read_dtype : string -> int -> int * dtype
+val unsafe_read_dtypes : string -> int -> int * dtypes
   (** Read a signature containing one or more dbus types followed by a
-      null character. The function assumes that the null character is
-      present before the end of the buffer. *)
+      null character. The two functions assumes that the null
+      character is present before the end of the buffer. *)
 
-val write_dtype : string -> int -> dtype -> unit
-val write_dtypes : string -> int -> dtypes -> unit
-  (** Write a signature followed by a null character. The two function
-      assumes that there is enough space in the buffer to write the
-      entire signature *)
+val unsafe_write_dtype : string -> int -> dtype -> int
+val unsafe_write_dtypes : string -> int -> dtypes -> int
+  (** Write a signature. The two function assumes that there is enough
+      space in the buffer to write the entire signature *)

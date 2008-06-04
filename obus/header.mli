@@ -10,7 +10,6 @@
 (** Header description *)
 
 type message_type =
-  | Invalid
   | Method_call
   | Method_return
   | Error
@@ -43,12 +42,9 @@ type fields = {
 val empty_fields : fields
   (** Fields where each entry is [None] *)
 
-(** Message byte order *)
-type byte_order = Little_endian | Big_endian
-
 (** Header description *)
 type ('length, 'serial)  t = {
-  byte_order : byte_order;
+  byte_order : Wire.byte_order;
   message_type : message_type;
   flags : flags;
   length : 'length;
@@ -68,22 +64,3 @@ type recv = (int, serial) t
         automatically by the library. Or a 'recv' header, which mean
         that the message has been received, so we can look at these
         informations. *)
-
-(**/**)
-
-open Wire
-
-module type Reader = sig
-  val read_constant_part : buffer -> message_type * flags * int * serial * int
-  val read_fields : buffer -> int -> fields
-end
-
-module type Writer = sig
-  val write_constant_part : buffer -> message_type -> flags -> int -> serial -> unit
-  val write_fields : buffer -> fields -> buffer * int
-end
-
-module LEReader : Reader
-module BEReader : Reader
-module LEWriter : Writer
-module BEWriter : Writer

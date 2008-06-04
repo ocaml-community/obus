@@ -143,11 +143,11 @@ let launch transport =
   let read =
     if Log.Debug.authentification
     then
-      (fun buf count -> let count = transport.Transport.recv buf 0 count in
-         DEBUG("received: %s" (String.sub buf 0 count));
+      (fun buf count -> let count = Transport.recv transport buf 0 count in
+         DEBUG("received: %s" (String.escaped (String.sub buf 0 count)));
          count)
     else
-      (fun buf count -> transport.Transport.recv buf 0 count)
+      (fun buf count -> Transport.recv transport buf 0 count)
   in
   let lexbuf = Lexing.from_function read in
 
@@ -157,8 +157,8 @@ let launch transport =
       Buffer.add_string buf "\r\n";
       let line = Buffer.contents buf in
       let len = String.length line in
-        DEBUG("sending: %s" line);
-        assert (transport.Transport.send line 0 len = len)
+        DEBUG("sending: %s" (String.escaped line));
+        Transport.send_exactly transport line 0 len
 
   and recv () =
     AuthLexer.command lexbuf
@@ -166,7 +166,7 @@ let launch transport =
 
     match find_mechanism (Protected.get makers) with
       | Some(cmd, state) ->
-          assert (transport.Transport.send "\x00" 0 1 = 1);
+          Transport.send_exactly transport "\x00" 0 1;
           send cmd;
           client_machine_exec recv send state
       | None -> None
