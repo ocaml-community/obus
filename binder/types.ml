@@ -84,10 +84,14 @@ let caml_type_of_string str =
 
 include Common
 
-type dbus_type = dtype
+type dbus_type =
+  | Tsingle of dtype
+  | Tseq of dtype list
 
-let dbus_type_of_signature = dtype_of_signature
-let signature_of_dbus_type = signature_of_dtype
+let dbus_type_of_signature str = Tsingle(dtype_of_signature str)
+let signature_of_dbus_type dt = match dt with
+  | Tsingle t -> signature_of_dtype t
+  | Tseq t -> signature_of_dtypes t
 
 let unit = tuple []
 let int = typ "int" []

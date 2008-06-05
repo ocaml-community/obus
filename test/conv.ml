@@ -28,7 +28,7 @@ let rrules =
   (function
      | Type("foo", []), x ->
          dep [< (tuple [int; int], x) >]
-           (fun is -> is @ [Iconvert(<:expr< fun (x, y) -> Foo(x, y) >>)])
+           (fun is -> flat is @ [Iconvert(<:expr< fun (x, y) -> Foo(x, y) >>)])
      | _ -> fail)
   :: common_rules
   @ Reading.default_rules
@@ -37,7 +37,7 @@ let wrules =
   (function
      | Type("foo", []), x ->
          dep [< (tuple [int; int], x) >]
-           (fun is -> [Iconvert(<:expr< fun (Foo(x, y)) -> (x, y) >>)] @ is)
+           (fun is -> [Iconvert(<:expr< fun (Foo(x, y)) -> (x, y) >>)] @ flat is)
      | _ -> fail)
   :: common_rules
   @ Writing.default_rules
@@ -55,16 +55,16 @@ let test eqn =
 module Printer = Camlp4.Printers.OCaml.Make(Syntax)
 
 let tests =
-  [int, Tuint32;
-   list int, Tstructure [Tarray Tint16];
-   list (tuple [int; int]), Tstructure [Tarray (Tstructure [Tuint32; Tbyte])];
-   tuple [int; int; int], Tstructure [Tint32; Tuint32; Tint32];
-   tuple [bool; list (tuple [string; string])], Tstructure [Tboolean; Tdict(Tstring, Tstring)];
-   tuple [bool; list (tuple [string; string])], Tstructure [Tboolean; Tdict(Tstring, Tstring)];
-   tuple [tuple [int; int]], Tstructure [Tint32; Tuint32];
-   tuple [int; tuple [int; int; int]; int], Tstructure [Tint32; Tint32; Tuint32; Tuint32; Tint32];
-   tuple [int; foo; string], Tstructure [Tuint32; Tint32; Tuint32; Tstring];
-   bar, Tstructure [Tint32; Tbyte; Tuint32; Tstring]]
+  [int, Tsingle Tuint32;
+   list int, Tseq [Tarray Tint16];
+   list (tuple [int; int]), Tseq [Tarray (Tstructure [Tuint32; Tbyte])];
+   tuple [int; int; int], Tseq [Tint32; Tuint32; Tint32];
+   tuple [bool; list (tuple [string; string])], Tseq [Tboolean; Tdict(Tstring, Tstring)];
+   tuple [bool; list (tuple [string; string])], Tseq [Tboolean; Tdict(Tstring, Tstring)];
+   tuple [tuple [int; int]], Tseq [Tint32; Tuint32];
+   tuple [int; tuple [int; int; int]; int], Tseq [Tint32; Tint32; Tuint32; Tuint32; Tint32];
+   tuple [int; foo; string], Tsingle (Tstructure [Tuint32; Tint32; Tuint32; Tstring]);
+   bar, Tsingle (Tstructure  [Tint32; Tbyte; Tuint32; Tstring])]
 
 let _ =
   List.iter test tests;
@@ -80,7 +80,7 @@ let _ =
   and wenv =
     List.fold_left
       (fun env instrs ->
-         let vars, expr, env = Compile.compile_writer instrs <:expr< () >> env in
+         let vars, expr, env = Compile.compile_writer instrs <:expr< i >> env in
            snd (Compile.lookup (List.fold_right (fun x e -> <:expr< fun $x$ -> $e$ >>) vars expr) env))
       Compile.empty_env
       (Util.filter_map (solve wrules) tests)

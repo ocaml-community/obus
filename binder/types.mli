@@ -79,7 +79,9 @@ type dtype =
   | Tstructure of dtype list
   | Tvariant
 
-type dbus_type = dtype
+type dbus_type =
+  | Tsingle of dtype
+  | Tseq of dtype list
 
 val dbus_type_of_signature : string -> dbus_type
 val signature_of_dbus_type : dbus_type -> string

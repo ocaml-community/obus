@@ -68,7 +68,7 @@ struct
 
   (* Files using each syntax *)
   let use_syntax =
-    ["seq", ["binder/genSerializer.ml"];
+    ["seq", ["binder/genSerializer.ml"; "binder/rules.ml"];
      "log", prepend "obus" ["auth.ml"; "address.ml"; "transport.ml"; "connection.ml"];
      "dbus_typval", []]
 end
@@ -132,6 +132,7 @@ let _ =
         Pathname.define_context "samples/proxies" [ "samples/interfaces" ];
         Pathname.define_context "samples/threaded" [ "samples/interfaces" ];
         Pathname.define_context "samples/interfaces" [ "obus" ];
+        Pathname.define_context "test" [ "common"; "binder" ];
 
         (* rule for building dbus interface binding *)
         rule "obus-binding"

@@ -67,14 +67,20 @@ let flat instrs =
                   Ast.exCom_of_list,
                   instrs)]
 
+(* Rule for structure *)
+let structure_rule = function
+  | x, Tsingle (Tstructure y) ->
+      dep [< (x, Tseq y) >] (fun x -> Istructure :: x)
+  | _ -> fail
+
 (* Rule for dealing with tuple in types *)
 let tuple_rule = function
   | Tuple [x], y ->
       dep [< (x, y) >] flat
-  | x, Tstructure [y] ->
-      dep [< (x, y) >] (fun x -> Istructure :: x)
-  | Tuple(x :: lx), Tstructure(y :: ly) ->
-      dep [< (x, y); (Tuple lx, Tstructure ly) >]
+  | x, Tseq [y] ->
+      dep [< (x, Tsingle y) >] (fun x -> x)
+  | Tuple(x :: lx), Tseq(y :: ly) ->
+      dep [< (x, Tsingle y); (Tuple lx, Tseq ly) >]
         (fun hd tl -> flat hd @ tl)
   | _ -> fail
 
@@ -85,10 +91,10 @@ let rec last = function
 
 (* Match two tuple, starting by the end *)
 let reverse_tuple_rule = function
-  | Tuple lx, Tstructure ly -> begin
+  | Tuple lx, Tseq ly -> begin
       match last lx, last ly with
         | (Some x, lx), (Some y, ly) ->
-            dep [< (x, y); (Tuple lx, Tstructure ly) >]
+            dep [< (x, Tsingle y); (Tuple lx, Tseq ly) >]
               (fun a b -> b @ flat a)
         | _ -> fail
     end
@@ -119,11 +125,14 @@ let default_actions =
     (obus_value, Tvariant), "variant";
     (obus_dtypes, Tsignature), "dtypes" ]
 
-let common_rule eqn =
-  Util.assoc eqn default_actions >>= (fun act -> success [Iaction act])
+let common_rule = function
+  | x, Tsingle y ->
+      Util.assoc (x, y) default_actions >>= (fun act -> success [Iaction act])
+  | _ -> fail
 
 let common_rules =
   [ common_rule;
+    structure_rule;
     tuple_rule;
     reverse_tuple_rule ]
 
@@ -182,10 +191,10 @@ struct
            )>>, env)
 
   let rule_array typ elt_type ?(reverse=false) empty add = function
-    | x, Tarray y ->
+    | x, Tsingle (Tarray y) ->
         ifmatch x typ elt_type
           (fun elt_type ->
-             dep [< (elt_type, y) >]
+             dep [< (elt_type, Tsingle y) >]
                (fun instrs -> [Iarray(make_array_reader reverse empty
                                         (function
                                            | [x] -> add x
@@ -196,12 +205,12 @@ struct
     | _ -> fail
 
   let rule_dict typ key_type val_type ?(reverse=false) empty add = function
-    | x, Tdict(k, v) ->
+    | x, Tsingle (Tdict(k, v)) ->
         match_types typ x
         >>= (fun sub ->
                let key_type = substitute sub key_type in
                let val_type = substitute sub val_type in
-                 dep [< (key_type, k); (val_type, v) >]
+                 dep [< (key_type, Tsingle k); (val_type, Tsingle v) >]
                    (fun kis vis -> [Iarray(make_array_reader reverse empty
                                              (function
                                                 | [x; y] -> add x y
@@ -236,10 +245,10 @@ struct
   let mk_fold elt acc expr = (<:expr< fun $elt$ $acc$ -> $expr$ >>)
 
   let rule_array typ elt_type ?(mk_fold_func=mk_fold) fold = function
-    | x, Tarray y ->
+    | x, Tsingle (Tarray y) ->
         ifmatch x typ elt_type
           (fun elt_type ->
-             dep [< (elt_type, y) >]
+             dep [< (elt_type, Tsingle y) >]
                (fun instrs -> [Iarray(make_array_writer
                                         (function
                                            | [x] -> mk_fold_func x
@@ -252,12 +261,12 @@ struct
   let mk_fold k v acc expr = (<:expr< fun $k$ $v$ $acc$ -> $expr$ >>)
 
   let rule_dict typ key_type val_type ?(mk_fold_func=mk_fold) fold = function
-    | x, Tdict(k, v) ->
+    | x, Tsingle (Tdict(k, v)) ->
         match_types typ x
         >>= (fun sub ->
                let key_type = substitute sub key_type in
                let val_type = substitute sub val_type in
-                 dep [< (key_type, k); (val_type, v) >]
+                 dep [< (key_type, Tsingle k); (val_type, Tsingle v) >]
                    (fun kis vis -> [Iarray(make_array_writer
                                              (function
                                                 | [x; y] -> mk_fold_func x y
