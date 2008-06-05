@@ -99,10 +99,10 @@ module type Reader = sig
   val read_bool_boolean : bool reader
   val read_string_string : string reader
   val read_string_object_path : string reader
-  val read_array : (ptr -> 'a reader) -> 'a reader
-  val read_array8 : (ptr -> 'a reader) -> 'a reader
+  val read_array : (ptr -> buffer -> ptr -> 'a) -> 'a reader
+  val read_array8 : (ptr -> buffer -> ptr -> 'a) -> 'a reader
     (** The first argument of these two function is a function which
-        take a limt and return a reader. *)
+        take as first argument a limit. *)
 end
 
 module LEWriter : Writer

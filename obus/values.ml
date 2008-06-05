@@ -281,25 +281,23 @@ struct
              | Tdouble
              | Tstructure _ -> read_array8
              | _ -> read_array) (fun limit buffer i ->
-                                   (limit,
-                                    read_until_rev
-                                      (fun i cont ->
-                                         let i, v = read_value t buffer i in
-                                           v :: cont i)
-                                      [] i limit)) buffer i
+                                   read_until_rev
+                                     (fun i cont ->
+                                        let i, v = read_value t buffer i in
+                                          v :: cont i)
+                                     [] i limit) buffer i
         in
           (i, Array(t, v))
     | Tdict(tk, tv) ->
         let i, v =
           read_array8 (fun limit buffer i ->
-                         (limit,
-                          read_until
-                            (fun i acc cont ->
-                               let i = rpad8 i in
-                               let i, k = read_value tk buffer i in
-                               let i, v = read_value tv buffer i in
-                                 cont i ((k, v) :: acc))
-                            [] i limit)) buffer i
+                         read_until
+                           (fun i acc cont ->
+                              let i = rpad8 i in
+                              let i, k = read_value tk buffer i in
+                              let i, v = read_value tv buffer i in
+                                cont i ((k, v) :: acc))
+                           [] i limit) buffer i
         in
           (i, Dict(tk, tv, v))
     | Tstructure tl ->

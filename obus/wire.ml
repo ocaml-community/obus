@@ -52,8 +52,8 @@ module type Reader = sig
   val read_bool_boolean : bool reader
   val read_string_string : string reader
   val read_string_object_path : string reader
-  val read_array : (ptr -> 'a reader) -> 'a reader
-  val read_array8 : (ptr -> 'a reader) -> 'a reader
+  val read_array : (ptr -> buffer -> ptr -> 'a) -> 'a reader
+  val read_array8 : (ptr -> buffer -> ptr -> 'a) -> 'a reader
 end
 
 open Printf
@@ -505,14 +505,14 @@ struct
     let (i, len) = read_int_uint32 buffer i in
       if len > Constant.max_array_size then read_array_too_big len;
       let limit = i + len in
-        reader limit buffer i
+        (limit, reader limit buffer i)
 
   let read_array8 reader buffer i =
     let (i, len) = read_int_uint32 buffer i in
       if len > Constant.max_array_size then read_array_too_big len;
       let i = rpad8 i in
       let limit = i + len in
-        reader limit buffer i
+        (limit, reader limit buffer i)
 end
 
 module LEWriter = MakeWriter(LittleEndian)

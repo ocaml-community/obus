@@ -173,7 +173,7 @@ struct
                  then $expr$
                  else if i > limit
                  then raise (Reading_error "invalid array size")
-                 else (i, acc)
+                 else acc
                in
                  aux i $empty$
            )>>, env)
@@ -189,7 +189,7 @@ struct
                  then raise (Reading_error "invalid array size")
                  else $empty$
                in
-                 (limit, aux i)
+                 aux i
            )>>, env)
 
   let rule_array typ elt_type ?(reverse=false) empty add = function
