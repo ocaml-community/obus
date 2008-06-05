@@ -214,13 +214,15 @@ let get_values = get_value
 open Wire
 
 module type Reader = sig
-  val read_value : buffer -> ptr -> dtype -> ptr * value
-  val read_values : buffer -> ptr -> dtypes -> ptr * values
+  val read_variant : value reader
+  val read_value : dtype -> value reader
+  val read_values : dtypes -> values reader
 end
 
 module type Writer = sig
-  val write_value : buffer -> ptr -> value -> ptr
-  val write_values : buffer -> ptr -> values -> ptr
+  val write_variant : value writer
+  val write_value : value writer
+  val write_values : values writer
 end
 
 let read_dtype buffer i =
@@ -258,7 +260,7 @@ module MakeReader(Reader : Wire.Reader) =
 struct
   open Reader
 
-  let rec read_value buffer i = function
+  let rec read_value t buffer i = match t with
     | Tbyte -> let i, v = read_char_byte buffer i in (i, Byte(v))
     | Tboolean -> let i, v = read_bool_boolean buffer i in (i, Boolean v)
     | Tint16 -> let i, v = read_int_int16 buffer i in (i, Int16 v)
@@ -278,34 +280,43 @@ struct
              | Tuint64
              | Tdouble
              | Tstructure _ -> read_array8
-             | _ -> read_array4) (read_until_rev
-                                    (fun i cont ->
-                                       let i, v = read_value buffer i t in
-                                         v :: cont i) []) buffer i
+             | _ -> read_array) (fun limit buffer i ->
+                                   (limit,
+                                    read_until_rev
+                                      (fun i cont ->
+                                         let i, v = read_value t buffer i in
+                                           v :: cont i)
+                                      [] i limit)) buffer i
         in
           (i, Array(t, v))
     | Tdict(tk, tv) ->
         let i, v =
-          read_array8 (read_until
-                         (fun i acc cont ->
-                            let i = rpad8 i in
-                            let i, k = read_value buffer i tk in
-                            let i, v = read_value buffer i tv in
-                              cont i ((k, v) :: acc)) []) buffer i
+          read_array8 (fun limit buffer i ->
+                         (limit,
+                          read_until
+                            (fun i acc cont ->
+                               let i = rpad8 i in
+                               let i, k = read_value tk buffer i in
+                               let i, v = read_value tv buffer i in
+                                 cont i ((k, v) :: acc))
+                            [] i limit)) buffer i
         in
           (i, Dict(tk, tv, v))
     | Tstructure tl ->
-        let i, v = read_values buffer (rpad8 i) tl in
+        let i, v = read_values tl buffer (rpad8 i) in
           (i, Structure v)
     | Tvariant ->
-        let i, t = read_dtype buffer i in
-        let i, v = read_value buffer i t in
+        let i, v = read_variant buffer i in
           (i, Variant v)
-  and read_values buffer i = function
+  and read_variant buffer i =
+    let i, t = read_dtype buffer i in
+    let i, v = read_value t buffer i in
+      (i, v)
+  and read_values tl buffer i = match tl with
     | [] -> (i, [])
     | t :: tl ->
-        let i, v = read_value buffer i t in
-        let i, vl = read_values buffer i tl in
+        let i, v = read_value t buffer i in
+        let i, vl = read_values tl buffer i in
           (i, v :: vl)
 end
 
@@ -332,22 +343,23 @@ struct
            | Tuint64
            | Tdouble
            | Tstructure _ -> write_array8
-           | _ -> write_array4)
-          (fun i -> List.fold_left (write_value buffer) i vs)
-          buffer i
+           | _ -> write_array)
+          (fun buffer i vs -> List.fold_left (write_value buffer) i vs)
+          buffer i vs
     | Dict(_, _, vs) ->
         write_array8
-          (fun i ->
+          (fun buffer i vs ->
              List.fold_left
                (fun i (k, v) ->
                   let i = wpad8 buffer i in
                   let i = write_value buffer i k in
                     write_value buffer i v) i vs)
-          buffer i
+          buffer i vs
     | Structure vs -> write_values buffer (wpad8 buffer i) vs
-    | Variant v ->
-        let i = write_dtype buffer i (dtype_of_value v) in
-          write_value buffer i v
+    | Variant v -> write_variant buffer i v
+  and write_variant buffer i v =
+    let i = write_dtype buffer i (dtype_of_value v) in
+      write_value buffer i v
   and write_values buffer i = function
     | [] -> i
     | v :: vs ->

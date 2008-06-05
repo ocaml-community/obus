@@ -61,8 +61,7 @@
     <method name="ListActivatableNames">
       <arg direction="out" type="as"/>
     </method>
-    <convert a="Rules.t" b="string"
-             b_of_a="Rules.to_string"/>
+    <convert a="Rules.t" b="string" b_of_a="Rules.to_string"/>
     <method name="AddMatch">
       <arg direction="in" type="s" ctype="Rules.t"/>
     </method>

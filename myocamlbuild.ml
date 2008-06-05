@@ -44,8 +44,8 @@ struct
      "proxy";
      "rules";
      "bus";
-     "signal"]
-(*     "DBus"]*)
+     "signal";
+     "DBus"]
 
   (* modules which are in the OBus pack but which must not be seen by
      the user. *)
@@ -60,7 +60,6 @@ struct
      "codeConstants";
      "helpers";
      "genImplem";
-     "genInterf";
      "types";
      "obus-binder";
      "rules";
@@ -68,7 +67,7 @@ struct
 
   (* Files using each syntax *)
   let use_syntax =
-    ["seq", ["binder/genSerializer.ml"; "binder/rules.ml"];
+    ["seq", ["binder/genSerializer.ml"; "binder/genImplem.ml"];
      "log", prepend "obus" ["auth.ml"; "address.ml"; "transport.ml"; "connection.ml"];
      "dbus_typval", []]
 end

@@ -66,7 +66,7 @@ let patt_record desc =
                     <:patt< $id$ = $expr$ >>)
                  desc))
 
-let appn expr args = List.fold_left app expr (List.map expr_of_id args)
+let appn expr args = List.fold_left app expr args
 
 let func args expr =
   List.fold_right

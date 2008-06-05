@@ -10,29 +10,36 @@
 (** Describe a DBus introspection file, plus some annotations for
     generating ocamls types and convertion functions *)
 
+open Camlp4.PreCast
 open Types
 
-type name = string
+type caml_name = string
+type dbus_name = string
 type doc = string list
 
-type argument = name option * name option * dbus_type * doc
+type argument = dbus_name option * caml_name option * dtype * doc
     (** Description of a method/signal argument, with
 
         - its dbus name
         - its caml name
         - its dbus type *)
 
-type arguments = argument list * caml_type
+type arguments = argument list * caml_type list
     (** A list of arguments, with their dbus informations and
         description of *)
 
 type access = Read | Write | Read_write
     (** Access mode of a property *)
 
-type flag_mode =
-  | F_poly
-  | F_variant
-  | F_record
+type mode =
+    (** Mode for a flag/sum type *)
+  | M_poly
+      (** Polymorphic variant *)
+  | M_variant
+      (** Traditionnal variant *)
+  | M_record
+      (** For a flag, a record of bool, for a sum, a record of
+          option *)
 
 type proxy_type =
   | P_bus
@@ -42,34 +49,33 @@ type declaration =
     (** A declaration inside a interface definition *)
   | Doc of doc
       (** Documentation *)
-  | Method of doc * name * name * arguments * arguments
+  | Method of doc * dbus_name * caml_name * arguments * arguments
       (** [Method(dbus_name, caml_name, in_args, out_args)] *)
-  | Signal of doc * name * name * arguments
+  | Signal of doc * dbus_name * caml_name * arguments
       (** [Signal(dbus_name, caml_name, args)] *)
-  | Property of doc * name * name * dbus_type * access
-      (** [Property(dbus_name, caml_name, dbus_type, access)] *)
-  | Proxy of doc * name * proxy_type * string option * string option
+  | Property of doc * dbus_name * caml_name * dtype * caml_type * access
+      (** [Property(dbus_name, caml_name, dbus_type, caml_type, access)] *)
+  | Proxy of doc * caml_name * proxy_type * string option * string option
       (** [Proxy(caml_name, typ, destination, path)] proxy creation helper
           function *)
-  | Flag of doc * name * flag_mode *  (int * name * doc) list * bool * string option
-      (** [Flag(name, mode, values, bitwise, modul)] a flag type, used for
-          functions which takes a list of flags or return a flag.
+  | Flag of doc * caml_name * mode *  (int * caml_name * doc) list * bool * string option
+      (** [Flag(name, mode, values, bitwise, external)] a flag type,
+          used for functions which takes a list of flags or return a
+          flag.
 
-          Rules and generated type will depend on [typ].
+          Rules and generated type will depend on [mode].
 
           If [bitwise] is [true] then key have to be interpretted has
           bit position instead of value. *)
   | Convert of doc * caml_type * caml_type * string option * string option
       (** [Convert(type_a, type_b, a_of_b, b_of_a)] add a rule for
           converting between this two types *)
+  | Variant of doc * caml_name * mode * (int * caml_name * dtype * caml_type list * doc) * string option
+      (** [Variant(doc, name, mode, constructors, modul)] *)
 
-type module_tree = Node of name * declaration list * (name * module_tree) list
-  (** [Node(dbus_interface_name, content, sons) A hierarchy of ocaml
-      modules for DBus interfaces *)
+type content = declaration list
+    (** content of an interface *)
 
-val parse_files : string list -> module_tree
-  (** [parse_files files] construct a module hierarchy from xml files *)
+type interface = dbus_name * caml_name list * content
 
-val contain_dbus_declaration : declaration list -> bool
-  (** [contain_dbus_declaration decls] return [true] if [decls]
-      containt at leat one of [Method], [Signal] or [Property] *)
+type tree = (dbus_name * content, caml_name) Tree.t

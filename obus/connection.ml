@@ -110,8 +110,8 @@ let read_values raise_exn header buffer ptr =
                 | Some s -> Values.dtypes_of_signature s
                 | _ -> []) in
       match header.byte_order with
-        | Wire.Little_endian -> snd (Values.LEReader.read_values buffer ptr ts)
-        | Wire.Big_endian -> snd (Values.BEReader.read_values buffer ptr ts)
+        | Wire.Little_endian -> snd (Values.LEReader.read_values ts buffer ptr)
+        | Wire.Big_endian -> snd (Values.BEReader.read_values ts buffer ptr)
 
 let write_values body byte_order buffer ptr = match byte_order with
   | Wire.Little_endian -> Values.LEWriter.write_values buffer ptr body

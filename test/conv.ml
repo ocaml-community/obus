@@ -81,7 +81,7 @@ let _ =
     List.fold_left
       (fun env instrs ->
          let vars, expr, env = Compile.compile_writer instrs <:expr< i >> env in
-           snd (Compile.lookup (List.fold_right (fun x e -> <:expr< fun $x$ -> $e$ >>) vars expr) env))
+           snd (Compile.lookup (List.fold_right (fun x e -> <:expr< fun $id:x$ -> $e$ >>) vars expr) env))
       Compile.empty_env
       (Util.filter_map (solve wrules) tests)
 

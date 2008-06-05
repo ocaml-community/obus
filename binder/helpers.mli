@@ -29,5 +29,5 @@ val bind : ident -> expr -> expr -> expr
 val bind_patt : patt -> expr -> expr -> expr
 val seq : expr list -> expr
 val app : expr -> expr -> expr
-val appn : expr -> ident list -> expr
+val appn : expr -> expr list -> expr
 val func : ident list -> expr -> expr

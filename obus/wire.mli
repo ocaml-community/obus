@@ -68,14 +68,17 @@ module type Writer = sig
   val write_bool_boolean : bool writer
   val write_string_string : string writer
   val write_string_object_path : string writer
-    (** There is two cases for arrays: elements are padded on an 4
-        boundary, so there is nothing special to do since the length
-        need a 4 boundary alignment. Or elements are padded on a 8
-        boundary so there is possibly 4 bytes of padding after the
+    (** There is two cases for arrays: elements are padded on an 4 or
+        less boundary, so there is nothing special to do since the
+        length need a 4 boundary alignment. Or elements are padded on
+        a 8 boundary so there is possibly 4 bytes of padding after the
         length (which are always present, even if the array is empty,
-        and ignored in the array length). *)
-  val write_array4 : (ptr -> ptr) -> buffer -> ptr -> ptr
-  val write_array8 : (ptr -> ptr) -> buffer -> ptr -> ptr
+        and ignored in the array length).
+
+        The first argument is a function which write all the element
+        of the array *)
+  val write_array : 'a writer -> 'a writer
+  val write_array8 : 'a writer -> 'a writer
 end
 
 type 'a reader = buffer -> ptr -> ptr * 'a
@@ -96,8 +99,10 @@ module type Reader = sig
   val read_bool_boolean : bool reader
   val read_string_string : string reader
   val read_string_object_path : string reader
-  val read_array4 : (ptr -> ptr -> 'a) -> 'a reader
-  val read_array8 : (ptr -> ptr -> 'a) -> 'a reader
+  val read_array : (ptr -> 'a reader) -> 'a reader
+  val read_array8 : (ptr -> 'a reader) -> 'a reader
+    (** The first argument of these two function is a function which
+        take a limt and return a reader. *)
 end
 
 module LEWriter : Writer
@@ -123,20 +128,11 @@ val check_signature : buffer -> ptr -> string -> unit
 val read_until : (ptr -> 'a -> (ptr -> 'a -> 'a) -> 'a) -> 'a -> ptr -> ptr -> 'a
   (** [read_until reader acc ptr limit] read values with [reader]
       until it reach [limit]. [reader] take a pointer, an accumulator
-      and a continuation. For example to read a array of int32 into a
-      list:
-
-      [read_array4 (read_until (fun i acc cont -> let i, v =
-      read_int_int32 buffer i in cont i (v :: acc)) []) buffer i]
-
-      Note that this way the resulting list is in reverse order. *)
+      and a continuation. *)
 
 val read_until_rev : (ptr -> (ptr -> 'a) -> 'a) -> 'a -> ptr -> ptr -> 'a
   (** [read_until_rev reader acc ptr limit] Used to read arrays and
-      add element in reverse order. So to read a list in right order:
-
-      [read_array4 (read_until (fun i cont -> let i, v =
-      read_int_int32 buffer i in v :: cont i)) buffer i] *)
+      add element in reverse order. *)
 
 (** {6 Padding} *)
 

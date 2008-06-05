@@ -66,8 +66,16 @@ let _ =
   then Arg.usage args usage_msg;
 
   let output_file_prefix = choose_output_file_prefix () in
-  let node = parse_files !xml_files in
-  let implem = GenImplem.gen !internal GenSerializer.default_rules node in
+  let node = List.fold_left
+    (fun node fname ->
+       List.fold_left
+         (fun node (dbus_name, caml_names, content) ->
+            Tree.insert caml_names (dbus_name, content) node)
+         node
+         (Xparser.parse Parser.document (Util.parse_xml fname)))
+    Tree.empty
+    !xml_files in
+  let implem = GenImplem.gen !internal node in
 
   let implem_fname = output_file_prefix ^ ".ml"
   and interf_fname = output_file_prefix ^ ".mli" in
@@ -75,17 +83,7 @@ let _ =
   let printer = new Printer.printer () in
   let oc = open_print_header implem_fname in
 
-    printer#str_item (Format.formatter_of_out_channel oc)
-      (if !internal
-       then (<:str_item<
-             open Values;;
-             open Wire;;
-             $implem$>>)
-       else (<:str_item<
-             open OBus;;
-             open Values;;
-             open Wire;;
-             $implem$>>));
+    printer#str_item (Format.formatter_of_out_channel oc) implem;
 
     let oc = open_print_header interf_fname in
       if not !internal

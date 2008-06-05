@@ -16,7 +16,7 @@ type 'env t =
   | Istructure
       (** Mark the beginning of reading/writing a structure, only used
           for padding *)
-  | Iarray of ('env -> expr * 'env) * dbus_type
+  | Iarray of ('env -> expr * 'env) * dtype
       (** [Iarray(mkfunc, elt_type)] read write an array with
           [mkfunc]. [elt_type] is the type of the element of the
           array. This is needed for the initial padding. *)

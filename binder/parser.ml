@@ -1,6 +1,6 @@
 (*
- * introspect.ml
- * -------------
+ * parser.ml
+ * ---------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -9,28 +9,7 @@
 
 open Types
 open Xparser
-
-type flag_mode =
-  | F_poly
-  | F_variant
-  | F_record
-type proxy_type =
-  | P_bus
-  | P_connection
-type name = string
-type doc = string list
-type argument = name option * name option * dbus_type * doc
-type arguments = argument list * caml_type
-type access = Read | Write | Read_write
-type declaration =
-  | Doc of doc
-  | Method of doc * name * name * arguments * arguments
-  | Signal of doc * name * name * arguments
-  | Property of doc * name * name * dbus_type * access
-  | Proxy of doc * name * proxy_type * string option * string option
-  | Flag of doc * name * flag_mode *  (int * name * doc) list * bool * string option
-  | Convert of doc * caml_type * caml_type * string option * string option
-type module_tree = Node of name * declaration list * (name * module_tree) list
+open Introspect
 
 (* Camelization of names *)
 let camlize_lid str = String.concat "_" (Util.split_upper str)
@@ -85,7 +64,7 @@ let dir_both = dir_in @ dir_out
 
 let adname = ars "name"
 let acname = aos "cname"
-let adtype = ar "type" dbus_type_of_signature
+let adtype = ar "type" dtype_of_signature
 let actype = ao "ctype" caml_type_of_string
 
 let arguments dirs =
@@ -109,13 +88,13 @@ let method_decl =
        and out_args, out_ctyps = List.split outs in
        let caml_in_typ, caml_out_typ = match ctyp with
          | Some t -> begin match List.rev (list_of_tuple t) with
-             | t :: ts -> (tuple (List.rev ts), t)
+             | t :: ts -> (List.rev ts, list_of_tuple t)
              | _ -> failwith
                  (Printf.sprintf
                     "invalid caml type for a method: %s, must have the form 'a -> 'b"
                     (string_of_caml_type t))
            end
-         | None -> (tuple in_ctyps, tuple out_ctyps)
+         | None -> (in_ctyps, out_ctyps)
        in
          Method(doc, dname, mklid dname cname, (in_args, caml_in_typ), (out_args, caml_out_typ)))
 
@@ -127,8 +106,8 @@ let signal_decl =
          Signal(doc, dname, String.capitalize (mklid dname cname),
                 (args,
                  match ctyp with
-                   | Some t -> t
-                   | None -> tuple ctyps)))
+                   | Some t -> list_of_tuple t
+                   | None -> ctyps)))
 
 let proxy_decl =
   elt "proxy" (a4 adname (afd "type" P_bus ["bus", P_bus; "connection", P_connection])
@@ -138,7 +117,7 @@ let proxy_decl =
        Proxy(doc, name, typ, dest, path))
 
 let flag_decl =
-  elt "flag" (a4 (ars "name") (afd "mode" F_poly ["poly", F_poly; "variant", F_variant; "record", F_record])
+  elt "flag" (a4 (ars "name") (afd "mode" M_poly ["poly", M_poly; "variant", M_variant; "record", M_record])
                 (abf "bitwise") (aos "module"))
     (s2
        (any (elt "value" (a2 (ar "key" int_of_string) (ars "name"))
@@ -147,7 +126,7 @@ let flag_decl =
        doc)
     (fun name mode bitwise modul values doc ->
        Flag(doc, name, mode,
-            (if mode = F_record
+            (if mode = M_record
              then values
              else List.map (fun (k, n, d) -> (k, String.capitalize n, d)) values),
             bitwise, modul))
@@ -176,7 +155,7 @@ let interface =
     (fun dname cname decls ->
        (dname, mkuids dname cname, decls))
 
-let node =
+let document =
   elt "node" a0
     (s2
        (any interface)
@@ -184,25 +163,3 @@ let node =
                s0
                ())))
     (fun interfs _ -> interfs)
-
-let rec insert node x = match node, x with
-  | Node(_, _, sons), (dname, [], content) ->
-      Node(dname, content, sons)
-  | Node(dname, content, sons), (dname', cname :: cnames, content') ->
-      Node(dname, content, insert_in_sons cname (dname', cnames, content') sons)
-and insert_in_sons cname x = function
-  | [] -> [(cname, insert (Node("", [], [])) x)]
-  | (cname', node) :: sons when cname' = cname -> (cname, insert node x) :: sons
-  | (cname', node) :: sons -> (cname', node) :: insert_in_sons cname x sons
-
-let parse_files fnames =
-  let interfs = List.flatten (List.map (fun fn ->
-                                          let xml = Util.parse_xml fn in
-                                            parse node ~filename:fn xml) fnames) in
-    List.fold_left insert (Node("", [], [])) interfs
-
-let contain_dbus_declaration = List.exists (function
-                                              | Method _
-                                              | Signal _
-                                              | Property _ -> true
-                                              | _ -> false)

@@ -75,6 +75,8 @@ let structure_rule = function
 
 (* Rule for dealing with tuple in types *)
 let tuple_rule = function
+  | Tuple [], Tseq [] ->
+      success []
   | Tuple [x], y ->
       dep [< (x, y) >] flat
   | x, Tseq [y] ->
@@ -171,7 +173,7 @@ struct
                  then $expr$
                  else if i > limit
                  then raise (Reading_error "invalid array size")
-                 else acc
+                 else (i, acc)
                in
                  aux i $empty$
            )>>, env)
@@ -187,7 +189,7 @@ struct
                  then raise (Reading_error "invalid array size")
                  else $empty$
                in
-                 aux i
+                 (limit, aux i)
            )>>, env)
 
   let rule_array typ elt_type ?(reverse=false) empty add = function
@@ -251,7 +253,7 @@ struct
              dep [< (elt_type, Tsingle y) >]
                (fun instrs -> [Iarray(make_array_writer
                                         (function
-                                           | [x] -> mk_fold_func x
+                                           | [x] -> mk_fold_func (patt_of_id x)
                                            | l -> failwith
                                                ("invalid number of written values for an array: "
                                                 ^ string_of_int (List.length l)))
@@ -269,7 +271,7 @@ struct
                  dep [< (key_type, Tsingle k); (val_type, Tsingle v) >]
                    (fun kis vis -> [Iarray(make_array_writer
                                              (function
-                                                | [x; y] -> mk_fold_func x y
+                                                | [x; y] -> mk_fold_func (patt_of_id x) (patt_of_id y)
                                                 | l -> failwith
                                                     ("invalid number of written values for an dict: "
                                                      ^ string_of_int (List.length l)))

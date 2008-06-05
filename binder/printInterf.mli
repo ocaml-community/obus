@@ -7,5 +7,5 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-val print : bool -> out_channel -> Introspect.module_tree -> unit
+val print : bool -> out_channel -> Introspect.tree -> unit
   (** [print internal formatter node] *)

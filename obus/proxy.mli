@@ -45,12 +45,9 @@ type ('a, 'b, 'c) method_call_desc = {
   method_member : string;
   method_in_sig : string;
   method_out_sig : string;
-  method_le_writer : Connection.writer;
-  method_be_writer : Connection.writer;
-  method_le_reader : ('b -> 'c Connection.reader);
-  method_be_reader : ('b -> 'c Connection.reader);
+  method_le_reader : 'b -> Wire.buffer -> Wire.ptr -> 'c;
+  method_be_reader : 'b -> Wire.buffer -> Wire.ptr -> 'c;
 }
 
-val proxy_call_sync : Connection.t -> ('a, 'b, 'c) method_call_desc -> 'b -> 'a t -> 'c
-val proxy_call_async : Connection.t -> ('a, 'b, unit) method_call_desc -> 'b -> 'a t -> unit
-val proxy_call_with_cookie : Connection.t -> ('a, 'b, 'c) method_call_desc -> 'b -> 'a t -> 'c Cookie.t
+val proxy_call : (Connection.t -> Header.send -> Connection.writer -> 'a Connection.reader -> 'b) ->
+  ('c, 'd, 'a) method_call_desc -> Connection.writer -> 'd -> 'c t -> 'b

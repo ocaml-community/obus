@@ -43,7 +43,10 @@ let padding_of_type = function
   | Tstructure _ -> 8
   | Tvariant -> 1
 
-let var_id n = (<:ident< $lid:"v" ^ string_of_int n$ >>)
+let var_id n =
+  if n >= 0
+  then (<:ident< $lid:"v" ^ string_of_int n$ >>)
+  else (<:ident< $lid:"v_" ^ string_of_int (-n)$ >>)
 let var_ids n count = List.map var_id (Util.gen_list (fun x -> x) n count)
 
 let var_patt n = patt_of_id (var_id n)
@@ -122,8 +125,8 @@ let compile_writer instrs return env =
                      $expr$
                      >>)
             | Iarray(mkexpr, etyp) ->
-                let expr, env = mkexpr env in
-                let id, env = lookup expr env in
+                let array_writer_expr, env = mkexpr env in
+                let id, env = lookup array_writer_expr env in
                 let array_func = match padding_of_type etyp with
                   | 8 -> "write_array8"
                   | _ -> "write_array"
@@ -154,4 +157,4 @@ let compile_writer instrs return env =
                        >>)
   in
   let env, n, expr = aux instrs env 0 return  in
-    (List.rev (var_patts 0 n), expr, env)
+    (List.rev (var_ids 0 n), expr, env)

@@ -4,6 +4,7 @@
 # Real thread modules need the thread library
 <obus/with_threads/*>: thread
 "obus/DBus.xml": internal
+#<obus/*.ml>: camlp4o, trace
 # Link OBus with the C stubs (depends on Config.use_c_stubs in myocamlbuild.ml)
 <obus{-thread,}.cm{x,}a>: wire_stubs
 # Tags for the binder and the binding plugin library
@@ -12,5 +13,6 @@
 <samples/lowlevels/*.*>: pkg_unix, use_obus, camlp4o, pa_dbus_typval
 <samples/proxies/*.*>: pkg_unix, use_obus
 <samples/threaded/*.*>: pkg_unix, use_obus-thread, thread
-<test/**>: pkg_unix, use_obus, use_obus-binding, use_camlp4, pkg_str, pkg_xml-light
-<test/*.ml>: camlp4of
+<test/**>: pkg_unix, use_camlp4_full, use_dynlink, pkg_str, pkg_xml-light
+<test/*.ml>: camlp4of, pa_seq
+<test/serialization/*.*>: use_obus

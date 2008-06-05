@@ -33,8 +33,8 @@ module type Writer = sig
   val write_bool_boolean : bool writer
   val write_string_string : string writer
   val write_string_object_path : string writer
-  val write_array4 : (ptr -> ptr) -> buffer -> ptr -> ptr
-  val write_array8 : (ptr -> ptr) -> buffer -> ptr -> ptr
+  val write_array : 'a writer -> 'a writer
+  val write_array8 : 'a writer -> 'a writer
 end
 module type Reader = sig
   val byte_order : byte_order
@@ -52,8 +52,8 @@ module type Reader = sig
   val read_bool_boolean : bool reader
   val read_string_string : string reader
   val read_string_object_path : string reader
-  val read_array4 : (ptr -> ptr -> 'a) -> 'a reader
-  val read_array8 : (ptr -> ptr -> 'a) -> 'a reader
+  val read_array : (ptr -> 'a reader) -> 'a reader
+  val read_array8 : (ptr -> 'a reader) -> 'a reader
 end
 
 open Printf
@@ -338,18 +338,18 @@ struct
     write_string buffer (write_int_uint32 buffer i (String.length v)) v
   let write_string_object_path = write_string_string
 
-  let write_array4 writer buffer i =
+  let write_array writer buffer i v =
     let i = wpad4 buffer i in
-    let j = writer (i + 4) in
+    let j = writer buffer (i + 4) v in
     let len = j - i - 4 in
       if len > Constant.max_array_size then write_array_too_big len;
       ignore (write_int_uint32 buffer i len);
       j
 
-  let write_array8 writer buffer i =
+  let write_array8 writer buffer i v =
     let i = wpad4 buffer i in
     let j = wpad8 buffer (i + 4) in
-    let k = writer j in
+    let k = writer buffer j v in
     let len = k - j in
       if len > Constant.max_array_size then write_array_too_big len;
       ignore (write_int_uint32 buffer i len);
@@ -501,20 +501,18 @@ struct
       read_string buffer i len
   let read_string_object_path = read_string_string
 
-  let read_array4 reader buffer i =
+  let read_array reader buffer i =
     let (i, len) = read_int_uint32 buffer i in
       if len > Constant.max_array_size then read_array_too_big len;
       let limit = i + len in
-      let v = reader i limit in
-        (limit, v)
+        reader limit buffer i
 
   let read_array8 reader buffer i =
     let (i, len) = read_int_uint32 buffer i in
       if len > Constant.max_array_size then read_array_too_big len;
       let i = rpad8 i in
       let limit = i + len in
-      let v = reader i limit in
-        (limit, v)
+        reader limit buffer i
 end
 
 module LEWriter = MakeWriter(LittleEndian)

@@ -26,7 +26,7 @@ val dump_env : env -> (ident * expr) list
       environment with their associated name *)
 
 val compile_reader : env Instruction.t list -> (expr list -> expr) -> env -> expr * env
-val compile_writer : env Instruction.t list -> expr -> env -> patt list * expr * env
+val compile_writer : env Instruction.t list -> expr -> env -> ident list * expr * env
   (** Make an expression from a list of instructions. The resulting
       expression is not added to the resulting
       environment. [compile_writer] return also the list of variablies

@@ -79,6 +79,8 @@ type dtype =
   | Tstructure of dtype list
   | Tvariant
 
+val dtype_of_signature : string -> dtype
+
 type dbus_type =
   | Tsingle of dtype
   | Tseq of dtype list
