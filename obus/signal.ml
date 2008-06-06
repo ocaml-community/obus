@@ -24,7 +24,7 @@ let bus_register bus (interface, make_reader) handler =
             "org.freedesktop.DBus"
             "/org/freedesktop/DBus"
             "org.freedesktop.DBus" "AddMatch"
-            [make_value string
+            [vstring
                (Printf.sprintf "type='signal',interface='%s'" (Interface.name interface))]))
 
 let make_set interface make_reader = (interface, make_reader)

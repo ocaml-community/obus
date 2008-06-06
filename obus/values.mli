@@ -68,6 +68,10 @@ val dtypes_of_values : values -> dtypes
 
 (** {6 DBus types/values construction} *)
 
+(** The following functions allow to create well formed dbus
+    values. i.e. all element of arrays and dictionnaries have the same
+    type, and key types of dictionaries are basic types *)
+
 type ('a, 'is_basic) cstr
 type yes
 type no
@@ -101,6 +105,46 @@ val get_value : ('a, _) cstr -> value -> 'a
 val get_values : 'a seq_cstr -> values -> 'a
   (** [get] and [get_list] raise an [Invalid_argument] if the value
       has not the valid type *)
+
+(** {6 Alternatives constructions} *)
+
+(** You can also use the following functions to create values and
+    types. They raise an [Invalid_argument] if you try to construct
+    incorrect values *)
+
+val tbyte : dtype
+val tboolean : dtype
+val tint16 : dtype
+val tint32 : dtype
+val tint64 : dtype
+val tuint16 : dtype
+val tuint32 : dtype
+val tuint64 : dtype
+val tdouble : dtype
+val tstring : dtype
+val tsignature : dtype
+val tobject_path : dtype
+val tarray : dtype -> dtype
+val tdict : dtype -> dtype -> dtype
+val tstructure : dtypes -> dtype
+val tvariant : dtype
+
+val vbyte : char -> value
+val vboolean : bool -> value
+val vint16 : int -> value
+val vint32 : int32 -> value
+val vint64 : int64 -> value
+val vuint16 : int -> value
+val vuint32 : int32 -> value
+val vuint64 : int64 -> value
+val vdouble : float -> value
+val vstring : string -> value
+val vsignature : dtypes -> value
+val vobject_path : string -> value
+val varray : dtype -> value list -> value
+val vdict : dtype -> dtype -> (value * value) list -> value
+val vstructure : values -> value
+val vvariant : value -> value
 
 (**/**)
 

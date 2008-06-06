@@ -211,6 +211,57 @@ let make_values = make_value
 let get_value (_, _, g) = g
 let get_values = get_value
 
+let check_basic = function
+  | Tarray _
+  | Tdict _
+  | Tstructure _
+  | Tvariant -> raise (Invalid_argument "the key type of a dictionnary must a be a basic type")
+  | _ -> ()
+
+let tbyte = Tbyte
+let tboolean = Tboolean
+let tint16 = Tint16
+let tint32 = Tint32
+let tint64 = Tint64
+let tuint16 = Tuint16
+let tuint32 = Tuint32
+let tuint64 = Tuint64
+let tdouble = Tdouble
+let tstring = Tstring
+let tsignature = Tsignature
+let tobject_path = Tobject_path
+let tarray t = Tarray t
+let tdict tk tv = check_basic tk; Tdict(tk, tv)
+let tstructure tl = Tstructure tl
+let tvariant = Tvariant
+
+val vbyte x = Byte x
+val vboolean x = Boolean x
+val vint16 x = Int16 x
+val vint32 x = Int32 x
+val vint64 x = Int64 x
+val vuint16 x = Uint16 x
+val vuint32 x = Uint32 x
+val vuint64 x = Uint64 x
+val vdouble x = Double x
+val vstring x = String x
+val vsignature x = Signature x
+val vobject_path x = Object_path x
+val varray t x =
+  List.iter (fun v ->
+               if dtype_of_value v <> t then
+                 raise (Invalid_arugment "element of arrays must all have the same type")) x;
+  Array(t, x)
+val vdict tk tv x =
+  check_basic tk;
+  List.iter (fun (k, v) ->
+               if dtype_of_value k <> tk
+                 || dtype_of_value v <> tv then
+                   raise (Invalid_arugment "element of dictionnaries must all have the same type")) x;
+  Dict(tk, tv, x)
+val vstructure x = Structure x
+val vvariant x = Variant x
+
 open Wire
 
 module type Reader = sig
