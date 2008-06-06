@@ -459,8 +459,8 @@ let gen internal node =
        let __cookie desc writer return proxy = Proxy.proxy_call Cookie.raw_send_message_with_cookie desc writer return proxy
        let __make_proxy connection interface header = match header.Header.fields.Header.path with
          | Some p ->
-             Some (Proxy.make connection interface
-                     ?destination:header.Header.fields.Header.sender p)
-         | None -> None;;
+             Proxy.make connection interface
+               ?destination:header.Header.fields.Header.sender p
+         | None -> raise (Content_error "signal without object path");;
        $funcs$
        >>)

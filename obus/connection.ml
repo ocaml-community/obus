@@ -194,7 +194,6 @@ let internal_dispatch connection =
       if Log.Verbose.connection && header.message_type = Error
       then begin
         let name, msg = Error.get_error header buffer body_start in
-        let msg = match msg with Some s -> s | None -> "" in
           LOG("error received: %s: %s" name msg)
       end;
       (* Try all the filters *)

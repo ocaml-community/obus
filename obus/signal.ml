@@ -9,7 +9,7 @@
 
 open Values
 
-type ('a, 'b) handler = 'a Proxy.t option -> 'b -> bool
+type ('a, 'b) handler = 'a Proxy.t -> 'b -> bool
 type ('a, 'b) set = 'a Interface.t * (Connection.t -> ('a, 'b) handler -> bool Connection.reader)
 
 let register connection (_, make_reader) handler =

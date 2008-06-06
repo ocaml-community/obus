@@ -9,7 +9,7 @@
 
 (** Handling of errors *)
 
-exception DBus of string * string option
+exception DBus of string * string
   (** A reply to a method call can be an error. When an error is
       received in response to a method call, and the error is not
       known (i.e. defined in an interface) this error is raised.
@@ -23,7 +23,7 @@ val to_string : exn -> string
 
 (**/**)
 
-val get_error : Header.recv -> Wire.buffer -> Wire.ptr -> string * string option
+val get_error : Header.recv -> Wire.buffer -> Wire.ptr -> string * string
   (* retrn the error name and message of a dbus error message *)
 
 val raise_error : Header.recv -> Wire.buffer -> Wire.ptr -> 'a

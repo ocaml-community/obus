@@ -12,7 +12,7 @@ type buffer = string
 type byte_order = Little_endian | Big_endian
 exception Out_of_bounds
 exception Content_error of string
-exception Convertion_failed of exn
+exception Convertion_failed of string * exn
 exception Reading_error of string
 exception Writing_error of string
 type 'a writer = buffer -> ptr -> 'a -> ptr

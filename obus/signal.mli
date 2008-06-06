@@ -13,7 +13,7 @@ type ('a, 'b) set
   (** Represent a set of signals of type ['b], for dbus object of type
       ['a]. *)
 
-type ('a, 'b) handler = 'a Proxy.t option -> 'b -> bool
+type ('a, 'b) handler = 'a Proxy.t -> 'b -> bool
   (** Type for a function receiving signals of type ['b] from an
       object of type ['a].
 

@@ -31,9 +31,10 @@ exception Content_error of string
   (** This exception must be raised by convertion functions a value is
       invalid. *)
 
-exception Convertion_failed of exn
+exception Convertion_failed of string * exn
   (** Exception raised while reading/writing if one of the convertion
-      function fail. *)
+      function fail. Contain the original exception and its string
+      representation. *)
 
 exception Reading_error of string
   (** Exception raised if a dbus marshaled message is invalid. In this

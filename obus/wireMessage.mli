@@ -18,7 +18,8 @@ val recv_one_message : Transport.t -> buffer -> Header.recv * buffer * ptr
       buffer acutally containing the body and the offset of the body
       start (aligned on an 8 boundary).
 
-      can raise one of [Transport.Error], [Wire.Reading_error] *)
+      can raise one of [Transport.Error], [Wire.Reading_error],
+      [Wire.Convertion_failed] *)
 
 val send_one_message : Transport.t -> buffer -> Header.send -> Header.serial -> (buffer -> ptr -> ptr) -> buffer
   (** [send_one_message transport buffer header serial body_writer]

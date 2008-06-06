@@ -21,7 +21,7 @@ struct
        if it is not the same as our *)
     let protocol_version = int_of_char buffer.[3] in
       if protocol_version <> Constant.protocol_version
-      then raise (Content_error (sprintf "invalid protocol version: %d" protocol_version));
+      then raise (Reading_error (sprintf "invalid protocol version: %d" protocol_version));
 
       (* Unmarshaling of all informations contained in the first 16-byte
          of the header *)
@@ -69,22 +69,49 @@ struct
           Transport.recv_exactly transport buffer 16 (total_length - 16);
 
           (* Parse header fields *)
-          let read_field signature reader f i =
-            check_signature buffer (i + 1) signature;
-            let i, x = reader buffer (i + 4) in
-              f i (Some x) in
+          let read_field signature name reader f i =
+            let j, len = read_int_byte buffer i in
+            let j, ch = read_char_byte buffer j in
+            let j, zt = read_char_byte buffer j in
+              if len <> 1 || ch <> signature || zt <> '\000'
+              then begin
+                let i, s = read_string_signature buffer i in
+                  raise (Reading_error
+                           (Printf.sprintf
+                              "invalid signature for header field %s: '%s', must be: '%c'"
+                              name s signature))
+              end else
+                let i, x = reader buffer j in
+                  f i (Some x) in
           let fields = read_until
-            (fun i acc cont -> let i = rpad8 i in
-                 match snd (read_int_byte buffer i) with
-                   | 1 -> read_field "o" read_string_string (fun i x -> cont i { acc with path = x }) i
-                   | 2 -> read_field "s" read_string_string (fun i x -> cont i { acc with interface = x }) i
-                   | 3 -> read_field "s" read_string_string (fun i x -> cont i { acc with member = x }) i
-                   | 4 -> read_field "s" read_string_string (fun i x -> cont i { acc with error_name = x }) i
-                   | 5 -> read_field "u" read_int32_uint32 (fun i x -> cont i { acc with reply_serial = x }) i
-                   | 6 -> read_field "s" read_string_string (fun i x -> cont i { acc with destination = x }) i
-                   | 7 -> read_field "s" read_string_string (fun i x -> cont i { acc with sender = x }) i
-                   | 8 -> read_field "g" read_string_signature (fun i x -> cont i { acc with signature = x }) i
-                   | n -> raise (Content_error (sprintf "unknown header fields: %d" n)))
+            (fun i acc cont ->
+               let i = rpad8 i in
+               let i, code = read_int_byte buffer i in
+                 match code with
+                   | 1 -> read_field 'o' "path" read_string_string
+                       (fun i x -> cont i { acc with path = x }) i
+                   | 2 -> read_field 's' "interface" read_string_string
+                       (fun i x -> cont i { acc with interface = x }) i
+                   | 3 -> read_field 's' "member" read_string_string
+                       (fun i x -> cont i { acc with member = x }) i
+                   | 4 -> read_field 's' "error_name" read_string_string
+                       (fun i x -> cont i { acc with error_name = x }) i
+                   | 5 -> read_field 'u' "reply_serial" read_int32_uint32
+                       (fun i x -> cont i { acc with reply_serial = x }) i
+                   | 6 -> read_field 's' "destination" read_string_string
+                       (fun i x -> cont i { acc with destination = x }) i
+                   | 7 -> read_field 's' "sender" read_string_string
+                       (fun i x -> cont i { acc with sender = x }) i
+                   | 8 -> read_field 'g' "signature" read_string_signature
+                       (fun i x -> cont i { acc with signature = x }) i
+                   | n ->
+                       (* Just ignore the field, as said in the
+                          specification *)
+                       let i, _ = match byte_order with
+                         | Little_endian -> Values.LEReader.read_variant buffer (i + 1)
+                         | Big_endian -> Values.BEReader.read_variant buffer (i + 1)
+                       in
+                         cont i acc)
             empty_fields 16 (fields_length + 16) in
             ({ byte_order = byte_order;
                message_type = message_type;
@@ -167,16 +194,16 @@ let recv_one_message transport buffer =
     with
       | Out_of_bounds ->
           raise (Reading_error "invalid message size")
-      | Content_error msg ->
-          (* All content errors in the header are considered as fatal *)
-          raise (Reading_error msg)
+      | Content_error _ as exn ->
+          raise exn
       | Reading_error _ as exn ->
           raise exn
       | Transport.Error _ as exn ->
           raise exn
       | exn ->
-          (* must never happen *)
-          raise (Reading_error (sprintf "unexpected error: %s" (Printexc.to_string exn)))
+          (* Other exceptions are the ones raised by user-defined
+             convertion functions *)
+          raise (Convertion_failed(Printexc.to_string exn, exn))
 
 let send_one_message transport buffer header serial writer =
   let f = match header.byte_order with
@@ -191,14 +218,12 @@ let send_one_message transport buffer header serial writer =
       | Out_of_bounds ->
           (* Try with a bigger buffer *)
           aux (String.create (String.length buffer * 2))
-      | Convertion_failed _ as exn ->
-          raise exn
       | Writing_error _ as exn ->
           raise exn
       | Transport.Error _ as exn ->
           raise exn
       | exn ->
-          raise (Convertion_failed exn)
+          raise (Convertion_failed(Printexc.to_string exn, exn))
   in
     aux (if String.length buffer < 16
          then String.create 65536

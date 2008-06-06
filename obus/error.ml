@@ -7,14 +7,12 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-exception DBus of string * string option
+exception DBus of string * string
 
 open Printf
 
 let to_string = function
-  | DBus(error, None) ->
-      sprintf "DBus error, name='%s'" error
-  | DBus(error, Some msg) ->
+  | DBus(error, msg) ->
       sprintf "DBus error, name='%s', message='%s'" error msg
   | Transport.Error(msg, exn) ->
       sprintf "transport: %s%s" msg
@@ -24,8 +22,8 @@ let to_string = function
                sprintf ", orignal error: %s" (Printexc.to_string exn))
   | Wire.Content_error msg ->
       sprintf "unexpected datas where found in the message: %s" msg
-  | Wire.Convertion_failed exn ->
-      sprintf "failed to convert some values, reason: %s" (Printexc.to_string exn)
+  | Wire.Convertion_failed(msg, exn) ->
+      sprintf "failed to convert some values, reason: %s" msg
   | Wire.Reading_error msg ->
       sprintf "invalid dbus message, reason: %s" msg
   | Wire.Writing_error msg ->
@@ -38,10 +36,10 @@ open Wire
 let get_error header buffer ptr =
   let msg = match header.fields.signature with
     | Some s when s <> "" && s.[0] = 's' ->
-        Some(snd ((match header.byte_order with
-                     | Little_endian -> LEReader.read_string_string
-                     | Big_endian -> BEReader.read_string_string) buffer ptr))
-    | _ -> None
+        snd ((match header.byte_order with
+                | Little_endian -> LEReader.read_string_string
+                | Big_endian -> BEReader.read_string_string) buffer ptr)
+    | _ -> ""
   and name = match header.fields.error_name with
     | Some name -> name
     | _ -> "<unamed>"
