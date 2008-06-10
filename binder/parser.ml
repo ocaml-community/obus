@@ -11,16 +11,13 @@ open Types
 open Xparser
 open Introspect
 
-(* Camelization of names *)
-let camlize_lid str = String.concat "_" (Util.split_upper str)
-
 let mklid did = function
-  | None -> camlize_lid did
+  | None -> StrUtil.camlize_lid did
   | Some cid -> cid
 
 let mkuids did = function
-  | None -> List.map String.capitalize (Util.split_dot did)
-  | Some cid -> Util.split_dot cid
+  | None -> List.map String.capitalize (StrUtil.split_dot did)
+  | Some cid -> StrUtil.split_dot cid
 
 let rec default_caml_type = function
   | Tbyte -> char
@@ -109,51 +106,53 @@ let signal_decl =
                    | Some t -> list_of_tuple t
                    | None -> ctyps)))
 
-let proxy_decl =
-  elt "proxy" (a4 adname (afd "type" P_bus ["bus", P_bus; "connection", P_connection])
-                 (aos "destination") (aos "path"))
-    (s1 doc)
-    (fun name typ dest path doc ->
-       Proxy(doc, name, typ, dest, path))
-
-let flag_decl =
-  elt "flag" (a4 (ars "name") (afd "mode" M_poly ["poly", M_poly; "variant", M_variant; "record", M_record])
-                (abf "bitwise") (aos "module"))
-    (s2
-       (any (elt "value" (a2 (ar "key" int_of_string) (ars "name"))
-               (s1 doc)
-               (fun key name doc -> (key, name, doc))))
-       doc)
-    (fun name mode bitwise modul values doc ->
-       Flag(doc, name, mode,
-            (if mode = M_record
-             then values
-             else List.map (fun (k, n, d) -> (k, String.capitalize n, d)) values),
-            bitwise, modul))
-
 let convert_decl =
-  elt "convert" (a4
-                   (ar "a" caml_type_of_string)
-                   (ar "b" caml_type_of_string)
-                   (aos "a_of_b")
-                   (aos "b_of_a"))
+  elt "type" (a4
+                   (ar "new" caml_type_of_string)
+                   (ar "old" caml_type_of_string)
+                   (aos "new_of_old")
+                   (aos "old_of_new"))
+    s0
+    (fun a b a_of_b b_of_a ->
+       Convert(a, b, a_of_b, b_of_a))
+
+let error_decl =
+  elt "error" (a2 adname acname)
     (s1 doc)
-    (fun a b a_of_b b_of_a doc ->
-       Convert(doc, a, b, a_of_b, b_of_a))
+    (fun dname cname doc ->
+       Exception(doc, dname,
+                 match cname with
+                   | Some n -> n
+                   | None ->
+                       match List.rev (StrUtil.split_dot dname) with
+                         | [] -> failwith "null error name"
+                         | n :: _ ->
+                             String.capitalize (StrUtil.camlize_lid n)))
+
+let interf_decl =
+  elt "interf" (a1 (abf "implem"))
+    (s1 (one text))
+    (fun is_implem interf -> Interf(interf, is_implem))
+
+let implem_decl =
+  elt "implem" a0
+    (s1 (one text))
+    (fun implem -> Implem(implem))
 
 let doc_decl =
   elt "doc" a0 (s1 (any text)) (fun x -> Doc x)
 
 let interface =
-  elt "interface" (a2 adname acname)
+  elt "interface" (a4 adname acname (ad "proxy" (typ "Proxy.t" [typ "t" []]) caml_type_of_string) (aos "to_proxy"))
     (s1 (union [method_decl;
                 signal_decl;
-                proxy_decl;
-                flag_decl;
                 convert_decl;
+                error_decl;
+                interf_decl;
+                implem_decl;
                 doc_decl]))
-    (fun dname cname decls ->
-       (dname, mkuids dname cname, decls))
+    (fun dname cname proxy_typ to_proxy decls ->
+       (dname, mkuids dname cname, decls, proxy_typ, to_proxy))
 
 let document =
   elt "node" a0

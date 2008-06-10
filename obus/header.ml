@@ -7,13 +7,16 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-type message_type =
-  | Method_call
-  | Method_return
-  | Error
-  | Signal
-
 type serial = int32
+type path = string
+type interface = string
+type member = string
+type error_name = string
+type reply_serial = serial
+type destination = string
+type sender = string
+type signature = string
+
 type flags = {
   no_reply_expected : bool;
   no_auto_start : bool;
@@ -24,35 +27,65 @@ let  default_flags = {
   no_auto_start = false;
 }
 
-type fields = {
-  path : string option;
-  member : string option;
-  interface : string option;
-  error_name : string option;
-  reply_serial : serial option;
-  destination : string option;
-  sender : string option;
-  signature : string option;
-}
+type method_call_typ =
+    [ `Method_call of path * interface option * member ]
+type method_return_typ =
+    [ `Method_return of reply_serial ]
+type error_typ =
+    [ `Error of reply_serial * error_name ]
+type signal_typ =
+    [ `Signal of path * interface * member ]
 
-let empty_fields = {
-  path = None;
-  member = None;
-  interface = None;
-  error_name = None;
-  reply_serial = None;
-  destination = None;
-  sender = None;
-  signature = None;
-}
+type any_typ =
+    [ method_call_typ
+    | method_return_typ
+    | error_typ
+    | signal_typ ]
 
-type ('a, 'b) t = {
-  byte_order : Wire.byte_order;
-  message_type : message_type;
+type 'a header = {
   flags : flags;
-  length : 'a;
-  serial : 'b;
-  fields : fields;
+  serial : serial;
+  message_type : 'a;
+  destination : destination option;
+  sender : sender option;
+  signature : signature;
 }
-type send = (unit, unit) t
-type recv = (int, serial) t
+
+type t = any_typ header
+
+type method_call = method_call_typ header
+type method_return = method_return_typ header
+type signal = signal_typ header
+type error = error_typ header
+
+let method_call ?(flags=default_flags) ?sender ?destination ?(signature="") ~path ?interface ~member () =
+  { flags = flags;
+    serial = 0l;
+    message_type = `Method_call(path, interface, member);
+    destination = destination;
+    sender = sender;
+    signature = signature }
+
+let method_return ?(flags=default_flags) ?sender ?destination ?(signature="") ~reply_serial () =
+  { flags = flags;
+    serial = 0l;
+    message_type = `Method_return(reply_serial);
+    destination = destination;
+    sender = sender;
+    signature = signature }
+
+let error ?(flags=default_flags) ?sender ?destination ?(signature="") ~reply_serial ~error_name () =
+  { flags = flags;
+    serial = 0l;
+    message_type = `Error(reply_serial, error_name);
+    destination = destination;
+    sender = sender;
+    signature = signature }
+
+let signal ?(flags=default_flags) ?sender ?destination  ?(signature="") ~path ~interface ~member () =
+  { flags = flags;
+    serial = 0l;
+    message_type = `Signal(path, interface, member);
+    destination = destination;
+    sender = sender;
+    signature = signature }

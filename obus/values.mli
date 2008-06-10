@@ -77,24 +77,24 @@ type yes
 type no
 type 'a seq_cstr
 
-val byte : (char, _) cstr
-val boolean : (bool, _) cstr
-val int16 : (int, _) cstr
-val int32 : (int32, _) cstr
-val int64 : (int64, _) cstr
-val uint16 : (int, _) cstr
-val uint32 : (int32, _) cstr
-val uint64 : (int64, _) cstr
-val double : (float, _) cstr
-val string : (string, _) cstr
-val signature : (dtypes, _) cstr
-val object_path : (string, _) cstr
-val array : ('a, _) cstr -> ('a list, no) cstr
-val dict : ('a, yes) cstr -> ('b, _) cstr -> (('a * 'b) list, no) cstr
-val structure : 'a seq_cstr  -> ('a, no) cstr
-val variant : (value, no) cstr
-val cons : ('a, _) cstr -> 'b seq_cstr -> ('a * 'b) seq_cstr
-val nil : unit seq_cstr
+val cbyte : (char, _) cstr
+val cboolean : (bool, _) cstr
+val cint16 : (int, _) cstr
+val cint32 : (int32, _) cstr
+val cint64 : (int64, _) cstr
+val cuint16 : (int, _) cstr
+val cuint32 : (int32, _) cstr
+val cuint64 : (int64, _) cstr
+val cdouble : (float, _) cstr
+val cstring : (string, _) cstr
+val csignature : (dtypes, _) cstr
+val cobject_path : (string, _) cstr
+val carray : ('a, _) cstr -> ('a list, no) cstr
+val cdict : ('a, yes) cstr -> ('b, _) cstr -> (('a * 'b) list, no) cstr
+val cstructure : 'a seq_cstr  -> ('a, no) cstr
+val cvariant : (value, no) cstr
+val ccons : ('a, _) cstr -> 'b seq_cstr -> ('a * 'b) seq_cstr
+val cnil : unit seq_cstr
 
 val make_dtype : (_, _) cstr -> dtype
 val make_value : ('a, _) cstr -> 'a -> value
@@ -129,22 +129,22 @@ val tdict : dtype -> dtype -> dtype
 val tstructure : dtypes -> dtype
 val tvariant : dtype
 
-val vbyte : char -> value
-val vboolean : bool -> value
-val vint16 : int -> value
-val vint32 : int32 -> value
-val vint64 : int64 -> value
-val vuint16 : int -> value
-val vuint32 : int32 -> value
-val vuint64 : int64 -> value
-val vdouble : float -> value
-val vstring : string -> value
-val vsignature : dtypes -> value
-val vobject_path : string -> value
-val varray : dtype -> value list -> value
-val vdict : dtype -> dtype -> (value * value) list -> value
-val vstructure : values -> value
-val vvariant : value -> value
+val byte : char -> value
+val boolean : bool -> value
+val int16 : int -> value
+val int32 : int32 -> value
+val int64 : int64 -> value
+val uint16 : int -> value
+val uint32 : int32 -> value
+val uint64 : int64 -> value
+val double : float -> value
+val string : string -> value
+val signature : dtypes -> value
+val object_path : string -> value
+val array : dtype -> value list -> value
+val dict : dtype -> dtype -> (value * value) list -> value
+val structure : values -> value
+val variant : value -> value
 
 (**/**)
 

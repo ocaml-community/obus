@@ -12,5 +12,8 @@
 open Xparser
 open Introspect
 
+val interface : interface xml_parser
+  (** Parser an interface *)
+
 val document : interface list xml_parser
   (** Parser for a whole document *)

@@ -8,64 +8,65 @@
 module Thread = Thread
 module Mutex = Mutex
 
+let with_lock m f =
+  Mutex.lock m;
+  try
+    let result = f () in
+      Mutex.unlock m;
+      result
+  with
+      e ->
+        Mutex.unlock m;
+        raise e
+
 module Protected =
 struct
   type 'a t = {
-    mutable protected_content : 'a;
-    protected_mutex : Mutex.t;
+    mutable content : 'a;
+    mutex : Mutex.t;
   }
 
   let make x =
-    { protected_content = x;
-      protected_mutex = Mutex.create () }
+    { content = x;
+      mutex = Mutex.create () }
 
   let get value =
-    Mutex.lock value.protected_mutex;
-    let result = value.protected_content in
-      Mutex.unlock value.protected_mutex;
-      result
+    value.content
 
   let set value v =
-    Mutex.lock value.protected_mutex;
-    value.protected_content <- v;
-    Mutex.unlock value.protected_mutex
+    Mutex.lock value.mutex;
+    value.content <- v;
+    Mutex.unlock value.mutex
 
   let process f value =
-    Mutex.lock value.protected_mutex;
-    let (result, process) = f value.protected_content in
-      value.protected_content <- process;
-      Mutex.unlock value.protected_mutex;
-      result
-
-  let safe_process f value =
-    try
-      process f value
-    with
-        e ->
-          Mutex.unlock value.protected_mutex;
-          raise e
+    with_lock value.mutex
+      (fun () ->
+         let (result, process) = f value.content in
+           value.content <- process;
+           result)
 
   let update f value =
-    Mutex.lock value.protected_mutex;
-    value.protected_content <- f value.protected_content;
-    Mutex.unlock value.protected_mutex
+    with_lock value.mutex
+      (fun () -> value.content <- f value.content)
 
-  let safe_update f value =
-    try
-      update f value
-    with
-        e ->
-          Mutex.unlock value.protected_mutex;
-          raise e
+  let with_value f value =
+    with_lock value.mutex
+      (fun () -> f value.content)
+
+  let if_none value f = match value.content with
+    | Some v -> v
+    | None ->
+        with_lock value.mutex
+          (fun () ->
+             match value.content with
+               | None ->
+                   let v = f () in
+                     value.content <- Some v;
+                     v
+               | Some v -> v)
 end
 
 module ThreadConfig =
 struct
   let use_threads = true
 end
-
-type ('a, 'b) if_thread =
-  | With_thread of 'a
-  | Without_thread of 'b
-
-let if_thread f _ = With_thread (f ())

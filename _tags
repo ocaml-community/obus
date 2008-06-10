@@ -5,14 +5,21 @@
 <obus/with_threads/*>: thread
 "obus/DBus.xml": internal
 #<obus/*.ml>: camlp4o, trace
-# Link OBus with the C stubs (depends on Config.use_c_stubs in myocamlbuild.ml)
-<obus{-thread,}.cm{x,}a>: wire_stubs
+# Tags for the library
+<obus/{auth,address,transport,connection,error}.ml>: camlp4o, pa_log
 # Tags for the binder and the binding plugin library
 <binder/*.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
-# Tests and samples
+<binder/*.ml>: camlp4of
+<binder/{genSerializer,genImplem}.ml>: pa_seq
+# Tools
+<tools/obus-binder.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
+<tools/obus-binder.ml>: camlp4of
+<tools/obus-introspect.*>: use_obus, pkg_unix, pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
+# Samples
+<samples/*.*>: pkg_unix, use_obus
 <samples/lowlevels/*.*>: pkg_unix, use_obus, camlp4o, pa_dbus_typval
-<samples/proxies/*.*>: pkg_unix, use_obus
 <samples/threaded/*.*>: pkg_unix, use_obus-thread, thread
+# Tests
 <test/**>: pkg_unix, use_camlp4_full, use_dynlink, pkg_str, pkg_xml-light
 <test/*.ml>: camlp4of, pa_seq
 <test/serialization/*.*>: use_obus

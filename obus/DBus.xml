@@ -1,5 +1,9 @@
 <node>
-  <interface name="org.freedesktop.DBus" cname="">
+  <interface name="org.freedesktop.DBus" cname=""
+             proxy="Bus.t" to_proxy="to_proxy">
+    <implem>
+      let to_proxy bus = Bus.make_proxy bus interface "org.freedesktop.DBus" "/org/freedesktop/DBus"
+    </implem>
     <doc>
       This interface describe the functions available on the message
       bus.
@@ -9,43 +13,102 @@
       parameters in the
       @see &lt;http://dbus.freedesktop.org/doc/dbus-specification.html&gt; DBus specification.
     </doc>
+    <error name="org.freedesktop.DBus.Error.Failed"/>
+    <error name="org.freedesktop.DBus.Error.UnknownMethod">
+      <doc>
+        This exception is raised by any program when a method is not
+        found.
+      </doc>
+    </error>
     <method name="Hello">
       <arg direction="out" type="s"/>
     </method>
-    <flag name="dbus_name_flag" mode="poly" bitwise="true">
-      <value key="1" name="allow_replacement"/>
-      <value key="2" name="replace_existing"/>
-      <value key="3" name="do_not_queue"/>
-    </flag>
-    <flag name="request_name_result" mode="poly">
-      <value key="1" name="primary_owner"/>
-      <value key="2" name="in_queue"/>
-      <value key="3" name="exists"/>
-      <value key="4" name="already_owner"/>
-    </flag>
+    <type new="dbus_name_flag list" old="int"
+          old_of_new="int_of_dnf"/>
+    <interf implem="true">
+      type dbus_name_flag =
+        [ `Allow_replacement
+          (** Allow other application to steal you the name *)
+        | `Replace_existing
+          (** Replace any existing owner of the name *)
+        | `Do_not_queue ]
+          (** Do not queue if not available *)
+    </interf>
+    <implem>
+      let int_of_dnf l = List.fold_left
+        (fun acc -&gt; function
+           | `Allow_replacement -&gt; 1 lor acc
+           | `Replace_existing -&gt; 2 lor acc
+           | `Do_not_queue -&gt; 4 lor acc)
+        0 l
+    </implem>
+    <type new="request_name_result" old="int"
+          new_of_old="reqnr_of_int"/>
+    <interf implem="true">
+      type request_name_result =
+        [ `Primary_owner
+          (** You are now the primary owner of the connection *)
+        | `In_queue
+          (** You will get the name when it will be available *)
+        | `Exists
+          (** Somebody else already have the name and nobody specify what to do in this case *)
+        | `Already_owner ]
+          (** You already have the name *)
+    </interf>
+    <implem>
+      let reqnr_of_int : int -&gt; request_name_result = function
+        | 1 -&gt; `Primary_owner
+        | 2 -&gt; `In_queue
+        | 3 -&gt; `Exists
+        | 4 -&gt; `Already_owner
+        | n -&gt; failwith ("invalid reply for RequestName: " ^ string_of_int n)
+    </implem>
     <method name="RequestName">
       <arg direction="in" type="s"/>
       <arg direction="in" type="u" ctype="dbus_name_flag list"/>
       <arg direction="out" type="u" ctype="request_name_result"/>
     </method>
-    <flag name="release_name_result" mode="poly">
-      <value key="1" name="released"/>
-      <value key="2" name="non_existent"/>
-      <value key="3" name="not_owner"/>
-    </flag>
+    <type new="release_name_result" old="int"
+          new_of_old="relnr_of_int"/>
+    <interf implem="true">
+      type release_name_result =
+        [ `Released
+        | `Non_existent
+        | `Not_owner ]
+    </interf>
+    <implem>
+      let relnr_of_int : int -&gt; release_name_result = function
+        | 1 -&gt; `Released
+        | 2 -&gt; `Non_existent
+        | 3 -&gt; `Not_owner
+        | n -&gt; failwith ("invalid reply for ReleaseName: " ^ string_of_int n)
+    </implem>
     <method name="ReleaseName">
       <arg direction="in" type="s"/>
       <arg direction="out" type="u" ctype="release_name_result"/>
     </method>
-    <flag name="start_service_flag" bitwise="true">
-      <doc>
-        These flags are currently unused.
-      </doc>
-    </flag>
-    <flag name="start_service_by_name_result" mode="poly">
-      <value key="1" name="success"/>
-      <value key="2" name="already_running"/>
-    </flag>
+    <type new="start_service_flag list" old="int"
+          old_of_new="int_of_ssf"/>
+    <interf implem="true">
+      type start_service_flag
+        (** These flags are currently unused. *)
+    </interf>
+    <implem>
+      let int_of_ssf _ = 0
+    </implem>
+    <type new="start_service_by_name_result" old="int"
+          new_of_old="ssbnr_of_int"/>
+    <interf implem="true">
+      type start_service_by_name_result =
+        [ `Success
+        | `Already_running ]
+    </interf>
+    <implem>
+      let ssbnr_of_int = function
+        | 1 -&gt; `Success
+        | 2 -&gt; `Already_running
+        | n -&gt; failwith ("invalid reply for StartServiceByName: " ^ string_of_int n)
+    </implem>
     <method name="StartServiceByName">
       <arg direction="in" type="s"/>
       <arg direction="in" type="u" ctype="start_service_flag list"/>
@@ -61,14 +124,28 @@
     <method name="ListActivatableNames">
       <arg direction="out" type="as"/>
     </method>
-    <convert a="Rules.t" b="string" b_of_a="Rules.to_string"/>
+    <type new="Rules.t" old="string" old_of_new=":Rules.to_string"/>
+    <error name="org.freedesktop.DBus.Error.OOM" cname="Out_of_memory"/>
     <method name="AddMatch">
+      <doc>
+        Raise an [Out_of_memory] if the bus does not have enough
+        memory to add the match rule.
+      </doc>
       <arg direction="in" type="s" ctype="Rules.t"/>
     </method>
+    <error name="org.freedesktop.DBus.Error.MatchRuleNotFound"/>
     <method name="RemoveMatch">
+      <doc>
+        Raise a [Match_rule_not_found] if the rule does not exists.
+      </doc>
       <arg direction="in" type="s"/>
     </method>
+    <error name="org.freedesktop.DBus.Error.NameHasNoOwner"/>
     <method name="GetNameOwner">
+      <doc>
+        Raise a [Name_has_no_owner] if the requested name does not
+        have an owner.
+      </doc>
       <arg direction="in" type="s"/>
       <arg direction="out" type="s"/>
     </method>

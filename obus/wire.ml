@@ -10,8 +10,9 @@
 type ptr = int
 type buffer = string
 type byte_order = Little_endian | Big_endian
+type 'a body_reader = byte_order -> buffer -> ptr -> 'a
+type body_writer = byte_order -> buffer -> ptr -> ptr
 exception Out_of_bounds
-exception Content_error of string
 exception Convertion_failed of string * exn
 exception Reading_error of string
 exception Writing_error of string
@@ -494,7 +495,7 @@ struct
       match v with
         | 0 -> (i, false)
         | 1 -> (i, true)
-        | n -> raise (Failure ("invalid boolean value: " ^ string_of_int n))
+        | n -> raise (Reading_error ("invalid boolean value: " ^ string_of_int n))
 
   let read_string_string buffer i =
     let (i, len) = read_int_uint32 buffer i in
@@ -523,7 +524,7 @@ module BEReader = MakeReader(BigEndian)
 let check_signature buffer i str =
   let i, len = read_int_byte buffer i in
   let fail _ =
-    raise (Content_error
+    raise (Failure
              (sprintf "unexpected signature, expected: %s, got: %s"
                 str (String.sub buffer i len)))
   in

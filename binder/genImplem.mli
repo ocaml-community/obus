@@ -9,4 +9,4 @@
 
 (** Generate a module implementation *)
 
-val gen : bool -> Introspect.tree -> Camlp4.PreCast.Ast.str_item
+val gen : Introspect.tree -> Camlp4.PreCast.Ast.str_item

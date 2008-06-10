@@ -113,96 +113,96 @@ let vdict tk tv x = Dict(tk, tv, x)
 let vstructure x = Structure x
 let vvariant x = Variant x
 
-let byte = (Tbyte,
-            vbyte,
+let cbyte = (Tbyte,
+             vbyte,
+             (function
+                | Byte x -> x
+                | _ -> invalid_type ()))
+let cboolean = (Tboolean,
+                vboolean,
+                (function
+                   | Boolean x -> x
+                   | _ -> invalid_type ()))
+let cint16 = (Tint16,
+              vint16,
+              (function
+                 | Int16 x -> x
+                 | _ -> invalid_type ()))
+let cint32 = (Tint32,
+              vint32,
+              (function
+                 | Int32 x -> x
+                 | _ -> invalid_type ()))
+let cint64 = (Tint64,
+              vint64,
+              (function
+                 | Int64 x -> x
+                 | _ -> invalid_type ()))
+let cuint16 = (Tuint16,
+               vuint16,
+               (function
+                  | Uint16 x -> x
+                  | _ -> invalid_type ()))
+let cuint32 = (Tuint32,
+               vuint32,
+               (function
+                  | Uint32 x -> x
+                  | _ -> invalid_type ()))
+let cuint64 = (Tuint64,
+               vuint64,
+               (function
+                  | Uint64 x -> x
+                  | _ -> invalid_type ()))
+let cdouble = (Tdouble,
+               vdouble,
+               (function
+                  | Double x -> x
+                  | _ -> invalid_type ()))
+let cstring = (Tstring,
+               vstring,
+               (function
+                  | String x -> x
+                  | _ -> invalid_type ()))
+let csignature = (Tsignature,
+                  vsignature,
+                  (function
+                     | Signature x -> x
+                     | _ -> invalid_type ()))
+let cobject_path = (Tobject_path,
+                    vobject_path,
+                    (function
+                       | Object_path x -> x
+                       | _ -> invalid_type ()))
+let carray (t, f, g) = (Tarray t,
+                        (fun x -> Array (t, List.map f x)),
+                        (function
+                           | Array(_, x) -> List.map g x
+                           | _ -> invalid_type ()))
+let cdict (tk, fk, gk) (tv, fv, gv) = (Tdict(tk, tv),
+                                       (fun x -> Dict(tk, tv, List.map (fun (k, v) -> (fk k, fv v)) x)),
+                                       (function
+                                          | Dict(_, _, x) -> List.map (fun (k, v) -> (gk k, gv v)) x
+                                          | _ -> invalid_type ()))
+let cstructure (t, f, g) = (Tstructure t,
+                            (fun x -> Structure(f x)),
+                            (function
+                               | Structure x -> g x
+                               | _ -> invalid_type ()))
+let cvariant = (Tvariant,
+                vvariant,
+                (function
+                   | Variant x -> x
+                   | _ -> invalid_type ()))
+let ccons (t, f, g) (tl, fl, gl) = (t :: tl,
+                                    (fun (x,y) -> f x :: fl y),
+                                    (function
+                                       | x :: y -> (g x, gl y)
+                                       | _ -> invalid_type ()))
+let cnil = ([],
+            (fun () -> []),
             (function
-               | Byte x -> x
+               | [] -> ()
                | _ -> invalid_type ()))
-let boolean = (Tboolean,
-               vboolean,
-               (function
-                  | Boolean x -> x
-                  | _ -> invalid_type ()))
-let int16 = (Tint16,
-             vint16,
-             (function
-                | Int16 x -> x
-                | _ -> invalid_type ()))
-let int32 = (Tint32,
-             vint32,
-             (function
-                | Int32 x -> x
-                | _ -> invalid_type ()))
-let int64 = (Tint64,
-             vint64,
-             (function
-                | Int64 x -> x
-                | _ -> invalid_type ()))
-let uint16 = (Tuint16,
-              vuint16,
-              (function
-                 | Uint16 x -> x
-                 | _ -> invalid_type ()))
-let uint32 = (Tuint32,
-              vuint32,
-              (function
-                 | Uint32 x -> x
-                 | _ -> invalid_type ()))
-let uint64 = (Tuint64,
-              vuint64,
-              (function
-                 | Uint64 x -> x
-                 | _ -> invalid_type ()))
-let double = (Tdouble,
-              vdouble,
-              (function
-                 | Double x -> x
-                 | _ -> invalid_type ()))
-let string = (Tstring,
-              vstring,
-              (function
-                 | String x -> x
-                 | _ -> invalid_type ()))
-let signature = (Tsignature,
-                 vsignature,
-                 (function
-                    | Signature x -> x
-                    | _ -> invalid_type ()))
-let object_path = (Tobject_path,
-                   vobject_path,
-                   (function
-                      | Object_path x -> x
-                      | _ -> invalid_type ()))
-let array (t, f, g) = (Tarray t,
-                       (fun x -> Array (t, List.map f x)),
-                       (function
-                          | Array(_, x) -> List.map g x
-                          | _ -> invalid_type ()))
-let dict (tk, fk, gk) (tv, fv, gv) = (Tdict(tk, tv),
-                                      (fun x -> Dict(tk, tv, List.map (fun (k, v) -> (fk k, fv v)) x)),
-                                      (function
-                                         | Dict(_, _, x) -> List.map (fun (k, v) -> (gk k, gv v)) x
-                                         | _ -> invalid_type ()))
-let structure (t, f, g) = (Tstructure t,
-                           (fun x -> Structure(f x)),
-                           (function
-                              | Structure x -> g x
-                              | _ -> invalid_type ()))
-let variant = (Tvariant,
-               vvariant,
-               (function
-                  | Variant x -> x
-                  | _ -> invalid_type ()))
-let cons (t, f, g) (tl, fl, gl) = (t :: tl,
-                                   (fun (x,y) -> f x :: fl y),
-                                   (function
-                                      | x :: y -> (g x, gl y)
-                                      | _ -> invalid_type ()))
-let nil = ([],
-           (fun () -> []),
-           (function
-              | [] -> ()
-              | _ -> invalid_type ()))
 
 let make_dtype (t, _, _) = t
 let make_value (_, f, _) = f
@@ -235,32 +235,32 @@ let tdict tk tv = check_basic tk; Tdict(tk, tv)
 let tstructure tl = Tstructure tl
 let tvariant = Tvariant
 
-val vbyte x = Byte x
-val vboolean x = Boolean x
-val vint16 x = Int16 x
-val vint32 x = Int32 x
-val vint64 x = Int64 x
-val vuint16 x = Uint16 x
-val vuint32 x = Uint32 x
-val vuint64 x = Uint64 x
-val vdouble x = Double x
-val vstring x = String x
-val vsignature x = Signature x
-val vobject_path x = Object_path x
-val varray t x =
+let byte x = Byte x
+let boolean x = Boolean x
+let int16 x = Int16 x
+let int32 x = Int32 x
+let int64 x = Int64 x
+let uint16 x = Uint16 x
+let uint32 x = Uint32 x
+let uint64 x = Uint64 x
+let double x = Double x
+let string x = String x
+let signature x = Signature x
+let object_path x = Object_path x
+let array t x =
   List.iter (fun v ->
                if dtype_of_value v <> t then
-                 raise (Invalid_arugment "element of arrays must all have the same type")) x;
+                 raise (Invalid_argument "element of arrays must all have the same type")) x;
   Array(t, x)
-val vdict tk tv x =
+let dict tk tv x =
   check_basic tk;
   List.iter (fun (k, v) ->
                if dtype_of_value k <> tk
                  || dtype_of_value v <> tv then
-                   raise (Invalid_arugment "element of dictionnaries must all have the same type")) x;
+                   raise (Invalid_argument "element of dictionnaries must all have the same type")) x;
   Dict(tk, tv, x)
-val vstructure x = Structure x
-val vvariant x = Variant x
+let structure x = Structure x
+let variant x = Variant x
 
 open Wire
 

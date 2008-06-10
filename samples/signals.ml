@@ -12,23 +12,19 @@ open Printf
 
 let bus_handler proxy = function
   | DBus.Name_owner_changed(name, old, _new) ->
-      printf "the owner of the name '%s' changed: '%s' -> '%s'\n%!" name old _new;
-      true
+      printf "the owner of the name '%s' changed: '%s' -> '%s'\n%!" name old _new
   | DBus.Name_lost(name) ->
-      printf "i lost the name '%s'!\n%!" name;
-      true
+      printf "i lost the name '%s'!\n%!" name
   | DBus.Name_acquired(name) ->
-      printf "Youhou! i got the name '%s'!\n%!" name;
-      true
+      printf "Youhou! i got the name '%s'!\n%!" name
 
 let hal_handler proxy = function
   | Hal.Device.Condition("ButtonPressed", button) ->
       printf "You pressed '%s'!\n%!" button;
-      true
   | _ ->
-      false
+      ()
 
-let get_fd bus = Transport.fd (Connection.transport (Bus.connection bus))
+let get_fd bus = Transport.fd (Connection.transport bus)
 
 let _ =
   let session = Bus.session () in
@@ -41,6 +37,6 @@ let _ =
       while true do
         let (fds, _, _) = Unix.select (List.map fst fd_map) [] [] (-1.0) in
           List.iter
-            (fun fd -> Bus.dispatch (List.assoc fd fd_map))
+            (fun fd -> Connection.dispatch (List.assoc fd fd_map))
             fds
       done

@@ -56,11 +56,40 @@ let of_string str =
   with
       Failure msg -> raise (Parse_error msg)
 
+let system_bus_variable = "DBUS_SYSTEM_BUS_ADDRESS"
+let session_bus_variable = "DBUS_SESSION_BUS_ADDRESS"
+let session_bus_property = "_DBUS_SESSION_BUS_ADDRESS"
+
 let system () =
   of_string
-    (try Sys.getenv "DBUS_SYSTEM_BUS_ADDRESS" with
-         Not_found -> Constant.default_system_bus_address)
+    (try Sys.getenv system_bus_variable with
+         Not_found ->
+           DEBUG("environment variable %s not found, using internal default" system_bus_variable);
+           Constant.default_system_bus_address)
 
 let session () =
-  try of_string (Sys.getenv "DBUS_SESSION_BUS_ADDRESS") with
-      Not_found -> []
+  match
+    try Some (Sys.getenv session_bus_variable) with
+        Not_found ->
+          LOG("environment variable %s not found" session_bus_variable);
+          try
+            (* Try with the root window property, this is bit ugly and
+               it depends on the presence of xprop... *)
+            let ic = Unix.open_process_in
+              (Printf.sprintf "xprop -root %s" session_bus_property)
+            in
+            let result = try
+              Scanf.fscanf ic ("_DBUS_SESSION_BUS_ADDRESS(STRING) = %S") (fun s -> Some s)
+            with
+                _ -> None
+            in
+              ignore (Unix.close_process_in ic);
+              result
+          with
+              _ ->
+                LOG("can not get session bus address from property %s on root window (maybe x11 is not running)"
+                      session_bus_property);
+                None
+  with
+    | Some str -> of_string str
+    | None -> []

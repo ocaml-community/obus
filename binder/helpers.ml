@@ -18,7 +18,7 @@ let ident_of_string name =
           if id <> "" && Char.uppercase id.[0] <> id.[0]
           then <:ident< $lid:id$ >>
           else <:ident< $uid:id$ >>)
-       (Util.split_dot name))
+       (StrUtil.split_dot name))
 
 let expr_of_id id = (<:expr< $id:id$ >>)
 let patt_of_id id = (<:patt< $id:id$ >>)

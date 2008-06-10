@@ -13,27 +13,25 @@
     the reply content later. It is like a [lazy] value. The value of
     the cookie became accessible as the reply is arrived. *)
 
-type 'a t
-  (** A non retreived message content *)
-
-val send_message_with_cookie : Connection.t -> ?raise_exn:bool -> Connection.send_message -> Connection.recv_message t
-  (** [send_message_sync connection raise_exn message] send a message
-      over a DBus connection, and return immediatly a cookie for
-      getting back the result later *)
+type 'a t = 'a Connection.cookie
+    (** A non retreived message content *)
 
 val get : 'a t -> 'a
   (** [get cookie] get the value associated with a cookie, eventually
-      waiting for it. If an exception was raised at the reception of
-      the reply, then it is raised now. *)
+      waiting for it. If the reply is an error then it will be raised
+      here. *)
 
 val is_ready : 'a t -> bool
-  (** [is_ready cookie] return true if the cookie is evaluated *)
+  (** [is_ready cookie] return true if the cookie is evaluated (or if
+      if is an error) *)
+
+val is_value : 'a t -> bool
+  (** Return true if the cookie is ready and is not an error *)
+
+val is_exn : 'a t -> bool
+  (** Return true if the cookie is ready and is an error *)
 
 val get_if_ready : 'a t -> 'a option
   (** [get_if_ready cookie] return Some(v) where v is the value of
-      [cookie] if it is ready, of None if not, and raise an exception
-      like [get]. *)
-
-(**/**)
-
-val raw_send_message_with_cookie : Connection.t -> Header.send -> Connection.writer -> 'a Connection.reader -> 'a t
+      [cookie] if it is ready, or [None] if not, and raise an
+      exception like [get]. *)

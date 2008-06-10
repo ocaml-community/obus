@@ -14,29 +14,28 @@ open Tree
 
 let no_space_regexp = Str.regexp "[^ \t]"
 
-let print internal oc node =
-  let proxy_typ = match internal with
-    | true -> "Bus.t"
-    | false -> "[> t ] Proxy.t"
-  in
-
+let print real oc node =
   let rec aux indent (Node(interf, sons)) =
     let spaces = String.make indent ' ' in
     let p fmt = fprintf oc fmt in
     let pn fmt = ksprintf (fun s -> output_string oc spaces; output_string oc s) fmt in
-    let n () = output_string oc "\n" in
+    let n () = if real then output_string oc "\n" else () in
+
+    let split_unindent str =
+      let lines = StrUtil.split_lines str in
+      let max_indent = List.fold_left begin fun n line ->
+        try
+          min (Str.search_forward no_space_regexp line 0) n
+        with
+            Not_found -> n
+      end max_int lines in
+        List.map (fun s -> Str.string_after s max_indent) lines
+    in
 
     let print_doc indent docs =
       List.iter begin fun doc ->
         let spaces = String.make indent ' ' in
-        let lines = Util.split_lines doc in
-        let max_indent = List.fold_left begin fun n line ->
-          try
-            max (Str.search_forward no_space_regexp line 0) n
-          with
-              Not_found -> n
-        end 0  lines in
-        let lines = List.map (fun s -> Str.string_after s max_indent) lines in
+        let lines = split_unindent doc in
           match lines with
             | [] -> ()
             | first :: lines ->
@@ -50,18 +49,15 @@ let print internal oc node =
       | l -> List.iter (fun t -> p "%s -> " (string_of_caml_type t)) l
     in
 
-    let print_flag doc prefix values =
-      List.iter begin fun (key, name, doc) ->
-        pn "  | %s%s\n" prefix name;
-        print_doc 6 doc
-      end values in
-
-    let print_content name content =
-      n ();
-      pn "(** {6 Wrapper for the dbus interface {i %s}} *)\n" name;
-      n ();
-      pn "type t = [ `%s ]\n" (String.capitalize (Str.global_replace Util.dot_regexp "_" name));
-      pn "val interface : t Interface.t\n";
+    let print_content name content proxy_typ =
+      if real
+      then begin
+        n ();
+        pn "(** {6 Wrapper for the dbus interface {i %s}} *)\n" name;
+        n ();
+        pn "type t\n";
+        pn "val interface : t Interface.t\n"
+      end;
 
       List.iter begin fun decl ->
         match decl with
@@ -71,7 +67,7 @@ let print internal oc node =
           | Method(doc, dname, cname,
                    (in_args, ins),
                    (out_args, outs)) ->
-              let ins = typ proxy_typ [] :: ins in
+              let ins = if real then proxy_typ :: ins else ins in
                 n ();
                 (* print sync version *)
                 pn "val %s : " cname;
@@ -79,62 +75,30 @@ let print internal oc node =
                 p "%s\n" (string_of_caml_type (tuple outs));
 
                 (* print method documentation *)
-                if doc = []
-                then pn "  (** Wrapper for %s *)\n" dname
-                else print_doc 2 doc;
-
-                (* print async version *)
-                pn "val %s_async : " cname;
-                print_func_type ins;
-                p "(";
-                print_func_type outs;
-                p "unit) -> unit\n";
-
-                (* print cookie version *)
-                pn "val %s_cookie : " cname;
-                print_func_type ins;
-                p "%s Cookie.t\n" (string_of_caml_type (tuple outs))
-          | Proxy(doc, name, ptyp, dest, path) ->
-              let args = Util.filter_map (fun x -> x)
-                [ (match ptyp with
-                     | P_bus -> Some (typ "Bus.t" [])
-                     | P_connection -> Some (typ "Connection.t" []));
-                  (match dest with
-                     | Some _ -> None
-                     | None -> Some (typ "Proxy.name" []));
-                  (match path with
-                     | Some _ -> None
-                     | None -> Some (typ "Proxy.path" [])) ] in
-                n ();
-                pn "val %s : " name;
-                print_func_type args;
-                p "t Proxy.t\n";
                 print_doc 2 doc;
-          | Flag(doc, name, _, [], _, None) ->
+
+                if real
+                then begin
+                  (* print async version *)
+                  pn "val %s_async : " cname;
+                  print_func_type ins;
+                  p "(";
+                  print_func_type outs;
+                  p "unit) -> unit\n";
+
+                  (* print cookie version *)
+                  pn "val %s_cookie : " cname;
+                  print_func_type ins;
+                  p "%s Cookie.t\n" (string_of_caml_type (tuple outs))
+                end
+          | Exception(doc, dname, cname) ->
               n ();
-              pn "type %s\n" name;
+              pn "(** Error %S *)\n" dname;
+              pn "exception %s of string\n" cname;
               print_doc 2 doc
-          | Flag(doc, name, mode, values, bitwise, None) ->
+          | Interf(interf, _) ->
               n ();
-              begin match mode with
-                | M_poly ->
-                    pn "type %s =\n" name;
-                    print_doc 2 doc;
-                    pn "  [\n";
-                    print_flag doc "`" values;
-                    pn "  ]\n"
-                | M_variant ->
-                    pn "type %s =\n" name;
-                    print_doc 2 doc;
-                    print_flag doc "" values
-                | M_record ->
-                    print_doc 0 doc;
-                    pn "type %s = {\n" name;
-                    List.iter begin fun (key, name, doc) ->
-                      p "  %s : bool\n" name;
-                    end values;
-                    pn "}\n";
-              end
+              List.iter (pn "%s\n") (split_unindent interf)
           | _ -> ()
       end content;
 
@@ -149,17 +113,18 @@ let print internal oc node =
           pn "type signal =\n";
           List.iter begin fun (doc, dname, cname, (args, ctypes)) ->
             pn "  | %s of %s\n" cname (string_of_caml_type (tuple ctypes));
-            if doc = []
-            then pn "      (** Representation of signal %s *)\n" dname
-            else print_doc 6 doc
+            print_doc 6 doc
           end signals;
-          n ();
-          pn "val signals : (t, signal) Signal.set\n"
+          if real
+          then begin
+            n ();
+            pn "val signals : (t, signal) Signal.set\n"
+          end
         end in
 
       begin match interf with
         | None -> ()
-        | Some(name, content) -> print_content name content
+        | Some(name, content, proxy_typ, to_proxy) -> print_content name content proxy_typ
       end;
 
       (* And finally sub-modules *)

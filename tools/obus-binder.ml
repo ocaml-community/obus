@@ -19,7 +19,7 @@ let internal = ref false
 
 let args = [
   "-o", Arg.String (fun s -> output_file_prefix := Some s),
-  Printf.sprintf "output file prefix";
+  "output file prefix";
   "-internal", Arg.Set internal,
   "generate a module bound to be part of the obus library";
 ]
@@ -41,6 +41,17 @@ let choose_output_file_prefix () = match !output_file_prefix with
               Not_found -> f
         end
       | _ -> "obus.out"
+
+let source_xml_parser = XmlParser.make ()
+let _ = XmlParser.prove source_xml_parser false
+
+let parse_file fname =
+  try
+    Xparser.parse Parser.document ~filename:fname (XmlParser.parse source_xml_parser (XmlParser.SFile fname))
+  with
+      Xml.Error err ->
+        Log.print "error while parsing file %S: %s\n" fname (Xml.error err);
+        exit 2
 
 let open_print_header fname =
   let oc = open_out fname in
@@ -69,13 +80,13 @@ let _ =
   let node = List.fold_left
     (fun node fname ->
        List.fold_left
-         (fun node (dbus_name, caml_names, content) ->
-            Tree.insert caml_names (dbus_name, content) node)
+         (fun node (dbus_name, caml_names, content, proxy_typ, to_proxy) ->
+            Tree.insert caml_names (dbus_name, content, proxy_typ, to_proxy) node)
          node
-         (Xparser.parse Parser.document (Util.parse_xml fname)))
+         (parse_file fname))
     Tree.empty
     !xml_files in
-  let implem = GenImplem.gen !internal node in
+  let implem = GenImplem.gen node in
 
   let implem_fname = output_file_prefix ^ ".ml"
   and interf_fname = output_file_prefix ^ ".mli" in
@@ -83,9 +94,14 @@ let _ =
   let printer = new Printer.printer () in
   let oc = open_print_header implem_fname in
 
-    printer#str_item (Format.formatter_of_out_channel oc) implem;
+    printer#str_item (Format.formatter_of_out_channel oc)
+      (if !internal
+       then
+         implem
+       else
+         <:str_item< open OBus;; $implem$ >>);
 
     let oc = open_print_header interf_fname in
       if not !internal
       then output_string oc "\nopen OBus\n";
-      PrintInterf.print !internal oc node
+      PrintInterf.print true oc node

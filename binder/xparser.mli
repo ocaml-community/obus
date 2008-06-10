@@ -91,6 +91,9 @@ val pcdata : (string -> 'a) -> 'a xml_parser
 val text : string xml_parser
   (** [text] equivalent of [pcdata (fun x -> x)] *)
 
+val raw : Xml.xml xml_parser
+  (** Do not parse the xml *)
+
 (** {6 Parsing a xml document} *)
 
 val parse : 'a xml_parser -> ?filename:string -> Xml.xml -> 'a

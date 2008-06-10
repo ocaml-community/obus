@@ -66,11 +66,5 @@ val fd : t -> Unix.file_descr
 
 val of_addresses : Address.t list -> t
   (** [create addresses] try to make a working transport from a list
-      of addresses. *)
-
-type maker = Address.t -> t option
-  (** A maker is a function which take an address and create a
-      transport from it. *)
-
-val register_maker : maker -> unit
-  (** [regsiter_maker maker] add a transport maker *)
+      of addresses. This only work for transport which OBus internally
+      handles *)

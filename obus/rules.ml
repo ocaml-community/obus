@@ -9,13 +9,19 @@
 
 open Header
 
+type message_type =
+  | Method_call
+  | Method_return
+  | Error
+  | Signal
+
 type rule =
-  | Type of Header.message_type
-  | Sender of Bus.name
+  | Type of message_type
+  | Sender of Connection.name
   | Interface of Interface.name
   | Member of string
   | Path of Proxy.path
-  | Destination of Bus.name
+  | Destination of Connection.name
   | Arg of int * string
 
 type t = rule list

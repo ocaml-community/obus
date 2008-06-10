@@ -21,33 +21,45 @@ type mechanism_return =
   | Error of string
       (** Authentification failed *)
 
-class type mechanism =
-object
-  (** A mechanism for authentification *)
+(** Handlers for an authentification mechanism *)
+type mechanism_handlers = {
+  mech_init : mechanism_return;
+  (** must be the initial return value of the mechanism. *)
 
-  method init : mechanism_return
-    (** [init] initialize the mechanism *)
-  method data : data -> mechanism_return
-    (** [data d] continue the mechanism with this data *)
-  method shutdown : unit
-    (** [shutdown] shutdown mechanism *)
-end
+  mech_data : data -> mechanism_return;
+  (** [mech_data] must continue the mechanism process with the given
+      data. *)
 
-class virtual immediate :
-object
-  (** Immediate authentification *)
-  method virtual init : mechanism_return
-  method data : data -> mechanism_return
-  method shutdown : unit
-end
+  mech_shutdown : unit -> unit;
+  (** shutdown the mechanism *)
+}
+
+val make :
+  init:mechanism_return ->
+  ?data:(data -> mechanism_return) ->
+  ?shutdown:(unit -> unit) -> unit -> mechanism_handlers
+  (** Create handers for an authentification mechanism.
+
+      The default for [data] is to return an error telling that no
+      data are expected.
+
+      The default for [shutdown] is to do nothing. *)
+
+type mechanism = string * (unit -> mechanism_handlers)
+    (** A mechiansm consist on a mechanism name and a function to
+        create the handlers *)
+
+(** {6 Predefined mechanisms} *)
+
+val mech_external : mechanism
 
 (** {6 Registration} *)
 
-val register_mechanism : string -> (unit -> mechanism) -> unit
-  (** [resgister_mechanism name mech] add support for a new mechanism. *)
+val default_mechanisms : mechanism list
+  (** All the default mechanisms. *)
 
 (** {6 Make authentification} *)
 
-val launch : Transport.t -> Address.guid option
+val launch : ?mechanisms:mechanism list -> Transport.t -> Address.guid option
   (** [launch transport] launch authentification on the given
       transport *)

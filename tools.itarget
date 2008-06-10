@@ -1,0 +1,4 @@
+tools/obus-binder.byte
+tools/obus-introspect.byte
+tools/obus-binder.native
+tools/obus-introspect.native

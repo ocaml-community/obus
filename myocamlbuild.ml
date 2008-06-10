@@ -11,13 +11,12 @@ struct
   (* Modules shared by all libraries *)
   let common_modules =
     ["Constant";
-     "Common_util";
+     "Util";
      "Common"]
 
   (* Modules shared by obus and obus_thread *)
   let obus_modules =
-    ["Util";
-     "AuthLexer";
+    ["AuthLexer";
      "AddrLexer";
      "OBus"]
 
@@ -27,17 +26,14 @@ struct
   (* Sub-modules of the OBus module *)
   let obus_pack_files =
     ["info";
-     "log";
      "wire";
      "header";
      "values";
-     "message";
      "interface";
      "address";
      "transport";
      "wireMessage";
      "auth";
-     "unixT";
      "error";
      "connection";
      "cookie";
@@ -54,22 +50,14 @@ struct
 
     (* Files of binder which use camlp4 quotation for caml ast *)
   let code_generators =
-    ["genCode";
-     "genSerializer";
-     "env";
-     "codeConstants";
+    ["genSerializer";
      "helpers";
      "genImplem";
      "types";
      "obus-binder";
-     "rules";
      "compile"]
 
-  (* Files using each syntax *)
-  let use_syntax =
-    ["seq", ["binder/genSerializer.ml"; "binder/genImplem.ml"];
-     "log", prepend "obus" ["auth.ml"; "address.ml"; "transport.ml"; "connection.ml"];
-     "dbus_typval", []]
+  let syntaxes = ["pa_log"; "pa_seq"; "trace"]
 end
 
 (* these functions are not really officially exported *)
@@ -93,22 +81,7 @@ let intern_lib dir lib =
   dep ["ocaml"; "byte"; "use_" ^ lib] [lib ^ ".cma"];
   dep ["ocaml"; "native"; "use_" ^ lib] [lib ^ ".cmxa"]
 
-let add_syntax syntax fname =
-  let tags = tags_of_pathname fname in
-    if not (Tags.mem "camlp4o" tags or Tags.mem "camlp4of" tags)
-    then tag_file fname ["camlp4o"];
-    tag_file fname ["pa_" ^ syntax]
-
 let _ =
-  List.iter
-    (fun module_name ->
-       tag_file (Printf.sprintf "binder/%s.ml" module_name) ["camlp4of"])
-    Config.code_generators;
-
-  List.iter
-    (fun (syntax, fnames) -> List.iter (add_syntax syntax) fnames)
-    Config.use_syntax;
-
   List.iter
     (fun fname ->
        tag_file (Printf.sprintf "obus/%s.cmx" fname) ["for-pack(OBus)"])
@@ -128,7 +101,8 @@ let _ =
         Pathname.define_context "obus/without_threads" [ "obus/threadsigs" ];
         Pathname.define_context "obus" [ "obus/threadsigs"; "common" ];
         Pathname.define_context "binder" [ "common" ];
-        Pathname.define_context "samples/proxies" [ "samples/interfaces" ];
+        Pathname.define_context "tools" [ "common"; "binder"; "obus"; "samples/interfaces" ];
+        Pathname.define_context "samples" [ "samples/interfaces" ];
         Pathname.define_context "samples/threaded" [ "samples/interfaces" ];
         Pathname.define_context "samples/interfaces" [ "obus" ];
         Pathname.define_context "test" [ "common"; "binder" ];
@@ -136,10 +110,10 @@ let _ =
         (* rule for building dbus interface binding *)
         rule "obus-binding"
           ~prods:["%.ml"; "%.mli"]
-          ~deps:["%.xml"; "binder/obus-binder.byte"]
+          ~deps:["%.xml"; "tools/obus-binder.byte"]
           (fun env builder ->
              let xml = env "%.xml" in
-               Cmd(S[P"./binder/obus-binder.byte"; A xml; A "-o"; A (env "%"); T(tags_of_pathname xml++"obus-binder"++"generate")]));
+               Cmd(S[P"./tools/obus-binder.byte"; A xml; A "-o"; A (env "%"); T(tags_of_pathname xml++"obus-binder"++"generate")]));
         flag ["obus-binder"; "generate"; "internal"] & A"-internal";
 
         (* When one link an OCaml library/binary/package, one should use -linkpkg *)
@@ -163,22 +137,14 @@ let _ =
           flag ["ocaml"; "doc";      "syntax_"^syntax] & S[A"-syntax"; A syntax];
         end (find_syntaxes ());
 
-        List.iter begin fun (ext, _) ->
-          let tag = "pa_" ^ ext in
-            if Pathname.exists ("syntax/pa_" ^ ext ^ ".ml")
-            then begin
-              flag ["ocaml"; "pp"; tag] & A("syntax/pa_" ^ ext ^ ".cmo");
-              dep ["ocaml"; "ocamldep"; tag] ["syntax/pa_" ^ ext ^ ".cmo"]
-            end else
-              flag ["ocaml"; "pp"; tag] & A (tag ^ ".cmo")
-        end Config.use_syntax;
-        flag ["ocaml"; "pp"; "trace"] & A("syntax/trace.cmo");
-        dep ["ocaml"; "ocamldep"; "trace"] ["syntax/trace.cmo"];
+        List.iter begin fun tag ->
+          flag ["ocaml"; "pp"; tag] & A("syntax/" ^ tag ^ ".cmo");
+          dep ["ocaml"; "ocamldep"; tag] ["syntax/" ^ tag ^ ".cmo"]
+        end Config.syntaxes;
 
         (* Internal libraries *)
         intern_lib "obus" "obus";
         intern_lib "obus" "obus-thread";
-        intern_lib "binder" "obus-binding";
 
         rule "obus_pack"
           ~prod:"obus/OBus.mlpack"

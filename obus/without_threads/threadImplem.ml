@@ -9,6 +9,8 @@ module Thread =
 struct
   type t = unit
   let create _ _ = ()
+  let self _ =  ()
+  let id _ = 0
 end
 
 module Mutex =
@@ -28,9 +30,11 @@ struct
   let get = ( ! )
   let set = ( := )
   let update f x = x := f !x
-  let safe_update f x = x := f !x
   let process f x = let y, z = f !x in x := z; y
-  let safe_process = process
+  let with_value f x = f !x
+  let if_none x f = match !x with
+    | Some v -> v
+    | None -> let v = f () in x := Some v; v
 end
 
 module ThreadConfig =
@@ -38,8 +42,4 @@ struct
   let use_threads = false
 end
 
-type ('a, 'b) if_thread =
-  | With_thread of 'a
-  | Without_thread of 'b
-
-let if_thread _ f = Without_thread (f ())
+let with_lock _ f = f ()

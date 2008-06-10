@@ -7,45 +7,26 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open ThreadImplem
+
 exception DBus of string * string
 
 open Printf
 
-let to_string = function
-  | DBus(error, msg) ->
-      sprintf "DBus error, name='%s', message='%s'" error msg
-  | Transport.Error(msg, exn) ->
-      sprintf "transport: %s%s" msg
-        (match exn with
-           | None -> ""
-           | Some exn ->
-               sprintf ", orignal error: %s" (Printexc.to_string exn))
-  | Wire.Content_error msg ->
-      sprintf "unexpected datas where found in the message: %s" msg
-  | Wire.Convertion_failed(msg, exn) ->
-      sprintf "failed to convert some values, reason: %s" msg
-  | Wire.Reading_error msg ->
-      sprintf "invalid dbus message, reason: %s" msg
-  | Wire.Writing_error msg ->
-      sprintf "message serialization failed, reason: %s" msg
-  | _ -> ""
+type error_maker = string -> string -> exn option
+type error_unmaker = exn -> (string * string) option
 
-open Header
-open Wire
+let error_makers = Protected.make []
+let error_unmakers = Protected.make []
 
-let get_error header buffer ptr =
-  let msg = match header.fields.signature with
-    | Some s when s <> "" && s.[0] = 's' ->
-        snd ((match header.byte_order with
-                | Little_endian -> LEReader.read_string_string
-                | Big_endian -> BEReader.read_string_string) buffer ptr)
-    | _ -> ""
-  and name = match header.fields.error_name with
-    | Some name -> name
-    | _ -> "<unamed>"
-  in
-    (name, msg)
+let make_error name msg =
+  match Util.find_map (fun maker -> maker name msg) (Protected.get error_makers) with
+    | Some exn -> exn
+    | None -> DBus(name, msg)
 
-let raise_error header buffer ptr =
-  let name, msg = get_error header buffer ptr in
-    raise (DBus(name, msg))
+let unmake_error = function
+  | DBus(name, msg) -> Some(name, msg)
+  | exn -> Util.find_map (fun maker -> maker exn) (Protected.get error_unmakers)
+
+let register_maker f = Protected.update (fun l -> f :: l) error_makers
+let register_unmaker f = Protected.update (fun l -> f :: l) error_unmakers

@@ -14,68 +14,64 @@ type path = string
 type 'a t = {
   connection : Connection.t;
   interface : 'a Interface.t;
-  sender : name option;
   name : name option;
   path : path;
 }
 
-let make connection interface ?sender ?destination path =
+let make connection interface ?destination path =
   { connection = connection;
     interface = interface;
     name = destination;
-    path = path;
-    sender = sender }
+    path = path }
 
 let path { path = x } = x
 let name { name = x } = x
-let sender { sender = x } = x
 let connection { connection = x } = x
 
-type ('a, 'b, 'c) method_call_desc = {
-  method_interface : 'a Interface.t;
-  method_member : string;
-  method_in_sig : string;
-  method_out_sig : string;
-  method_le_reader : 'b -> Wire.buffer -> Wire.ptr -> 'c;
-  method_be_reader : 'b -> Wire.buffer -> Wire.ptr -> 'c;
+open Wire
+
+type ('a, 'b) intern_method_call_desc = {
+  intern_mcd_interface : 'a Interface.t;
+  intern_mcd_member : string;
+  intern_mcd_input_signature : string;
+  intern_mcd_output_signature : string;
+  intern_mcd_reader : 'b body_reader;
 }
 
 open Header
+open Connection
 
-let handle_reply desc cont header buffer i = match header.message_type with
-  | Error ->
-      Error.raise_error header buffer i
-  | _ ->
-      let out_sig = match header.fields.signature with
-        | Some s -> s
-        | None -> ""
-      in
-        if out_sig = desc.method_out_sig
-        then match header.Header.byte_order with
-          | Wire.Little_endian -> desc.method_le_reader cont buffer i
-          | Wire.Big_endian -> desc.method_be_reader cont buffer i
-        else raise (Wire.Content_error
-                      (Printf.sprintf
-                         "unexpected_signature for method %s.%s, expected: %s, got: %s"
-                         (Interface.name desc.method_interface)
-                         desc.method_member
-                         desc.method_out_sig
-                         out_sig))
+let fail desc header =
+  failwith
+    (Printf.sprintf
+       "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
+       desc.intern_mcd_member
+       (Interface.name desc.intern_mcd_interface)
+       desc.intern_mcd_output_signature
+       header.signature)
 
-let proxy_call func desc writer cont proxy =
-  func (connection proxy)
-    { byte_order = Info.native_byte_order;
-      message_type = Method_call;
-      flags = default_flags;
-      length = ();
-      serial = ();
-      fields =
-        { path = Some (path proxy);
-          member = Some desc.method_member;
-          interface = Some (Interface.name desc.method_interface);
-          error_name = None;
-          destination = name proxy;
-          reply_serial = None;
-          sender = sender proxy;
-          signature = Some desc.method_in_sig } }
-    writer (handle_reply desc cont)
+let handle_reply desc header byte_order buffer ptr =
+  if header.signature = desc.intern_mcd_output_signature
+  then desc.intern_mcd_reader byte_order buffer ptr
+  else fail desc header
+
+let handle_reply_async desc f header byte_order buffer ptr =
+  if header.signature = desc.intern_mcd_output_signature
+  then let x = desc.intern_mcd_reader byte_order buffer ptr in
+    (fun () -> f x)
+  else fail desc header
+
+let make_header desc proxy =
+  method_call
+    ?destination:(name proxy)
+    ~path:(path proxy)
+    ~member:desc.intern_mcd_member
+    ~interface:(Interface.name desc.intern_mcd_interface)
+    ~signature:desc.intern_mcd_input_signature ()
+
+let intern_proxy_call_sync proxy desc writer =
+  intern_send_message_sync (connection proxy) (make_header desc proxy) writer (handle_reply desc)
+let intern_proxy_call_async proxy desc writer ?on_error f =
+  intern_send_message_async (connection proxy) (make_header desc proxy) writer ?on_error (handle_reply_async desc f)
+let intern_proxy_call_cookie proxy desc writer =
+  intern_send_message_cookie (connection proxy) (make_header desc proxy) writer (handle_reply desc)

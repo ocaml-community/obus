@@ -9,11 +9,17 @@
 
 (** Rules for matching messages, used by DBus.add_match *)
 
+type message_type =
+  | Method_call
+  | Method_return
+  | Error
+  | Signal
+
 type rule =
     (** A single rule for matching a message *)
-  | Type of Header.message_type
+  | Type of message_type
       (** Match the message type *)
-  | Sender of Bus.name
+  | Sender of Connection.name
       (** Match the sender of the message *)
   | Interface of Interface.name
       (** Match message that come from this interface *)
@@ -21,7 +27,7 @@ type rule =
       (** Match the interface member *)
   | Path of Proxy.path
       (** Match the object patj *)
-  | Destination of Bus.name
+  | Destination of Connection.name
       (** Match the message destination *)
   | Arg of int * string
       (** [Arg(n, v)] Match any message that have at least [n]+1

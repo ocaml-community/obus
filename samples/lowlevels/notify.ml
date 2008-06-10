@@ -10,35 +10,30 @@
 (* Now something more fun: sending notification *)
 
 open OBus
-open Message
+open Header
 open Values
 
 let notify connection title msg =
   let (_, body) =
     Connection.send_message_sync connection
-      (method_call []
-         "org.freedesktop.Notifications"
-         "/org/freedesktop/Notifications"
-         "org.freedesktop.Notifications"
-         "Notify"
-         (make_values
-            (<+ string uint32 string string string
-               (array string)
-               (dict string variant)
-               int32 +>)
-            (<- (Filename.basename Sys.argv.(0)) (* app_name *)
-               0l (* id *)
-               "info" (* icon *)
-               title (* summary *)
-               msg (* body *)
-               [] (* actions *)
-               [] (* hints *)
-               5000l (* timeout *) ->)))
+      (method_call
+         ~destination:"org.freedesktop.Notifications"
+         ~path:"/org/freedesktop/Notifications"
+         ~interface:"org.freedesktop.Notifications"
+         ~member:"Notify" ())
+      [string (Filename.basename Sys.argv.(0)); (* app_name *)
+       uint32 0l; (* id *)
+       string "info"; (* icon *)
+       string title; (* summary *)
+       string msg; (* body *)
+       array tstring []; (* actions *)
+       dict tstring tvariant []; (* hints *)
+       int32 5000l] (* timeout *)
   in
-  let <- return_id -> = get_values <+ uint32 +> body in
-    return_id
+    match body with
+      | [Uint32 return_id] -> return_id
+      | _ -> failwith "unexpected signature"
 
 let _ =
   let bus = Bus.session () in
-  let connection = Bus.connection bus in
-    ignore (notify connection "Hello, world!" "ocaml is fun!")
+    ignore (notify bus "Hello, world!" "ocaml is fun!")

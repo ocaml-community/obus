@@ -7,60 +7,96 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** Header description *)
-
-type message_type =
-  | Method_call
-  | Method_return
-  | Error
-  | Signal
+(** Header description. *)
 
 type serial = int32
-  (** Message identifier *)
 
-(** Optionnal flags *)
+(** Type of each header field *)
+type path = string
+type interface = string
+type member = string
+type error_name = string
+type reply_serial = serial
+type destination = string
+type sender = string
+type signature = string
+
+type method_call_typ =
+    [ `Method_call of path * interface option * member ]
+type method_return_typ =
+    [ `Method_return of reply_serial ]
+type error_typ =
+    [ `Error of reply_serial * error_name ]
+type signal_typ =
+    [ `Signal of path * interface * member ]
+
+type any_typ =
+    [ method_call_typ
+    | method_return_typ
+    | error_typ
+    | signal_typ ]
+
+(** flags *)
 type flags = {
   no_reply_expected : bool;
   no_auto_start : bool;
 }
 
-val default_flags : flags
-  (** Defaults flags (all false) *)
-
-(** Optionnal headers fields *)
-type fields = {
-  path : string option;
-  member : string option;
-  interface : string option;
-  error_name : string option;
-  reply_serial : serial option;
-  destination : string option;
-  sender : string option;
-  signature : string option;
-}
-
-val empty_fields : fields
-  (** Fields where each entry is [None] *)
-
-(** Header description *)
-type ('length, 'serial)  t = {
-  byte_order : Wire.byte_order;
-  message_type : message_type;
+type 'a header = {
   flags : flags;
-  length : 'length;
-  serial : 'serial;
-  fields : fields;
+  serial : serial;
+  message_type : 'a;
+  (** Optionnals header fields *)
+  destination : destination option;
+  sender : sender option;
+  (** No signature is equivalent to "" *)
+  signature : signature;
 }
-    (** Note: The protocol version is not represented here because it
-        is added/checked automatically by OBus. You can not
-        communicate with an application that does not have the same
-        protocol version as you. *)
 
-type send = (unit, unit) t
-type recv = (int, serial) t
-    (** An header can be a 'send' header, which means that the message
-        is destined to be send over the bus, so we must not fill
-        [serial] and [length] fields because it will be done
-        automatically by the library. Or a 'recv' header, which mean
-        that the message has been received, so we can look at these
-        informations. *)
+type t = any_typ header
+
+type method_call = method_call_typ header
+type method_return = method_return_typ header
+type signal = signal_typ header
+type error = error_typ header
+
+val default_flags : flags
+  (** All false *)
+
+(** {6 Helpers for creation of headers} *)
+
+(** Note that the function [Connection.send_*] will ignore the
+    [signature] and [serial] fields *)
+
+val method_call :
+  ?flags:flags ->
+  ?sender:sender ->
+  ?destination:destination ->
+  ?signature:signature ->
+  path:path ->
+  ?interface:interface ->
+  member:member -> unit -> [> method_call_typ ] header
+
+val method_return :
+  ?flags:flags ->
+  ?sender:sender ->
+  ?destination:destination ->
+  ?signature:signature ->
+  reply_serial:serial -> unit -> [> method_return_typ ] header
+
+val error :
+  ?flags:flags ->
+  ?sender:sender ->
+  ?destination:destination ->
+  ?signature:signature ->
+  reply_serial:serial ->
+  error_name:error_name -> unit -> [> error_typ ] header
+
+val signal :
+  ?flags:flags ->
+  ?sender:sender ->
+  ?destination:destination ->
+  ?signature:signature ->
+  path:path ->
+  interface:interface ->
+  member:member -> unit -> [> signal_typ ] header

@@ -10,7 +10,7 @@
 open Camlp4.PreCast
 
 let section file_name =
-  match Filename.basename (String.sub file_name 0 (String.rindex file_name '.')) with
+  match Filename.chop_extension (Filename.basename file_name) with
     | "auth" -> "authentification"
     | s -> s
 
@@ -28,12 +28,12 @@ let rec insert section prefix =
 let map_expr = function
   | <:expr@_loc< LOG($x$) >> ->
     let section = section (Loc.file_name _loc) in
-      <:expr< if Log.Verbose.$lid:section$
+      <:expr< if Info.verbose
       then $insert section "" x$
       else () >>
   | <:expr@_loc< DEBUG($x$) >> ->
     let section = section (Loc.file_name _loc) in
-      <:expr< if Log.Debug.$lid:section$
+      <:expr< if Info.debug
       then $insert section "" x$
       else () >>
   | <:expr@_loc< ERROR($x$) >> ->

@@ -63,7 +63,7 @@ module Caml =
 let caml_type_of_string str =
   let fail () = failwith ("can not understand this caml type: " ^ str) in
   let parse_id id =
-    Util.ljoin "." (List.map (function
+    String.concat "." (List.map (function
                                 | Ast.IdLid(_, t) -> t
                                 | Ast.IdUid(_, t) -> t
                                 | _ -> fail ()) (Ast.list_of_ident id [])) in

@@ -13,13 +13,9 @@ type ('a, 'b) set
   (** Represent a set of signals of type ['b], for dbus object of type
       ['a]. *)
 
-type ('a, 'b) handler = 'a Proxy.t -> 'b -> bool
+type ('a, 'b) handler = 'a Proxy.t -> 'b -> unit
   (** Type for a function receiving signals of type ['b] from an
-      object of type ['a].
-
-      Note: several handler can receive the same signal. Once a
-      handler consider the signal as been handled it should return
-      [true], so other handler will not be used on this signal. *)
+      object of type ['a]. *)
 
 val register : Connection.t -> ('a, 'b) set -> ('a, 'b) handler -> unit
   (** [register connection signals handler] add a handler for the given set of signal.
@@ -36,4 +32,5 @@ val bus_register : Bus.t -> ('a, 'b) set -> ('a, 'b) handler -> unit
 
 (**/**)
 
-val make_set : 'a Interface.t -> (Connection.t -> ('a, 'b) handler -> bool Connection.reader) -> ('a, 'b) set
+open Wire
+val make_set : 'a Interface.t -> (string * string -> 'b body_reader option) -> ('a, 'b) set

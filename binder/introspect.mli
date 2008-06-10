@@ -31,20 +31,6 @@ type arguments = argument list * caml_type list
 type access = Read | Write | Read_write
     (** Access mode of a property *)
 
-type mode =
-    (** Mode for a flag/sum type *)
-  | M_poly
-      (** Polymorphic variant *)
-  | M_variant
-      (** Traditionnal variant *)
-  | M_record
-      (** For a flag, a record of bool, for a sum, a record of
-          option *)
-
-type proxy_type =
-  | P_bus
-  | P_connection
-
 type declaration =
     (** A declaration inside a interface definition *)
   | Doc of doc
@@ -55,27 +41,19 @@ type declaration =
       (** [Signal(dbus_name, caml_name, args)] *)
   | Property of doc * dbus_name * caml_name * dtype * caml_type * access
       (** [Property(dbus_name, caml_name, dbus_type, caml_type, access)] *)
-  | Proxy of doc * caml_name * proxy_type * string option * string option
-      (** [Proxy(caml_name, typ, destination, path)] proxy creation helper
-          function *)
-  | Flag of doc * caml_name * mode *  (int * caml_name * doc) list * bool * string option
-      (** [Flag(name, mode, values, bitwise, external)] a flag type,
-          used for functions which takes a list of flags or return a
-          flag.
-
-          Rules and generated type will depend on [mode].
-
-          If [bitwise] is [true] then key have to be interpretted has
-          bit position instead of value. *)
-  | Convert of doc * caml_type * caml_type * string option * string option
-      (** [Convert(type_a, type_b, a_of_b, b_of_a)] add a rule for
-          converting between this two types *)
-  | Variant of doc * caml_name * mode * (int * caml_name * dtype * caml_type list * doc) * string option
-      (** [Variant(doc, name, mode, constructors, modul)] *)
+  | Exception of doc * dbus_name * caml_name
+      (** Declaration of a DBus exception *)
+  | Convert of caml_type * caml_type * string option * string option
+      (** [Convert(new_type, old_type, new_of_old, old_of_new)] add a
+          rule for converting between this two types *)
+  | Interf of string * bool
+      (** Code to include in the interface *)
+  | Implem of string
+      (** Code to include in the implementation *)
 
 type content = declaration list
     (** content of an interface *)
 
-type interface = dbus_name * caml_name list * content
+type interface = dbus_name * caml_name list * content * caml_type * caml_name option
 
-type tree = (dbus_name * content, caml_name) Tree.t
+type tree = (dbus_name * content * caml_type * caml_name option, caml_name) Tree.t

@@ -38,35 +38,35 @@ open Values
 let notify connection title msg =
   let (_, body) =
     Connection.send_message_sync connection
-      (Message.method_call []
-         "org.freedesktop.Notifications"
-         "/org/freedesktop/Notifications"
-         "org.freedesktop.Notifications"
-         "Notify"
-         (make_values
-            (cons string
-               (cons uint32
-                  (cons string
-                     (cons string
-                        (cons string
-                           (cons (array string)
-                              (cons (dict string variant)
-                                 (cons int32 nil))))))))
-            ((Filename.basename Sys.argv.(0)) (* app_name *)
-               ,(0l (* id *)
-                   , (  "info" (* icon *)
-                    , (  title (* summary *)
-                       , (  msg (* body *)
-                          , (  [] (* actions *)
-                             , (  [] (* hints *)
-                             ,    (  5000l (* timeout *), ()))))))))))
+      (Header.method_call
+         ~destination:"org.freedesktop.Notifications"
+         ~path:"/org/freedesktop/Notifications"
+         ~interface:"org.freedesktop.Notifications"
+         ~member:"Notify" ())
+      (make_values
+         (ccons cstring
+            (ccons cuint32
+               (ccons cstring
+                  (ccons cstring
+                     (ccons cstring
+                        (ccons (carray cstring)
+                           (ccons (cdict cstring cvariant)
+                              (ccons cint32 cnil))))))))
+         ((Filename.basename Sys.argv.(0)) (* app_name *)
+            ,(0l (* id *)
+                , (  "info" (* icon *)
+                       , (  title (* summary *)
+                              , (  msg (* body *)
+                                     , (  [] (* actions *)
+                                            , (  [] (* hints *)
+                                                   ,    (  5000l (* timeout *), ())))))))))
   in
-  let (return_id, ()) = get_values (cons uint32 nil) body in
+  let (return_id, ()) = get_values (ccons cuint32 cnil) body in
     return_id
 
 let _ =
   let transport = make "/tmp/obus-dump" (Transport.of_addresses (Address.session ())) in
   let connection = Connection.of_transport transport in
-  let bus = Bus.from_connection connection in
+    Bus.register_connection connection;
     ignore (notify connection "Hello, world!" "ocaml is fun!")
 

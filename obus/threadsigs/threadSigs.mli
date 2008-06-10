@@ -6,15 +6,6 @@
  *)
 
 module type S = sig
-
-  type ('a, 'b) if_thread =
-    | With_thread of 'a
-    | Without_thread of 'b
-
-  val if_thread : (unit -> 'a) -> (unit -> 'b) -> ('a, 'b) if_thread
-    (** [if_thread then else] create an if_thread value, depending on
-        weather we are using thread *)
-
   module Protected : sig
     type 'a t
       (** A mutable value protected by a mutex *)
@@ -29,19 +20,19 @@ module type S = sig
       (** [get p] get the content of a protected value *)
 
     val update : ('a -> 'a) -> 'a t -> unit
-      (** [update p f] update the content of a protected value, [f]
-          must not raise exception *)
-
-    val safe_update : ('a -> 'a) -> 'a t -> unit
-      (** same as [update] but handle the case when [f] raise
-          exception *)
+      (** [update f p] update the content of a protected value and
+          handle the case when [f] raise exception *)
 
     val process : ('a -> ('b * 'a)) -> 'a t -> 'b
-      (** [process p f] same as process but also return a value *)
+      (** [process f p] same as update but also return a value. *)
 
-    val safe_process : ('a -> ('b * 'a)) -> 'a t -> 'b
-      (** same as [process] but handle the case when [f] raise
-          exception *)
+    val with_value : ('a -> 'b) -> 'a t -> 'b
+      (** [with_value f p] use the content of a protected value with
+          [f] *)
+
+    val if_none : 'a option t -> (unit -> 'a) -> 'a
+      (** [if_none p f] return the content of proctected
+          option. Retreive its value with [f] if it is [None] *)
   end
 
   module ThreadConfig : sig
@@ -52,6 +43,8 @@ module type S = sig
   module Thread : sig
     type t
     val create : ('a -> 'b) -> 'a -> t
+    val self : unit -> t
+    val id : t -> int
   end
 
   module Mutex : sig
@@ -61,4 +54,8 @@ module type S = sig
     val try_lock : t -> bool
     val unlock : t -> unit
   end
+
+  val with_lock : Mutex.t -> (unit -> 'a) -> 'a
+    (** [with_lock m f] execute [f] while [m] is acquired and release
+        it after even if [f] raise an exception *)
 end

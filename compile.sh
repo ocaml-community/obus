@@ -1,2 +1,2 @@
 #!/bin/sh
-exec ocamlbuild obus.cma obus-thread.cma
+exec ocamlbuild lib.otarget $(cat tools.itarget samples.itarget)

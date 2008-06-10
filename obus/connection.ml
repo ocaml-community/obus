@@ -7,60 +7,90 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Printf
 open ThreadImplem
-
 open Header
-module I = Interface
 
-module SerialMap = Map.Make(struct type t = serial let compare = compare end)
-module InterfMap = Map.Make(struct type t = string let compare = compare end)
+module MyMap(Ord : Map.OrderedType) =
+struct
+  include Map.Make(Ord)
+
+  let lookup key map =
+    try
+      Some(find key map)
+    with
+        Not_found -> None
+end
+
+module SerialMap = MyMap(struct type t = serial let compare = compare end)
+module InterfMap = MyMap(struct type t = string let compare = compare end)
 
 type guid = Address.guid
+type name = string
 
-type 'a reader = Header.recv -> string -> int -> 'a
-type writer = string -> int -> int
+exception Protocol_error of string
+exception Cannot_send of string
+
+type intern_method_call_handler_result =
+  | Intern_mchr_no_such_method
+  | Intern_mchr_no_such_object
+  | Intern_mchr_ok of (unit -> unit) Wire.body_reader
 
 type body = Values.values
-type filter = recv -> body Lazy.t -> bool
 
-type filter_desc =
-  | User of filter
-  | Raw of bool reader
-      (* We make a difference between user and raw filter because user
-         filters receive an unmarshaled message, so we do not want to
-         unmarshal it several times. Raw filters unmarshal the message
-         only if they have to and do not unmarshal it the same
-         way... *)
+type filter_id = int
+type filter = Header.t -> body -> unit
 
-type t = {
+type reply_handler =
+  | User of (Header.method_return -> body -> unit)
+  | Intern of (Header.method_return -> (unit -> unit) Wire.body_reader)
+type signal_handler = signal -> (unit -> unit) Wire.body_reader option
+type method_call_handler = method_call -> intern_method_call_handler_result
+
+type connection = {
   (* Transport used for the connection *)
   transport : Transport.t;
 
-  (* Incomming buffer, it is not protected by a mutex because there is
-     only one thread using it. It is mutable because it can grow if
-     needed. *)
-  mutable incoming_buffer : string;
-
-  (* Outgoing buffer, can grow too *)
-  outgoing_buffer : string Protected.t;
-
-  (* Next available serial for sending message *)
-  next_serial : serial Protected.t;
+  (* Unique name of the connection *)
+  name : name option Protected.t;
 
   (* The server guid *)
   guid : guid;
 
-  (* Message filters *)
-  filters : filter_desc list Protected.t;
+  (* The dispatcher thread *)
+  mutable dispatcher : Thread.t;
 
-  (* There is always one predefined filter which handle method call
-     and reply, it use these structure for that: *)
-  serial_waiters : unit reader SerialMap.t Protected.t;
-  (* Note: once a reply came, the waiter is removed *)
-  interfaces : Interface.handlers InterfMap.t Protected.t;
+  (* This tell weather the connection has crashed *)
+  mutable crashed : exn option;
+
+  (* The incomming buffer. Actually only the dispatcher thread access
+     to the incoming buffer. Each incoming messages go to this buffer
+     and they are immediatly unmarshaled by one of the handlers. It is
+     mutable because it can be grown if needed. *)
+  mutable incoming_buffer : string;
+
+  (* Outgoing buffer, it can grow too *)
+  outgoing_buffer : string Protected.t;
+
+  (* Next available serial for sending message. *)
+  next_serial : serial Protected.t;
+
+  (* The handlers mutex. It has two goal: prevent concurrent access to
+     structure containing a list of handlers and also prevent addition
+     of new handler after the connection crashed. *)
+  handlers_mutex : Mutex.t;
+
+  mutable next_filter_id : int;
+  mutable filters : (filter_id * filter) list;
+  mutable reply_handlers : (reply_handler * (exn -> unit) option) SerialMap.t;
+  mutable signal_handlers : signal_handler list InterfMap.t;
+  mutable method_call_handlers : method_call_handler InterfMap.t;
+
+  (* Handling of errors *)
+  mutable on_error : exn -> bool;
 }
 
-type connection = t
+type t = connection
 
 (* Mapping from server guid to connection. *)
 module GuidTable = Weak.Make
@@ -78,167 +108,462 @@ let find_guid guid =
     | x -> x
   end guid_connection_table None
 
-type send_message = Header.send * body
-type recv_message = Header.recv * body
+let traduce = function
+  | Wire.Reading_error msg -> Protocol_error msg;
+  | Wire.Writing_error msg -> Cannot_send msg
+  | exn -> exn
 
-let gen_serial connection = Protected.process (fun x -> (x, Int32.succ x)) connection.next_serial
+let is_fatal = function
+  | Protocol_error _
+  | Wire.Reading_error _
+  | Wire.Writing_error _
+  | Transport.Error _ -> true
+  | _ -> false
 
-let write_message connection header serial body_writer =
-  Protected.safe_update
-    (fun buffer ->
-       WireMessage.send_one_message connection.transport buffer header serial body_writer)
-    connection.outgoing_buffer
+let set_crash connection exn =
+  connection.crashed <- Some exn;
+  (try Transport.close connection.transport () with _ -> ());
+  connection.filters <- [];
+  connection.reply_handlers <- SerialMap.empty;
+  connection.signal_handlers <- InterfMap.empty;
+  connection.method_call_handlers <- InterfMap.empty
 
-let raw_send_message_async connection header body_writer body_reader =
-  let serial = gen_serial connection in
-    Protected.update (SerialMap.add serial body_reader) connection.serial_waiters;
-    write_message connection header serial body_writer
+let set_or_get_crash connection exn =
+  with_lock connection.handlers_mutex
+    (fun () -> match connection.crashed with
+       | Some exn -> exn
+       | None -> set_crash connection exn; exn)
 
-let raw_send_message_no_reply connection header body_writer =
-  let serial = gen_serial connection in
-    write_message connection header serial body_writer
+let set_crash_and_fail connection exn =
+  raise (set_or_get_crash connection exn)
 
-let raw_add_filter connection reader =
-  Protected.update (fun l -> Raw(reader) :: l) connection.filters
+let close connection =
+  with_lock connection.handlers_mutex
+    (fun () -> match connection.crashed with
+       | Some exn -> raise exn
+       | None -> set_crash connection (Invalid_argument "connection closed"))
 
-let read_values raise_exn header buffer ptr =
-  if raise_exn && header.message_type = Error
-  then
-    Error.raise_error header buffer ptr
-  else
-    let ts = (match header.fields.signature with
-                | Some s -> Values.dtypes_of_signature s
-                | _ -> []) in
-      match header.byte_order with
-        | Wire.Little_endian -> snd (Values.LEReader.read_values ts buffer ptr)
-        | Wire.Big_endian -> snd (Values.BEReader.read_values ts buffer ptr)
+(* Used to safely add or remove an handler. *)
+let modify_handlers connection f =
+  with_lock connection.handlers_mutex
+    (fun () ->
+       match connection.crashed with
+         | Some exn -> raise exn
+         | None -> f ())
 
+(* This generate a new fresh serial *)
+let gen_serial connection =
+  Protected.process (fun x -> (x, Int32.succ x)) connection.next_serial
+
+(* Read the body of a message as a [Values.values] value *)
+let read_values signature byte_order buffer ptr =
+  let ts = Values.dtypes_of_signature signature in
+    match byte_order with
+      | Wire.Little_endian -> snd (Values.LEReader.read_values ts buffer ptr)
+      | Wire.Big_endian -> snd (Values.BEReader.read_values ts buffer ptr)
+
+(* Write the body of a message from a value of type [Values.values] *)
 let write_values body byte_order buffer ptr = match byte_order with
   | Wire.Little_endian -> Values.LEWriter.write_values buffer ptr body
   | Wire.Big_endian -> Values.BEWriter.write_values buffer ptr body
 
-let send_message_async connection (header, body) f =
-  raw_send_message_async connection header (write_values body header.byte_order)
-    (fun header buffer ptr -> f (header, read_values false header buffer ptr))
-let send_message_no_reply connection (header, body) =
-  raw_send_message_no_reply connection header (write_values body header.byte_order)
+(* Read the error message of an error *)
+let get_error header byte_order buffer ptr =
+  match header.signature with
+    | s when s <> "" && s.[0] = 's' ->
+        snd ((match byte_order with
+                | Wire.Little_endian -> Wire.LEReader.read_string_string
+                | Wire.Big_endian -> Wire.BEReader.read_string_string) buffer ptr)
+    | _ -> ""
+
+(* Write an error message *)
+let set_error msg byte_order buffer ptr =
+  begin match byte_order with
+    | Wire.Little_endian -> Wire.LEWriter.write_string_string
+    | Wire.Big_endian -> Wire.BEWriter.write_string_string
+  end buffer ptr msg
+
+(* Write a whole message on a buffer and send it *)
+let write_message connection header body_writer =
+  match connection.crashed with
+    | Some exn -> raise exn
+    | None ->
+        try
+          Protected.update
+            (fun buffer ->
+               WireMessage.send_one_message connection.transport buffer header body_writer)
+            connection.outgoing_buffer
+        with
+          | Transport.Error _ as exn ->
+              set_crash_and_fail connection exn
+          | Wire.Writing_error msg ->
+              raise (Cannot_send msg)
+
+(* Sending messages *)
+
+let any_send_message  connection header body_writer =
+  let serial = gen_serial connection in
+    write_message connection { header with serial = serial } body_writer
+
+let any_send_message_async connection header body_writer on_error handler =
+  let serial = gen_serial connection in
+    modify_handlers connection
+      (fun () -> connection.reply_handlers <-
+         SerialMap.add serial (handler, on_error) connection.reply_handlers);
+    write_message connection ({ header with serial = serial } : method_call :> Header.t) body_writer
+
+let intern_send_message connection header body_writer =
+  any_send_message connection header body_writer
+let intern_send_message_async connection header body_writer ?on_error f =
+  any_send_message_async connection header body_writer on_error (Intern f)
+
+let make_user_header header body =
+  { header with signature =
+      Values.signature_of_dtypes
+        (Values.dtypes_of_values body) }
+
+let send_message connection header body =
+  any_send_message connection (make_user_header header body) (write_values body)
+let send_message_async connection header body ?on_error f =
+  any_send_message_async connection (make_user_header header body) (write_values body) on_error (User f)
+
+let send_error connection { destination = destination; serial = serial } name msg =
+  intern_send_message connection
+    (error
+       ?destination:destination
+       ~reply_serial:serial
+       ~error_name:name ())
+    (set_error msg)
+
+let send_exn connection method_call exn =
+  match Error.unmake_error exn with
+    | Some(name, msg) ->
+        send_error connection method_call name msg
+    | None ->
+        raise (Invalid_argument
+                 (sprintf "not a DBus error: %s" (Printexc.to_string exn)))
+
+(* Method call handlers *)
+
+let intern_add_method_call_handler connection interface handler =
+  modify_handlers connection
+    (fun () -> connection.method_call_handlers <-
+       if InterfMap.mem interface connection.method_call_handlers
+       then raise (Invalid_argument
+                     (sprintf
+                        "trying to define multiple method call handlers for interface '%s'"
+                        interface))
+       else InterfMap.add interface handler connection.method_call_handlers)
+
+(* Signals handlers *)
+
+let intern_add_signal_handler connection interface handler =
+  modify_handlers connection
+    (fun () -> connection.signal_handlers <-
+       InterfMap.add interface
+       (handler
+        :: (match InterfMap.lookup interface connection.signal_handlers with
+              | Some handlers -> handlers
+              | None -> []))
+       connection.signal_handlers)
+
+(* General filters *)
+
 let add_filter connection filter =
-  Protected.update (fun l -> User(filter) :: l) connection.filters
-let add_interface connection interface =
-  Protected.update (fun m -> InterfMap.add (I.name interface) (I.get_handlers interface) m) connection.interfaces
+  modify_handlers connection
+    (fun () ->
+       let id = connection.next_filter_id in
+         connection.next_filter_id <- id + 1;
+         connection.filters <- (id, filter) :: connection.filters;
+         id)
+let remove_filter connection id =
+  modify_handlers connection
+    (fun () ->
+       connection.filters <- List.remove_assoc id connection.filters)
+
+(* Find the handler for a reply and remove it. Assume that the
+   handlers_mutex is acquired. *)
+let find_reply_handler connection serial f g =
+  match SerialMap.lookup serial connection.reply_handlers with
+    | Some x ->
+        connection.reply_handlers <- SerialMap.remove serial connection.reply_handlers;
+        f x
+    | None ->
+        g (); []
+
+(* Read the body of a method call with the given reader and send an
+   error to the sender if the unmarshaling function raise an error. *)
+let method_call_read connection method_call reader byte_order buffer ptr =
+  try
+    [reader byte_order buffer ptr]
+  with
+      (* These fatal errors are handled by another catcher. The sender
+         can of course not be notified. *)
+    | Wire.Reading_error _ as exn ->
+        raise exn
+    | Transport.Error _ as exn ->
+        raise exn
+
+    | exn -> match Error.unmake_error exn with
+        | Some(name, msg) ->
+            send_error connection method_call name msg;
+            []
+        | None ->
+            (* This is really bad, this must not happen *)
+            send_error connection method_call
+              "org.freedesktop.DBus.Error.Failed"
+              (* We can not really be clearer than that. The caml
+                 exception will not be usefull to the sender. *)
+              "unknown reason";
+            raise exn
 
 let internal_dispatch connection =
-  let header, buffer, body_start = WireMessage.recv_one_message connection.transport connection.incoming_buffer in
+  (* This is just to avoid blocking if the connection has crashed but
+     this is not guaranteed that it will work. *)
+  begin match connection.crashed with
+    | Some exn -> raise exn
+    | None -> ()
+  end;
+  (* At this state if the connection crashes, we can block
+     forever. But this wil normally never happen since when the
+     connection crash the transport is closed and we will get an error
+     for that. *)
+  let header, byte_order, buffer, body_start =
+    WireMessage.recv_one_message connection.transport connection.incoming_buffer in
     connection.incoming_buffer <- buffer;
-    (* The body is a lazy value so it is computed at most one time *)
-    let body = Lazy.lazy_from_fun (fun () -> read_values false header buffer body_start) in
-    let rec aux = function
-      | filter :: l ->
-          begin try
-            let handled = begin match filter with
-              | User filter -> filter header body
-              | Raw reader -> reader header buffer body_start
-            end in
-              if handled
-              then ()
-              else aux l
-          with
-              _ ->
-                (* We can not do anything if the filter raise an
-                   exception. *)
-                aux l
-          end
-      | [] ->
-          (* The message has not been handled, try with internal dispatching *)
-          match header.message_type, header.fields with
-            | Method_return, { reply_serial = Some(serial) }
-            | Error, { reply_serial = Some(serial) } ->
-                begin match (Protected.process begin fun map ->
-                               try
-                                 let waiter = SerialMap.find serial map in
-                                   (Some(waiter), SerialMap.remove serial map)
-                               with
-                                   Not_found -> (None, map)
-                             end connection.serial_waiters) with
-                  | Some reader -> reader header buffer body_start
-                  | None -> ()
-                end
-            | Method_call, { interface = Some(interface) } ->
-                begin try
-                  ignore ((InterfMap.find interface
-                             (Protected.get connection.interfaces)).I.method_call
-                            header buffer body_start)
-                with
-                    Not_found ->
-                      (* XXX TODO: send an error message XXX *)
-                      ()
-                end
-            | Method_call, { interface = None } ->
-                (* Specification say we must handle this case, so lets try
-                   with every interfaces... *)
-                begin try
-                  InterfMap.iter begin fun _ interface ->
-                    try
-                      if interface.I.method_call header buffer body_start then
-                        raise Exit
+    (* The body is a lazy value so if not needed it is not computed *)
+    let body = Lazy.lazy_from_fun (fun () -> read_values header.signature byte_order buffer body_start) in
+    let filters, handlers =
+      modify_handlers connection
+        (fun () ->
+           (* First we find all handlers for the message and we
+              unmarshal it but we do not call the handlers.
+
+              We do that because handlers may send message and
+              wait for reply. So we need to be able to dispatch in
+              an handler. For that the incoming buffer must be
+              available. *)
+           (List.map
+              (fun (id, filter) -> let body = Lazy.force body in fun () -> filter header body)
+              connection.filters,
+            match header with
+
+              (* For method return and errors, we lookup at the reply
+                 waiters. If one is find then it get the reply, if
+                 none, then the reply is dropped. *)
+              | { message_type = `Method_return(reply_serial) } as header ->
+                  find_reply_handler connection reply_serial
+                    (fun (handler, error_handler) -> match handler with
+                       | User f -> let body = Lazy.force body in [fun () -> f header body]
+                       | Intern f ->
+                           try
+                             [f header byte_order buffer body_start]
+                           with
+                               exn when not (is_fatal exn) ->
+                                 (* Always notify the user of
+                                    non-fatal errors *)
+                                 match error_handler with
+                                   | Some f -> [fun () -> f exn]
+                                   | None -> raise exn)
+                    (fun () ->
+                       DEBUG("reply to message with serial %ld dropped" reply_serial))
+              | { message_type = `Error(reply_serial, error_name) } ->
+                  let msg = get_error header byte_order buffer body_start in
+                    find_reply_handler connection reply_serial
+                      (fun  (handler, error_handler) -> match error_handler with
+                         | Some f -> [fun () -> f (Error.make_error error_name msg)]
+                         | None ->
+                             DEBUG("error reply to message with serial %ld dropped because no on_error is \
+                                    provided, the error is: %S: %S"
+                                     reply_serial error_name msg);
+                             [])
+                      (fun () ->
+                         DEBUG("error reply to message with serial %ld dropped because no reply was expected, \
+                                the error is: %S: %S"
+                                 reply_serial error_name msg))
+
+              (* For signals we get all the handlers defined for this
+                 signal. Note that with the current implmemtation if
+                 multiple handlers are defined for the same interface
+                 the message is unmarshaled several times. *)
+              | { message_type = `Signal(path, interface, member) } as header ->
+                  begin match InterfMap.lookup interface connection.signal_handlers with
+                    | None ->
+                        DEBUG("signal %S with signature %S on interface %S, from object %S dropped \
+                               because no signal handler where found for this interface"
+                                member header.signature interface path);
+                        []
+                    | Some handlers ->
+                        Util.filter_map
+                          (fun handler ->
+                             match handler header with
+                               | Some reader ->
+                                   Some(reader byte_order buffer body_start)
+                               | None ->
+                                   DEBUG("signal %S with signature %S on interface %S, from object %S \
+                                          dropped by signal handler"
+                                           member header.signature interface path);
+                                   None)
+                          handlers
+                  end
+
+              (* Method calls with interface fields, the easy case, we
+                 just ensure that the sender always get a reply. *)
+              | { message_type = `Method_call(path, Some(interface), member) } as header ->
+                  begin match InterfMap.lookup interface connection.method_call_handlers with
+                    | None ->
+                        send_error connection header
+                          "org.freedesktop.DBus.Error.UnknownMethod"
+                          (sprintf "No such interface: %S" interface);
+                        []
+                    | Some handler -> match handler header with
+                        | Intern_mchr_no_such_method ->
+                            send_error connection header
+                              "org.freedesktop.DBus.Error.UnknownMethod"
+                              (sprintf "Method %S with signature %S on interface %S doesn't exist"
+                                 member header.signature interface);
+                            []
+                        | Intern_mchr_no_such_object ->
+                            send_error connection header
+                              "org.freedesktop.DBus.Error.Failed"
+                              (sprintf "No such object: %S" path);
+                            []
+                        | Intern_mchr_ok reader ->
+                            method_call_read connection header reader byte_order buffer body_start
+                  end
+
+              (* Method calls without interface fields. We try every
+                 interfaces. This implementation choose to send an
+                 error if two interfaces have the same method with the
+                 same signature for an object *)
+              | { message_type = `Method_call(path, None, member) } as header ->
+                  begin
+                    match
+                      InterfMap.fold begin fun interface handler acc ->
+                        match handler header with
+                          | Intern_mchr_no_such_method
+                          | Intern_mchr_no_such_object -> acc
+                          | Intern_mchr_ok reader -> (reader, interface) :: acc
+                      end connection.method_call_handlers []
                     with
-                        _ -> ()
-                  end (Protected.get connection.interfaces);
-                with Exit -> ()
-                end
-            | _ ->
-                (* Message dropped *)
-                ()
+                      | [] ->
+                          send_error connection header
+                            "org.freedesktop.DBus.Error.UnknownMethod"
+                            (sprintf
+                               "No interface have a method %S with signature %S on object %S"
+                               member header.signature path);
+                          []
+                      | [(reader, interface)] ->
+                          method_call_read connection header reader byte_order buffer body_start
+                      | l ->
+                          send_error connection header
+                            "org.freedesktop.DBus.Error.Failed"
+                            (sprintf
+                               "Ambiguous choice for method %S with signature %S on object %S. \
+                                The following interfaces have this method: \"%s\""
+                               member header.signature path
+                               (String.concat "\", \"" (List.map snd l)));
+                          []
+                  end))
     in
-      (* Write errors on stderr *)
-      if Log.Verbose.connection && header.message_type = Error
-      then begin
-        let name, msg = Error.get_error header buffer body_start in
-          LOG("error received: %s: %s" name msg)
-      end;
-      (* Try all the filters *)
-      aux (Protected.get connection.filters)
+      (* Now we can run all handlers *)
+      List.iter (fun filter -> filter ()) filters;
+      List.iter (fun handler -> handler ()) handlers
+
+let really_dispatch connection =
+  try
+    internal_dispatch connection
+  with
+      exn when is_fatal exn ->
+        set_crash_and_fail connection (traduce exn)
 
 let dispatch connection =
-  if ThreadConfig.use_threads
-  then ()
-  else internal_dispatch connection
+  if Thread.self () = connection.dispatcher
+  then really_dispatch connection
+  else ()
 
-let transport connection = connection.transport
-let guid connection = connection.guid
+let default_on_error exn =
+  begin match exn with
+    | Protocol_error msg ->
+        ERROR("the DBus connection has been closed due to a protocol error: %s" msg)
+    | Transport.Error(msg, exn_opt) ->
+        ERROR("the DBus connection has been closed due to a transport error: %s%s" msg
+                (match exn_opt with
+                   | Some exn -> " :" ^ Printexc.to_string exn
+                   | None -> ""))
+    | exn ->
+        ERROR("the DBus connection has been closed due to this uncaught exception: %s" (Printexc.to_string exn))
+  end;
+  exit 1
+
+let catch_error connection exn =
+  try
+    connection.on_error exn
+  with
+      handler_exn ->
+        DEBUG("the error handler failed with this exception: %s" (Printexc.to_string handler_exn));
+        default_on_error exn
+
+let rec dispatch_forever connection =
+  match
+    try
+      internal_dispatch connection;
+      true
+    with
+      | exn when is_fatal exn ->
+          ignore (catch_error connection (set_or_get_crash connection (traduce exn)));
+          false
+      | exn ->
+          catch_error connection exn
+  with
+    | true -> dispatch_forever connection
+    | false -> ()
+
+let init_dispatcher connection =
+  connection.dispatcher <- Thread.self ();
+  dispatch_forever connection
+
+let of_authenticated_transport ?(shared=true) transport guid =
+  let make () =
+    {
+      transport = transport;
+      dispatcher = Thread.self ();
+      incoming_buffer = String.create 65536;
+      outgoing_buffer = Protected.make (String.create 65536);
+      reply_handlers = SerialMap.empty;
+      signal_handlers = InterfMap.empty;
+      method_call_handlers = InterfMap.empty;
+      filters = [];
+      handlers_mutex = Mutex.create ();
+      crashed = None;
+      next_serial = Protected.make 1l;
+      next_filter_id = 0;
+      guid = guid;
+      name = Protected.make None;
+      on_error = default_on_error;
+    }
+  in
+  let connection = match shared with
+    | false -> make ()
+    | true ->
+        with_lock guid_connection_table_m begin fun () ->
+          match find_guid guid with
+            | Some(connection) ->
+                connection
+            | None ->
+                let connection = make () in
+                  GuidTable.add guid_connection_table connection;
+                  connection
+        end
+  in
+    (* Launch dispatcher *)
+    ignore (Thread.create init_dispatcher connection);
+    connection
 
 let of_transport ?(shared=true) transport =
   match Auth.launch transport with
-    | None -> raise (Failure "cannot authentificate on the given transport")
-    | Some(guid) ->
-        let make () =
-          {
-            transport = transport;
-            incoming_buffer = String.create 65536;
-            outgoing_buffer = Protected.make (String.create 65536);
-            serial_waiters = Protected.make SerialMap.empty;
-            interfaces = Protected.make InterfMap.empty;
-            filters = Protected.make [];
-            next_serial = Protected.make 1l;
-            guid = guid
-          }
-        in
-        let connection = match shared with
-          | false -> make ()
-          | true ->
-              Util.with_mutex guid_connection_table_m begin fun () ->
-                match find_guid guid with
-                  | Some(connection) ->
-                      connection
-                  | None ->
-                      let connection = make () in
-                        GuidTable.add guid_connection_table connection;
-                        connection
-              end
-        in
-          (* Launch dispatcher *)
-          ignore (Thread.create (fun () -> while true do internal_dispatch connection done) ());
-          connection
+    | None -> failwith "cannot authentificate on the given transport"
+    | Some(guid) -> of_authenticated_transport ~shared:shared transport guid
 
 let of_addresses ?(shared=true) addresses = match shared with
   | false -> of_transport (Transport.of_addresses addresses) ~shared:false
@@ -246,7 +571,7 @@ let of_addresses ?(shared=true) addresses = match shared with
       (* Try to find an guid that we already have *)
       let guids = Util.filter_map (fun (_, _, g) -> g) addresses in
         match
-          Util.with_mutex guid_connection_table_m
+          with_lock guid_connection_table_m
             (fun () -> Util.find_map find_guid guids)
         with
           | Some(connection) -> connection
@@ -255,58 +580,110 @@ let of_addresses ?(shared=true) addresses = match shared with
                  there is no other connection to a server with the
                  same guid, because between the two lookup another
                  thread can add a new connection. *)
-              of_transport (Transport.of_addresses addresses) ~shared:true
+              of_transport ~shared:true (Transport.of_addresses addresses)
 
-(* Handling of synchronous call.
+let transport connection = connection.transport
+let guid connection = connection.guid
+
+let on_error connection f =
+  modify_handlers connection
+    (fun () ->
+       connection.on_error <- f)
+
+let intern_get_name connection f =
+  Protected.if_none connection.name f
+
+(* Handling of cookie.
 
    They are just implemented as asynchronous call which store the
-   reply into a shared reference and wake up that emit the method
-   call *)
+   reply into a shared reference. *)
 
-type 'a sync_result =
-  | Waiting
+type 'a content =
+  | Waiting of connection * Mutex.t option
       (* The reply has not already come *)
   | Val of 'a
       (* The reply come and this is the readed value *)
   | Exn of exn
-      (* An exception has been raised during the reading of the message *)
+      (* An exception has been raised during the reading of the
+         message *)
 
-(* If not using threads we must do dispatching until the reply come. *)
-let rec wait_for_reply connection result = match !result with
-  | Waiting -> internal_dispatch connection; wait_for_reply connection result
-  | Val x -> x
+type 'a cookie = 'a content ref
+
+let rec intern_cookie_get cookie = match !cookie with
+  | Waiting(connection, w) ->
+      begin match w with
+        | Some m when Thread.self () <> connection.dispatcher ->
+            Mutex.lock m;
+            Mutex.unlock m
+        | _ ->
+            really_dispatch connection
+      end;
+      intern_cookie_get cookie
+  | Exn exn -> raise exn
+  | Val v -> v
+
+let intern_cookie_get_if_ready cookie = match !cookie with
+  | Waiting _ -> None
+  | Val v -> Some v
   | Exn exn -> raise exn
 
-(* This handle a reply for a synchronous call *)
-let handle_reply_for_sync result_storage sleep_mutex body_reader header buffer ptr =
-  (* This store the result to let the calling thread find the value *)
-  result_storage :=
-    (try
-       Val(body_reader header buffer ptr)
-     with
-         exn -> Exn exn);
-  (* This wakeup the calling thread *)
-  Mutex.unlock sleep_mutex
+let intern_cookie_is_ready cookie = match !cookie with
+  | Waiting _ -> false
+  | _ -> true
 
-let raw_send_message_sync connection header body_writer body_reader =
-  let sleep_mutex = Mutex.create () in
-  let result = ref Waiting in
-    Mutex.lock sleep_mutex;
-    raw_send_message_async connection header body_writer
-      (handle_reply_for_sync result sleep_mutex body_reader);
-    if ThreadConfig.use_threads
-    then begin
-      Mutex.lock sleep_mutex;
-      match !result with
-        | Exn exn -> raise exn
-        | Val x -> x
-            (* This never happen since the only way to unlock the
-               sleep_mutex is to read the message *)
-        | Waiting -> assert false
-    end else
-      wait_for_reply connection result
+let intern_cookie_is_value cookie = match !cookie with
+  | Val _ -> true
+  | _ -> false
 
-let send_message_sync connection ?(raise_exn=true) (header, body) =
-  raw_send_message_sync connection header
-    (write_values body header.byte_order)
-    (fun header buffer ptr -> (header, read_values raise_exn header buffer ptr))
+let intern_cookie_is_exn cookie = match !cookie with
+  | Exn _ -> true
+  | _ -> false
+
+let intern_handle_reply_cookie body_reader cookie sleep_mutex =
+  Intern(fun header byte_order buffer ptr ->
+           cookie := Val(body_reader header byte_order buffer ptr);
+           begin match sleep_mutex with
+             | Some m -> Mutex.unlock m
+             | None -> ()
+           end;
+           (fun () -> ()))
+
+let user_handle_reply_cookie cookie sleep_mutex =
+  User(fun header body ->
+         cookie := Val(header, body);
+         match sleep_mutex with
+           | Some m -> Mutex.unlock m
+           | None -> ())
+
+let any_send_message_cookie create_mutex connection header body_writer handler_maker =
+  let sleep_mutex = match create_mutex with
+    | true
+    | false when Thread.self () <> connection.dispatcher ->
+        let m = Mutex.create () in
+          Mutex.lock m;
+          Some m
+    | _ -> None
+  in
+  let cookie = ref (Waiting(connection, sleep_mutex)) in
+    any_send_message_async connection header body_writer
+      (Some (fun exn -> cookie := Exn exn))
+      (handler_maker cookie sleep_mutex);
+    cookie
+
+let intern_send_message_cookie connection header body_writer body_reader =
+  any_send_message_cookie true connection header body_writer (intern_handle_reply_cookie body_reader)
+let send_message_cookie connection header body =
+  any_send_message_cookie true connection (make_user_header header body) (write_values body) user_handle_reply_cookie
+
+(* Handling of synchronous call.
+
+   We just create a cookie and retreive it immediatly. *)
+
+let any_send_message_sync connection header body_writer handler_maker =
+  let cookie = any_send_message_cookie false connection header body_writer handler_maker in
+    intern_cookie_get cookie
+
+let intern_send_message_sync connection header body_writer body_reader =
+  any_send_message_sync connection header body_writer (intern_handle_reply_cookie body_reader)
+let send_message_sync connection header body =
+  any_send_message_sync connection (make_user_header header body) (write_values body) user_handle_reply_cookie

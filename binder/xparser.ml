@@ -91,6 +91,8 @@ let pcdata f =
 
 let text = pcdata id
 
+let raw = (PT_pcdata, fun elt -> Some elt)
+
 let one xml_parser xmls =
   match Util.part_map (snd xml_parser) xmls with
     | [v], l -> (v, l)

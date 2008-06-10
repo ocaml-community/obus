@@ -7,10 +7,67 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-
 open Wire
 open Header
 open Printf
+
+(* Raw description of an header *)
+
+type raw_fields = {
+  _path : path option;
+  _member : member option;
+  _interface : interface option;
+  _error_name : error_name option;
+  _reply_serial : reply_serial option;
+  _destination : destination option;
+  _sender : sender option;
+  _signature : signature;
+}
+
+let empty_fields = {
+  _path = None;
+  _member = None;
+  _interface = None;
+  _error_name = None;
+  _reply_serial = None;
+  _destination = None;
+  _sender = None;
+  _signature = "";
+}
+
+let path = ("path", fun x -> x._path)
+let member = ("member", fun x -> x._member)
+let interface = ("interface", fun x -> x._interface)
+let error_name = ("error_name", fun x -> x._error_name)
+let reply_serial = ("reply_serial", fun x -> x._reply_serial)
+
+let get_required message_type_name (field_name, get_field) fields =
+  match get_field fields with
+    | Some v -> v
+    | None -> raise (Reading_error
+                       (Printf.sprintf "invalid header, field '%s' is required for '%s'"
+                          field_name message_type_name))
+
+let method_call_of_raw fields =
+  let req x = get_required "method_call" x in
+    `Method_call(req path fields,
+                 fields._interface,
+                 req member fields)
+
+let method_return_of_raw fields =
+  let req x = get_required "method_return" x in
+    `Method_return(req reply_serial fields)
+
+let error_of_raw fields =
+  let req x = get_required "error" x in
+    `Error(req reply_serial fields,
+           req error_name fields)
+
+let signal_of_raw fields =
+  let req x = get_required "signal" x in
+    `Signal(req path fields,
+            req interface fields,
+            req member fields)
 
 module MakeReader(Reader : Wire.Reader) =
 struct
@@ -23,14 +80,15 @@ struct
       if protocol_version <> Constant.protocol_version
       then raise (Reading_error (sprintf "invalid protocol version: %d" protocol_version));
 
-      (* Unmarshaling of all informations contained in the first 16-byte
-         of the header *)
-      let message_type = match int_of_char buffer.[1] with
-        | 1 -> Method_call
-        | 2 -> Method_return
-        | 3 -> Error
-        | 4 -> Signal
-        | n -> raise (Content_error (sprintf "unknown message type: %d" n))
+      (* Unmarshaling of all informations contained in the first
+         16-byte of the header *)
+
+      let message_maker = match int_of_char buffer.[1] with
+        | 1 -> method_call_of_raw
+        | 2 -> method_return_of_raw
+        | 3 -> error_of_raw
+        | 4 -> signal_of_raw
+        | n -> raise (Reading_error (sprintf "unknown message type: %d" n))
       and flags =
         let flags = int_of_char buffer.[2] in
           { no_reply_expected = flags land 1 = 1;
@@ -82,28 +140,28 @@ struct
                               name s signature))
               end else
                 let i, x = reader buffer j in
-                  f i (Some x) in
+                  f i x in
           let fields = read_until
             (fun i acc cont ->
                let i = rpad8 i in
                let i, code = read_int_byte buffer i in
                  match code with
                    | 1 -> read_field 'o' "path" read_string_string
-                       (fun i x -> cont i { acc with path = x }) i
+                       (fun i x -> cont i { acc with _path = Some x }) i
                    | 2 -> read_field 's' "interface" read_string_string
-                       (fun i x -> cont i { acc with interface = x }) i
+                       (fun i x -> cont i { acc with _interface = Some x }) i
                    | 3 -> read_field 's' "member" read_string_string
-                       (fun i x -> cont i { acc with member = x }) i
+                       (fun i x -> cont i { acc with _member = Some x }) i
                    | 4 -> read_field 's' "error_name" read_string_string
-                       (fun i x -> cont i { acc with error_name = x }) i
+                       (fun i x -> cont i { acc with _error_name = Some x }) i
                    | 5 -> read_field 'u' "reply_serial" read_int32_uint32
-                       (fun i x -> cont i { acc with reply_serial = x }) i
+                       (fun i x -> cont i { acc with _reply_serial = Some x }) i
                    | 6 -> read_field 's' "destination" read_string_string
-                       (fun i x -> cont i { acc with destination = x }) i
+                       (fun i x -> cont i { acc with _destination = Some x }) i
                    | 7 -> read_field 's' "sender" read_string_string
-                       (fun i x -> cont i { acc with sender = x }) i
+                       (fun i x -> cont i { acc with _sender = Some x }) i
                    | 8 -> read_field 'g' "signature" read_string_signature
-                       (fun i x -> cont i { acc with signature = x }) i
+                       (fun i x -> cont i { acc with _signature = x }) i
                    | n ->
                        (* Just ignore the field, as said in the
                           specification *)
@@ -113,12 +171,13 @@ struct
                        in
                          cont i acc)
             empty_fields 16 (fields_length + 16) in
-            ({ byte_order = byte_order;
-               message_type = message_type;
-               flags = flags;
+            ({ flags = flags;
                serial = serial;
-               length = length;
-               fields = fields },
+               message_type = message_maker fields;
+               destination = fields._destination;
+               sender = fields._sender;
+               signature = fields._signature },
+             byte_order,
              buffer,
              body_start)
 end
@@ -127,50 +186,87 @@ module MakeWriter(Writer : Wire.Writer) =
 struct
   open Writer
 
-  let write transport buffer header serial writer =
+  let write transport buffer header writer =
     buffer.[0] <- (match byte_order with
                      | Little_endian -> 'l'
                      | Big_endian -> 'B');
-    buffer.[1] <- char_of_int begin match header.message_type with
-      | Method_call -> 1
-      | Method_return -> 2
-      | Error -> 3
-      | Signal -> 4
-    end;
-    buffer.[2] <- char_of_int ((if header.flags.no_reply_expected then 1 else 0) lor
-                                 (if header.flags.no_auto_start then 2 else 0));
-    buffer.[3] <- char_of_int Constant.protocol_version;
-    ignore (write_int32_uint32 buffer 8 serial);
+    let code, fields = match header.message_type with
+      | `Method_call(path, interface, member) ->
+          (1,
+           { _path = Some path;
+             _interface = interface;
+             _member = Some member;
+             _error_name = None;
+             _reply_serial = None;
+             _destination = header.destination;
+             _sender = header.sender;
+             _signature = header.signature })
+      | `Method_return(reply_serial) ->
+          (2,
+           { _path = None;
+             _interface = None;
+             _member = None;
+             _error_name = None;
+             _reply_serial = Some reply_serial;
+             _destination = header.destination;
+             _sender = header.sender;
+             _signature = header.signature })
+      | `Error(reply_serial, error_name) ->
+          (3,
+           { _path = None;
+             _interface = None;
+             _member = None;
+             _error_name = Some error_name;
+             _reply_serial = Some reply_serial;
+             _destination = header.destination;
+             _sender = header.sender;
+             _signature = header.signature })
+      | `Signal(path, interface, member) ->
+          (4,
+           { _path = Some path;
+             _interface = Some interface;
+             _member = Some member;
+             _error_name = None;
+             _reply_serial = None;
+             _destination = header.destination;
+             _sender = header.sender;
+             _signature = header.signature })
+    in
+      buffer.[1] <- char_of_int code;
+      buffer.[2] <- char_of_int ((if header.flags.no_reply_expected then 1 else 0) lor
+                                   (if header.flags.no_auto_start then 2 else 0));
+      buffer.[3] <- char_of_int Constant.protocol_version;
+      ignore (write_int32_uint32 buffer 8 header.serial);
 
-    let write_field code signature writer i = function
-      | None -> i
-      | Some v ->
-          let i = wpad8 buffer i in
-          let i = write_int_byte buffer i code in
-          let i = write_string_signature buffer i signature in
-            writer buffer i v in
-    let i = write_field 1 "o" write_string_string 16 header.fields.path in
-    let i = write_field 2 "s" write_string_string i header.fields.interface in
-    let i = write_field 3 "s" write_string_string i header.fields.member in
-    let i = write_field 4 "s" write_string_string i header.fields.error_name in
-    let i = write_field 5 "u" write_int32_uint32 i header.fields.reply_serial in
-    let i = write_field 6 "s" write_string_string i header.fields.destination in
-    let i = write_field 7 "s" write_string_string i header.fields.sender in
-    let i = write_field 8 "g" write_string_signature i header.fields.signature in
-    let len = i - 16 in
-      if len > Constant.max_array_size
-      then raise (Writing_error (sprintf "header fields array exceed the limit: %d" len));
+      let write_field code signature writer i = function
+        | None -> i
+        | Some v ->
+            let i = wpad8 buffer i in
+            let i = write_int_byte buffer i code in
+            let i = write_string_signature buffer i signature in
+              writer buffer i v in
+      let i = write_field 1 "o" write_string_string 16 fields._path in
+      let i = write_field 2 "s" write_string_string i fields._interface in
+      let i = write_field 3 "s" write_string_string i fields._member in
+      let i = write_field 4 "s" write_string_string i fields._error_name in
+      let i = write_field 5 "u" write_int32_uint32 i fields._reply_serial in
+      let i = write_field 6 "s" write_string_string i fields._destination in
+      let i = write_field 7 "s" write_string_string i fields._sender in
+      let i = write_field 8 "g" write_string_signature i (Some fields._signature) in
+      let len = i - 16 in
+        if len > Constant.max_array_size
+        then raise (Writing_error (sprintf "header fields array exceed the limit: %d" len));
 
-      ignore (write_int_uint32 buffer 12 len);
-      (* The body start after alignement padding of the header to an
-         8-boundary *)
-      let i = wpad8 buffer i in
-      let j = writer buffer i in
-        if j > Constant.max_message_size
-        then raise (Writing_error (sprintf "message too big to be send: %d" j));
+        ignore (write_int_uint32 buffer 12 len);
+        (* The body start after alignement padding of the header to an
+           8-boundary *)
+        let i = wpad8 buffer i in
+        let j = writer byte_order buffer i in
+          if j > Constant.max_message_size
+          then raise (Writing_error (sprintf "message too big to be sent: %d" j));
 
-        ignore (write_int_uint32 buffer 4 (j - i));
-        Transport.send_exactly transport buffer 0 j
+          ignore (write_int_uint32 buffer 4 (j - i));
+          Transport.send_exactly transport buffer 0 j
 end
 
 module LEReader = MakeReader(LEReader)
@@ -192,38 +288,22 @@ let recv_one_message transport buffer =
         | 'B' -> BEReader.read transport buffer
         | c -> raise (Reading_error (Printf.sprintf "invalid byte order: %s" (Char.escaped c)))
     with
-      | Out_of_bounds ->
+        Out_of_bounds ->
           raise (Reading_error "invalid message size")
-      | Content_error _ as exn ->
-          raise exn
-      | Reading_error _ as exn ->
-          raise exn
-      | Transport.Error _ as exn ->
-          raise exn
-      | exn ->
-          (* Other exceptions are the ones raised by user-defined
-             convertion functions *)
-          raise (Convertion_failed(Printexc.to_string exn, exn))
 
-let send_one_message transport buffer header serial writer =
-  let f = match header.byte_order with
+let send_one_message transport buffer header writer =
+  let f = match Info.native_byte_order with
     | Little_endian -> LEWriter.write
     | Big_endian -> BEWriter.write
   in
   let rec aux buffer =
     try
-      f transport buffer header serial writer;
+      f transport buffer header writer;
       buffer
     with
-      | Out_of_bounds ->
+        Out_of_bounds ->
           (* Try with a bigger buffer *)
           aux (String.create (String.length buffer * 2))
-      | Writing_error _ as exn ->
-          raise exn
-      | Transport.Error _ as exn ->
-          raise exn
-      | exn ->
-          raise (Convertion_failed(Printexc.to_string exn, exn))
   in
     aux (if String.length buffer < 16
          then String.create 65536

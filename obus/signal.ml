@@ -8,23 +8,37 @@
  *)
 
 open Values
+open Header
+open Connection
 
-type ('a, 'b) handler = 'a Proxy.t -> 'b -> bool
-type ('a, 'b) set = 'a Interface.t * (Connection.t -> ('a, 'b) handler -> bool Connection.reader)
+type ('a, 'b) handler = 'a Proxy.t -> 'b -> unit
+type ('a, 'b) set = 'a Interface.t * (Connection.t -> ('a, 'b) handler -> (signal -> (unit -> unit) Wire.body_reader option))
 
-let register connection (_, make_reader) handler =
-  Connection.raw_add_filter connection (make_reader connection handler)
+let register connection (interface, make_reader) handler =
+  intern_add_signal_handler connection (Interface.name interface)
+    (make_reader connection handler)
 
 let bus_register bus (interface, make_reader) handler =
-  let connection = Bus.connection bus in
-    Connection.raw_add_filter connection (make_reader connection handler);
-    ignore
-      (Connection.send_message_sync connection
-         (Message.method_call []
-            "org.freedesktop.DBus"
-            "/org/freedesktop/DBus"
-            "org.freedesktop.DBus" "AddMatch"
-            [vstring
-               (Printf.sprintf "type='signal',interface='%s'" (Interface.name interface))]))
+  intern_add_signal_handler bus (Interface.name interface)
+    (make_reader bus handler);
+  ignore
+    (send_message_sync bus
+       (method_call
+          ~destination:"org.freedesktop.DBus"
+          ~path:"/org/freedesktop/DBus"
+          ~interface:"org.freedesktop.DBus"
+          ~member:"AddMatch" ())
+       [string
+          (Printf.sprintf "type='signal',interface='%s'" (Interface.name interface))])
 
-let make_set interface make_reader = (interface, make_reader)
+let make_set interface get_readers =
+  (interface,
+   fun connection handler header ->
+     let `Signal(path, _, member) = header.message_type in
+       match get_readers (member, header.signature) with
+         | Some(reader) ->
+             Some(fun byte_order buffer ptr ->
+                    let signal = reader byte_order buffer ptr
+                    and proxy = Proxy.make connection interface ?destination:header.sender path in
+                      fun () -> handler proxy signal)
+         | None -> None)

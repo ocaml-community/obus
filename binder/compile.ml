@@ -14,7 +14,7 @@ open Instruction
 
 let _loc = Loc.ghost
 
-type env = (expr * ident) list
+type env = (expr * string) list
 
 let empty_env = []
 let dump_env l = List.rev (List.map (fun (a, b) -> (b, a)) l)
@@ -22,7 +22,7 @@ let dump_env l = List.rev (List.map (fun (a, b) -> (b, a)) l)
 let lookup expr env =
   match Util.assoc expr env with
     | Some id -> (id, env)
-    | None -> let id = (<:ident< $lid:"f" ^ string_of_int (List.length env)$ >>) in
+    | None -> let id = "f" ^ string_of_int (List.length env) in
         (id, (expr, id) :: env)
 
 let padding_of_type = function
@@ -47,7 +47,13 @@ let var_id n =
   if n >= 0
   then (<:ident< $lid:"v" ^ string_of_int n$ >>)
   else (<:ident< $lid:"v_" ^ string_of_int (-n)$ >>)
-let var_ids n count = List.map var_id (Util.gen_list (fun x -> x) n count)
+
+let var_ids from count =
+  let rec aux acc = function
+    | 0 -> acc
+    | n -> aux (var_id (n + from - 1) :: acc) (n - 1)
+  in
+    aux [] count
 
 let var_patt n = patt_of_id (var_id n)
 let var_patts n count = List.map patt_of_id (var_ids n count)
@@ -77,7 +83,7 @@ let compile_reader instrs return env =
                    | _ -> "read_array"
                  in
                    (<:expr<
-                      let i, $var_patt n$ = $lid:array_func$ $id:id$ buffer i in
+                      let i, $var_patt n$ = $lid:array_func$ $lid:id$ buffer i in
                         $expr$
                         >>,
                     env))
@@ -133,7 +139,7 @@ let compile_writer instrs return env =
                 in
                   (env, n + 1,
                    <:expr<
-                     let i = $lid:array_func$ $id:id$ buffer i $var_expr n$ in
+                     let i = $lid:array_func$ $lid:id$ buffer i $var_expr n$ in
                        $expr$
                        >>)
             | Iaction func ->

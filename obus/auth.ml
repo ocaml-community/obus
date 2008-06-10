@@ -37,34 +37,30 @@ type mechanism_return =
   | OK of data
   | Error of string
 
-class type mechanism =
-object
-  method init : mechanism_return
-  method data : data -> mechanism_return
-  method shutdown : unit
-end
+type mechanism_handlers = {
+  mech_init : mechanism_return;
+  mech_data : data -> mechanism_return;
+  mech_shutdown : unit -> unit;
+}
+type mechanism = string * (unit -> mechanism_handlers)
 
-class virtual immediate =
-object
-  method virtual init : mechanism_return
-  method data (_ : data) = Error("no data expected for this mechanism")
-  method shutdown = ()
-end
+let make ~init ?(data=fun _ -> Error("no data expected for this mechanism"))
+    ?(shutdown=fun _ -> ()) () =
+  { mech_init = init;
+    mech_data = data;
+    mech_shutdown = shutdown }
 
 (* Predefined mechanisms *)
 
-class external_mech = object
-  inherit immediate
-  method init = OK(string_of_int (Unix.getuid ()))
-end
+let mech_external = ("EXTERNAL",
+                     fun () ->
+                       make ~init:(OK (string_of_int (Unix.getuid ()))) ())
 
-type maker = string * (unit -> mechanism)
-let makers = Protected.make [("EXTERNAL", fun () -> new external_mech)]
-let register_mechanism name m = Protected.update (fun l -> (name, m) :: l) makers
+let default_mechanisms = [ mech_external ]
 
 (* The protocol state machine for the client *)
 
-type client_machine_state = client_state * mechanism * maker list
+type client_machine_state = client_state * mechanism_handlers * mechanism list
 type client_machine_transition =
   | ClientTransition of (client_command * client_machine_state)
   | ClientFinal of guid
@@ -77,7 +73,7 @@ let rec find_mechanism = function
   | (name, create_mech) :: mechs ->
       try
         let mech = create_mech () in
-          match mech#init with
+          match mech.mech_init with
             | Continue(resp) -> Some(`Auth(name, resp), (`Waiting_for_data, mech, mechs))
             | OK(resp)       -> Some(`Auth(name, resp), (`Waiting_for_ok,   mech, mechs))
             | Error(_)       -> find_mechanism mechs
@@ -87,13 +83,13 @@ let rec find_mechanism = function
 let client_transition (state, mech, mechs) cmd = match state, cmd with
   | `Waiting_for_data, `Data(data) ->
       ClientTransition(
-        match mech#data data with
+        match mech.mech_data data with
           | Continue(resp) -> `Data(resp), (`Waiting_for_data, mech, mechs)
           | OK(resp)       -> `Data(resp), (`Waiting_for_ok,   mech, mechs)
           | Error(msg)     -> `Error(msg), (`Waiting_for_data, mech, mechs))
 
   | _, `Rejected(supported_mechanisms) ->
-      mech#shutdown;
+      mech.mech_shutdown ();
       begin match find_mechanism
         (List.filter (fun (name, _) -> List.mem name supported_mechanisms) mechs)
       with
@@ -139,12 +135,12 @@ let marshal_client_command buf = function
       Buffer.add_string buf "ERROR ";
       Buffer.add_string buf message
 
-let launch transport =
+let launch ?(mechanisms=default_mechanisms) transport =
   let read =
-    if Log.Debug.authentification
+    if Info.debug
     then
       (fun buf count -> let count = Transport.recv transport buf 0 count in
-         DEBUG("received: %s" (String.escaped (String.sub buf 0 count)));
+         DEBUG("received: %S" (String.sub buf 0 count));
          count)
     else
       (fun buf count -> Transport.recv transport buf 0 count)
@@ -157,14 +153,14 @@ let launch transport =
       Buffer.add_string buf "\r\n";
       let line = Buffer.contents buf in
       let len = String.length line in
-        DEBUG("sending: %s" (String.escaped line));
+        DEBUG("sending: %S" line);
         Transport.send_exactly transport line 0 len
 
   and recv () =
     AuthLexer.command lexbuf
   in
 
-    match find_mechanism (Protected.get makers) with
+    match find_mechanism mechanisms with
       | Some(cmd, state) ->
           Transport.send_exactly transport "\x00" 0 1;
           send cmd;

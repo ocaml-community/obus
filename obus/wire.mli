@@ -18,7 +18,13 @@ type buffer = string
 type byte_order = Little_endian | Big_endian
     (** Message byte order *)
 
+type 'a body_reader = byte_order -> buffer -> ptr -> 'a
+type body_writer = byte_order -> buffer -> ptr -> ptr
+
 (** {6 Errors} *)
+
+(** Note that the [Connection] module will never let these errors
+    arrive to the program. They are only used internally. *)
 
 exception Out_of_bounds
   (** Exception raised when the end of the buffer is reached. We do
@@ -26,15 +32,6 @@ exception Out_of_bounds
       string functions [Invalid_argument "out of bounds"] to make a
       difference between out of bounds of serialization functions and
       ones of convertions functions. *)
-
-exception Content_error of string
-  (** This exception must be raised by convertion functions a value is
-      invalid. *)
-
-exception Convertion_failed of string * exn
-  (** Exception raised while reading/writing if one of the convertion
-      function fail. Contain the original exception and its string
-      representation. *)
 
 exception Reading_error of string
   (** Exception raised if a dbus marshaled message is invalid. In this

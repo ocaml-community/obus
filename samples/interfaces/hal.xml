@@ -1,8 +1,11 @@
 <node>
   <interface name="org.freedesktop.Hal.Manager" cname="Manager">
-    <proxy name="proxy" type="bus"
-           destination="org.freedesktop.Hal"
-           path="/org/freedesktop/Hal/Manager"/>
+    <interf>
+      val proxy : Bus.t -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus = Bus.make_proxy bus interface "org.freedesktop.Hal" "/org/freedesktop/Hal/Manager"
+    </implem>
     <method name="GetAllDevices">
       <arg name="devices" direction="out" type="ao"/>
     </method>
@@ -19,7 +22,7 @@
       <arg name="value" direction="in" type="s"/>
     </method>
     <method name="FindDeviceByCapability">
-      <arg name="devices" direction="out" type="as"/>
+      <arg name="devices" direction="out" type="ao"/>
       <arg name="capability" direction="in" type="s"/>
     </method>
     <method name="NewDevice">
@@ -64,8 +67,12 @@
     </signal>
   </interface>
   <interface name="org.freedesktop.Hal.Device" cname="Device">
-    <proxy name="proxy" type="bus"
-           destination="org.freedesktop.Hal"/>
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
     <method name="GetAllProperties">
       <arg name="properties" direction="out" type="a{sv}"/>
     </method>
@@ -217,9 +224,80 @@
       <arg name="num_locks" type="i"/>
     </signal>
   </interface>
+  <interface name="org.freedesktop.Hal.Device.Volume" cname="Device.Volume">
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
+    <method name="Mount">
+      <arg name="mount_point" direction="in" type="s"/>
+      <arg name="fstype" direction="in" type="s"/>
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="Unmount">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="Eject">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.Storage" cname="Device.Storage">
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
+    <method name="Eject">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="CloseTray">
+      <arg name="extra_options" direction="in" type="as"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.Storage.Removable" cname="Device.Storage.Removable">
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
+    <method name="CheckForMedia">
+      <arg name="call_had_sideeffect" direction="out" type="b"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.Hal.Device.WakeOnLan" cname="Device.WakeOnLan">
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
+    <method name="GetSupported">
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="GetEnabled">
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="SetEnabled">
+      <arg name="enable" direction="in" type="b"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+  </interface>
   <interface name="org.freedesktop.Hal.Device.SystemPowerManagement" cname="Device.SystemPowerManagement">
-    <proxy name="proxy" type="bus"
-           destination="org.freedesktop.Hal"/>
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
     <method name="Suspend">
       <arg name="num_seconds_to_sleep" direction="in" type="i"/>
       <arg name="return_code" direction="out" type="i"/>
@@ -243,8 +321,12 @@
     </method>
   </interface>
   <interface name="org.freedesktop.Hal.Device.CPUFreq" cname="Device.CPUFreq">
-    <proxy name="proxy" type="bus"
-           destination="org.freedesktop.Hal"/>
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
     <method name="SetCPUFreqGovernor">
       <arg name="governor_string" direction="in" type="s"/>
     </method>
@@ -267,41 +349,45 @@
       <arg name="return_code" direction="out" type="as"/>
     </method>
   </interface>
-  <interface name="org.freedesktop.Hal.Device.Volume" cname="Device.Volume">
-    <proxy name="proxy" type="bus"
-           destination="org.freedesktop.Hal"/>
-    <method name="Mount">
-      <arg name="mount_point" direction="in" type="s"/>
-      <arg name="fstype" direction="in" type="s"/>
-      <arg name="extra_options" direction="in" type="as"/>
+  <interface name="org.freedesktop.Hal.Device.LaptopPanel" cname="Device.LaptopPanel">
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
+    <method name="SetBrightness">
+      <arg name="brightness_value" direction="in" type="i"/>
       <arg name="return_code" direction="out" type="i"/>
     </method>
-    <method name="Unmount">
-      <arg name="extra_options" direction="in" type="as"/>
-      <arg name="return_code" direction="out" type="i"/>
-    </method>
-    <method name="Eject">
-      <arg name="extra_options" direction="in" type="as"/>
+    <method name="GetBrightness">
       <arg name="return_code" direction="out" type="i"/>
     </method>
   </interface>
-  <interface name="org.freedesktop.Hal.Device.Storage" cname="Device.Storage">
-    <proxy name="proxy" type="bus"
-           destination="org.freedesktop.Hal"/>
-    <method name="Eject">
-      <arg name="extra_options" direction="in" type="as"/>
-      <arg name="return_code" direction="out" type="i"/>
-    </method>
-    <method name="CloseTray">
-      <arg name="extra_options" direction="in" type="as"/>
+  <interface name="org.freedesktop.Hal.Device.DockStation" cname="Device.DockStation">
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
+    <method name="Undock">
       <arg name="return_code" direction="out" type="i"/>
     </method>
   </interface>
-  <interface name="org.freedesktop.Hal.Device.Storage.Removable" cname="Device.Storage.Removable">
-    <proxy name="proxy" type="bus"
-           destination="org.freedesktop.Hal"/>
-    <method name="CheckForMedia">
-      <arg name="call_had_sideeffect" direction="out" type="b"/>
+  <interface name="org.freedesktop.Hal.Device.KillSwitch" cname="Device.KillSwitch">
+    <interf>
+      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+    </interf>
+    <implem>
+      let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
+    </implem>
+    <method name="SetPower">
+      <arg name="power" direction="in" type="b"/>
+      <arg name="return_code" direction="out" type="i"/>
+    </method>
+    <method name="GetPower">
+      <arg name="return_code" direction="out" type="i"/>
     </method>
   </interface>
 </node>
