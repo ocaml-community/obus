@@ -46,25 +46,10 @@ let filter what_bus header body =
       header.signature
       (Values.string_of_values body)
 
-(* Note that we can not filter all method calls... The bus will
-   disconnection us if we try to do it. So we have to add a match for
-   each names *)
-
-let add_name bus name =
-  if name <> Bus.name bus && name.[0] = ':' then
-    DBus.add_match bus [ Type Method_call; Sender name ]
-
-(* Handle new names *)
-let handle_new_names bus proxy = function
-  | DBus.Name_owner_changed(name, "", _) -> add_name bus name
-  | _ -> ()
-
 let match_all bus =
+  (* Filtering method calls seems to make the bus to disconnect us *)
   List.iter (fun typ -> DBus.add_match bus [ Type typ ])
-    [ Method_return; Error; Signal ];
-  (* Initially we list names and add a match for each name *)
-  DBus.list_names_async bus (List.iter (add_name bus));
-  Signal.register bus DBus.signals (handle_new_names bus)
+    [ Method_return; Error; Signal ]
 
 let _ =
   let session = Bus.session () in
