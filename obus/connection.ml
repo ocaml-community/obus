@@ -58,7 +58,7 @@ type connection = {
   guid : guid;
 
   (* The dispatcher thread *)
-  mutable dispatcher : Thread.t;
+  dispatcher : Thread.t;
 
   (* This tell weather the connection has crashed *)
   mutable crashed : exn option;
@@ -109,12 +109,14 @@ let find_guid guid =
   end guid_connection_table None
 
 let traduce = function
+  | Wire.Out_of_bounds -> Protocol_error "invalid message size"
   | Wire.Reading_error msg -> Protocol_error msg;
   | Wire.Writing_error msg -> Cannot_send msg
   | exn -> exn
 
 let is_fatal = function
   | Protocol_error _
+  | Wire.Out_of_bounds
   | Wire.Reading_error _
   | Wire.Writing_error _
   | Transport.Error _ -> true
@@ -519,29 +521,37 @@ let rec dispatch_forever connection =
     | true -> dispatch_forever connection
     | false -> ()
 
-let init_dispatcher connection =
-  connection.dispatcher <- Thread.self ();
-  dispatch_forever connection
+let init_dispatcher receive_connection initial_mutex =
+  Mutex.lock initial_mutex;
+  match !receive_connection with
+    | Some connection -> dispatch_forever connection
+    | None -> assert false
 
 let of_authenticated_transport ?(shared=true) transport guid =
   let make () =
-    {
-      transport = transport;
-      dispatcher = Thread.self ();
-      incoming_buffer = String.create 65536;
-      outgoing_buffer = Protected.make (String.create 65536);
-      reply_handlers = SerialMap.empty;
-      signal_handlers = InterfMap.empty;
-      method_call_handlers = InterfMap.empty;
-      filters = [];
-      handlers_mutex = Mutex.create ();
-      crashed = None;
-      next_serial = Protected.make 1l;
-      next_filter_id = 0;
-      guid = guid;
-      name = Protected.make None;
-      on_error = default_on_error;
-    }
+    let initial_dispatcher_mutex = Mutex.create ()
+    and send_connection = ref None in
+      Mutex.lock initial_dispatcher_mutex;
+      let connection = {
+        transport = transport;
+        dispatcher = Thread.create (init_dispatcher send_connection) initial_dispatcher_mutex;
+        incoming_buffer = String.create 65536;
+        outgoing_buffer = Protected.make (String.create 65536);
+        reply_handlers = SerialMap.empty;
+        signal_handlers = InterfMap.empty;
+        method_call_handlers = InterfMap.empty;
+        filters = [];
+        handlers_mutex = Mutex.create ();
+        crashed = None;
+        next_serial = Protected.make 1l;
+        next_filter_id = 0;
+        guid = guid;
+        name = Protected.make None;
+        on_error = default_on_error;
+      } in
+        send_connection := Some connection;
+        Mutex.unlock initial_dispatcher_mutex;
+        connection
   in
   let connection = match shared with
     | false -> make ()
@@ -556,8 +566,6 @@ let of_authenticated_transport ?(shared=true) transport guid =
                   connection
         end
   in
-    (* Launch dispatcher *)
-    ignore (Thread.create init_dispatcher connection);
     connection
 
 let of_transport ?(shared=true) transport =
