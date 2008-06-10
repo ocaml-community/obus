@@ -7,16 +7,36 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+(* This sample illustrate use if some of the functions offered by the
+   message bus *)
+
+open Printf
 open OBus
+
+let service = "org.freedesktop.Notifications"
+let name = "org.ocamlcore.forge.obus"
 
 let _ =
   let bus = Bus.session () in
-    Printf.printf "bus id: %s\n" (DBus.get_id bus);
-    let names = DBus.list_names bus in
-      print_endline "names on the session bus:";
-      List.iter print_endline names;
-      let s = "org.freedesktop.Notifications" in
-        Printf.printf "starting service %s: " s;
-        match DBus.start_service_by_name bus s [] with
-          | `Success -> print_endline "success"
-          | `Already_running -> print_endline "already running"
+    printf "the message bus id is: %S\n" (DBus.get_id bus);
+
+    printf "names on the session bus:\n";
+    List.iter (printf "  %s\n") (DBus.list_names bus);
+
+    printf "these names are activable:\n";
+    List.iter (printf "  %s\n") (DBus.list_activatable_names bus);
+
+    printf "trying to start service %S: %!" service;
+    print_endline
+      (match DBus.start_service_by_name bus service [] with
+         | `Success -> "success"
+         | `Already_running -> "already running");
+
+    printf "trying to acquire the name %S: %!" name;
+    print_endline
+      (match DBus.request_name bus name [ `Replace_existing; `Do_not_queue ] with
+         | `Primary_owner -> "success"
+         | `In_queue -> "in queue"
+         | `Exists -> "the name already exists"
+         | `Already_owner -> "i already own the name")
+

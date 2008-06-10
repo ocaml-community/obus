@@ -2,4 +2,5 @@ samples/hello.byte
 samples/bus-functions.byte
 samples/eject.byte
 samples/signals.byte
+samples/threaded/monitor.byte
 samples/lowlevels/notify.byte

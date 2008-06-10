@@ -96,10 +96,10 @@ let _ =
         Pathname.define_context "obus/without_threads" [ "obus/threadsigs" ];
         Pathname.define_context "obus" [ "obus/threadsigs"; "common" ];
         Pathname.define_context "binder" [ "common" ];
-        Pathname.define_context "tools" [ "common"; "binder"; "obus"; "samples/interfaces" ];
-        Pathname.define_context "samples" [ "samples/interfaces" ];
-        Pathname.define_context "samples/threaded" [ "samples/interfaces" ];
-        Pathname.define_context "samples/interfaces" [ "obus" ];
+        Pathname.define_context "tools" [ "common"; "binder"; "obus"; "interfaces" ];
+        Pathname.define_context "samples" [ "interfaces" ];
+        Pathname.define_context "samples/threaded" [ "interfaces" ];
+        Pathname.define_context "interfaces" [ "obus" ];
         Pathname.define_context "test" [ "common"; "binder" ];
 
         (* rule for building dbus interface binding *)
