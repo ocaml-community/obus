@@ -18,4 +18,5 @@ val insert : 'b list -> 'a -> ('a, 'b) t -> ('a, 'b) t
 
 val map : ('b list -> 'a -> 'c) -> ('a, 'b) t -> ('c, 'b) t
 val fold : ('b list -> 'a -> 'c -> 'c) -> 'c -> ('a, 'b) t -> 'c
+val fold_map : ('b list -> 'a -> 'c -> 'c * 'd) -> 'c -> ('a, 'b) t -> 'c * ('d, 'b) t
 val flat : ('a option -> ('b * 'c) list -> 'c) -> ('a, 'b) t -> 'c

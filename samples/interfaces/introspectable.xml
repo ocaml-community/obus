@@ -1,7 +1,15 @@
 <node>
   <interface name="org.freedesktop.DBus.Introspectable" cname="">
-    <method name="Introspect">
+    <method name="Introspect" cname="_introspect">
       <arg name="data" direction="out" type="s"/>
     </method>
+    <interf>
+      val introspect : Bus.t -&gt; Connection.name -&gt; Proxy.path -&gt; string
+        (** [introspect bus service path] introspect [path] on [service] *)
+    </interf>
+    <implem>
+      let introspect bus service path =
+        _introspect (Bus.make_proxy bus interface service path)
+    </implem>
   </interface>
 </node>

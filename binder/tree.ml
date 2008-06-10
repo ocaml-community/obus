@@ -40,6 +40,24 @@ let fold f x node =
   in
     aux x [] node
 
+let fold_map f x node =
+  let rec aux acc path (Node(x, sons)) =
+    let acc, x = match x with
+      | Some x ->
+          let acc, x = f path x acc in
+            (acc, Some x)
+      | None -> (acc, None) in
+    let acc, sons =
+      List.fold_left
+        (fun (acc, sons) (label, node) ->
+           let acc, new_node = aux acc (path @ [label]) node in
+             (acc, (label, new_node) :: sons))
+        (acc, [])
+        sons in
+      (acc, Node(x, List.rev sons))
+  in
+    aux x [] node
+
 let flat f node =
   let rec aux (Node(x, sons)) =
     f x (List.map (fun (label, node) -> (label, aux node)) sons)

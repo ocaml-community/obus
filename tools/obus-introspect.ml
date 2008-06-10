@@ -57,7 +57,7 @@ let uniq l =
           else (name, content) :: acc) [] l)
 
 let rec get_interfaces bus service path =
-  let interfaces, nodes = parse_string (Introspectable.introspect (Bus.make_proxy bus Introspectable.interface service path)) in
+  let interfaces, nodes = parse_string (Introspectable.introspect bus service path) in
   let subs = match !recursive with
     | true ->
         List.flatten (List.map (fun name -> get_interfaces bus service (path ^ "/" ^ name)) nodes)

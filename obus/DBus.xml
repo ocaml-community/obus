@@ -124,7 +124,7 @@
     <method name="ListActivatableNames">
       <arg direction="out" type="as"/>
     </method>
-    <type new="Rules.t" old="string" old_of_new=":Rules.to_string"/>
+    <type new="Rules.t" old="string" old_of_new="Rules.to_string"/>
     <error name="org.freedesktop.DBus.Error.OOM" cname="Out_of_memory"/>
     <method name="AddMatch">
       <doc>

@@ -43,11 +43,6 @@ struct
      "signal";
      "DBus"]
 
-  (* modules which are in the OBus pack but which must not be seen by
-     the user. *)
-  let hidden =
-    ["wireMessage"]
-
     (* Files of binder which use camlp4 quotation for caml ast *)
   let code_generators =
     ["genSerializer";
@@ -155,7 +150,7 @@ let _ =
           ~prod:"obus.odocl"
           (fun _ _ -> Echo(List.map (fun s -> "obus/" ^ String.capitalize s ^ "\n")
                              (List.filter
-                                (fun s -> not (List.mem s ("wire" :: Config.hidden)))
+                                (fun s -> not (List.mem s ["wire"; "wireMessage"]))
                                 Config.obus_pack_files),
                            "obus.odocl"));
 

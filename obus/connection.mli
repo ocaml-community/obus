@@ -84,7 +84,7 @@ val send_message_async : t -> Header.method_call -> body -> ?on_error:(exn -> un
       will just be dropped. *)
 
 type 'a cookie
-  (** See {!Cookie} for details *)
+  (** See [Cookie] for details *)
 
 val send_message_cookie : t -> Header.method_call -> body -> (Header.method_return * body) cookie
   (** Send a message an return a cookie for later retrieval of the
