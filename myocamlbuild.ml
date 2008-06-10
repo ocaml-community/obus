@@ -143,8 +143,13 @@ let _ =
 
         rule "obus_pack"
           ~prod:"obus/OBus.mlpack"
-          (fun _ _ -> Echo(List.map (fun s -> String.capitalize s ^ "\n")
-                             Config.obus_pack_files, "obus/OBus.mlpack"));
+          (fun _ _ -> Echo(List.map (fun s -> String.capitalize s ^ "\n") Config.obus_pack_files,
+                           "obus/OBus.mlpack"));
+
+        rule "obus_mli_to_install"
+          ~prod:"lib-dist"
+          (fun _ _ -> Echo(List.map (fun s -> "obus/" ^ s ^ ".mli\n") Config.obus_pack_files,
+                           "lib-dist"));
 
         rule "obus_doc"
           ~prod:"obus.odocl"
