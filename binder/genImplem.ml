@@ -161,11 +161,13 @@ let gen_interf path (interf_name, content, proxy_typ, to_proxy) (rrules, wrules)
         let st_reader = gen_reader rrules outs out_caml_types in
 
         let writer_expr = appn <:expr< __writer >> (List.map expr_of_id args) in
-        let func_def name mode args handler =
+        let func_def suffix call_suffix f =
           let func_expr =
-            func args <:expr< Proxy.$lid:"intern_proxy_call_" ^ mode$ $proxy_expr$ __desc $writer_expr$ $handler$ >> in
+            func args
+              (f <:expr< Proxy.$lid:"intern_proxy_call_" ^ call_suffix$ $proxy_expr$ __desc $writer_expr$ >>)
+          in
             (<:str_item<
-               let $lid:name$ proxy = $func_expr$
+               let $lid:cname ^ suffix$ proxy = $func_expr$
                  >>)
         in
           (rrules,
@@ -181,9 +183,10 @@ let gen_interf path (interf_name, content, proxy_typ, to_proxy) (rrules, wrules)
              Proxy.intern_mcd_output_signature = $str:make_sig outs$;
              Proxy.intern_mcd_reader = __reader $make_tuple outs$;
            };;
-           $ func_def cname "sync" args <:expr< >> $;;
-           $ func_def (cname ^ "_async") "async" (args @ [ <:ident< handler >> ]) (make_handler outs) $;;
-           $ func_def (cname ^ "_cookie") "cookie" args <:expr< >> $ >>)
+           $ func_def "" "sync" (fun x -> x) $;;
+           $ func_def "_async" "async"
+             (fun x -> <:expr< (fun ?on_error handler -> $x$ ?on_error $make_handler outs$) >>) $;;
+           $ func_def "_cookie" "cookie" (fun x -> x) $ >>)
     | Exception(_, dname, cname) ->
         (rrules,
          wrules,

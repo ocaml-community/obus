@@ -82,7 +82,7 @@ let print real oc node =
                   (* print async version *)
                   pn "val %s_async : " cname;
                   print_func_type ins;
-                  p "(";
+                  p "?on_error:(exn -> unit) -> (";
                   print_func_type outs;
                   p "unit) -> unit\n";
 
