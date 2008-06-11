@@ -61,8 +61,9 @@ let handle_reply_async desc f header byte_order buffer ptr =
     (fun () -> f x)
   else fail desc header
 
-let make_header desc proxy =
+let make_header desc ?flags proxy =
   method_call
+    ?flags
     ?destination:(name proxy)
     ~path:(path proxy)
     ~member:desc.intern_mcd_member
@@ -75,3 +76,8 @@ let intern_proxy_call_async proxy desc writer ?on_error f =
   intern_send_message_async (connection proxy) (make_header desc proxy) writer ?on_error (handle_reply_async desc f)
 let intern_proxy_call_cookie proxy desc writer =
   intern_send_message_cookie (connection proxy) (make_header desc proxy) writer (handle_reply desc)
+let intern_proxy_call_no_reply proxy desc writer =
+  intern_send_message (connection proxy)
+    (make_header desc ~flags:{ no_reply_expected = true;
+                               no_auto_start = true }
+       proxy) writer

@@ -89,7 +89,12 @@ let print real oc node =
                   (* print cookie version *)
                   pn "val %s_cookie : " cname;
                   print_func_type ins;
-                  p "%s Cookie.t\n" (string_of_caml_type (tuple outs))
+                  p "%s Cookie.t\n" (string_of_caml_type (tuple outs));
+
+                  (* print no_reply version *)
+                  pn "val %s_no_reply : " cname;
+                  print_func_type ins;
+                  p "unit\n"
                 end
           | Exception(doc, dname, cname) ->
               n ();

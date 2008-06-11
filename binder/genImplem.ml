@@ -186,7 +186,8 @@ let gen_interf path (interf_name, content, proxy_typ, to_proxy) (rrules, wrules)
            $ func_def "" "sync" (fun x -> x) $;;
            $ func_def "_async" "async"
              (fun x -> <:expr< (fun ?on_error handler -> $x$ ?on_error $make_handler outs$) >>) $;;
-           $ func_def "_cookie" "cookie" (fun x -> x) $ >>)
+           $ func_def "_cookie" "cookie" (fun x -> x) $;;
+           $ func_def "_no_reply" "no_reply" (fun x -> x) $ >>)
     | Exception(_, dname, cname) ->
         (rrules,
          wrules,

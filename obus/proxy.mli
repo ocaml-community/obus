@@ -48,3 +48,4 @@ type ('a, 'b) intern_method_call_desc = {
 val intern_proxy_call_sync : 'a t -> ('a, 'b) intern_method_call_desc -> body_writer -> 'b
 val intern_proxy_call_async : 'a t -> ('a, 'b) intern_method_call_desc -> body_writer -> ?on_error:(exn -> unit) -> ('b -> unit) -> unit
 val intern_proxy_call_cookie : 'a t -> ('a, 'b) intern_method_call_desc -> body_writer -> 'b Cookie.t
+val intern_proxy_call_no_reply : 'a t -> ('a, 'b) intern_method_call_desc -> body_writer -> unit
