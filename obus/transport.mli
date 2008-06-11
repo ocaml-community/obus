@@ -66,5 +66,5 @@ val fd : t -> Unix.file_descr
 
 val of_addresses : Address.t list -> t
   (** [create addresses] try to make a working transport from a list
-      of addresses. This only work for transport which OBus internally
-      handles *)
+      of addresses. This only works for transport which OBus
+      internally handles *)

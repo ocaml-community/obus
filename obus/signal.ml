@@ -8,11 +8,11 @@
  *)
 
 open Values
-open Header
+open Message
 open Connection
 
 type ('a, 'b) handler = 'a Proxy.t -> 'b -> unit
-type ('a, 'b) set = 'a Interface.t * (Connection.t -> ('a, 'b) handler -> (signal -> (unit -> unit) Wire.body_reader option))
+type ('a, 'b) set = 'a Interface.t * (Connection.t -> ('a, 'b) handler -> (signal_type intern_recv -> (unit -> unit) option))
 
 let register connection (interface, make_reader) handler =
   intern_add_signal_handler connection (Interface.name interface)
@@ -27,18 +27,19 @@ let bus_register bus (interface, make_reader) handler =
           ~destination:"org.freedesktop.DBus"
           ~path:"/org/freedesktop/DBus"
           ~interface:"org.freedesktop.DBus"
-          ~member:"AddMatch" ())
-       [string
-          (Printf.sprintf "type='signal',interface='%s'" (Interface.name interface))])
+          ~member:"AddMatch"
+          ~body:[string
+                   (Printf.sprintf "type='signal',interface='%s'" (Interface.name interface))]
+          ()))
 
-let make_set interface get_readers =
+let make_set interface get_reader =
   (interface,
-   fun connection handler header ->
-     let `Signal(path, _, member) = header.message_type in
-       match get_readers (member, header.signature) with
+   fun connection handler message ->
+     let `Signal(path, _, member) = message.typ in
+       match get_reader (member, message.signature) with
          | Some(reader) ->
-             Some(fun byte_order buffer ptr ->
-                    let signal = reader byte_order buffer ptr
-                    and proxy = Proxy.make connection interface ?destination:header.sender path in
-                      fun () -> handler proxy signal)
+             let (byte_order, buffer, ptr) = message.body in
+             let signal = reader byte_order buffer ptr
+             and proxy = Proxy.make connection interface ?destination:message.sender path in
+               Some(fun () -> handler proxy signal)
          | None -> None)

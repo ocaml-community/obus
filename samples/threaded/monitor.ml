@@ -12,10 +12,10 @@
 
 open Printf
 open OBus
-open Header
 open Rules
+open Message
 
-let filter what_bus header body =
+let filter what_bus message =
   let opt = function
     | Some s -> sprintf "Some %S" s
     | None -> "None"
@@ -29,8 +29,8 @@ let filter what_bus header body =
   signature = %S
   body = %s
 
-%!" what_bus header.flags.no_reply_expected header.flags.no_auto_start header.serial
-      (match header.message_type with
+%!" what_bus message.flags.no_reply_expected message.flags.no_auto_start message.serial
+      (match message.typ with
          | `Method_call(path, interface, member) ->
              sprintf "method_call { path = %S ; interface = %s ; member = %S }"
                path (opt interface) member
@@ -41,10 +41,10 @@ let filter what_bus header body =
          | `Signal(path, interface, member) ->
              sprintf "signal { path = %S ; interface = %S ; member = %S }"
                path interface member)
-      (opt header.destination)
-      (opt header.sender)
-      header.signature
-      (Values.string_of_values body)
+      (opt message.destination)
+      (opt message.sender)
+      message.signature
+      (Values.string_of_values (body message))
 
 let match_all bus =
   (* Filtering method calls seems to make the bus to disconnect us *)

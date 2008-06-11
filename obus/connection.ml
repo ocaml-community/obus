@@ -9,7 +9,7 @@
 
 open Printf
 open ThreadImplem
-open Header
+open Message
 
 module MyMap(Ord : Map.OrderedType) =
 struct
@@ -31,21 +31,22 @@ type name = string
 exception Protocol_error of string
 exception Cannot_send of string
 
+type intern_handler = unit -> unit
 type intern_method_call_handler_result =
   | Intern_mchr_no_such_method
   | Intern_mchr_no_such_object
-  | Intern_mchr_ok of (unit -> unit) Wire.body_reader
+  | Intern_mchr_ok of intern_handler
 
 type body = Values.values
 
 type filter_id = int
-type filter = Header.t -> body -> unit
+type filter = Message.t -> unit
 
 type reply_handler =
-  | User of (Header.method_return -> body -> unit)
-  | Intern of (Header.method_return -> (unit -> unit) Wire.body_reader)
-type signal_handler = signal -> (unit -> unit) Wire.body_reader option
-type method_call_handler = method_call -> intern_method_call_handler_result
+  | User of (method_return -> unit)
+  | Intern of (method_return_type intern_recv -> intern_handler)
+type signal_handler = signal_type intern_recv -> intern_handler option
+type method_call_handler = method_call_type intern_recv -> intern_method_call_handler_result
 
 type connection = {
   (* Transport used for the connection *)
@@ -157,26 +158,14 @@ let modify_handlers connection f =
 let gen_serial connection =
   Protected.process (fun x -> (x, Int32.succ x)) connection.next_serial
 
-(* Read the body of a message as a [Values.values] value *)
-let read_values signature byte_order buffer ptr =
-  let ts = Values.dtypes_of_signature signature in
-    match byte_order with
-      | Wire.Little_endian -> snd (Values.LEReader.read_values ts buffer ptr)
-      | Wire.Big_endian -> snd (Values.BEReader.read_values ts buffer ptr)
-
-(* Write the body of a message from a value of type [Values.values] *)
-let write_values body byte_order buffer ptr = match byte_order with
-  | Wire.Little_endian -> Values.LEWriter.write_values buffer ptr body
-  | Wire.Big_endian -> Values.BEWriter.write_values buffer ptr body
-
 (* Read the error message of an error *)
-let get_error header byte_order buffer ptr =
-  match header.signature with
-    | s when s <> "" && s.[0] = 's' ->
-        snd ((match byte_order with
-                | Wire.Little_endian -> Wire.LEReader.read_string_string
-                | Wire.Big_endian -> Wire.BEReader.read_string_string) buffer ptr)
-    | _ -> ""
+let get_error = function
+  | { signature = "s";
+      body = (byte_order, buffer, ptr) }  ->
+      snd ((match byte_order with
+              | Wire.Little_endian -> Wire.LEReader.read_string_string
+              | Wire.Big_endian -> Wire.BEReader.read_string_string) buffer ptr)
+  | _ -> ""
 
 (* Write an error message *)
 let set_error msg byte_order buffer ptr =
@@ -186,14 +175,14 @@ let set_error msg byte_order buffer ptr =
   end buffer ptr msg
 
 (* Write a whole message on a buffer and send it *)
-let write_message connection header body_writer =
+let write_message connection serial message =
   match connection.crashed with
     | Some exn -> raise exn
     | None ->
         try
           Protected.update
             (fun buffer ->
-               WireMessage.send_one_message connection.transport buffer header body_writer)
+               WireMessage.send_one_message connection.transport buffer serial message)
             connection.outgoing_buffer
         with
           | Transport.Error _ as exn ->
@@ -203,39 +192,35 @@ let write_message connection header body_writer =
 
 (* Sending messages *)
 
-let any_send_message  connection header body_writer =
+let any_send_message  connection message =
   let serial = gen_serial connection in
-    write_message connection { header with serial = serial } body_writer
+    write_message connection serial message
 
-let any_send_message_async connection header body_writer on_error handler =
+let any_send_message_async connection message on_error handler =
   let serial = gen_serial connection in
     modify_handlers connection
       (fun () -> connection.reply_handlers <-
          SerialMap.add serial (handler, on_error) connection.reply_handlers);
-    write_message connection ({ header with serial = serial } : method_call :> Header.t) body_writer
+    write_message connection serial (message : method_call_type intern_send :> any_type intern_send)
 
-let intern_send_message connection header body_writer =
-  any_send_message connection header body_writer
-let intern_send_message_async connection header body_writer ?on_error f =
-  any_send_message_async connection header body_writer on_error (Intern f)
+let intern_send_message connection message =
+  any_send_message connection message
+let intern_send_message_async connection message ?on_error f =
+  any_send_message_async connection message on_error (Intern f)
 
-let make_user_header header body =
-  { header with signature =
-      Values.signature_of_dtypes
-        (Values.dtypes_of_values body) }
-
-let send_message connection header body =
-  any_send_message connection (make_user_header header body) (write_values body)
-let send_message_async connection header body ?on_error f =
-  any_send_message_async connection (make_user_header header body) (write_values body) on_error (User f)
+let send_message connection message =
+  any_send_message connection (intern_user_to_send message)
+let send_message_async connection message ?on_error f =
+  any_send_message_async connection (intern_user_to_send message) on_error (User f)
 
 let send_error connection { destination = destination; serial = serial } name msg =
   intern_send_message connection
-    (error
+    (intern_make_send
        ?destination:destination
-       ~reply_serial:serial
-       ~error_name:name ())
-    (set_error msg)
+       ~signature:"s"
+       ~typ:(`Error(serial, name))
+       ~body:(set_error msg)
+       ())
 
 let send_exn connection method_call exn =
   match Error.unmake_error exn with
@@ -293,31 +278,24 @@ let find_reply_handler connection serial f g =
     | None ->
         g (); []
 
-(* Read the body of a method call with the given reader and send an
-   error to the sender if the unmarshaling function raise an error. *)
-let method_call_read connection method_call reader byte_order buffer ptr =
-  try
-    [reader byte_order buffer ptr]
-  with
-      (* These fatal errors are handled by another catcher. The sender
-         can of course not be notified. *)
-    | Wire.Reading_error _ as exn ->
-        raise exn
-    | Transport.Error _ as exn ->
+(* Handle the case when the handler of method call fail: send an error
+   to the sender. *)
+let handle_method_call_failure connection method_call exn =
+  match Error.unmake_error exn with
+    | Some(name, msg) ->
+        send_error connection method_call name msg
+    | None ->
+        (* This is really bad, this must not happen *)
+        send_error connection method_call
+          "org.freedesktop.DBus.Error.Failed"
+          (* We can not really be clearer than that. The caml
+             exception will not be usefull to the sender. *)
+          "unknown reason";
         raise exn
 
-    | exn -> match Error.unmake_error exn with
-        | Some(name, msg) ->
-            send_error connection method_call name msg;
-            []
-        | None ->
-            (* This is really bad, this must not happen *)
-            send_error connection method_call
-              "org.freedesktop.DBus.Error.Failed"
-              (* We can not really be clearer than that. The caml
-                 exception will not be usefull to the sender. *)
-              "unknown reason";
-            raise exn
+type unmarshal_result =
+  | UR_success of intern_handler
+  | UR_failure of exn
 
 let internal_dispatch connection =
   (* This is just to avoid blocking if the connection has crashed but
@@ -330,36 +308,44 @@ let internal_dispatch connection =
      forever. But this wil normally never happen since when the
      connection crash the transport is closed and we will get an error
      for that. *)
-  let header, byte_order, buffer, body_start =
-    WireMessage.recv_one_message connection.transport connection.incoming_buffer in
+  let message, buffer = WireMessage.recv_one_message connection.transport connection.incoming_buffer in
     connection.incoming_buffer <- buffer;
-    (* The body is a lazy value so if not needed it is not computed *)
-    let body = Lazy.lazy_from_fun (fun () -> read_values header.signature byte_order buffer body_start) in
+    (* User version of the message. It will probably not be used if
+       the programmer only use the high-level interfaces, so we
+       compute it only if needed *)
+    let user_message = Lazy.lazy_from_fun (fun () -> intern_recv_to_user message) in
     let filters, handlers =
       modify_handlers connection
         (fun () ->
-           (* First we find all handlers for the message and we
-              unmarshal it but we do not call the handlers.
+           (* First we find all handlers for the message. Each
+              handlers, when applied on the marshaled message, will
+              return a closure containing its own representation of
+              the unmarshaled message. Then after we have find all
+              possible handlers we will call them effectively by
+              applying the closure to ().
 
-              We do that because handlers may send message and
-              wait for reply. So we need to be able to dispatch in
-              an handler. For that the incoming buffer must be
+              We do that because handlers may send message and wait
+              for reply. So we need to be able to dispatch in a
+              handler. For that the incoming buffer must be
               available. *)
            (List.map
-              (fun (id, filter) -> let body = Lazy.force body in fun () -> filter header body)
+              (fun (id, filter) ->
+                 let message = Lazy.force user_message in
+                   fun () -> filter message)
               connection.filters,
-            match header with
+
+            match message with
 
               (* For method return and errors, we lookup at the reply
                  waiters. If one is find then it get the reply, if
                  none, then the reply is dropped. *)
-              | { message_type = `Method_return(reply_serial) } as header ->
+              | { typ = `Method_return(reply_serial) } as message ->
                   find_reply_handler connection reply_serial
                     (fun (handler, error_handler) -> match handler with
-                       | User f -> let body = Lazy.force body in [fun () -> f header body]
+                       | User f -> let message = intern_recv_to_user message in [fun () -> f message]
                        | Intern f ->
                            try
-                             [f header byte_order buffer body_start]
+                             [f message]
                            with
                                exn when not (is_fatal exn) ->
                                  (* Always notify the user of
@@ -369,8 +355,8 @@ let internal_dispatch connection =
                                    | None -> raise exn)
                     (fun () ->
                        DEBUG("reply to message with serial %ld dropped" reply_serial))
-              | { message_type = `Error(reply_serial, error_name) } ->
-                  let msg = get_error header byte_order buffer body_start in
+              | { typ = `Error(reply_serial, error_name) } ->
+                  let msg = get_error message in
                     find_reply_handler connection reply_serial
                       (fun  (handler, error_handler) -> match error_handler with
                          | Some f -> [fun () -> f (Error.make_error error_name msg)]
@@ -388,82 +374,95 @@ let internal_dispatch connection =
                  signal. Note that with the current implmemtation if
                  multiple handlers are defined for the same interface
                  the message is unmarshaled several times. *)
-              | { message_type = `Signal(path, interface, member) } as header ->
+              | { typ = `Signal(path, interface, member) } as message ->
                   begin match InterfMap.lookup interface connection.signal_handlers with
                     | None ->
                         DEBUG("signal %S with signature %S on interface %S, from object %S dropped \
                                because no signal handler where found for this interface"
-                                member header.signature interface path);
+                                member message.signature interface path);
                         []
                     | Some handlers ->
                         Util.filter_map
                           (fun handler ->
-                             match handler header with
-                               | Some reader ->
-                                   Some(reader byte_order buffer body_start)
+                             match handler message with
                                | None ->
                                    DEBUG("signal %S with signature %S on interface %S, from object %S \
                                           dropped by signal handler"
-                                           member header.signature interface path);
-                                   None)
+                                           member message.signature interface path);
+                                   None
+                               | x -> x)
                           handlers
                   end
 
               (* Method calls with interface fields, the easy case, we
                  just ensure that the sender always get a reply. *)
-              | { message_type = `Method_call(path, Some(interface), member) } as header ->
+              | { typ = `Method_call(path, Some(interface), member) } as message ->
                   begin match InterfMap.lookup interface connection.method_call_handlers with
                     | None ->
-                        send_error connection header
+                        send_error connection message
                           "org.freedesktop.DBus.Error.UnknownMethod"
                           (sprintf "No such interface: %S" interface);
                         []
-                    | Some handler -> match handler header with
-                        | Intern_mchr_no_such_method ->
-                            send_error connection header
-                              "org.freedesktop.DBus.Error.UnknownMethod"
-                              (sprintf "Method %S with signature %S on interface %S doesn't exist"
-                                 member header.signature interface);
-                            []
-                        | Intern_mchr_no_such_object ->
-                            send_error connection header
-                              "org.freedesktop.DBus.Error.Failed"
-                              (sprintf "No such object: %S" path);
-                            []
-                        | Intern_mchr_ok reader ->
-                            method_call_read connection header reader byte_order buffer body_start
+                    | Some handler ->
+                        match
+                          try
+                            Some(handler message)
+                          with
+                              exn when not (is_fatal exn) ->
+                                handle_method_call_failure connection message exn;
+                                None
+                        with
+                          | Some Intern_mchr_no_such_method ->
+                              send_error connection message
+                                "org.freedesktop.DBus.Error.UnknownMethod"
+                                (sprintf "Method %S with signature %S on interface %S doesn't exist"
+                                   member message.signature interface);
+                              []
+                          | Some Intern_mchr_no_such_object ->
+                              send_error connection message
+                                "org.freedesktop.DBus.Error.Failed"
+                                (sprintf "No such object: %S" path);
+                              []
+                          | Some (Intern_mchr_ok f) -> [f]
+                          | None -> []
                   end
 
               (* Method calls without interface fields. We try every
                  interfaces. This implementation choose to send an
                  error if two interfaces have the same method with the
                  same signature for an object *)
-              | { message_type = `Method_call(path, None, member) } as header ->
+              | { typ = `Method_call(path, None, member) } as message ->
                   begin
                     match
                       InterfMap.fold begin fun interface handler acc ->
-                        match handler header with
-                          | Intern_mchr_no_such_method
-                          | Intern_mchr_no_such_object -> acc
-                          | Intern_mchr_ok reader -> (reader, interface) :: acc
+                        try
+                          match handler message with
+                            | Intern_mchr_no_such_method
+                            | Intern_mchr_no_such_object -> acc
+                            | Intern_mchr_ok f -> (UR_success f, interface) :: acc
+                        with
+                            exn when not (is_fatal exn) ->
+                              (UR_failure exn, interface) :: acc
                       end connection.method_call_handlers []
                     with
                       | [] ->
-                          send_error connection header
+                          send_error connection message
                             "org.freedesktop.DBus.Error.UnknownMethod"
                             (sprintf
                                "No interface have a method %S with signature %S on object %S"
-                               member header.signature path);
+                               member message.signature path);
                           []
-                      | [(reader, interface)] ->
-                          method_call_read connection header reader byte_order buffer body_start
+                      | [(UR_success f, interface)] -> [f]
+                      | [(UR_failure exn, interface)] ->
+                          handle_method_call_failure connection message exn;
+                          []
                       | l ->
-                          send_error connection header
+                          send_error connection message
                             "org.freedesktop.DBus.Error.Failed"
                             (sprintf
                                "Ambiguous choice for method %S with signature %S on object %S. \
                                 The following interfaces have this method: \"%s\""
-                               member header.signature path
+                               member message.signature path
                                (String.concat "\", \"" (List.map snd l)));
                           []
                   end))
@@ -647,9 +646,9 @@ let intern_cookie_is_exn cookie = match !cookie with
   | Exn _ -> true
   | _ -> false
 
-let intern_handle_reply_cookie body_reader cookie sleep_mutex =
-  Intern(fun header byte_order buffer ptr ->
-           cookie := Val(body_reader header byte_order buffer ptr);
+let intern_handle_reply_cookie handler cookie sleep_mutex =
+  Intern(fun message ->
+           cookie := Val(handler message);
            begin match sleep_mutex with
              | Some m -> Mutex.unlock m
              | None -> ()
@@ -657,13 +656,13 @@ let intern_handle_reply_cookie body_reader cookie sleep_mutex =
            (fun () -> ()))
 
 let user_handle_reply_cookie cookie sleep_mutex =
-  User(fun header body ->
-         cookie := Val(header, body);
+  User(fun message ->
+         cookie := Val message;
          match sleep_mutex with
            | Some m -> Mutex.unlock m
            | None -> ())
 
-let any_send_message_cookie create_mutex connection header body_writer handler_maker =
+let any_send_message_cookie create_mutex connection message handler_maker =
   let sleep_mutex = match create_mutex with
     | true
     | false when Thread.self () <> connection.dispatcher ->
@@ -673,25 +672,25 @@ let any_send_message_cookie create_mutex connection header body_writer handler_m
     | _ -> None
   in
   let cookie = ref (Waiting(connection, sleep_mutex)) in
-    any_send_message_async connection header body_writer
+    any_send_message_async connection message
       (Some (fun exn -> cookie := Exn exn))
       (handler_maker cookie sleep_mutex);
     cookie
 
-let intern_send_message_cookie connection header body_writer body_reader =
-  any_send_message_cookie true connection header body_writer (intern_handle_reply_cookie body_reader)
-let send_message_cookie connection header body =
-  any_send_message_cookie true connection (make_user_header header body) (write_values body) user_handle_reply_cookie
+let intern_send_message_cookie connection message body_reader =
+  any_send_message_cookie true connection message (intern_handle_reply_cookie body_reader)
+let send_message_cookie connection message =
+  any_send_message_cookie true connection (intern_user_to_send message) user_handle_reply_cookie
 
 (* Handling of synchronous call.
 
    We just create a cookie and retreive it immediatly. *)
 
-let any_send_message_sync connection header body_writer handler_maker =
-  let cookie = any_send_message_cookie false connection header body_writer handler_maker in
+let any_send_message_sync connection message handler_maker =
+  let cookie = any_send_message_cookie false connection message handler_maker in
     intern_cookie_get cookie
 
-let intern_send_message_sync connection header body_writer body_reader =
-  any_send_message_sync connection header body_writer (intern_handle_reply_cookie body_reader)
-let send_message_sync connection header body =
-  any_send_message_sync connection (make_user_header header body) (write_values body) user_handle_reply_cookie
+let intern_send_message_sync connection message body_reader =
+  any_send_message_sync connection message (intern_handle_reply_cookie body_reader)
+let send_message_sync connection message =
+  any_send_message_sync connection (intern_user_to_send message) user_handle_reply_cookie

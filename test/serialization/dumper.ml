@@ -36,32 +36,33 @@ let make prefix t =
 open Values
 
 let notify connection title msg =
-  let (_, body) =
+  let reply =
     Connection.send_message_sync connection
-      (Header.method_call
+      (Message.method_call
          ~destination:"org.freedesktop.Notifications"
          ~path:"/org/freedesktop/Notifications"
          ~interface:"org.freedesktop.Notifications"
-         ~member:"Notify" ())
-      (make_values
-         (ccons cstring
-            (ccons cuint32
-               (ccons cstring
+         ~member:"Notify"
+         ~body:(make_values
                   (ccons cstring
-                     (ccons cstring
-                        (ccons (carray cstring)
-                           (ccons (cdict cstring cvariant)
-                              (ccons cint32 cnil))))))))
-         ((Filename.basename Sys.argv.(0)) (* app_name *)
-            ,(0l (* id *)
-                , (  "info" (* icon *)
-                       , (  title (* summary *)
-                              , (  msg (* body *)
-                                     , (  [] (* actions *)
-                                            , (  [] (* hints *)
-                                                   ,    (  5000l (* timeout *), ())))))))))
+                     (ccons cuint32
+                        (ccons cstring
+                           (ccons cstring
+                              (ccons cstring
+                                 (ccons (carray cstring)
+                                    (ccons (cdict cstring cvariant)
+                                       (ccons cint32 cnil))))))))
+                  ((Filename.basename Sys.argv.(0)) (* app_name *)
+                     ,(0l (* id *)
+                         , (  "info" (* icon *)
+                                , (  title (* summary *)
+                                       , (  msg (* body *)
+                                              , (  [] (* actions *)
+                                                     , (  [] (* hints *)
+                                                            ,    (  5000l (* timeout *), ())))))))))
+         ())
   in
-  let (return_id, ()) = get_values (ccons cuint32 cnil) body in
+  let (return_id, ()) = get_values (ccons cuint32 cnil) (Message.body reply) in
     return_id
 
 let _ =

@@ -27,7 +27,7 @@ struct
   let obus_pack_files =
     ["info";
      "wire";
-     "header";
+     "message";
      "values";
      "interface";
      "address";

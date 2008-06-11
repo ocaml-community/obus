@@ -13,37 +13,33 @@ open OBus
 open Values
 
 let notify connection title msg =
-  (* To send a message we have to construct an header and a body by
-     hand *)
-
-  let header =
-    Header.method_call
+  (* We have to construct a message by hand *)
+  let message =
+    Message.method_call
       ~destination:"org.freedesktop.Notifications"
       ~path:"/org/freedesktop/Notifications"
       ~interface:"org.freedesktop.Notifications"
-      ~member:"Notify" ()
-
-  and body =
-    [string (Filename.basename Sys.argv.(0)); (* app_name *)
-     uint32 0l; (* id *)
-     string "info"; (* icon *)
-     string title; (* summary *)
-     string msg; (* body *)
-     array tstring []; (* actions *)
-     dict tstring tvariant []; (* hints *)
-     int32 5000l] (* timeout *)
-  in
+      ~member:"Notify"
+      ~body:[string (Filename.basename Sys.argv.(0)); (* app_name *)
+             uint32 0l; (* id *)
+             string "info"; (* icon *)
+             string title; (* summary *)
+             string msg; (* body *)
+             array tstring []; (* actions *)
+             dict tstring tvariant []; (* hints *)
+             int32 5000l] (* timeout *)
+      () in
 
   (* Now we send the message and block until the reply come *)
-  let reply_header, reply_body =
-    Connection.send_message_sync connection header body in
+  let reply =
+    Connection.send_message_sync connection message in
 
     (* Of course we must match the body to see if this is what we
        expect... *)
-    match reply_body with
+    match Message.body reply with
       | [Uint32 return_id] -> return_id
       | _ ->
-          Printf.eprintf "unexpected signature: %s\n%!" header.Header.signature;
+          Printf.eprintf "unexpected signature: %s\n%!" (Message.signature reply);
           exit 1
 
 let _ =

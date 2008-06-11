@@ -10,8 +10,9 @@
 (** Module used to receive or send an entire message *)
 
 open Wire
+open Message
 
-val recv_one_message : Transport.t -> buffer -> Header.t * byte_order * buffer * ptr
+val recv_one_message : Transport.t -> buffer -> any_type intern_recv * buffer
   (** [recv_one_message transport buffer] read one a message from the
       given transport. If buffer is not enough large then a new buffer
       is created. It return the parsed header of the message, the
@@ -21,9 +22,9 @@ val recv_one_message : Transport.t -> buffer -> Header.t * byte_order * buffer *
       It can raise one of these fatal errors: [Transport.Error],
       [Wire.Reading_error]. Any other errors are convertion errors. *)
 
-val send_one_message : Transport.t -> buffer -> Header.t -> (byte_order -> buffer -> ptr -> ptr) -> buffer
-  (** [send_one_message transport buffer flags serial header
-      body_writer] write and send one message on the given transport.
+val send_one_message : Transport.t -> buffer -> serial -> any_type intern_send -> buffer
+  (** [send_one_message transport buffer serial message] write
+      and send one message on the given transport.
 
       can raise one of [Transport.Error], [Wire.Writing_error]. Others
       errors are convertion errors. *)

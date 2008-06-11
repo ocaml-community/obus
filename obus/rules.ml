@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Header
-
 type message_type =
   | Method_call
   | Method_return

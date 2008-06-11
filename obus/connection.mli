@@ -63,19 +63,17 @@ val guid : t -> guid
 
 (** {6 Sending messages} *)
 
-type body = Values.values
-
-val send_message : t -> Header.t -> body -> unit
+val send_message : t -> Message.t -> unit
   (** Send a message. do not wait for the reply. *)
 
-val send_message_sync : t -> Header.method_call -> body -> Header.method_return * body
+val send_message_sync : t -> Message.method_call -> Message.method_return
   (** Send a message and wait for the reply.
 
       If the reply is an error, an exception will be raised: if the
       exception is known (like [DBus.Error.Failed]) it will be
       raised. If not an [Error.DBus] will be raised. *)
 
-val send_message_async : t -> Header.method_call -> body -> ?on_error:(exn -> unit) -> (Header.method_return -> body -> unit) -> unit
+val send_message_async : t -> Message.method_call -> ?on_error:(exn -> unit) -> (Message.method_return -> unit) -> unit
   (** Same as send_message but return immediatly and register a
       function which will receive the result.
 
@@ -86,15 +84,15 @@ val send_message_async : t -> Header.method_call -> body -> ?on_error:(exn -> un
 type 'a cookie
   (** See [Cookie] for details *)
 
-val send_message_cookie : t -> Header.method_call -> body -> (Header.method_return * body) cookie
+val send_message_cookie : t -> Message.method_call -> Message.method_return cookie
   (** Send a message an return a cookie for later retrieval of the
       result *)
 
-val send_exn : t -> Header.method_call -> exn -> unit
+val send_exn : t -> Message.method_call -> exn -> unit
   (** Send an error message in reply to a method call. It raise an
       [Invalid_argument] if the exception is not a DBus error. *)
 
-val send_error : t -> Header.method_call -> string -> string -> unit
+val send_error : t -> Message.method_call -> string -> string -> unit
   (** [send_error connection method_call name message] same as
       [send_exn] but take a name and a message instead of an
       exception. *)
@@ -103,7 +101,7 @@ val send_error : t -> Header.method_call -> string -> string -> unit
 
 type filter_id
 
-type filter = Header.t -> body -> unit
+type filter = Message.t -> unit
   (** Filters are used to filter all incoming message which come from
       a connection. *)
 
@@ -176,16 +174,17 @@ val on_error : t -> (exn -> bool) -> unit
 (**/**)
 
 open Wire
+type intern_handler = unit -> unit
 type intern_method_call_handler_result =
   | Intern_mchr_no_such_method
   | Intern_mchr_no_such_object
-  | Intern_mchr_ok of (unit -> unit) Wire.body_reader
-val intern_send_message : t -> Header.t -> body_writer -> unit
-val intern_send_message_sync : t -> Header.method_call -> body_writer -> (Header.method_return -> 'a body_reader) -> 'a
-val intern_send_message_async : t -> Header.method_call -> body_writer -> ?on_error:(exn -> unit) -> (Header.method_return -> (unit -> unit) body_reader) -> unit
-val intern_send_message_cookie : t -> Header.method_call -> body_writer -> (Header.method_return -> 'a body_reader) -> 'a cookie
-val intern_add_signal_handler : t -> Interface.name -> (Header.signal -> (unit -> unit) body_reader option) -> unit
-val intern_add_method_call_handler : t -> Interface.name -> (Header.method_call -> intern_method_call_handler_result) -> unit
+  | Intern_mchr_ok of intern_handler
+val intern_send_message : t -> Message.any_type Message.intern_send -> unit
+val intern_send_message_sync : t -> Message.method_call_type Message.intern_send -> (Message.method_return_type Message.intern_recv -> 'a) -> 'a
+val intern_send_message_async : t -> Message.method_call_type Message.intern_send -> ?on_error:(exn -> unit) -> (Message.method_return_type Message.intern_recv -> intern_handler) -> unit
+val intern_send_message_cookie : t -> Message.method_call_type Message.intern_send -> (Message.method_return_type Message.intern_recv -> 'a) -> 'a cookie
+val intern_add_signal_handler : t -> Interface.name -> (Message.signal_type Message.intern_recv -> intern_handler option) -> unit
+val intern_add_method_call_handler : t -> Interface.name -> (Message.method_call_type Message.intern_recv -> intern_method_call_handler_result) -> unit
 val intern_get_name : t -> (unit -> string) -> string
 val intern_cookie_get : 'a cookie -> 'a
 val intern_cookie_is_ready : 'a cookie -> bool

@@ -38,46 +38,50 @@ type ('a, 'b) intern_method_call_desc = {
   intern_mcd_reader : 'b body_reader;
 }
 
-open Header
+open Message
 open Connection
 
-let fail desc header =
+let fail desc message =
   failwith
     (Printf.sprintf
        "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
        desc.intern_mcd_member
        (Interface.name desc.intern_mcd_interface)
        desc.intern_mcd_output_signature
-       header.signature)
+       message.signature)
 
-let handle_reply desc header byte_order buffer ptr =
-  if header.signature = desc.intern_mcd_output_signature
-  then desc.intern_mcd_reader byte_order buffer ptr
-  else fail desc header
+let handle_reply desc message =
+  if message.signature = desc.intern_mcd_output_signature
+  then
+    let (byte_order, buffer, ptr) = message.body in
+      desc.intern_mcd_reader byte_order buffer ptr
+  else fail desc message
 
-let handle_reply_async desc f header byte_order buffer ptr =
-  if header.signature = desc.intern_mcd_output_signature
-  then let x = desc.intern_mcd_reader byte_order buffer ptr in
-    (fun () -> f x)
-  else fail desc header
+let handle_reply_async desc f message =
+  if message.signature = desc.intern_mcd_output_signature
+  then
+    let (byte_order, buffer, ptr) = message.body in
+    let x = desc.intern_mcd_reader byte_order buffer ptr in
+      (fun () -> f x)
+  else fail desc message
 
-let make_header desc ?flags proxy =
-  method_call
+let make_message desc ?flags proxy body_writer =
+  intern_make_send
     ?flags
     ?destination:(name proxy)
-    ~path:(path proxy)
-    ~member:desc.intern_mcd_member
-    ~interface:(Interface.name desc.intern_mcd_interface)
-    ~signature:desc.intern_mcd_input_signature ()
+    ~typ:(`Method_call(path proxy, Some (Interface.name desc.intern_mcd_interface), desc.intern_mcd_member))
+    ~signature:desc.intern_mcd_input_signature
+    ~body:body_writer
+    ()
 
 let intern_proxy_call_sync proxy desc writer =
-  intern_send_message_sync (connection proxy) (make_header desc proxy) writer (handle_reply desc)
+  intern_send_message_sync (connection proxy) (make_message desc proxy writer) (handle_reply desc)
 let intern_proxy_call_async proxy desc writer ?on_error f =
-  intern_send_message_async (connection proxy) (make_header desc proxy) writer ?on_error (handle_reply_async desc f)
+  intern_send_message_async (connection proxy) (make_message desc proxy writer) ?on_error (handle_reply_async desc f)
 let intern_proxy_call_cookie proxy desc writer =
-  intern_send_message_cookie (connection proxy) (make_header desc proxy) writer (handle_reply desc)
+  intern_send_message_cookie (connection proxy) (make_message desc proxy writer) (handle_reply desc)
 let intern_proxy_call_no_reply proxy desc writer =
   intern_send_message (connection proxy)
-    (make_header desc ~flags:{ no_reply_expected = true;
-                               no_auto_start = true }
-       proxy) writer
+    (make_message desc ~flags:{ no_reply_expected = true;
+                                no_auto_start = true }
+       proxy writer)

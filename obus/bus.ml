@@ -9,26 +9,26 @@
 
 open ThreadImplem
 open Values
-open Header
 
 type t = Connection.t
 
 let name connection =
   Connection.intern_get_name connection
     (fun () ->
-       let header, body =  Connection.send_message_sync connection
-         (Header.method_call
+       match Connection.send_message_sync connection
+         (Message.method_call
             ~destination:"org.freedesktop.DBus"
             ~path:"/org/freedesktop/DBus"
             ~interface:"org.freedesktop.DBus"
-            ~member:"Hello" ()) []
-       in
-         match body with
-           | [String name] -> name
-           | _ -> failwith
+            ~member:"Hello"
+            ~body:[] ())
+       with
+         | { Message.body = [String name] } -> name
+         | { Message.signature = signature } ->
+             failwith
                (Printf.sprintf
                   "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
-                  "Hello" "org.freedesktop.DBus" "s" header.signature))
+                  "Hello" "org.freedesktop.DBus" "s" signature))
 
 let register_connection connection = ignore (name connection)
 
