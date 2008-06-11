@@ -279,32 +279,35 @@ let gen node =
     (GenSerializer.Reading.default_rules,
      GenSerializer.Writing.default_rules) node in
   let exns = get_exceptions node in
-    (<:str_item<
-       $ Ast.stSem_of_list
-       (Tree.flat
-          (fun st subs ->
-             (match st with
-                | Some st -> [st]
-                | None -> [])
-             @ List.map (fun (name, sts) -> make_module name sts) subs)
-          implem_tree)
-       $;;
-     let _ =
-       Error.register_maker
-         (fun name msg ->
-            match name with
-                $ Ast.mcOr_of_list
-                  (List.map
-                     (fun (dname, cname) ->
-                        <:match_case< $str:dname$ -> Some($id:cname$ msg) >>)
-                     exns
-                   @ [ <:match_case< _ -> None >> ]) $);
-       Error.register_unmaker
-         (function
-              $ Ast.mcOr_of_list
-                (List.map
-                   (fun (dname, cname) ->
-                      <:match_case< $id:cname$ msg -> Some($str:dname$, msg) >>)
-                   exns
-                 @ [ <:match_case< _ -> None >> ]) $);;
-     >>)
+  let st = Ast.stSem_of_list
+    (Tree.flat
+       (fun st subs ->
+          (match st with
+             | Some st -> [st]
+             | None -> [])
+          @ List.map (fun (name, sts) -> make_module name sts) subs)
+       implem_tree) in
+    match exns with
+      | [] -> st
+      | _ ->
+          (<:str_item<
+             $st$;;
+           let _ =
+             Error.register_maker
+               (fun name msg ->
+                  match name with
+                      $ Ast.mcOr_of_list
+                        (List.map
+                           (fun (dname, cname) ->
+                              <:match_case< $str:dname$ -> Some($id:cname$ msg) >>)
+                           exns
+                         @ [ <:match_case< _ -> None >> ]) $);
+             Error.register_unmaker
+               (function
+                    $ Ast.mcOr_of_list
+                      (List.map
+                         (fun (dname, cname) ->
+                            <:match_case< $id:cname$ msg -> Some($str:dname$, msg) >>)
+                         exns
+                       @ [ <:match_case< _ -> None >> ]) $);;
+           >>)
