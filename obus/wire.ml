@@ -271,61 +271,52 @@ struct
 
   let write_int_int16 buffer i v =
     let i = wprepare2 buffer i in
-      String.unsafe_set buffer (i + data16bit0) (Char.unsafe_chr (v land 0xff));
-      String.unsafe_set buffer (i + data16bit1) (Char.unsafe_chr ((v lsr 8) land 0xff));
+      String.unsafe_set buffer (i + data16bit0) (Char.unsafe_chr v);
+      String.unsafe_set buffer (i + data16bit1) (Char.unsafe_chr (v lsr 8));
       i + 2
   let write_int_uint16 = write_int_int16
 
   let write_int_int32 buffer i v =
     let i = wprepare4 buffer i in
-      String.unsafe_set buffer (i + data32bit0) (Char.unsafe_chr (v land 0xff));
-      String.unsafe_set buffer (i + data32bit1) (Char.unsafe_chr ((v lsr 8) land 0xff));
-      String.unsafe_set buffer (i + data32bit2) (Char.unsafe_chr ((v lsr 16) land 0xff));
-      String.unsafe_set buffer (i + data32bit3) (Char.unsafe_chr ((v lsr 24) land 0xff));
-      i + 4
-  let write_int_uint32 = write_int_int32
-
-  let write_int_int32 buffer i v =
-    let i = wprepare4 buffer i in
-      String.unsafe_set buffer (i + data32bit0) (Char.unsafe_chr (v land 0xff));
-      String.unsafe_set buffer (i + data32bit1) (Char.unsafe_chr ((v lsr 8) land 0xff));
-      String.unsafe_set buffer (i + data32bit2) (Char.unsafe_chr ((v lsr 16) land 0xff));
-      String.unsafe_set buffer (i + data32bit3) (Char.unsafe_chr ((v lsr 24) land 0xff));
+      String.unsafe_set buffer (i + data32bit0) (Char.unsafe_chr v);
+      String.unsafe_set buffer (i + data32bit1) (Char.unsafe_chr (v lsr 8));
+      String.unsafe_set buffer (i + data32bit2) (Char.unsafe_chr (v lsr 16));
+      String.unsafe_set buffer (i + data32bit3) (Char.unsafe_chr (v asr 24));
       i + 4
   let write_int_uint32 = write_int_int32
 
   let write_int_int64 buffer i v =
     let i = wprepare8 buffer i in
-      String.unsafe_set buffer (i + data64bit0) (Char.unsafe_chr (v land 0xff));
-      String.unsafe_set buffer (i + data64bit1) (Char.unsafe_chr ((v lsr 8) land 0xff));
-      String.unsafe_set buffer (i + data64bit2) (Char.unsafe_chr ((v lsr 16) land 0xff));
-      String.unsafe_set buffer (i + data64bit3) (Char.unsafe_chr ((v lsr 24) land 0xff));
-      String.unsafe_set buffer (i + data64bit4) (Char.unsafe_chr ((v lsr 32) land 0xff));
-      String.unsafe_set buffer (i + data64bit5) (Char.unsafe_chr ((v lsr 40) land 0xff));
-      String.unsafe_set buffer (i + data64bit6) (Char.unsafe_chr ((v lsr 48) land 0xff));
-      String.unsafe_set buffer (i + data64bit7) (Char.unsafe_chr ((v lsr 56) land 0xff));
+      String.unsafe_set buffer (i + data64bit0) (Char.unsafe_chr v);
+      String.unsafe_set buffer (i + data64bit1) (Char.unsafe_chr (v lsr 8));
+      String.unsafe_set buffer (i + data64bit2) (Char.unsafe_chr (v lsr 16));
+      String.unsafe_set buffer (i + data64bit3) (Char.unsafe_chr (v asr 24));
+      String.unsafe_set buffer (i + data64bit4) (Char.unsafe_chr (v asr 32));
+      String.unsafe_set buffer (i + data64bit5) (Char.unsafe_chr (v asr 40));
+      String.unsafe_set buffer (i + data64bit6) (Char.unsafe_chr (v asr 48));
+      String.unsafe_set buffer (i + data64bit7) (Char.unsafe_chr (v asr 56));
       i + 8
   let write_int_uint64 = write_int_int64
 
   let write_int32_int32 buffer i v =
     let i = wprepare4 buffer i in
-      String.unsafe_set buffer (i + data32bit0) (Char.unsafe_chr (Int32.to_int v land 0xff));
-      String.unsafe_set buffer (i + data32bit1) (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8) land 0xff));
-      String.unsafe_set buffer (i + data32bit2) (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16) land 0xff));
-      String.unsafe_set buffer (i + data32bit3) (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24) land 0xff));
+      String.unsafe_set buffer (i + data32bit0) (Char.unsafe_chr (Int32.to_int v));
+      String.unsafe_set buffer (i + data32bit1) (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
+      String.unsafe_set buffer (i + data32bit2) (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
+      String.unsafe_set buffer (i + data32bit3) (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24)));
       i + 4
   let write_int32_uint32 = write_int32_int32
 
   let write_int64_int64 buffer i v =
     let i = wprepare8 buffer i in
-      String.unsafe_set buffer (i + data64bit0) (Char.unsafe_chr (Int64.to_int v land 0xff));
-      String.unsafe_set buffer (i + data64bit1) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 8) land 0xff));
-      String.unsafe_set buffer (i + data64bit2) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 16) land 0xff));
-      String.unsafe_set buffer (i + data64bit3) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 24) land 0xff));
-      String.unsafe_set buffer (i + data64bit4) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 32) land 0xff));
-      String.unsafe_set buffer (i + data64bit5) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 40) land 0xff));
-      String.unsafe_set buffer (i + data64bit6) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 48) land 0xff));
-      String.unsafe_set buffer (i + data64bit7) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 56) land 0xff));
+      String.unsafe_set buffer (i + data64bit0) (Char.unsafe_chr (Int64.to_int v));
+      String.unsafe_set buffer (i + data64bit1) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 8)));
+      String.unsafe_set buffer (i + data64bit2) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 16)));
+      String.unsafe_set buffer (i + data64bit3) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 24)));
+      String.unsafe_set buffer (i + data64bit4) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 32)));
+      String.unsafe_set buffer (i + data64bit5) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 40)));
+      String.unsafe_set buffer (i + data64bit6) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 48)));
+      String.unsafe_set buffer (i + data64bit7) (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 56)));
       i + 8
   let write_int64_uint64 = write_int64_int64
 
