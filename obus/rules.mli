@@ -25,7 +25,7 @@ type rule =
       (** Match message that come from this interface *)
   | Member of string
       (** Match the interface member *)
-  | Path of Proxy.path
+  | Path of Path.t
       (** Match the object patj *)
   | Destination of Connection.name
       (** Match the message destination *)

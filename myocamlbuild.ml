@@ -26,6 +26,7 @@ struct
   (* Sub-modules of the OBus module *)
   let obus_pack_files =
     ["info";
+     "path";
      "wire";
      "message";
      "values";

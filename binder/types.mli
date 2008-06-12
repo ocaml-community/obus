@@ -28,6 +28,7 @@ val float : caml_type
 val bool : caml_type
 val char : caml_type
 val string : caml_type
+val path : caml_type
 val list : caml_type -> caml_type
   (** Standart caml types *)
 val obus_value : caml_type

@@ -21,7 +21,7 @@ type value =
   | Double of float
   | String of string
   | Signature of dtypes
-  | Object_path of string
+  | Object_path of Path.t
   | Array of dtype * value list
   | Dict of dtype * dtype * (value * value) list
   | Structure of value list
@@ -323,7 +323,7 @@ struct
     | Tdouble -> let i, v = read_float_double buffer i in (i, Double v)
     | Tstring -> let i, v = read_string_string buffer i in (i, String v)
     | Tsignature -> let i, v = read_dtypes buffer i in (i, Signature v)
-    | Tobject_path -> let i, v = read_string_object_path buffer i in (i, Object_path v)
+    | Tobject_path -> let i, v = read_path_object_path buffer i in (i, Object_path v)
     | Tarray t ->
         let i, v =
           (match t with
@@ -385,7 +385,7 @@ struct
     | Double v -> write_float_double buffer i v
     | String v -> write_string_string buffer i v
     | Signature v -> write_dtypes buffer i v
-    | Object_path v -> write_string_object_path buffer i v
+    | Object_path v -> write_path_object_path buffer i v
     | Array(t, vs) ->
         (match t with
            | Tint64

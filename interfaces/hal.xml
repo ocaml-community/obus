@@ -68,7 +68,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device" cname="Device">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -226,7 +226,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.Volume" cname="Device.Volume">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -248,7 +248,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.Storage" cname="Device.Storage">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -264,7 +264,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.Storage.Removable" cname="Device.Storage.Removable">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -275,7 +275,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.WakeOnLan" cname="Device.WakeOnLan">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -293,7 +293,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.SystemPowerManagement" cname="Device.SystemPowerManagement">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -322,7 +322,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.CPUFreq" cname="Device.CPUFreq">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -351,7 +351,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.LaptopPanel" cname="Device.LaptopPanel">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -366,7 +366,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.DockStation" cname="Device.DockStation">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path
@@ -377,7 +377,7 @@
   </interface>
   <interface name="org.freedesktop.Hal.Device.KillSwitch" cname="Device.KillSwitch">
     <interf>
-      val proxy : Bus.t -&gt; Proxy.path -&gt; t Proxy.t
+      val proxy : Bus.t -&gt; Path.t -&gt; t Proxy.t
     </interf>
     <implem>
       let proxy bus path = Bus.make_proxy bus interface "org.freedesktop.Hal" path

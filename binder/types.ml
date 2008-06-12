@@ -101,11 +101,12 @@ let float = typ "float" []
 let bool = typ "bool" []
 let char = typ "char" []
 let string = typ "string" []
+let path = typ "Path.t" []
 let list x = typ "list" [x]
-let obus_value = typ "OBus.Values.value" []
-let obus_values = typ "OBus.Values.values" []
-let obus_dtype = typ "OBus.Values.dtype" []
-let obus_dtypes = typ "OBus.Values.dtypes" []
+let obus_value = typ "Values.value" []
+let obus_values = typ "Values.values" []
+let obus_dtype = typ "Values.dtype" []
+let obus_dtypes = typ "Values.dtypes" []
 
 let string_of_eqn (ct, dt) =
   string_of_caml_type ct ^ " = " ^ signature_of_dbus_type dt

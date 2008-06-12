@@ -33,7 +33,7 @@ module type Writer = sig
   val write_float_double : float writer
   val write_bool_boolean : bool writer
   val write_string_string : string writer
-  val write_string_object_path : string writer
+  val write_path_object_path : Path.t writer
   val write_array : 'a writer -> 'a writer
   val write_array8 : 'a writer -> 'a writer
 end
@@ -52,7 +52,7 @@ module type Reader = sig
   val read_float_double : float reader
   val read_bool_boolean : bool reader
   val read_string_string : string reader
-  val read_string_object_path : string reader
+  val read_path_object_path : Path.t reader
   val read_array : (ptr -> buffer -> ptr -> 'a) -> 'a reader
   val read_array8 : (ptr -> buffer -> ptr -> 'a) -> 'a reader
 end
@@ -328,7 +328,7 @@ struct
 
   let write_string_string buffer i v =
     write_string buffer (write_int_uint32 buffer i (String.length v)) v
-  let write_string_object_path = write_string_string
+  let write_path_object_path = write_string_string
 
   let write_array writer buffer i v =
     let i = wpad4 buffer i in
@@ -491,7 +491,7 @@ struct
   let read_string_string buffer i =
     let (i, len) = read_int_uint32 buffer i in
       read_string buffer i len
-  let read_string_object_path = read_string_string
+  let read_path_object_path = read_string_string
 
   let read_array reader buffer i =
     let (i, len) = read_int_uint32 buffer i in

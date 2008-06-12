@@ -12,7 +12,7 @@
 type serial = int32
 
 (** Type of each message part *)
-type path = string
+type path = Path.t
 type interface = string
 type member = string
 type error_name = string

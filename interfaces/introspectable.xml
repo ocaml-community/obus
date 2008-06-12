@@ -4,7 +4,7 @@
       <arg name="data" direction="out" type="s"/>
     </method>
     <interf>
-      val introspect : Bus.t -&gt; Connection.name -&gt; Proxy.path -&gt; string
+      val introspect : Bus.t -&gt; Connection.name -&gt; Path.t -&gt; string
         (** [introspect bus service path] introspect [path] on [service] *)
     </interf>
     <implem>

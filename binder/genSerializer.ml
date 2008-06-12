@@ -123,7 +123,7 @@ let default_actions =
     (bool, Tboolean), "bool_boolean";
     (string, Tstring), "string_string";
     (string, Tsignature), "string_signature";
-    (string, Tobject_path), "string_object_path";
+    (path, Tobject_path), "path_object_path";
     (obus_value, Tvariant), "variant";
     (obus_dtypes, Tsignature), "dtypes" ]
 

@@ -31,7 +31,7 @@ let rec default_caml_type = function
   | Tdouble -> float
   | Tstring -> string
   | Tsignature -> obus_dtypes
-  | Tobject_path -> string
+  | Tobject_path -> path
   | Tarray(t) -> list (default_caml_type t)
   | Tdict(tk, tv) -> list (tuple [default_caml_type tk; default_caml_type tv])
   | Tstructure(ts) -> tuple (List.map default_caml_type ts)

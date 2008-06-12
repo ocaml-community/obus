@@ -18,7 +18,7 @@ type rule =
   | Sender of Connection.name
   | Interface of Interface.name
   | Member of string
-  | Path of Proxy.path
+  | Path of Path.t
   | Destination of Connection.name
   | Arg of int * string
 

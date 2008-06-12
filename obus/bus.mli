@@ -45,7 +45,7 @@ val name : t -> Connection.name
 
 (** {6 Proxies} *)
 
-val make_proxy : t -> 'a Interface.t -> Connection.name -> Proxy.path -> 'a Proxy.t
+val make_proxy : t -> 'a Interface.t -> Connection.name -> Path.t -> 'a Proxy.t
   (** [make_proxy bus interface dest path] same as [Proxy.make bus
       internface ~destination:dest path] *)
 

@@ -52,7 +52,7 @@ type value =
   | Double of float
   | String of string
   | Signature of dtypes
-  | Object_path of string
+  | Object_path of Path.t
   | Array of dtype * value list
       (** Array and dict must also contain types information because
           they can be empty *)
@@ -88,7 +88,7 @@ val cuint64 : (int64, _) cstr
 val cdouble : (float, _) cstr
 val cstring : (string, _) cstr
 val csignature : (dtypes, _) cstr
-val cobject_path : (string, _) cstr
+val cobject_path : (Path.t, _) cstr
 val carray : ('a, _) cstr -> ('a list, no) cstr
 val cdict : ('a, yes) cstr -> ('b, _) cstr -> (('a * 'b) list, no) cstr
 val cstructure : 'a seq_cstr  -> ('a, no) cstr
@@ -140,7 +140,7 @@ val uint64 : int64 -> value
 val double : float -> value
 val string : string -> value
 val signature : dtypes -> value
-val object_path : string -> value
+val object_path : Path.t -> value
 val array : dtype -> value list -> value
 val dict : dtype -> dtype -> (value * value) list -> value
 val structure : values -> value

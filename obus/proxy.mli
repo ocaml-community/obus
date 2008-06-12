@@ -17,14 +17,12 @@
 type 'a t
   (** Representation of proxy for a value of type ['a] *)
 
-type path = string
-
-val make : Connection.t -> 'a Interface.t -> ?destination:Connection.name -> path -> 'a t
+val make : Connection.t -> 'a Interface.t -> ?destination:Connection.name -> Path.t -> 'a t
   (** [make connection interface destination path] create a proxy with
       interface [interface] and [connection] as backend.  If
       [destination] is provided it will be used in sent messages *)
 
-val path : 'a t -> path
+val path : 'a t -> Path.t
   (** [path proxy] get the path of a proxy *)
 
 val name : 'a t -> Connection.name option
