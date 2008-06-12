@@ -81,7 +81,7 @@ let make_handler l = match l with
   | [] -> <:expr< handler >>
   | _ -> let names = StrUtil.gen_names "x" l in
       (<:expr<
-         fun $ Ast.paCom_of_list (List.map idpatt_of_string names) $ ->
+         fun $ Ast.PaTup(_loc, Ast.paCom_of_list (List.map idpatt_of_string names)) $ ->
            $appn <:expr< handler >> (List.map idexpr_of_string names)$ >>)
 
 let fresh_uid =

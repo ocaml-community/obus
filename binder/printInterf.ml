@@ -89,7 +89,7 @@ let print real oc node =
                   (* print cookie version *)
                   pn "val %s_cookie : " cname;
                   print_func_type ins;
-                  p "%s Cookie.t\n" (string_of_caml_type (tuple outs));
+                  p "%s\n" (string_of_caml_type (typ "Cookie.t" [tuple outs]));
 
                   (* print no_reply version *)
                   pn "val %s_no_reply : " cname;
