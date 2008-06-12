@@ -16,6 +16,10 @@ val native_byte_order : Wire.byte_order
   (** Byte order of the current architecture. It is used as default
       for sent message. *)
 
+val max_name_length : int
+  (** Maximum length of a name (=255). This limit applies to bus
+      names, interfaces, and members *)
+
 val max_array_size : int
   (** Maximum size for the marshaled representation of an array. In
       this version of the protocol this is 2^26 bytes (64MB). *)

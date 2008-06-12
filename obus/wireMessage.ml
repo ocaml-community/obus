@@ -21,7 +21,7 @@ type raw_fields = {
   _reply_serial : reply_serial option;
   _destination : destination option;
   _sender : sender option;
-  _signature : signature;
+  _signature : string;
 }
 
 let empty_fields = {

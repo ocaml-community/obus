@@ -15,7 +15,8 @@ type error_name = string
 type reply_serial = serial
 type destination = string
 type sender = string
-type signature = string
+type signature = Values.dtypes
+type body = Values.values
 
 type flags = {
   no_reply_expected : bool;
@@ -45,15 +46,16 @@ type any_type =
     | error_type
     | signal_type ]
 
-type ('typ, 'body) message = {
+type ('a, 'b, 'c) _message = {
   flags : flags;
   serial : serial;
-  typ : 'typ;
+  typ : 'a;
   destination : destination option;
   sender : sender option;
-  signature : signature;
-  body : 'body;
+  signature : 'b;
+  body : 'c;
 }
+type 'a message = ('a, Values.dtypes, Values.values) _message
 
 let flags message = message.flags
 let serial message = message.serial
@@ -63,23 +65,21 @@ let sender message = message.sender
 let signature message = message.signature
 let body message = message.body
 
-type body = Values.values
-type t = (any_type, body) message
-type method_call = (method_call_type, body) message
-type method_return = (method_return_type, body) message
-type signal = (signal_type, body) message
-type error = (error_type, body) message
+type t = any_type message
+type method_call = method_call_type message
+type method_return = method_return_type message
+type signal = signal_type message
+type error = error_type message
 
 let make ?(flags=default_flags) ?sender ?destination ~typ ~body () =
-  { flags = flags;
-    serial = 0l;
-    typ = typ;
-    destination = destination;
-    sender = sender;
-    signature =
-      Values.signature_of_dtypes
-        (Values.dtypes_of_values body);
-    body = body }
+  let dtypes = Values.dtypes_of_values body in
+    { flags = flags;
+      serial = 0l;
+      typ = typ;
+      destination = destination;
+      sender = sender;
+      signature = dtypes;
+      body = body }
 
 let method_call ?flags ?sender ?destination ~path ?interface ~member ~body () =
   make ?flags ?sender ?destination ~typ:(`Method_call(path, interface, member)) ~body:body ()
@@ -94,10 +94,9 @@ let signal ?flags ?sender ?destination ~path ~interface ~member ~body () =
   make ?flags ?sender ?destination ~typ:(`Signal(path, interface, member)) ~body:body ()
 
 open Wire
-type send_body = body_writer
-type recv_body = byte_order * buffer * ptr
-type 'a intern_send = ('a, send_body) message
-type 'a intern_recv = ('a, recv_body) message
+type 'a intern_send = ('a, string, byte_order -> buffer -> ptr -> ptr) _message
+type 'a intern_recv = ('a, string, byte_order * buffer * ptr) _message
+
 let intern_make_send ?(flags=default_flags) ?sender ?destination ~signature ~typ ~body () =
   { flags = flags;
     serial = 0l;
@@ -106,6 +105,7 @@ let intern_make_send ?(flags=default_flags) ?sender ?destination ~signature ~typ
     sender = sender;
     signature = signature;
     body = body }
+
 let intern_make_recv ?(flags=default_flags) ?sender ?destination ~serial ~signature ~typ ~body () =
   { flags = flags;
     serial = serial;
@@ -116,18 +116,20 @@ let intern_make_recv ?(flags=default_flags) ?sender ?destination ~serial ~signat
     body = body }
 
 let intern_user_to_send message =
-  { message
-    with body = fun byte_order buffer ptr -> match byte_order with
-      | Little_endian -> Values.LEWriter.write_values buffer ptr (body message)
-      | Big_endian -> Values.BEWriter.write_values buffer ptr (body message) }
+  { message with
+      signature = Values.signature_of_dtypes (signature message);
+      body = fun byte_order buffer ptr -> match byte_order with
+        | Little_endian -> Values.LEWriter.write_values buffer ptr (body message)
+        | Big_endian -> Values.BEWriter.write_values buffer ptr (body message) }
 
 let intern_recv_to_user message =
-  { message
-    with body =
-      let (byte_order, buffer, ptr) = body message in
-      let ts = Values.dtypes_of_signature (signature message) in
-        match byte_order with
-          | Little_endian -> snd (Values.LEReader.read_values ts buffer ptr)
-          | Big_endian -> snd (Values.BEReader.read_values ts buffer ptr) }
+  let dtypes = Values.dtypes_of_signature (signature message) in
+    { message with
+        signature = dtypes;
+        body =
+        let (byte_order, buffer, ptr) = body message in
+          match byte_order with
+            | Little_endian -> snd (Values.LEReader.read_values dtypes buffer ptr)
+            | Big_endian -> snd (Values.BEReader.read_values dtypes buffer ptr) }
 
 

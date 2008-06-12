@@ -11,7 +11,7 @@
 
 type serial = int32
 
-(** Type of each header field *)
+(** Type of each message part *)
 type path = string
 type interface = string
 type member = string
@@ -19,7 +19,8 @@ type error_name = string
 type reply_serial = serial
 type destination = string
 type sender = string
-type signature = string
+type signature = Values.dtypes
+type body = Values.values
 
 type method_call_type =
     [ `Method_call of path * interface option * member ]
@@ -48,7 +49,7 @@ val no_auto_start : flags -> bool
 val default_flags : flags
   (** All false *)
 
-type ('typ, 'body) message = (*private*) {
+type ('typ, 'signature, 'body) _message = (*private*) {
   flags : flags;
   serial : serial;
   typ : 'typ;
@@ -56,27 +57,26 @@ type ('typ, 'body) message = (*private*) {
   destination : destination option;
   sender : sender option;
   (** No signature is equivalent to "" *)
-  signature : signature;
+  signature : 'signature;
   body : 'body;
 }
 
-val flags : ('a, 'b) message -> flags
-val serial : ('a, 'b) message -> serial
-val typ : ('a, 'b) message -> 'a
-val destination : ('a, 'b) message -> destination option
-val sender : ('a, 'b) message -> sender option
-val signature : ('a, 'b) message -> signature
-val body : ('a, 'b) message -> 'b
+type 'a message = ('a, Values.dtypes, Values.values) _message
 
-type body = Values.values
-    (** A message body is just a list of DBus values *)
+val flags : ('a, 'b, 'c) _message -> flags
+val serial : ('a, 'b, 'c) _message -> serial
+val typ : ('a, 'b, 'c) _message -> 'a
+val destination : ('a, 'b, 'c) _message -> destination option
+val sender : ('a, 'b, 'c) _message -> sender option
+val signature : ('a, 'b, 'c) _message -> 'b
+val body : ('a, 'b, 'c) _message -> 'c
 
-type t = (any_type, body) message
+type t = any_type message
 
-type method_call = (method_call_type, body) message
-type method_return = (method_return_type, body) message
-type signal = (signal_type, body) message
-type error = (error_type, body) message
+type method_call = method_call_type message
+type method_return = method_return_type message
+type signal = signal_type message
+type error = error_type message
 
 (** {6 Creation of messages} *)
 
@@ -88,7 +88,7 @@ val make :
   ?sender:sender ->
   ?destination:destination ->
   typ:'a ->
-  body:body -> unit -> ('a, body) message
+  body:body -> unit -> 'a message
 
 val method_call :
   ?flags:flags ->
@@ -97,14 +97,14 @@ val method_call :
   path:path ->
   ?interface:interface ->
   member:member ->
-  body:body -> unit -> ([> method_call_type ], body) message
+  body:body -> unit -> [> method_call_type ] message
 
 val method_return :
   ?flags:flags ->
   ?sender:sender ->
   ?destination:destination ->
   reply_serial:serial ->
-  body:body -> unit -> ([> method_return_type ], body) message
+  body:body -> unit -> [> method_return_type ] message
 
 val error :
   ?flags:flags ->
@@ -112,7 +112,7 @@ val error :
   ?destination:destination ->
   reply_serial:serial ->
   error_name:error_name ->
-  body:body -> unit -> ([> error_type ], body) message
+  body:body -> unit -> [> error_type ] message
 
 val signal :
   ?flags:flags ->
@@ -121,29 +121,27 @@ val signal :
   path:path ->
   interface:interface ->
   member:member ->
-  body:body -> unit -> ([> signal_type ], body) message
+  body:body -> unit -> [> signal_type ] message
 
 (**/**)
 
 open Wire
-type send_body = byte_order -> buffer -> ptr -> ptr
-type recv_body = byte_order * buffer * ptr
-type 'a intern_send = ('a, send_body) message
-type 'a intern_recv = ('a, recv_body) message
+type 'a intern_send = ('a, string, byte_order -> buffer -> ptr -> ptr) _message
+type 'a intern_recv = ('a, string, byte_order * buffer * ptr) _message
 val intern_make_send :
   ?flags:flags ->
   ?sender:sender ->
   ?destination:destination ->
-  signature:signature ->
+  signature:string ->
   typ:'a ->
-  body:send_body -> unit -> ('a, send_body) message
+  body:(byte_order -> buffer -> ptr -> ptr) -> unit -> 'a intern_send
 val intern_make_recv :
   ?flags:flags ->
   ?sender:sender ->
   ?destination:destination ->
   serial:serial ->
-  signature:signature ->
+  signature:string ->
   typ:'a ->
-  body:recv_body -> unit -> ('a, recv_body) message
-val intern_user_to_send : ('a, body) message -> 'a intern_send
-val intern_recv_to_user : 'a intern_recv -> ('a, body) message
+  body:(byte_order * buffer * ptr) -> unit -> 'a intern_recv
+val intern_user_to_send : 'a message -> 'a intern_send
+val intern_recv_to_user : 'a intern_recv -> 'a message
