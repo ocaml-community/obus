@@ -117,7 +117,12 @@ let print real oc node =
           n ();
           pn "type signal =\n";
           List.iter begin fun (doc, dname, cname, (args, ctypes)) ->
-            pn "  | %s of %s\n" cname (string_of_caml_type (tuple ctypes));
+            begin match ctypes with
+              | [] ->
+                  pn "  | %s\n" cname
+              | _ ->
+                  pn "  | %s of %s\n" cname (string_of_caml_type (tuple ctypes))
+            end;
             print_doc 6 doc
           end signals;
           if real
