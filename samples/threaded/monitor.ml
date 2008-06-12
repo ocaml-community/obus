@@ -26,7 +26,6 @@ let filter what_bus message =
   message_type = %s
   destination = %s
   sender = %s
-  signature = %s
   body = %s
 
 %!" what_bus message.flags.no_reply_expected message.flags.no_auto_start message.serial
@@ -43,7 +42,6 @@ let filter what_bus message =
                path interface member)
       (opt message.destination)
       (opt message.sender)
-      (Values.string_of_dtypes (signature message))
       (Values.string_of_values (body message))
 
 let match_all bus =

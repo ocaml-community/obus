@@ -11,6 +11,21 @@ open Wire
 open Message
 open Printf
 
+type 'a send_message = ('a, string * (byte_order -> buffer -> ptr -> ptr)) _message
+type 'a recv_message = ('a, string * (byte_order * buffer * ptr)) _message
+type send = any_type send_message
+type recv = any_type recv_message
+type method_call_recv = method_call_type recv_message
+type method_return_recv = method_return_type recv_message
+type signal_recv = signal_type recv_message
+type error_recv = error_type recv_message
+type method_call_send = method_call_type send_message
+type method_return_send = method_return_type send_message
+type signal_send = signal_type send_message
+type error_send = error_type send_message
+
+let signature message = fst (body message)
+
 (* Raw description of an header *)
 
 type raw_fields = {
@@ -171,15 +186,12 @@ struct
                        in
                          cont i acc)
             empty_fields 16 (fields_length + 16) in
-            (intern_make_recv
-               ~flags:flags
-               ?sender:fields._sender
-               ?destination:fields._destination
-               ~serial:serial
-               ~signature:fields._signature
-               ~typ:(message_maker fields)
-               ~body:(byte_order, buffer, body_start)
-               (),
+            ({ flags = flags;
+               sender = fields._sender;
+               destination = fields._destination;
+               serial = serial;
+               typ = message_maker fields;
+               body = (fields._signature, (byte_order, buffer, body_start)) },
              buffer)
 end
 
@@ -187,10 +199,11 @@ module MakeWriter(Writer : Wire.Writer) =
 struct
   open Writer
 
-  let write transport buffer serial message =
+  let write transport buffer message =
     buffer.[0] <- (match byte_order with
                      | Little_endian -> 'l'
                      | Big_endian -> 'B');
+    let signature, body_writer = message.body in
     let code, fields = match message.typ with
       | `Method_call(path, interface, member) ->
           (1,
@@ -201,7 +214,7 @@ struct
              _reply_serial = None;
              _destination = message.destination;
              _sender = message.sender;
-             _signature = message.signature })
+             _signature = signature })
       | `Method_return(reply_serial) ->
           (2,
            { _path = None;
@@ -211,7 +224,7 @@ struct
              _reply_serial = Some reply_serial;
              _destination = message.destination;
              _sender = message.sender;
-             _signature = message.signature })
+             _signature = signature })
       | `Error(reply_serial, error_name) ->
           (3,
            { _path = None;
@@ -221,7 +234,7 @@ struct
              _reply_serial = Some reply_serial;
              _destination = message.destination;
              _sender = message.sender;
-             _signature = message.signature })
+             _signature = signature })
       | `Signal(path, interface, member) ->
           (4,
            { _path = Some path;
@@ -231,13 +244,13 @@ struct
              _reply_serial = None;
              _destination = message.destination;
              _sender = message.sender;
-             _signature = message.signature })
+             _signature = signature })
     in
       buffer.[1] <- char_of_int code;
       buffer.[2] <- char_of_int ((if message.flags.no_reply_expected then 1 else 0) lor
                                    (if message.flags.no_auto_start then 2 else 0));
       buffer.[3] <- char_of_int Constant.protocol_version;
-      ignore (write_int32_uint32 buffer 8 serial);
+      ignore (write_int32_uint32 buffer 8 message.serial);
 
       let write_field code signature writer i = function
         | None -> i
@@ -262,7 +275,7 @@ struct
         (* The body start after alignement padding of the header to an
            8-boundary *)
         let i = wpad8 buffer i in
-        let j = message.body byte_order buffer i in
+        let j = body_writer byte_order buffer i in
           if j > Constant.max_message_size
           then raise (Writing_error (sprintf "message too big to be sent: %d" j));
 
@@ -292,14 +305,14 @@ let recv_one_message transport buffer =
         Out_of_bounds ->
           raise (Reading_error "invalid message size")
 
-let send_one_message transport buffer serial message =
+let send_one_message transport buffer message =
   let f = match Info.native_byte_order with
     | Little_endian -> LEWriter.write
     | Big_endian -> BEWriter.write
   in
   let rec aux buffer =
     try
-      f transport buffer serial message;
+      f transport buffer message;
       buffer
     with
         Out_of_bounds ->

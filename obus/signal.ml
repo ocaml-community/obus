@@ -9,10 +9,11 @@
 
 open Values
 open Message
+open WireMessage
 open Connection
 
 type ('a, 'b) handler = 'a Proxy.t -> 'b -> unit
-type ('a, 'b) set = 'a Interface.t * (Connection.t -> ('a, 'b) handler -> (signal_type intern_recv -> (unit -> unit) option))
+type ('a, 'b) set = 'a Interface.t * (Connection.t -> ('a, 'b) handler -> (signal_recv -> (unit -> unit) option))
 
 let register connection (interface, make_reader) handler =
   intern_add_signal_handler connection (Interface.name interface)
@@ -23,7 +24,7 @@ let bus_register bus (interface, make_reader) handler =
     (make_reader bus handler);
   ignore
     (send_message_sync bus
-       (method_call
+       (Message.method_call
           ~destination:"org.freedesktop.DBus"
           ~path:"/org/freedesktop/DBus"
           ~interface:"org.freedesktop.DBus"
@@ -34,12 +35,13 @@ let bus_register bus (interface, make_reader) handler =
 
 let make_set interface get_reader =
   (interface,
-   fun connection handler message ->
-     let `Signal(path, _, member) = message.typ in
-       match get_reader (member, message.signature) with
+   fun connection handler
+     { typ = `Signal(path, _, member);
+       sender = sender;
+       body = signature, (byte_order, buffer, ptr) } ->
+       match get_reader (member, signature) with
          | Some(reader) ->
-             let (byte_order, buffer, ptr) = message.body in
              let signal = reader byte_order buffer ptr
-             and proxy = Proxy.make connection interface ?destination:message.sender path in
+             and proxy = Proxy.make connection interface ?destination:sender path in
                Some(fun () -> handler proxy signal)
          | None -> None)

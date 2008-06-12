@@ -39,7 +39,7 @@ let notify connection title msg =
     match Message.body reply with
       | [Uint32 return_id] -> return_id
       | _ ->
-          Printf.eprintf "unexpected signature: %s\n%!" (Values.signature_of_dtypes (Message.signature reply));
+          Printf.eprintf "unexpected signature: %s\n%!" (Message.signature reply);
           exit 1
 
 let _ =

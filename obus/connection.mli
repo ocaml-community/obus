@@ -173,18 +173,18 @@ val on_error : t -> (exn -> bool) -> unit
 
 (**/**)
 
-open Wire
+open WireMessage
 type intern_handler = unit -> unit
 type intern_method_call_handler_result =
   | Intern_mchr_no_such_method
   | Intern_mchr_no_such_object
   | Intern_mchr_ok of intern_handler
-val intern_send_message : t -> Message.any_type Message.intern_send -> unit
-val intern_send_message_sync : t -> Message.method_call_type Message.intern_send -> (Message.method_return_type Message.intern_recv -> 'a) -> 'a
-val intern_send_message_async : t -> Message.method_call_type Message.intern_send -> ?on_error:(exn -> unit) -> (Message.method_return_type Message.intern_recv -> intern_handler) -> unit
-val intern_send_message_cookie : t -> Message.method_call_type Message.intern_send -> (Message.method_return_type Message.intern_recv -> 'a) -> 'a cookie
-val intern_add_signal_handler : t -> Interface.name -> (Message.signal_type Message.intern_recv -> intern_handler option) -> unit
-val intern_add_method_call_handler : t -> Interface.name -> (Message.method_call_type Message.intern_recv -> intern_method_call_handler_result) -> unit
+val intern_send_message : t -> send -> unit
+val intern_send_message_sync : t -> method_call_send -> (method_return_recv -> 'a) -> 'a
+val intern_send_message_async : t -> method_call_send -> ?on_error:(exn -> unit) -> (method_return_recv -> intern_handler) -> unit
+val intern_send_message_cookie : t -> method_call_send -> (method_return_recv -> 'a) -> 'a cookie
+val intern_add_signal_handler : t -> Interface.name -> (signal_recv -> intern_handler option) -> unit
+val intern_add_method_call_handler : t -> Interface.name -> (method_call_recv -> intern_method_call_handler_result) -> unit
 val intern_get_name : t -> (unit -> string) -> string
 val intern_cookie_get : 'a cookie -> 'a
 val intern_cookie_is_ready : 'a cookie -> bool

@@ -10,6 +10,7 @@
 open Printf
 open ThreadImplem
 open Message
+open WireMessage
 
 module MyMap(Ord : Map.OrderedType) =
 struct
@@ -44,9 +45,9 @@ type filter = Message.t -> unit
 
 type reply_handler =
   | User of (method_return -> unit)
-  | Intern of (method_return_type intern_recv -> intern_handler)
-type signal_handler = signal_type intern_recv -> intern_handler option
-type method_call_handler = method_call_type intern_recv -> intern_method_call_handler_result
+  | Intern of (method_return_recv -> intern_handler)
+type signal_handler = signal_recv -> intern_handler option
+type method_call_handler = method_call_recv -> intern_method_call_handler_result
 
 type connection = {
   (* Transport used for the connection *)
@@ -160,8 +161,7 @@ let gen_serial connection =
 
 (* Read the error message of an error *)
 let get_error = function
-  | { signature = "s";
-      body = (byte_order, buffer, ptr) }  ->
+  | { body = ("s", (byte_order, buffer, ptr)) }  ->
       snd ((match byte_order with
               | Wire.Little_endian -> Wire.LEReader.read_string_string
               | Wire.Big_endian -> Wire.BEReader.read_string_string) buffer ptr)
@@ -175,14 +175,14 @@ let set_error msg byte_order buffer ptr =
   end buffer ptr msg
 
 (* Write a whole message on a buffer and send it *)
-let write_message connection serial message =
+let write_message connection message =
   match connection.crashed with
     | Some exn -> raise exn
     | None ->
         try
           Protected.update
             (fun buffer ->
-               WireMessage.send_one_message connection.transport buffer serial message)
+               send_one_message connection.transport buffer message)
             connection.outgoing_buffer
         with
           | Transport.Error _ as exn ->
@@ -190,18 +190,34 @@ let write_message connection serial message =
           | Wire.Writing_error msg ->
               raise (Cannot_send msg)
 
+(* Convertion between raw messages and use messages *)
+
+let intern_user_to_send message =
+  { message with body =
+      (Values.signature_of_dtypes (Values.dtypes_of_values (body message)),
+       fun byte_order buffer ptr -> match byte_order with
+         | Wire.Little_endian -> Values.LEWriter.write_values buffer ptr (body message)
+         | Wire.Big_endian -> Values.BEWriter.write_values buffer ptr (body message)) }
+
+let intern_recv_to_user message =
+  let signature, (byte_order, buffer, ptr) = body message in
+  let dtypes = Values.dtypes_of_signature signature in
+    { message with body = match byte_order with
+        | Wire.Little_endian -> snd (Values.LEReader.read_values dtypes buffer ptr)
+        | Wire.Big_endian -> snd (Values.BEReader.read_values dtypes buffer ptr) }
+
 (* Sending messages *)
 
-let any_send_message  connection message =
+let any_send_message connection message =
   let serial = gen_serial connection in
-    write_message connection serial message
+    write_message connection { message with serial = serial }
 
 let any_send_message_async connection message on_error handler =
   let serial = gen_serial connection in
     modify_handlers connection
       (fun () -> connection.reply_handlers <-
          SerialMap.add serial (handler, on_error) connection.reply_handlers);
-    write_message connection serial (message : method_call_type intern_send :> any_type intern_send)
+    write_message connection ({ message with serial = serial } : method_call_send :> send)
 
 let intern_send_message connection message =
   any_send_message connection message
@@ -215,12 +231,12 @@ let send_message_async connection message ?on_error f =
 
 let send_error connection { destination = destination; serial = serial } name msg =
   intern_send_message connection
-    (intern_make_send
-       ?destination:destination
-       ~signature:"s"
-       ~typ:(`Error(serial, name))
-       ~body:(set_error msg)
-       ())
+    { destination = destination;
+      sender = None;
+      flags = { no_reply_expected = true; no_auto_start = true };
+      serial = 0l;
+      typ = `Error(serial, name);
+      body = ("s", set_error msg) }
 
 let send_exn connection method_call exn =
   match Error.unmake_error exn with
@@ -308,7 +324,7 @@ let internal_dispatch connection =
      forever. But this wil normally never happen since when the
      connection crash the transport is closed and we will get an error
      for that. *)
-  let message, buffer = WireMessage.recv_one_message connection.transport connection.incoming_buffer in
+  let message, buffer = recv_one_message connection.transport connection.incoming_buffer in
     connection.incoming_buffer <- buffer;
     (* User version of the message. It will probably not be used if
        the programmer only use the high-level interfaces, so we
@@ -379,7 +395,7 @@ let internal_dispatch connection =
                     | None ->
                         DEBUG("signal %S with signature %S on interface %S, from object %S dropped \
                                because no signal handler where found for this interface"
-                                member message.signature interface path);
+                                member (signature message) interface path);
                         []
                     | Some handlers ->
                         Util.filter_map
@@ -388,7 +404,7 @@ let internal_dispatch connection =
                                | None ->
                                    DEBUG("signal %S with signature %S on interface %S, from object %S \
                                           dropped by signal handler"
-                                           member message.signature interface path);
+                                           member (signature message) interface path);
                                    None
                                | x -> x)
                           handlers
@@ -416,7 +432,7 @@ let internal_dispatch connection =
                               send_error connection message
                                 "org.freedesktop.DBus.Error.UnknownMethod"
                                 (sprintf "Method %S with signature %S on interface %S doesn't exist"
-                                   member message.signature interface);
+                                   member (signature message) interface);
                               []
                           | Some Intern_mchr_no_such_object ->
                               send_error connection message
@@ -450,7 +466,7 @@ let internal_dispatch connection =
                             "org.freedesktop.DBus.Error.UnknownMethod"
                             (sprintf
                                "No interface have a method %S with signature %S on object %S"
-                               member message.signature path);
+                               member (signature message) path);
                           []
                       | [(UR_success f, interface)] -> [f]
                       | [(UR_failure exn, interface)] ->
@@ -462,7 +478,7 @@ let internal_dispatch connection =
                             (sprintf
                                "Ambiguous choice for method %S with signature %S on object %S. \
                                 The following interfaces have this method: \"%s\""
-                               member message.signature path
+                               member (signature message) path
                                (String.concat "\", \"" (List.map snd l)));
                           []
                   end))

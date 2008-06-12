@@ -48,31 +48,29 @@ let fail desc message =
        desc.intern_mcd_member
        (Interface.name desc.intern_mcd_interface)
        desc.intern_mcd_output_signature
-       message.signature)
+       (WireMessage.signature message))
 
 let handle_reply desc message =
-  if message.signature = desc.intern_mcd_output_signature
-  then
-    let (byte_order, buffer, ptr) = message.body in
-      desc.intern_mcd_reader byte_order buffer ptr
-  else fail desc message
+  let signature, (byte_order, buffer, ptr) = message.body in
+    if signature = desc.intern_mcd_output_signature
+    then desc.intern_mcd_reader byte_order buffer ptr
+    else fail desc message
 
 let handle_reply_async desc f message =
-  if message.signature = desc.intern_mcd_output_signature
-  then
-    let (byte_order, buffer, ptr) = message.body in
-    let x = desc.intern_mcd_reader byte_order buffer ptr in
-      (fun () -> f x)
-  else fail desc message
+  let signature, (byte_order, buffer, ptr) = message.body in
+    if signature = desc.intern_mcd_output_signature
+    then
+      let x = desc.intern_mcd_reader byte_order buffer ptr in
+        (fun () -> f x)
+    else fail desc message
 
-let make_message desc ?flags proxy body_writer =
-  intern_make_send
-    ?flags
-    ?destination:(name proxy)
-    ~typ:(`Method_call(path proxy, Some (Interface.name desc.intern_mcd_interface), desc.intern_mcd_member))
-    ~signature:desc.intern_mcd_input_signature
-    ~body:body_writer
-    ()
+let make_message desc ?(flags=default_flags) proxy body_writer =
+  { flags = flags;
+    serial = 0l;
+    sender = None;
+    destination = name proxy;
+    typ = `Method_call(path proxy, Some (Interface.name desc.intern_mcd_interface), desc.intern_mcd_member);
+    body = (desc.intern_mcd_input_signature, body_writer) }
 
 let intern_proxy_call_sync proxy desc writer =
   intern_send_message_sync (connection proxy) (make_message desc proxy writer) (handle_reply desc)

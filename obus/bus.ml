@@ -24,11 +24,11 @@ let name connection =
             ~body:[] ())
        with
          | { Message.body = [String name] } -> name
-         | { Message.signature = signature } ->
+         | message ->
              failwith
                (Printf.sprintf
                   "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
-                  "Hello" "org.freedesktop.DBus" "s" (signature_of_dtypes signature)))
+                  "Hello" "org.freedesktop.DBus" "s" (Message.signature message)))
 
 let register_connection connection = ignore (name connection)
 
