@@ -8,7 +8,7 @@
  *)
 
 open Camlp4.PreCast
-open Types
+open Btypes
 open GenSerializer
 open Compile
 open Helpers
@@ -39,7 +39,7 @@ module Caml =
        (Camlp4OCamlRevisedParser.Make
           (Camlp4.OCamlInitSyntax.Make(Ast)(Gram)(Quotation))))
 
-let dbus_types args = Tseq (List.map (fun (_, _, dbus_type, _) -> dbus_type) args)
+let dbus_types args = List.map (fun (_, _, dbus_type, _) -> dbus_type) args
 let gen_args l = List.map ident_of_string (StrUtil.gen_names "v" l)
 
 let rule_wconvert path ta tb func = function
@@ -57,7 +57,7 @@ let rule_rconvert path ta tb func = function
   | _ -> fail
 
 let solve rules caml_types args =
-  let eqn = (tuple caml_types, dbus_types args) in
+  let eqn = (tuple caml_types, `seq (dbus_types args)) in
     match Solver.solve rules eqn with
       | Some instrs -> instrs
       | None ->
@@ -70,7 +70,7 @@ let rec gen_signal_readers rules signals =
       (env, (dname, id) :: mapping)
   end (empty_env, []) signals
 
-let make_sig args = signature_of_dbus_type (dbus_types args)
+let make_sig args = signature_of_dbus_type (`seq (dbus_types args))
 let make_tuple l = match l with
   | [] -> <:expr< () >>
   | _ -> let names = StrUtil.gen_names "x" l in

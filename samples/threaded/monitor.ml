@@ -26,6 +26,8 @@ let filter what_bus message =
   message_type = %s
   destination = %s
   sender = %s
+  signature = %S
+  body_type = %s
   body = %s
 
 %!" what_bus message.flags.no_reply_expected message.flags.no_auto_start message.serial
@@ -42,7 +44,9 @@ let filter what_bus message =
                path interface member)
       (opt message.destination)
       (opt message.sender)
-      (Values.string_of_values (body message))
+      (Message.signature message)
+      (String.concat ", " (List.map (fun v -> Types.to_string (Values.typ v)) (body message)))
+      (String.concat "; " (List .map Values.to_string (body message)))
 
 let match_all bus =
   (* Filtering method calls seems to make the bus to disconnect us *)

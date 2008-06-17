@@ -11,13 +11,13 @@
     generating ocamls types and convertion functions *)
 
 open Camlp4.PreCast
-open Types
+open Btypes
 
 type caml_name = string
 type dbus_name = string
 type doc = string list
 
-type argument = dbus_name option * caml_name option * dtype * doc
+type argument = dbus_name option * caml_name option * dbus_single_type * doc
     (** Description of a method/signal argument, with
 
         - its dbus name
@@ -39,7 +39,7 @@ type declaration =
       (** [Method(dbus_name, caml_name, in_args, out_args)] *)
   | Signal of doc * dbus_name * caml_name * arguments
       (** [Signal(dbus_name, caml_name, args)] *)
-  | Property of doc * dbus_name * caml_name * dtype * caml_type * access
+  | Property of doc * dbus_name * caml_name * dbus_single_type * caml_type * access
       (** [Property(dbus_name, caml_name, dbus_type, caml_type, access)] *)
   | Exception of doc * dbus_name * caml_name
       (** Declaration of a DBus exception *)

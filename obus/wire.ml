@@ -20,6 +20,8 @@ type 'a writer = buffer -> ptr -> 'a -> ptr
 type 'a reader = buffer -> ptr -> ptr * 'a
 module type Writer = sig
   val byte_order : byte_order
+  val write_char_byte : char writer
+  val write_int_byte : int writer
   val write_int_int16 : int writer
   val write_int_int32 : int writer
   val write_int_int64 : int writer
@@ -33,12 +35,17 @@ module type Writer = sig
   val write_float_double : float writer
   val write_bool_boolean : bool writer
   val write_string_string : string writer
+  val write_types_signature : Types.t list writer
+  val write_string_signature : string writer
   val write_path_object_path : Path.t writer
   val write_array : 'a writer -> 'a writer
   val write_array8 : 'a writer -> 'a writer
+  val write_byte_array_string : string writer
 end
 module type Reader = sig
   val byte_order : byte_order
+  val read_char_byte : char reader
+  val read_int_byte : int reader
   val read_int_int16 : int reader
   val read_int_int32 : int reader
   val read_int_int64 : int reader
@@ -52,9 +59,12 @@ module type Reader = sig
   val read_float_double : float reader
   val read_bool_boolean : bool reader
   val read_string_string : string reader
+  val read_types_signature : Types.t list reader
+  val read_string_signature : string reader
   val read_path_object_path : Path.t reader
   val read_array : (ptr -> buffer -> ptr -> 'a) -> 'a reader
   val read_array8 : (ptr -> buffer -> ptr -> 'a) -> 'a reader
+  val read_byte_array_string : string reader
 end
 
 open Printf
@@ -237,15 +247,14 @@ struct
   let data64bit7 = 0
 end
 
-let write_char_byte buffer i v =
-  if i >= String.length buffer then out_of_bounds ();
-  String.unsafe_set buffer i v;
-  i + 1
+module WireTypesParams =
+struct
+  let set = String.unsafe_set
+  let get = String.unsafe_get
+  let terminated str i = String.unsafe_get str i = '\x00'
+end
 
-let write_int_byte buffer i v =
-  if i >= String.length buffer then out_of_bounds ();
-  String.unsafe_set buffer i (Char.unsafe_chr v);
-  i + 1
+module RWTypes = WireTypes.Make(Types)(WireTypesParams)
 
 let write_string buffer i str =
   let len = String.length str in
@@ -254,20 +263,27 @@ let write_string buffer i str =
     match len with
       | 0 ->
           i + 1
-      | 1 -> (* same thing here *)
+      | 1 ->
           String.unsafe_set buffer i (String.unsafe_get str 0);
           i + 2
       | _ ->
           String.unsafe_blit str 0 buffer i len;
           i + len + 1
 
-let write_string_signature buffer i v =
-  write_string buffer (write_int_byte buffer i (String.length v)) v
-
 module MakeWriter(BO : ByteOrder) =
 struct
   let byte_order = BO.byte_order
   open BO
+
+  let write_char_byte buffer i v =
+    if i >= String.length buffer then out_of_bounds ();
+    String.unsafe_set buffer i v;
+    i + 1
+
+  let write_int_byte buffer i v =
+    if i >= String.length buffer then out_of_bounds ();
+    String.unsafe_set buffer i (Char.unsafe_chr v);
+    i + 1
 
   let write_int_int16 buffer i v =
     let i = wprepare2 buffer i in
@@ -330,6 +346,17 @@ struct
     write_string buffer (write_int_uint32 buffer i (String.length v)) v
   let write_path_object_path = write_string_string
 
+  let write_string_signature buffer i v =
+    write_string buffer (write_int_byte buffer i (String.length v)) v
+
+  let write_types_signature buffer i ts =
+    let len = RWTypes.signature_size ts in
+    let i = write_int_byte buffer i len in
+      if i + len > String.length buffer then raise Out_of_bounds;
+      let i = RWTypes.write buffer i ts in
+        String.unsafe_set buffer i '\x00';
+        i + 1
+
   let write_array writer buffer i v =
     let i = wpad4 buffer i in
     let j = writer buffer (i + 4) v in
@@ -346,15 +373,15 @@ struct
       if len > Constant.max_array_size then write_array_too_big len;
       ignore (write_int_uint32 buffer i len);
       k
+
+  let write_byte_array_string =
+    write_array
+      (fun buffer i v ->
+         let len = String.length v in
+           if i + len > String.length buffer then out_of_bounds ();
+           String.unsafe_blit v 0 buffer i len;
+           i + len)
 end
-
-let read_char_byte buffer i =
-  if i >= String.length buffer then out_of_bounds ();
-  (i + 1, String.unsafe_get buffer i)
-
-let read_int_byte buffer i =
-  if i >= String.length buffer then out_of_bounds ();
-  (i + 1, Char.code (String.unsafe_get buffer i))
 
 let read_string buffer i len =
   if len < 0 || i + len > String.length buffer then out_of_bounds ();
@@ -363,21 +390,25 @@ let read_string buffer i len =
     match len with
       | 0 ->
           (i + 1, str)
-      | 1 -> (* This happen often for variant *)
+      | 1 ->
           String.unsafe_set str 0 (String.unsafe_get buffer i);
           (i + 2, str)
       | _ ->
           String.unsafe_blit buffer i str 0 len;
           (i + len + 1, str)
 
-let read_string_signature buffer i =
-  let (i, len) = read_int_byte buffer i in
-    read_string buffer i len
-
 module MakeReader(BO : ByteOrder) =
 struct
   let byte_order = BO.byte_order
   open BO
+
+  let read_char_byte buffer i =
+    if i >= String.length buffer then out_of_bounds ();
+    (i + 1, String.unsafe_get buffer i)
+
+  let read_int_byte buffer i =
+    if i >= String.length buffer then out_of_bounds ();
+    (i + 1, Char.code (String.unsafe_get buffer i))
 
   let read_int_int16 buffer i =
     let i = rprepare2 buffer i in
@@ -493,6 +524,23 @@ struct
       read_string buffer i len
   let read_path_object_path = read_string_string
 
+  let read_string_signature buffer i =
+    let (i, len) = read_int_byte buffer i in
+      read_string buffer i len
+
+  let read_types_signature buffer i =
+    let i, len = read_int_byte buffer i in
+      if len < 0 || i + len > String.length buffer then raise Out_of_bounds;
+      if String.unsafe_get buffer (i + len) <> '\x00'
+      then raise (Reading_error "signature does not end with a null byte");
+      try
+        RWTypes.read buffer i
+      with
+          WireTypes.Fail(j, msg) ->
+            raise (Reading_error
+                     (sprintf "invalid signature %S, at position %d: %s"
+                        (String.sub buffer i len) (j - i) msg))
+
   let read_array reader buffer i =
     let (i, len) = read_int_uint32 buffer i in
       if len > Constant.max_array_size then read_array_too_big len;
@@ -505,34 +553,21 @@ struct
       let i = rpad8 i in
       let limit = i + len in
         (limit, reader limit buffer i)
+
+  let read_byte_array_string =
+    read_array
+      (fun limit buffer i ->
+         if limit > String.length buffer then out_of_bounds ();
+         let len = (limit - i) in
+         let str = String.create len in
+           String.unsafe_blit buffer i str 0 len;
+           str)
 end
 
 module LEWriter = MakeWriter(LittleEndian)
 module BEWriter = MakeWriter(BigEndian)
 module LEReader = MakeReader(LittleEndian)
 module BEReader = MakeReader(BigEndian)
-
-let check_signature buffer i str =
-  let i, len = read_int_byte buffer i in
-  let fail _ =
-    raise (Failure
-             (sprintf "unexpected signature, expected: %s, got: %s"
-                str (String.sub buffer i len)))
-  in
-  let rec aux = function
-    | -1 -> ()
-    | j when String.unsafe_get buffer (i + j) = String.unsafe_get str j ->
-        aux (j - 1)
-    | _ ->
-        fail ()
-  in
-    if len < 0 || i + len > String.length buffer then out_of_bounds ();
-    if String.unsafe_get buffer (i + len) <> '\x00'
-    then raise (Reading_error "signature does not end with a null byte");
-    let len' = String.length str in
-      if len <> len'
-      then fail ();
-      aux (len' - 1)
 
 let read_until reader empty i limit =
   let rec aux i acc =

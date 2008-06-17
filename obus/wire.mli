@@ -52,6 +52,8 @@ type 'a writer = buffer -> ptr -> 'a -> ptr
 
 module type Writer = sig
   val byte_order : byte_order
+  val write_char_byte : char writer
+  val write_int_byte : int writer
   val write_int_int16 : int writer
   val write_int_int32 : int writer
   val write_int_int64 : int writer
@@ -65,6 +67,8 @@ module type Writer = sig
   val write_float_double : float writer
   val write_bool_boolean : bool writer
   val write_string_string : string writer
+  val write_types_signature : Types.t list writer
+  val write_string_signature : string writer
   val write_path_object_path : Path.t writer
     (** There is two cases for arrays: elements are padded on an 4 or
         less boundary, so there is nothing special to do since the
@@ -77,12 +81,15 @@ module type Writer = sig
         of the array *)
   val write_array : 'a writer -> 'a writer
   val write_array8 : 'a writer -> 'a writer
+  val write_byte_array_string : string writer
 end
 
 type 'a reader = buffer -> ptr -> ptr * 'a
 
 module type Reader = sig
   val byte_order : byte_order
+  val read_char_byte : char reader
+  val read_int_byte : int reader
   val read_int_int16 : int reader
   val read_int_int32 : int reader
   val read_int_int64 : int reader
@@ -96,11 +103,14 @@ module type Reader = sig
   val read_float_double : float reader
   val read_bool_boolean : bool reader
   val read_string_string : string reader
+  val read_types_signature : Types.t list reader
+  val read_string_signature : string reader
   val read_path_object_path : Path.t reader
   val read_array : (ptr -> buffer -> ptr -> 'a) -> 'a reader
   val read_array8 : (ptr -> buffer -> ptr -> 'a) -> 'a reader
     (** The first argument of these two function is a function which
         take as first argument a limit. *)
+  val read_byte_array_string : string reader
 end
 
 module LEWriter : Writer
@@ -108,20 +118,7 @@ module BEWriter : Writer
 module LEReader : Reader
 module BEReader : Reader
 
-(** {6 Other functions which does not depends on byte order} *)
-
-val write_char_byte : char writer
-val write_int_byte : int writer
-val write_string_signature : string writer
-
-val read_char_byte : char reader
-val read_int_byte : int reader
-val read_string_signature : string reader
-
-val check_signature : buffer -> ptr -> string -> unit
-  (** [check_signature buffer ptr sig] compare the marshaled signature
-      at pos [ptr] in [buffer] with [sig]. If it match do nothing,
-      if not raise an [Content_error]. *)
+(** {6 Other util functions} *)
 
 val read_until : (ptr -> 'a -> (ptr -> 'a -> 'a) -> 'a) -> 'a -> ptr -> ptr -> 'a
   (** [read_until reader acc ptr limit] read values with [reader]

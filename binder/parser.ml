@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Types
+open Btypes
 open Xparser
 open Introspect
 
@@ -19,23 +19,29 @@ let mkuids did = function
   | None -> List.map String.capitalize (StrUtil.split_dot did)
   | Some cid -> StrUtil.split_dot cid
 
-let rec default_caml_type = function
-  | Tbyte -> char
-  | Tboolean -> bool
-  | Tint16 -> int
-  | Tint32 -> int
-  | Tint64 -> int64
-  | Tuint16 -> int
-  | Tuint32 -> int
-  | Tuint64 -> int64
-  | Tdouble -> float
-  | Tstring -> string
-  | Tsignature -> obus_dtypes
-  | Tobject_path -> path
-  | Tarray(t) -> list (default_caml_type t)
-  | Tdict(tk, tv) -> list (tuple [default_caml_type tk; default_caml_type tv])
-  | Tstructure(ts) -> tuple (List.map default_caml_type ts)
-  | Tvariant -> obus_value
+let default_caml_type t =
+  let aux_basic = function
+    | `byte -> char
+    | `boolean -> bool
+    | `int16 -> int
+    | `int32 -> int
+    | `int64 -> int64
+    | `uint16 -> int
+    | `uint32 -> int
+    | `uint64 -> int64
+    | `double -> float
+    | `string -> string
+    | `signature -> obus_types
+    | `object_path -> path
+  in
+  let rec aux = function
+    | #dbus_basic_type as t -> aux_basic t
+    | `array(t) -> list (aux t)
+    | `dict(tk, tv) -> list (tuple [aux_basic tk; aux tv])
+    | `structure(ts) -> tuple (List.map aux ts)
+    | `variant -> obus_value
+  in
+    aux t
 
 let mktyp dtyp = function
   | None -> default_caml_type dtyp
@@ -61,7 +67,11 @@ let dir_both = dir_in @ dir_out
 
 let adname = ars "name"
 let acname = aos "cname"
-let adtype = ar "type" dtype_of_signature
+let adtype = ar "type" (fun s -> match dbus_type_of_signature s with
+                          | `seq [t] -> t
+                          | #dbus_single_type as t -> t
+                          | _ -> failwith (Printf.sprintf
+                                             "not a single type: %S" s))
 let actype = ao "ctype" caml_type_of_string
 
 let arguments dirs =

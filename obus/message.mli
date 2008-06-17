@@ -19,7 +19,7 @@ type error_name = string
 type reply_serial = serial
 type destination = string
 type sender = string
-type body = Values.values
+type body = Values.t list
 
 type method_call_type =
     [ `Method_call of path * interface option * member ]
@@ -57,7 +57,7 @@ type ('typ, 'body) _message = {
   body : 'body;
 }
 
-type 'a message = ('a, Values.values) _message
+type 'a message = ('a, Values.t list) _message
 
 val flags : ('a, 'b) _message -> flags
 val serial : ('a, 'b) _message -> serial
@@ -67,8 +67,8 @@ val sender : ('a, 'b) _message -> sender option
 val body : ('a, 'b) _message -> 'b
 
 val signature : 'a message -> string
-  (** shorthand for [(Values.signature_of_dtypes
-      (Values.dtypes_of_values (body message)))] *)
+  (** shorthand for [(Types.to_signature (List.map Values.typ (body
+      message)))] *)
 
 type t = any_type message
 

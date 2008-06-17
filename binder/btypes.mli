@@ -1,6 +1,6 @@
 (*
- * types.mli
- * ---------
+ * btypes.mli
+ * ----------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -28,13 +28,11 @@ val float : caml_type
 val bool : caml_type
 val char : caml_type
 val string : caml_type
-val path : caml_type
 val list : caml_type -> caml_type
   (** Standart caml types *)
+val path : caml_type
 val obus_value : caml_type
-val obus_values : caml_type
-val obus_dtype : caml_type
-val obus_dtypes : caml_type
+val obus_types : caml_type
   (** Types specific to obus *)
 
 val list_of_tuple : caml_type -> caml_type list
@@ -62,29 +60,30 @@ type ident = Camlp4.PreCast.Ast.ident
 type expr = Camlp4.PreCast.Ast.expr
 type patt = Camlp4.PreCast.Ast.patt
 
-type dtype =
-  | Tbyte
-  | Tboolean
-  | Tint16
-  | Tint32
-  | Tint64
-  | Tuint16
-  | Tuint32
-  | Tuint64
-  | Tdouble
-  | Tstring
-  | Tsignature
-  | Tobject_path
-  | Tarray of dtype
-  | Tdict of dtype * dtype
-  | Tstructure of dtype list
-  | Tvariant
+type dbus_basic_type =
+    [ `byte
+    | `boolean
+    | `int16
+    | `int32
+    | `int64
+    | `uint16
+    | `uint32
+    | `uint64
+    | `double
+    | `string
+    | `signature
+    | `object_path ]
 
-val dtype_of_signature : string -> dtype
+type dbus_single_type =
+    [ dbus_basic_type
+    | `array of dbus_single_type
+    | `dict of dbus_basic_type * dbus_single_type
+    | `structure of dbus_single_type list
+    | `variant ]
 
 type dbus_type =
-  | Tsingle of dtype
-  | Tseq of dtype list
+    [ dbus_single_type
+    | `seq of dbus_single_type list ]
 
 val dbus_type_of_signature : string -> dbus_type
 val signature_of_dbus_type : dbus_type -> string

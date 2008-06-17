@@ -1,3 +1,4 @@
+open Printf
 open Ocamlbuild_plugin
 open Command (* no longer needed for OCaml >= 3.10.2 *)
 
@@ -10,22 +11,22 @@ struct
 
   (* Modules shared by all libraries *)
   let common_modules =
-    ["Constant";
-     "Util";
-     "Common"]
+    ["common/constant";
+     "common/util"]
 
   (* Modules shared by obus and obus_thread *)
   let obus_modules =
-    ["AuthLexer";
-     "AddrLexer";
-     "OBus"]
+    ["obus/authLexer";
+     "obus/addrLexer";
+     "obus/OBus"]
 
-  let obus_thread_module = "with_threads/ThreadImplem"
-  let obus_no_thread_module = "without_threads/ThreadImplem"
+  let obus_thread_module = "obus/with_threads/threadImplem"
+  let obus_no_thread_module = "obus/without_threads/threadImplem"
 
   (* Sub-modules of the OBus module *)
   let obus_pack_files =
-    ["info";
+    ["types";
+     "info";
      "path";
      "wire";
      "message";
@@ -44,14 +45,8 @@ struct
      "signal";
      "DBus"]
 
-    (* Files of binder which use camlp4 quotation for caml ast *)
-  let code_generators =
-    ["genSerializer";
-     "helpers";
-     "genImplem";
-     "types";
-     "obus-binder";
-     "compile"]
+  (* Hidden sub-modules (must not appears in documentation) *)
+  let hidden = [ "wire"; "wireMessage" ]
 
   let syntaxes = ["pa_log"; "pa_seq"; "trace"]
 end
@@ -80,7 +75,7 @@ let intern_lib dir lib =
 let _ =
   List.iter
     (fun fname ->
-       tag_file (Printf.sprintf "obus/%s.cmx" fname) ["for-pack(OBus)"])
+       tag_file (sprintf "obus/%s.cmx" fname) ["for-pack(OBus)"])
     Config.obus_pack_files;
 
   dispatch begin function
@@ -142,21 +137,26 @@ let _ =
         intern_lib "obus" "obus";
         intern_lib "obus" "obus-thread";
 
+
+
         rule "obus_pack"
           ~prod:"obus/OBus.mlpack"
-          (fun _ _ -> Echo(List.map (fun s -> String.capitalize s ^ "\n") Config.obus_pack_files,
+          (fun _ _ -> Echo(List.map (sprintf "%a\n" (fun _ -> module_name_of_pathname)) Config.obus_pack_files,
                            "obus/OBus.mlpack"));
 
         rule "obus_mli_to_install"
           ~prod:"lib-dist"
-          (fun _ _ -> Echo(List.map (fun s -> "obus/" ^ s ^ ".mli\n") Config.obus_pack_files,
+          (fun _ _ -> Echo(List.map (sprintf "obus/%s.mli\n")
+                             (List.filter
+                                (fun s -> not (List.mem s Config.hidden))
+                                Config.obus_pack_files),
                            "lib-dist"));
 
         rule "obus_doc"
           ~prod:"obus.odocl"
-          (fun _ _ -> Echo(List.map (fun s -> "obus/" ^ String.capitalize s ^ "\n")
+          (fun _ _ -> Echo(List.map (sprintf "obus/%a\n" (fun _ -> module_name_of_pathname))
                              (List.filter
-                                (fun s -> not (List.mem s ["wire"; "wireMessage"]))
+                                (fun s -> not (List.mem s Config.hidden))
                                 Config.obus_pack_files),
                            "obus.odocl"));
 
@@ -165,9 +165,9 @@ let _ =
             ~prod:filename
             ~deps:[]
             (fun _ _ -> Echo(List.map (fun s -> s ^ "\n")
-                               (prepend "common" Config.common_modules
-                                @ prepend "obus" additional_modules
-                                @ prepend "obus" Config.obus_modules),
+                               (Config.common_modules
+                                @ additional_modules
+                                @ Config.obus_modules),
                              filename)) in
 
           library_rule "obus.mllib"

@@ -15,7 +15,7 @@ type error_name = string
 type reply_serial = serial
 type destination = string
 type sender = string
-type body = Values.values
+type body = Values.t list
 
 type flags = {
   no_reply_expected : bool;
@@ -53,7 +53,7 @@ type ('a, 'b) _message = {
   sender : sender option;
   body : 'b;
 }
-type 'a message = ('a, Values.values) _message
+type 'a message = ('a, Values.t list) _message
 
 let flags message = message.flags
 let serial message = message.serial
@@ -62,7 +62,7 @@ let destination message = message.destination
 let sender message = message.sender
 let body message = message.body
 
-let signature message = Values.signature_of_dtypes (Values.dtypes_of_values (body message))
+let signature message = Types.to_signature (List.map Values.typ (body message))
 
 type t = any_type message
 type method_call = method_call_type message

@@ -8,7 +8,7 @@
  *)
 
 open Camlp4.PreCast
-open Types
+open Btypes
 open Instruction
 open Helpers
 open Compile
@@ -69,20 +69,20 @@ let flat instrs =
 
 (* Rule for structure *)
 let structure_rule = function
-  | x, Tsingle (Tstructure y) ->
-      dep [< (x, Tseq y) >] (fun x -> Istructure :: x)
+  | x, `structure y ->
+      dep [< (x, `seq y) >] (fun x -> Istructure :: x)
   | _ -> fail
 
 (* Rule for dealing with tuple in types *)
 let tuple_rule = function
-  | Tuple [], Tseq [] ->
+  | Tuple [], `seq [] ->
       success []
   | Tuple [x], y ->
       dep [< (x, y) >] flat
-  | x, Tseq [y] ->
-      dep [< (x, Tsingle y) >] (fun x -> x)
-  | Tuple(x :: lx), Tseq(y :: ly) ->
-      dep [< (x, Tsingle y); (Tuple lx, Tseq ly) >]
+  | x, `seq [y] ->
+      dep [< (x, (y : dbus_single_type :> dbus_type)) >] (fun x -> x)
+  | Tuple(x :: lx), `seq(y :: ly) ->
+      dep [< (x, (y : dbus_single_type :> dbus_type)); (Tuple lx, `seq ly) >]
         (fun hd tl -> flat hd @ tl)
   | _ -> fail
 
@@ -93,10 +93,10 @@ let rec last = function
 
 (* Match two tuple, starting by the end *)
 let reverse_tuple_rule = function
-  | Tuple lx, Tseq ly -> begin
+  | Tuple lx, `seq ly -> begin
       match last lx, last ly with
         | (Some x, lx), (Some y, ly) ->
-            dep [< (x, Tsingle y); (Tuple lx, Tseq ly) >]
+            dep [< (x, (y : dbus_single_type :> dbus_type)); (Tuple lx, `seq ly) >]
               (fun a b -> b @ flat a)
         | _ -> fail
     end
@@ -107,30 +107,28 @@ let (>>=) x f = match x with
   | None -> fail
 
 let default_actions =
-  [ (char, Tbyte), "char_byte";
-    (int, Tbyte), "int_byte";
-    (int, Tint16), "int_int16";
-    (int, Tint32), "int_int32";
-    (int, Tint64), "int_int64";
-    (int, Tuint16), "int_uint16";
-    (int, Tuint32), "int_uint32";
-    (int, Tuint64), "int_uint64";
-    (int32, Tint32), "int32_int32";
-    (int64, Tint64), "int64_int64";
-    (int32, Tuint32), "int32_uint32";
-    (int64, Tuint64), "int64_uint64";
-    (float, Tdouble), "float_double";
-    (bool, Tboolean), "bool_boolean";
-    (string, Tstring), "string_string";
-    (string, Tsignature), "string_signature";
-    (path, Tobject_path), "path_object_path";
-    (obus_value, Tvariant), "variant";
-    (obus_dtypes, Tsignature), "dtypes" ]
+  [ (char, `byte), "char_byte";
+    (int, `byte), "int_byte";
+    (int, `int16), "int_int16";
+    (int, `int32), "int_int32";
+    (int, `int64), "int_int64";
+    (int, `uint16), "int_uint16";
+    (int, `uint32), "int_uint32";
+    (int, `uint64), "int_uint64";
+    (int32, `int32), "int32_int32";
+    (int64, `int64), "int64_int64";
+    (int32, `uint32), "int32_uint32";
+    (int64, `uint64), "int64_uint64";
+    (float, `double), "float_double";
+    (bool, `boolean), "bool_boolean";
+    (string, `string), "string_string";
+    (string, `signature), "string_signature";
+    (path, `object_path), "path_object_path";
+    (obus_value, `variant), "variant";
+    (obus_types, `signature), "types_signature" ]
 
-let common_rule = function
-  | x, Tsingle y ->
-      Util.assoc (x, y) default_actions >>= (fun act -> success [Iaction act])
-  | _ -> fail
+let common_rule eqn =
+  Util.assoc eqn default_actions >>= (fun act -> success [Iaction act])
 
 let common_rules =
   [ common_rule;
@@ -193,10 +191,10 @@ struct
            )>>, env)
 
   let rule_array typ elt_type ?(reverse=false) empty add = function
-    | x, Tsingle (Tarray y) ->
+    | x, `array y ->
         ifmatch x typ elt_type
           (fun elt_type ->
-             dep [< (elt_type, Tsingle y) >]
+             dep [< (elt_type, (y : dbus_single_type :> dbus_type)) >]
                (fun instrs -> [Iarray(make_array_reader reverse empty
                                         (function
                                            | [x] -> add x
@@ -207,12 +205,12 @@ struct
     | _ -> fail
 
   let rule_dict typ key_type val_type ?(reverse=false) empty add = function
-    | x, Tsingle (Tdict(k, v)) ->
+    | x, `dict(k, v) ->
         match_types typ x
         >>= (fun sub ->
                let key_type = substitute sub key_type in
                let val_type = substitute sub val_type in
-                 dep [< (key_type, Tsingle k); (val_type, Tsingle v) >]
+                 dep [< (key_type, (k : dbus_basic_type :> dbus_type)); (val_type, (v : dbus_single_type :> dbus_type)) >]
                    (fun kis vis -> [Iarray(make_array_reader reverse empty
                                              (function
                                                 | [x; y] -> add x y
@@ -220,7 +218,7 @@ struct
                                                     ("invalid number of read values for an dict: "
                                                      ^ string_of_int (List.length l)))
                                              (Istructure :: flat kis @ flat vis),
-                                           Tstructure [k; v])]))
+                                           `structure [(k : dbus_basic_type :> dbus_single_type); v])]))
     | _ -> fail
 
   let default_rules =
@@ -247,10 +245,10 @@ struct
   let mk_fold elt acc expr = (<:expr< fun $elt$ $acc$ -> $expr$ >>)
 
   let rule_array typ elt_type ?(mk_fold_func=mk_fold) fold = function
-    | x, Tsingle (Tarray y) ->
+    | x, `array y ->
         ifmatch x typ elt_type
           (fun elt_type ->
-             dep [< (elt_type, Tsingle y) >]
+             dep [< (elt_type, (y : dbus_single_type :> dbus_type)) >]
                (fun instrs -> [Iarray(make_array_writer
                                         (function
                                            | [x] -> mk_fold_func (patt_of_id x)
@@ -263,12 +261,12 @@ struct
   let mk_fold k v acc expr = (<:expr< fun $k$ $v$ $acc$ -> $expr$ >>)
 
   let rule_dict typ key_type val_type ?(mk_fold_func=mk_fold) fold = function
-    | x, Tsingle (Tdict(k, v)) ->
+    | x, `dict(k, v) ->
         match_types typ x
         >>= (fun sub ->
                let key_type = substitute sub key_type in
                let val_type = substitute sub val_type in
-                 dep [< (key_type, Tsingle k); (val_type, Tsingle v) >]
+                 dep [< (key_type, (k : dbus_basic_type :> dbus_type)); (val_type, (v : dbus_single_type :> dbus_type)) >]
                    (fun kis vis -> [Iarray(make_array_writer
                                              (function
                                                 | [x; y] -> mk_fold_func (patt_of_id x) (patt_of_id y)
@@ -276,7 +274,7 @@ struct
                                                     ("invalid number of written values for an dict: "
                                                      ^ string_of_int (List.length l)))
                                              fold (Istructure :: flat kis @ flat vis),
-                                           Tstructure [k; v])]))
+                                           `structure [(k : dbus_basic_type :> dbus_single_type); v])]))
     | _ -> fail
 
   let default_rules =

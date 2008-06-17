@@ -9,7 +9,7 @@
 
 (** Generate a function for marshaling or unmarshaling caml values *)
 
-open Types
+open Btypes
 
 type eqn = caml_type * dbus_type
     (** An equation is a pair of a caml type x and a dbus type

@@ -25,8 +25,8 @@ let notify connection title msg =
              string "info"; (* icon *)
              string title; (* summary *)
              string msg; (* body *)
-             array tstring []; (* actions *)
-             dict tstring tvariant []; (* hints *)
+             array `string []; (* actions *)
+             dict `string `variant []; (* hints *)
              int32 5000l] (* timeout *)
       () in
 

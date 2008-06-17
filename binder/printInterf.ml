@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Types
+open Btypes
 open Introspect
 open Printf
 open Tree

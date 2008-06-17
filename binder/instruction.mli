@@ -10,13 +10,13 @@
 (** Describe the intermediate instruction that are used to generated
     the expression of a reading/writing function *)
 
-open Types
+open Btypes
 
 type 'env t =
   | Istructure
       (** Mark the beginning of reading/writing a structure, only used
           for padding *)
-  | Iarray of ('env -> expr * 'env) * dtype
+  | Iarray of ('env -> expr * 'env) * dbus_single_type
       (** [Iarray(mkfunc, elt_type)] read write an array with
           [mkfunc]. [elt_type] is the type of the element of the
           array. This is needed for the initial padding. *)

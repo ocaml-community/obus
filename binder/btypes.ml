@@ -1,6 +1,6 @@
 (*
- * types.ml
- * --------
+ * btypes.ml
+ * ---------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -82,17 +82,6 @@ let caml_type_of_string str =
   in
     parse_type (Caml.Gram.parse Caml.ctyp _loc (Stream.of_string str))
 
-include Common
-
-type dbus_type =
-  | Tsingle of dtype
-  | Tseq of dtype list
-
-let dbus_type_of_signature str = Tsingle(dtype_of_signature str)
-let signature_of_dbus_type dt = match dt with
-  | Tsingle t -> signature_of_dtype t
-  | Tseq t -> signature_of_dtypes t
-
 let unit = tuple []
 let int = typ "int" []
 let int32 = typ "int32" []
@@ -101,12 +90,43 @@ let float = typ "float" []
 let bool = typ "bool" []
 let char = typ "char" []
 let string = typ "string" []
-let path = typ "Path.t" []
 let list x = typ "list" [x]
-let obus_value = typ "Values.value" []
-let obus_values = typ "Values.values" []
-let obus_dtype = typ "Values.dtype" []
-let obus_dtypes = typ "Values.dtypes" []
+let path = typ "Path.t" []
+let obus_value = typ "Values.t" []
+let obus_types = list (typ "Types.t" [])
+
+type dbus_basic_type =
+    [ `byte
+    | `boolean
+    | `int16
+    | `int32
+    | `int64
+    | `uint16
+    | `uint32
+    | `uint64
+    | `double
+    | `string
+    | `signature
+    | `object_path ]
+
+type dbus_single_type =
+    [ dbus_basic_type
+    | `array of dbus_single_type
+    | `dict of dbus_basic_type * dbus_single_type
+    | `structure of dbus_single_type list
+    | `variant ]
+
+type dbus_type =
+    [ dbus_single_type
+    | `seq of dbus_single_type list ]
+
+let dbus_type_of_signature str = `seq (CommonTypes.of_signature str)
+let signature_of_dbus_type dt = CommonTypes.to_signature
+  (match dt with
+     | #dbus_single_type as t -> [t]
+     | `seq tl -> tl)
 
 let string_of_eqn (ct, dt) =
-  string_of_caml_type ct ^ " = " ^ signature_of_dbus_type dt
+  string_of_caml_type ct ^ " = " ^ CommonTypes.to_string (match dt with
+                                                            | `seq t -> `structure t
+                                                            | #dbus_single_type as t -> t)

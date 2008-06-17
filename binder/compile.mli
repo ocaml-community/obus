@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Types
+open Btypes
 
 type env
   (** The environment represent the list of already generated

@@ -38,7 +38,7 @@ type intern_method_call_handler_result =
   | Intern_mchr_no_such_object
   | Intern_mchr_ok of intern_handler
 
-type body = Values.values
+type body = Values.t list
 
 type filter_id = int
 type filter = Message.t -> unit
@@ -194,17 +194,17 @@ let write_message connection message =
 
 let intern_user_to_send message =
   { message with body =
-      (Values.signature_of_dtypes (Values.dtypes_of_values (body message)),
+      (Types.to_signature (List.map Values.typ (body message)),
        fun byte_order buffer ptr -> match byte_order with
-         | Wire.Little_endian -> Values.LEWriter.write_values buffer ptr (body message)
-         | Wire.Big_endian -> Values.BEWriter.write_values buffer ptr (body message)) }
+         | Wire.Little_endian -> Values.LEWriter.write buffer ptr (body message)
+         | Wire.Big_endian -> Values.BEWriter.write buffer ptr (body message)) }
 
 let intern_recv_to_user message =
   let signature, (byte_order, buffer, ptr) = body message in
-  let dtypes = Values.dtypes_of_signature signature in
+  let dtypes = Types.of_signature signature in
     { message with body = match byte_order with
-        | Wire.Little_endian -> snd (Values.LEReader.read_values dtypes buffer ptr)
-        | Wire.Big_endian -> snd (Values.BEReader.read_values dtypes buffer ptr) }
+        | Wire.Little_endian -> snd (Values.LEReader.read dtypes buffer ptr)
+        | Wire.Big_endian -> snd (Values.BEReader.read dtypes buffer ptr) }
 
 (* Sending messages *)
 

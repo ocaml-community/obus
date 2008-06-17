@@ -8,7 +8,7 @@
  *)
 
 open Camlp4.PreCast
-open Types
+open Btypes
 open Helpers
 open Instruction
 
@@ -26,22 +26,22 @@ let lookup expr env =
         (id, (expr, id) :: env)
 
 let padding_of_type = function
-  | Tbyte -> 1
-  | Tboolean -> 4
-  | Tint16 -> 2
-  | Tint32 -> 4
-  | Tint64 -> 8
-  | Tuint16 -> 2
-  | Tuint32 -> 4
-  | Tuint64 -> 8
-  | Tdouble -> 8
-  | Tstring -> 4
-  | Tsignature -> 1
-  | Tobject_path -> 4
-  | Tarray _ -> 4
-  | Tdict _ -> 4
-  | Tstructure _ -> 8
-  | Tvariant -> 1
+  | `byte -> 1
+  | `boolean -> 4
+  | `int16 -> 2
+  | `int32 -> 4
+  | `int64 -> 8
+  | `uint16 -> 2
+  | `uint32 -> 4
+  | `uint64 -> 8
+  | `double -> 8
+  | `string -> 4
+  | `signature -> 1
+  | `object_path -> 4
+  | `array _ -> 4
+  | `dict _ -> 4
+  | `structure _ -> 8
+  | `variant -> 1
 
 let var_id n =
   if n >= 0
