@@ -254,7 +254,7 @@ struct
   let terminated str i = String.unsafe_get str i = '\x00'
 end
 
-module RWTypes = WireTypes.Make(Types)(WireTypesParams)
+module WireTypes = CommonTypes.MakeWire(WireTypesParams)
 
 let write_string buffer i str =
   let len = String.length str in
@@ -350,10 +350,10 @@ struct
     write_string buffer (write_int_byte buffer i (String.length v)) v
 
   let write_types_signature buffer i ts =
-    let len = RWTypes.signature_size ts in
+    let len = CommonTypes.signature_size ts in
     let i = write_int_byte buffer i len in
       if i + len > String.length buffer then raise Out_of_bounds;
-      let i = RWTypes.write buffer i ts in
+      let i = WireTypes.write buffer i ts in
         String.unsafe_set buffer i '\x00';
         i + 1
 
@@ -534,9 +534,9 @@ struct
       if String.unsafe_get buffer (i + len) <> '\x00'
       then raise (Reading_error "signature does not end with a null byte");
       try
-        RWTypes.read buffer i
+        WireTypes.read buffer i
       with
-          WireTypes.Fail(j, msg) ->
+          CommonTypes.Parse_failure(j, msg) ->
             raise (Reading_error
                      (sprintf "invalid signature %S, at position %d: %s"
                         (String.sub buffer i len) (j - i) msg))

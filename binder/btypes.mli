@@ -60,27 +60,8 @@ type ident = Camlp4.PreCast.Ast.ident
 type expr = Camlp4.PreCast.Ast.expr
 type patt = Camlp4.PreCast.Ast.patt
 
-type dbus_basic_type =
-    [ `byte
-    | `boolean
-    | `int16
-    | `int32
-    | `int64
-    | `uint16
-    | `uint32
-    | `uint64
-    | `double
-    | `string
-    | `signature
-    | `object_path ]
-
-type dbus_single_type =
-    [ dbus_basic_type
-    | `array of dbus_single_type
-    | `dict of dbus_basic_type * dbus_single_type
-    | `structure of dbus_single_type list
-    | `variant ]
-
+type dbus_basic_type = CommonTypes.basic
+type dbus_single_type = CommonTypes.t
 type dbus_type =
     [ dbus_single_type
     | `seq of dbus_single_type list ]

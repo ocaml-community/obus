@@ -12,7 +12,8 @@ struct
   (* Modules shared by all libraries *)
   let common_modules =
     ["common/constant";
-     "common/util"]
+     "common/util";
+     "common/commonTypes"]
 
   (* Modules shared by obus and obus_thread *)
   let obus_modules =

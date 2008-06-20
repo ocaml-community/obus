@@ -25,24 +25,6 @@ let lookup expr env =
     | None -> let id = "f" ^ string_of_int (List.length env) in
         (id, (expr, id) :: env)
 
-let padding_of_type = function
-  | `byte -> 1
-  | `boolean -> 4
-  | `int16 -> 2
-  | `int32 -> 4
-  | `int64 -> 8
-  | `uint16 -> 2
-  | `uint32 -> 4
-  | `uint64 -> 8
-  | `double -> 8
-  | `string -> 4
-  | `signature -> 1
-  | `object_path -> 4
-  | `array _ -> 4
-  | `dict _ -> 4
-  | `structure _ -> 8
-  | `variant -> 1
-
 let var_id n =
   if n >= 0
   then (<:ident< $lid:"v" ^ string_of_int n$ >>)
@@ -78,8 +60,8 @@ let compile_reader instrs return env =
                fun (expr, env) ->
                  let array_reader_expr, env = mkexpr env in
                  let id, env = lookup array_reader_expr env in
-                 let array_func = match padding_of_type etyp with
-                   | 8 -> "read_array8"
+                 let array_func = match etyp with
+                   | #CommonTypes.aligned_on_8_boundary -> "read_array8"
                    | _ -> "read_array"
                  in
                    (<:expr<
@@ -133,8 +115,8 @@ let compile_writer instrs return env =
             | Iarray(mkexpr, etyp) ->
                 let array_writer_expr, env = mkexpr env in
                 let id, env = lookup array_writer_expr env in
-                let array_func = match padding_of_type etyp with
-                  | 8 -> "write_array8"
+                let array_func = match etyp with
+                  | #CommonTypes.aligned_on_8_boundary -> "write_array8"
                   | _ -> "write_array"
                 in
                   (env, n + 1,

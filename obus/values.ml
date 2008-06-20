@@ -213,11 +213,6 @@ module type Writer = sig
   val write : t list writer
 end
 
-open WireTypes
-
-type aligned_on_8_boundary =
-    [ `int64 | `uint64 | `double | `structure of Types.t list ]
-
 module MakeReader(Reader : Wire.Reader) =
 struct
   open Reader
@@ -241,7 +236,7 @@ struct
     | `array t ->
         let i, v =
           (match t with
-             | #aligned_on_8_boundary -> read_array8
+             | #CommonTypes.aligned_on_8_boundary -> read_array8
              | _ -> read_array) (fun limit buffer i ->
                                    read_until_rev
                                      (fun i cont ->
@@ -304,7 +299,7 @@ struct
     | Object_path v -> write_path_object_path buffer i v
     | Array(t, vs) ->
         (match t with
-           | #aligned_on_8_boundary -> write_array8
+           | #CommonTypes.aligned_on_8_boundary -> write_array8
            | _ -> write_array)
           (fun buffer i vs -> List.fold_left (write_value buffer) i vs)
           buffer i vs
