@@ -44,7 +44,7 @@ let tboolean = Tboolean
 let tint16 = Tint16
 let tint32 = Tint32
 let tint64 = Tint64
-let tint16 = Tint16
+let tuint16 = Tint16
 let tuint32 = Tuint32
 let tuint64 = Tuint64
 let tdouble = Tdouble
@@ -56,14 +56,16 @@ let tarray t = Tarray t
 let tdict tk tv = Tdict(tk, tv)
 let tstruct tl = Tstruct tl
 let tvariant = Tvariant
-let tcons ta tb = ta :: tb
+let tcons : single -> sequence -> sequence = fun ta tb -> ta :: tb
 let tnil = []
 
 module type Matcher = sig
   type ('a, 'cl) branch
 
   class matcher : object
-    method fail : 'a. 'a
+    method default_basic : 'a. ('a, basic) ty -> ('a, basic) branch
+    method default_single : 'a. ('a, single) ty -> ('a, single) branch
+    method default_sequence : 'a. ('a, sequence) ty -> ('a, sequence) branch
 
     method byte : (char, basic) branch
     method boolean : (bool, basic) branch
@@ -98,29 +100,31 @@ struct
   type ('a, 'cl) branch = ('a, 'cl) Branch.t
 
   class matcher = object(self)
-    method fail : 'a. 'a = failwith ("OBus_dynamic: match failure")
+    method default_basic : 'a. ('a, basic) ty -> ('a, basic) branch = fun t -> failwith ("OBus_dynamic.Matcher.matcher#match_basic: match failure")
+    method default_single : 'a. ('a, single) ty -> ('a, single) branch = fun t -> failwith ("OBus_dynamic.Matcher.matcher#match_single: match failure")
+    method default_sequence : 'a. ('a, sequence) ty -> ('a, sequence) branch = fun t -> failwith ("OBus_dynamic.Matcher.matcher#match_sequence: match failure")
 
-    method byte : (char, basic) branch = self#fail
-    method boolean : (bool, basic) branch = self#fail
-    method int16 : (int, basic) branch = self#fail
-    method int32 : (int32, basic) branch = self#fail
-    method int64 : (int64, basic) branch = self#fail
-    method uint16 : (int, basic) branch = self#fail
-    method uint32 : (int32, basic) branch = self#fail
-    method uint64 : (int64, basic) branch = self#fail
-    method double : (float, basic) branch = self#fail
-    method string : (string, basic) branch = self#fail
-    method signature : (signature, basic) branch = self#fail
-    method object_path : (OBus_path.t, basic) branch = self#fail
+    method byte : (char, basic) branch = self#default_basic tbyte
+    method boolean : (bool, basic) branch = self#default_basic tboolean
+    method int16 : (int, basic) branch = self#default_basic tint16
+    method int32 : (int32, basic) branch = self#default_basic tint32
+    method int64 : (int64, basic) branch = self#default_basic tint64
+    method uint16 : (int, basic) branch = self#default_basic tuint16
+    method uint32 : (int32, basic) branch = self#default_basic tuint32
+    method uint64 : (int64, basic) branch = self#default_basic tuint64
+    method double : (float, basic) branch = self#default_basic tdouble
+    method string : (string, basic) branch = self#default_basic tstring
+    method signature : (signature, basic) branch = self#default_basic tsignature
+    method object_path : (OBus_path.t, basic) branch = self#default_basic tobject_path
 
-    method basic : 'a. ('a, basic) ty -> ('a, single) branch = self#fail
-    method array : 'a. ('a, single) ty -> ('a list, single) branch = self#fail
-    method dict : 'a 'b. ('a, basic) ty -> ('b, single) ty -> (('a * 'b) list, single) branch = self#fail
-    method structure : 'a. ('a, sequence) ty -> ('a, single) branch = self#fail
-    method variant : (variant, single) branch = self#fail
+    method basic : 'a. ('a, basic) ty -> ('a, single) branch = fun t -> self#default_single (tbasic t)
+    method array : 'a. ('a, single) ty -> ('a list, single) branch = fun t -> self#default_single (tarray t)
+    method dict : 'a 'b. ('a, basic) ty -> ('b, single) ty -> (('a * 'b) list, single) branch = fun tk tv -> self#default_single (tdict tk tv)
+    method structure : 'a. ('a, sequence) ty -> ('a, single) branch = fun tl -> self#default_single (tstruct tl)
+    method variant : (variant, single) branch = self#default_single tvariant
 
-    method cons : 'a 'b. ('a, single) ty -> ('b, sequence) ty -> ('a * 'b, sequence) branch = self#fail
-    method nil : (unit, sequence) branch = self#fail
+    method cons : 'a 'b. ('a, single) ty -> ('b, sequence) ty -> ('a * 'b, sequence) branch = fun ta tb -> self#default_sequence (tcons ta tb)
+    method nil : (unit, sequence) branch = self#default_sequence tnil
 
     method match_basic : 'a. ('a, basic) ty -> ('a, basic) branch = function
       | Tbyte -> Obj.magic (self#byte)
@@ -201,6 +205,12 @@ struct
   and make_sequence : ('a, sequence) ty -> ('a, sequence) Combinators.t = function
     | t :: tl -> Obj.magic (ccons (make_single t) (make_sequence tl))
     | [] -> Obj.magic cnil
+
+  class make = object
+    method match_basic : 'a. ('a, basic) ty -> ('a, basic) Combinators.t = make_basic
+    method match_single : 'a. ('a, single) ty -> ('a, single) Combinators.t = make_single
+    method match_sequence : 'a. ('a, sequence) ty -> ('a, sequence) Combinators.t = make_sequence
+  end
 end
 
 module Printers =

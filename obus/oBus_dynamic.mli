@@ -83,7 +83,7 @@ val tboolean : (bool, basic) ty
 val tint16 : (int, basic) ty
 val tint32 : (int32, basic) ty
 val tint64 : (int64, basic) ty
-val tint16 : (int, basic) ty
+val tuint16 : (int, basic) ty
 val tuint32 : (int32, basic) ty
 val tuint64 : (int64, basic) ty
 val tdouble : (float, basic) ty
@@ -104,7 +104,9 @@ module type Matcher = sig
   type ('a, 'cl) branch
 
   class matcher : object
-    method fail : 'a. 'a
+    method default_basic : 'a. ('a, basic) ty -> ('a, basic) branch
+    method default_single : 'a. ('a, single) ty -> ('a, single) branch
+    method default_sequence : 'a. ('a, sequence) ty -> ('a, sequence) branch
 
     method byte : (char, basic) branch
     method boolean : (bool, basic) branch
@@ -189,6 +191,12 @@ module Maker(Combinators : Combinators) : sig
   val make_basic : ('a, basic) ty -> ('a, basic) Combinators.t
   val make_single : ('a, single) ty -> ('a, single) Combinators.t
   val make_sequence : ('a, sequence) ty -> ('a, sequence) Combinators.t
+
+  class make : object
+    method match_basic : 'a. ('a, basic) ty -> ('a, basic) Combinators.t
+    method match_single : 'a. ('a, single) ty -> ('a, single) Combinators.t
+    method match_sequence : 'a. ('a, sequence) ty -> ('a, sequence) Combinators.t
+  end
 end
 
 (** {3 Unsafe operations} *)
