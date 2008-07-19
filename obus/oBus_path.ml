@@ -1,6 +1,6 @@
 (*
- * path.ml
- * -------
+ * oBus_path.ml
+ * ------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -24,6 +24,8 @@ let append path elt = match path with
         unsafe_set result path_len '/';
         unsafe_blit elt 0 result (path_len + 1) elt_len;
         result
+
+let (/) = append
 
 let make elts =
   let path = create (List.fold_left (fun len elt -> len + length elt + 1) 0 elts)  in

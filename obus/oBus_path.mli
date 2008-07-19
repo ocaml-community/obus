@@ -1,6 +1,6 @@
 (*
- * path.mli
- * --------
+ * oBus_path.mli
+ * -------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -21,6 +21,7 @@ val empty : t
   (** empty path *)
 
 val append : t -> elt -> t
+val (/) : t -> elt -> t
   (** [append path x] append [x] to [t]. [x] must not contain ['/'] *)
 
 val split : t -> elt list
