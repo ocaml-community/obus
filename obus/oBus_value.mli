@@ -72,146 +72,165 @@ val string_of_sequence : sequence -> string
 
 (** {6 Typed construction/deconstruction} *)
 
-type ('a, 'cl) ty
-  (** Description of a type, ['a] is the caml type used representing a
-      DBus type and ['cl] is the class of the type *)
+exception Cast_failure
+  (** Raised when a cast fail *)
 
-type cl_basic = [ `basic | `single | `sequence ]
-type cl_single = [ `single | `sequence ]
-type cl_sequence = [ `sequence ]
-    (** Predicats on DBus types *)
+class type ['a] ty_sequence = object
+  method make_sequence : 'a -> sequence
+  method cast_sequence : sequence -> 'a
+  method type_sequence : OBus_types.sequence
+end
 
-val make_basic : ('a, [> `basic ]) ty -> 'a -> basic
-val make_single : ('a, [> `single ]) ty -> 'a -> single
-val make_sequence : ('a, [> `sequence ]) ty -> 'a -> sequence
+class virtual ['a] ty_single : object
+  inherit ['a] ty_sequence
+    (** One single type can is seen as a sequence of exactly one
+        type *)
+
+  method virtual make_single : 'a -> single
+  method virtual cast_single : single -> 'a
+  method virtual type_single : OBus_types.single
+end
+
+class virtual ['a] ty_basic : object
+  inherit ['a] ty_single
+    (** A basic type is a single type *)
+
+  method virtual make_basic : 'a -> basic
+  method virtual cast_basic : basic -> 'a
+  method virtual type_basic : OBus_types.basic
+end
+
+val make_basic : 'a #ty_basic -> 'a -> basic
+val make_single : 'a #ty_single -> 'a -> single
+val make_sequence : 'a #ty_sequence -> 'a -> sequence
   (** Create a DBus value from a standart caml value *)
 
-exception Cast_failure
-
-val cast_basic : ('a, [> `basic ]) ty -> basic -> 'a
-val cast_single : ('a, [> `single ]) ty -> single -> 'a
-val cast_sequence : ('a, [> `sequence ]) ty -> sequence -> 'a
+val cast_basic : 'a #ty_basic -> basic -> 'a
+val cast_single : 'a #ty_single -> single -> 'a
+val cast_sequence : 'a #ty_sequence -> sequence -> 'a
   (** Cast a DBus value to a standart caml value. Raise a
       [Cast_failure] if types do not match *)
 
-val opt_cast_basic : ('a, [> `basic ]) ty -> basic -> 'a option
-val opt_cast_single : ('a, [> `single ]) ty -> single -> 'a option
-val opt_cast_sequence : ('a, [> `sequence ]) ty -> sequence -> 'a option
+val opt_cast_basic : 'a #ty_basic -> basic -> 'a option
+val opt_cast_single : 'a #ty_single -> single -> 'a option
+val opt_cast_sequence : 'a #ty_sequence -> sequence -> 'a option
   (** Same thing but return an option instead of raising an
       exception *)
 
-val type_of_basic_ty : ('a, [> `basic ]) ty -> OBus_types.basic
-val type_of_single_ty : ('a, [> `single ]) ty -> OBus_types.single
-val type_of_sequence_ty : ('a, [> `sequence ]) ty -> OBus_types.sequence
+val type_of_basic_ty : 'a #ty_basic -> OBus_types.basic
+val type_of_single_ty : 'a #ty_single -> OBus_types.single
+val type_of_sequence_ty : 'a #ty_sequence -> OBus_types.sequence
 
-type ('b, 'c) with_ty = { with_ty : 'a. ('a, 'b) ty -> 'c }
-val with_basic_ty : (cl_basic, 'a) with_ty -> OBus_types.basic -> 'a
-val with_single_ty : (cl_single, 'a) with_ty -> OBus_types.single -> 'a
-val with_sequence_ty : (cl_sequence, 'a) with_ty -> OBus_types.sequence -> 'a
+type 'a with_basic_ty = { with_basic_ty : 'b. 'b ty_basic -> 'a }
+type 'a with_single_ty = { with_single_ty : 'b. 'b ty_single -> 'a }
+type 'a with_sequence_ty = { with_sequence_ty : 'b. 'b ty_sequence -> 'a }
+val with_basic_ty : 'a with_basic_ty -> OBus_types.basic -> 'a
+val with_single_ty : 'a with_single_ty -> OBus_types.single -> 'a
+val with_sequence_ty : 'a with_sequence_ty -> OBus_types.sequence -> 'a
   (** Manipulate a typed representation of a type from an untyped one,
       this can be used to cast a DBus value without having to
       completely match its type *)
 
 (** {6 Typed constructors} *)
 
-val tbyte : (char, cl_basic) ty
-val tboolean : (bool, cl_basic) ty
-val tint16 : (int, cl_basic) ty
-val tint32 : (int32, cl_basic) ty
-val tint64 : (int64, cl_basic) ty
-val tuint16 : (int, cl_basic) ty
-val tuint32 : (int32, cl_basic) ty
-val tuint64 : (int64, cl_basic) ty
-val tdouble : (float, cl_basic) ty
-val tstring : (string, cl_basic) ty
-val tsignature : (OBus_types.signature, cl_basic) ty
-val tobject_path : (OBus_path.t, cl_basic) ty
+val tbyte : char ty_basic
+val tboolean : bool ty_basic
+val tint16 : int ty_basic
+val tint32 : int32 ty_basic
+val tint64 : int64 ty_basic
+val tuint16 : int ty_basic
+val tuint32 : int32 ty_basic
+val tuint64 : int64 ty_basic
+val tdouble : float ty_basic
+val tstring : string ty_basic
+val tsignature : OBus_types.signature ty_basic
+val tobject_path : OBus_path.t ty_basic
 
-val tarray : ('a, [> `single ]) ty -> ('a list, cl_single) ty
-val tdict : ('a, [> `basic ]) ty -> ('b, [> `single ]) ty -> (('a * 'b) list, cl_single) ty
-val tstruct : ('a, [> `sequence ]) ty -> ('a, cl_single) ty
-val tvariant : (single, cl_single) ty
+val tarray : 'a #ty_single -> 'a list ty_single
+val tdict : 'a #ty_basic -> 'b #ty_single -> ('a * 'b) list ty_single
+val tstruct : 'a #ty_sequence -> 'a ty_single
+val tvariant : single ty_single
 
-val tcons : ('a, [> `single ]) ty -> ('b, [> `sequence ]) ty -> ('a * 'b, cl_sequence) ty
-val tnil : (unit, cl_sequence) ty
+val tcons : 'a #ty_single -> 'b #ty_sequence -> ('a * 'b) ty_sequence
+val tnil : unit ty_sequence
 
 val tup0 :
-  (unit, cl_sequence) ty
+  unit ty_sequence
 val tup1 :
-  ('a1, [> `single ]) ty ->
-  ('a1, cl_sequence) ty
+  'a1 #ty_single ->
+  'a1 ty_sequence
 val tup2 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a1 * 'a2, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  ('a1 * 'a2) ty_sequence
 val tup3 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a3, [> `single ]) ty ->
-  ('a1 * 'a2 * 'a3, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  'a3 #ty_single ->
+  ('a1 * 'a2 * 'a3) ty_sequence
 val tup4 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a3, [> `single ]) ty ->
-  ('a4, [> `single ]) ty ->
-  ('a1 * 'a2 * 'a3 * 'a4, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  'a3 #ty_single ->
+  'a4 #ty_single ->
+  ('a1 * 'a2 * 'a3 * 'a4) ty_sequence
 val tup5 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a3, [> `single ]) ty ->
-  ('a4, [> `single ]) ty ->
-  ('a5, [> `single ]) ty ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  'a3 #ty_single ->
+  'a4 #ty_single ->
+  'a5 #ty_single ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5) ty_sequence
 val tup6 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a3, [> `single ]) ty ->
-  ('a4, [> `single ]) ty ->
-  ('a5, [> `single ]) ty ->
-  ('a6, [> `single ]) ty ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  'a3 #ty_single ->
+  'a4 #ty_single ->
+  'a5 #ty_single ->
+  'a6 #ty_single ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) ty_sequence
 val tup7 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a3, [> `single ]) ty ->
-  ('a4, [> `single ]) ty ->
-  ('a5, [> `single ]) ty ->
-  ('a6, [> `single ]) ty ->
-  ('a7, [> `single ]) ty ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  'a3 #ty_single ->
+  'a4 #ty_single ->
+  'a5 #ty_single ->
+  'a6 #ty_single ->
+  'a7 #ty_single ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7) ty_sequence
 val tup8 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a3, [> `single ]) ty ->
-  ('a4, [> `single ]) ty ->
-  ('a5, [> `single ]) ty ->
-  ('a6, [> `single ]) ty ->
-  ('a7, [> `single ]) ty ->
-  ('a8, [> `single ]) ty ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  'a3 #ty_single ->
+  'a4 #ty_single ->
+  'a5 #ty_single ->
+  'a6 #ty_single ->
+  'a7 #ty_single ->
+  'a8 #ty_single ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8) ty_sequence
 val tup9 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a3, [> `single ]) ty ->
-  ('a4, [> `single ]) ty ->
-  ('a5, [> `single ]) ty ->
-  ('a6, [> `single ]) ty ->
-  ('a7, [> `single ]) ty ->
-  ('a8, [> `single ]) ty ->
-  ('a9, [> `single ]) ty ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  'a3 #ty_single ->
+  'a4 #ty_single ->
+  'a5 #ty_single ->
+  'a6 #ty_single ->
+  'a7 #ty_single ->
+  'a8 #ty_single ->
+  'a9 #ty_single ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9) ty_sequence
 val tup10 :
-  ('a1, [> `single ]) ty ->
-  ('a2, [> `single ]) ty ->
-  ('a3, [> `single ]) ty ->
-  ('a4, [> `single ]) ty ->
-  ('a5, [> `single ]) ty ->
-  ('a6, [> `single ]) ty ->
-  ('a7, [> `single ]) ty ->
-  ('a8, [> `single ]) ty ->
-  ('a9, [> `single ]) ty ->
-  ('a10, [> `single ]) ty ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10, cl_sequence) ty
+  'a1 #ty_single ->
+  'a2 #ty_single ->
+  'a3 #ty_single ->
+  'a4 #ty_single ->
+  'a5 #ty_single ->
+  'a6 #ty_single ->
+  'a7 #ty_single ->
+  'a8 #ty_single ->
+  'a9 #ty_single ->
+  'a10 #ty_single ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10) ty_sequence
 
 (** Note that [tcons a (tcons b (tcons c (tcons d tnil)))], [tup4 a b
     c d], [tcons a (tup3 b c d)], ... represent the same DBus type *)
