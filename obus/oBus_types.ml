@@ -38,27 +38,27 @@ type sequence = single list
 type signature = sequence
 
 let string_of_basic = function
-  | Tbyte -> "byte"
-  | Tboolean -> "boolean"
-  | Tint16 -> "int16"
-  | Tint32 -> "int32"
-  | Tint64 -> "int64"
-  | Tuint16 -> "uint16"
-  | Tuint32 -> "uint32"
-  | Tuint64 -> "uint64"
-  | Tdouble -> "double"
-  | Tstring -> "string"
-  | Tsignature -> "signature"
-  | Tobject_path -> "object_path"
+  | Tbyte -> "Tbyte"
+  | Tboolean -> "Tboolean"
+  | Tint16 -> "Tint16"
+  | Tint32 -> "Tint32"
+  | Tint64 -> "Tint64"
+  | Tuint16 -> "Tuint16"
+  | Tuint32 -> "Tuint32"
+  | Tuint64 -> "Tuint64"
+  | Tdouble -> "Tdouble"
+  | Tstring -> "Tstring"
+  | Tsignature -> "Tsignature"
+  | Tobject_path -> "Tobject_path"
 
 let rec string_of_single = function
-  | Tbasic t -> string_of_basic t
-  | Tarray t -> sprintf "%s array" (string_of_single t)
-  | Tdict(k, v) -> sprintf "(%s, %s) dict" (string_of_basic k) (string_of_single v)
-  | Tstruct tl -> sprintf "(%s) structure" (string_of_sequence tl)
-  | Tvariant -> "variant"
+  | Tbasic t -> sprintf "Tbasic %s" (string_of_basic t)
+  | Tarray t -> sprintf "Tarray(%s)" (string_of_single t)
+  | Tdict(k, v) -> sprintf "Tdict(%s, %s)" (string_of_basic k) (string_of_single v)
+  | Tstruct tl -> sprintf "Tstruct %s" (string_of_sequence tl)
+  | Tvariant -> "Tvariant"
 
-and string_of_sequence tl = String.concat " * " (List.map string_of_single tl)
+and string_of_sequence tl = sprintf "[%s]" (String.concat " * " (List.map string_of_single tl))
 
 open Types_rw
 
@@ -78,7 +78,7 @@ module W = Make_writer(T)
 let string_of_signature ts =
   let len = W.signature_size ts in
   let str = String.create len in
-    ignore (W.unsafe_write_sequence str 0 ts);
+    ignore (W.write_sequence str 0 ts);
     str
 
 let signature_of_string signature =

@@ -8,16 +8,15 @@
  *)
 
 open OBus_types
-open OBus_dynamic
+open OBus_value
 
-let v = make (tarray (tbasic tint32)) [1l; 2l; 3l]
+let v = make_single (tarray tint32) [1l; 2l; 3l]
+
+let s = make_sequence (tup4 tint16 tstring tbyte (tarray tint16)) (1, "toto", 'e', [1; 2])
+let (w, (x, (y, z))) = cast_sequence (tcons tint16 (tcons tstring (tup2 tbyte (tarray tint16)))) s
 
 let _ =
-  let module M = Matcher(struct type ('a, 'cl) t = 'a -> int end) in
-    Printf.printf "v : %s = %s\n" (OBus_types.string_of_single (typ v)) (string_of_single v);
-    Printf.printf "%d\n"
-      (with_single
-         (object(self)
-            inherit M.matcher
-            method array t l = List.length l
-          end) v)
+  Printf.printf "v : %s = %s\n" (OBus_types.string_of_single (type_of_single v)) (string_of_single v);
+  Printf.printf "%ld\n"
+    ((cast_sequence tint32)
+       [make_single tint32 1l])
