@@ -29,3 +29,8 @@ val split : t -> elt list
 
 val make : elt list -> t
   (** make a path from a list of component *)
+
+(** {6 Combinators (for the syntax extension)} *)
+
+val obr_t : (t, _, OBus_wire.dobject_path) OBus_conv.rsingle
+val obw_t : (t, _, OBus_wire.dobject_path) OBus_conv.wsingle

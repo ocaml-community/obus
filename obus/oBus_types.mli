@@ -49,3 +49,8 @@ val signature_of_string : string -> signature
 val string_of_basic : basic -> string
 val string_of_single : single -> string
 val string_of_sequence : sequence -> string
+
+(** {6 Combinators (for the syntax extension)} *)
+
+val obr_signature : (signature, _, OBus_wire.dsignature) OBus_conv.rsingle
+val obw_signature : (signature, _, OBus_wire.dsignature) OBus_conv.wsingle
