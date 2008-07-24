@@ -12,8 +12,8 @@
 (** This modules define combinators for standard caml types. It is
     automatically opened by the syntax extension. *)
 
-open OBus_conv
-open OBus_wire
+open OBus_comb
+open OBus_types
 
 val ob_byte : (char, _, dbyte) one
 val ob_char : (char, _, dbyte) one
@@ -29,7 +29,7 @@ val ob_int64 : (int64, _, dint64) one
 val ob_uint64 : (int64, _, duint64) one
 val ob_double : (float, _, ddouble) one
 val ob_float : (float, _, ddouble) one
-val ob_signature : (OBus_types.signature, _, dsignature) one
+val ob_signature : (signature, _, dsignature) one
 val ob_object_path : (OBus_path.t, _, dobject_path) one
 val ob_path : (OBus_path.t, _, dobject_path) one
 val ob_list : ('a, unit, 'da) one -> ('a list, _, 'da darray) one

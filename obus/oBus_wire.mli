@@ -13,119 +13,27 @@
     deserializing DBus values.
 
     This can be used to create new type combinators which can not be
-    written with the functions provided by the [OBus_conv] module. *)
+    written with the functions provided by the [OBus_conv] module.
 
-open OBus_types
+    The type of monads contains their signatures (= the type of the
+    DBus values they write or read) so monad combination is ensured to
+    be safe (in the sens that a monad which will pass the type checker
+    will always produce or read correct DBus values).
 
-(** {6 Annotations} *)
-
-(** In the following we will call the signature of a monad [m] the
-    DBus type of the value written by [m] if it is a writing monad or
-    read by [m] if it is a reading monad.
-
-    To ensure that the signature is correct, i.e. to prevent from
-    writing/reading value with an incorrect structure, we encode the
-    signature in the type of the monad.
-
-    Note that we need to encode the whole signature and not only the
-    class (basic, single or sequence). This ensure that the signature
-    of the monad is constant.
-
-    For example it prevent this kind of code:
-
-    {[
-      let f x = match Random.int 2 with
-        | 0 -> wint32 x
-        | _ -> wuint32 x
-    ]}
-
-    This is why the types used in this module are a bit complicated...
+    So it is safe to write your own writing/reading monad.
 *)
 
-type (+'a, 'b) annot
-  (** ['b] is the DBus type structure and ['a] is the tail
-      variable:
-
-      For example the sequence (INT32, STRING, BYTE ARRAY) is encoded
-      like that:
-
-      [('a, dint32 * (dstring * (dbyte darray * 'a)))]
-
-      ['a] is used to have a canonical of sequence, for example to
-      identify the following types:
-
-      [(dint32 * dint32) * dstring] and [dint32 * dint32 * dstring]
-  *)
-
-type (+'a, 'b) sannot = ('a, 'b * 'a) annot
-    (** For one type *)
-
-type dbyte = [`byte]
-type dboolean = [`boolean]
-type dint16 = [`int16]
-type dint32 = [`int32]
-type dint64 = [`int64]
-type duint16 = [`uint16]
-type duint32 = [`uint32]
-type duint64 = [`uint64]
-type ddouble = [`double]
-type dstring = [`string]
-type dsignature = [`signature]
-type dobject_path = [`object_path]
-type 'a dstruct
-type 'a darray
-type ('a, 'b) ddict
-constraint 'a = [> ]
-    (** This constraint ensure that the type is a basic type *)
-type dvariant
-
-(** {8 Construction of annotations} *)
-
-(** The signature of a monad can not be extracted from the monad
-    itself, so when providing a monad for creating a type combinator
-    we must also provide an expression describing the signature of the
-    monad. Types will ensure that the announced signature is the same
-    as the signature of the provided monad. *)
-
-val dbyte : (_, dbasic) sannot
-val dboolean : (_, dboolean) sannot
-val dint16 : (_, dint16) sannot
-val dint32 : (_, dint32) sannot
-val dint64 : (_, dint64) sannot
-val duint16 : (_, duint16) sannot
-val duint32 : (_, duint32) sannot
-val duint64 : (_, duint64) sannot
-val ddouble : (_, ddouble) sannot
-val dstring : (_, dstring) sannot
-val dsignature : (_, dsignature) sannot
-val dobject_path : (_, dobject_path) sannot
-val dstruct : (unit, 'a) annot -> (_, 'a dstruct) sannot
-val darray : (unit, 'a) sannot -> (_, 'a darray) sannot
-val ddict : (unit, [> ] as 'a) sannot -> (unit, 'b) sannot -> (_, ('a, 'b) ddict) sannot
-val dvariant : (_, dvariant) sannot
-
-val dpair : ('a, 'b) annot -> ('b, 'c) annot -> ('a, 'c) annot
-val dnil : ('a, 'a) annot
-
-val dtup3 : ('a, 'b) annot -> ('b, 'c) annot -> ('c, 'd) annot -> ('a, 'd) annot
-val dtup4 : ('a, 'b) annot -> ('b, 'c) annot -> ('c, 'd) annot -> ('d, 'e) annot -> ('a, 'e) annot
-val dtup5 : ('a, 'b) annot -> ('b, 'c) annot -> ('c, 'd) annot -> ('d, 'e) annot -> ('e, 'f) annot -> ('a, 'f) annot
-
-(** {8 Extraction of types from annotations} *)
-
-val basic_type_of_annot : (unit, [> ]) sannot -> basic
-val single_type_of_annot : (unit, 'a) sannot -> single
-val sequence_type_of_annot : (unit, 'a) annot -> sequence
+open OBus_types
 
 (** {6 Wire Monad} *)
 
 (** Type of monads used for reading and writing *)
 module type Wire_monad = sig
-  type ('a, +'b, 'c) t
+  type ('a, +'b, +'c) t
     (** ['a] is the type parameter of the monad, ['b] and ['c] have
         the same role as in [('b, 'c) annot]. *)
 
-  type ('a, +'b, 'c) one = ('a, 'b, 'c * 'b) t
+  type ('a, +'b, +'c) one = ('a, 'b, 'c * 'b) t
       (** A monad which read/write only ony value *)
 
   type ('a, +'b) null = ('a, 'b, 'b) t
@@ -133,6 +41,8 @@ module type Wire_monad = sig
 
   val bind : ('a, 'b, 'c) t -> ('a -> ('d, 'c, 't) t) -> ('d, 'b, 'e) t
   val return : 'a -> ('a, 'b) null
+
+  val failwith : string -> ('a, 'b, 'c) t
 
   val (>>=) : ('a, 'b, 'c) t -> ('a -> ('d, 'c, 'e) t) -> ('d, 'b, 'e) t
   val (>>) : (unit, 'a, 'b) t -> ('c, 'b, 'd) t -> ('c, 'a, 'd) t
@@ -173,16 +83,23 @@ val wstruct : (unit, unit, 'a) Writer.t -> (unit, _, 'a dstruct) Writer.one
 
 type accu
 
-val warray : (unit, 'a) sannot -> ('b -> (unit, unit, 'a) Writer.one) -> (('b -> accu -> accu) -> 'c -> accu -> accu) -> 'c -> (unit, _, 'a darray) Writer.one
-  (** [warray typ element_writer fold] construct an array writer.
-      [fold] must be a fold-like function for values of type ['c]
+val warray : (unit, 'da) sannot ->
+  ('a -> (unit, unit, 'da) Writer.one) ->
+  (('a -> accu -> accu) -> 'b -> accu -> accu) -> 'b ->
+  (unit, _, 'da darray) Writer.one
+    (** [warray typ element_writer fold] construct an array writer.
+        [fold] must be a fold-like function for values of type ['c]
 
-      For an obscure reason in the DBus wire protocol we need to know
-      the type of the elements. *)
+        Due to an obscure reason in the DBus wire protocol we need to
+        know the type of the elements. *)
 
-val wdict : ('a -> 'b -> (unit, unit, 'c * ('d * unit)) Writer.one) -> (('b -> accu -> accu) -> 'c -> accu -> accu) -> 'c -> (unit, _, 'a darray) Writer.one
-  (** Same thing but for dictionnaries, the types of element is not
-      required here. *)
+val wdict :
+  ('a -> (unit, unit, 'da) Writer.one) ->
+  ('b -> (unit, unit, 'db) Writer.one) ->
+  (('a -> 'b -> accu -> accu) -> 'c -> accu -> accu) -> 'c ->
+  (unit, _, ('da, 'db) ddict) Writer.one
+    (** Same thing but for dictionnaries, the type of elements is not
+        required here. *)
 
 (** {8 Predefined array writers} *)
 
@@ -260,8 +177,11 @@ val rpath : (string, _, dobject_path) Reader.one
 
 val rstruct : ('a, unit, 'b) Reader.t -> ('a, _, 'b dstruct) Reader.one
 
-val rarray : ?reverse:bool -> (unit, 'a) sannot -> ('b, unit, 'a) Reader.one -> ('b -> 'c -> 'c) -> 'c -> ('c, _, 'a darray) Reader.one
-  (** [rarray reverse typ element_reader add empty] construct an array reader.
+val rarray : ?reverse:bool -> (unit, 'da) sannot ->
+  ('a, unit, 'da) Reader.one ->
+  ('a -> 'b -> 'b) -> 'b -> ('b, _, 'da darray) Reader.one
+  (** [rarray reverse typ element_reader add empty] construct an array
+      reader.
 
       [add] is a function which add an element to a value of type ['c] and
       [empty] is the initial value of the acumulator.
@@ -275,7 +195,10 @@ val rarray : ?reverse:bool -> (unit, 'a) sannot -> ('b, unit, 'a) Reader.one -> 
       Passing [true] for [reverse] will change this behaviour but the
       function will not be tail-recursive.  *)
 
-val rdict : ?reverse:bool -> ('a * 'b, unit, 'c * ('d * unit)) Reader.t -> ('a -> 'b -> 'e -> 'e) -> 'e -> ('e, _, ('c, 'd) ddict) Reader.one
+val rdict : ?reverse:bool ->
+  ('a, unit, 'da) Reader.one ->
+  ('b, unit, 'db) Reader.one ->
+  ('a -> 'b -> 'c -> 'c) -> 'c -> ('c, _, ('da, 'da) ddict) Reader.one
   (** Same thing but for dictionnaries *)
 
 (** {8 Predefined array readers} *)

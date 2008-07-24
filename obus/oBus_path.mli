@@ -32,5 +32,4 @@ val make : elt list -> t
 
 (** {6 Combinators (for the syntax extension)} *)
 
-val obr_t : (t, _, OBus_wire.dobject_path) OBus_conv.rsingle
-val obw_t : (t, _, OBus_wire.dobject_path) OBus_conv.wsingle
+val ob_t : (t, _, OBus_types.dobject_path) OBus_comb.one

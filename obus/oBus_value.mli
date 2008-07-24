@@ -237,5 +237,4 @@ val tup10 :
 
 (** {6 Combinators (for the syntax extension)} *)
 
-val obr_single : (single, _, OBus_wire.dvariant) OBus_conv.rsingle
-val obw_single : (single, _, OBus_wire.dvariant) OBus_conv.wsingle
+val ob_single : (single, _, OBus_types.dvariant) OBus_comb.one
