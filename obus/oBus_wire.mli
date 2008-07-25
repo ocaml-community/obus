@@ -23,7 +23,7 @@
     So it is safe to write your own writing/reading monad.
 *)
 
-open OBus_types
+open OBus_annot
 
 (** {6 Wire Monad} *)
 
@@ -34,10 +34,18 @@ module type Wire_monad = sig
         the same role as in [('b, 'c) annot]. *)
 
   type ('a, +'b, +'c) one = ('a, 'b, 'c * 'b) t
-      (** A monad which read/write only ony value *)
+      (** A monad which read/write only one single value *)
 
   type ('a, +'b) null = ('a, 'b, 'b) t
       (** Monad which has no effect (read/write nothing). *)
+
+  type ('a, 'b) basic_p = ('a, unit, 'b) one
+  constraint 'b = _ dbasic
+      (** Match monads which have a signature of one basic type *)
+  type ('a, 'b) single_p = ('a, unit, 'b) one
+      (** Match monads which have a signature of one single type *)
+  type ('a, 'b) sequence_p = ('a, unit, 'b) t
+      (** Match any monads *)
 
   val bind : ('a, 'b, 'c) t -> ('a -> ('d, 'c, 't) t) -> ('d, 'b, 'e) t
   val return : 'a -> ('a, 'b) null
@@ -79,12 +87,11 @@ val wpath : string -> (unit, _, dobject_path) Writer.one
 
 (** {8 Containers} *)
 
-val wstruct : (unit, unit, 'a) Writer.t -> (unit, _, 'a dstruct) Writer.one
+val wstruct : (unit, 'da) Writer.sequence_p -> (unit, _, 'da dstruct) Writer.one
 
 type accu
 
-val warray : (unit, 'da) sannot ->
-  ('a -> (unit, unit, 'da) Writer.one) ->
+val warray : 'da OBus_annot.single_p -> ('a -> (unit, 'da) Writer.single_p) ->
   (('a -> accu -> accu) -> 'b -> accu -> accu) -> 'b ->
   (unit, _, 'da darray) Writer.one
     (** [warray typ element_writer fold] construct an array writer.
@@ -94,8 +101,8 @@ val warray : (unit, 'da) sannot ->
         know the type of the elements. *)
 
 val wdict :
-  ('a -> (unit, unit, 'da) Writer.one) ->
-  ('b -> (unit, unit, 'db) Writer.one) ->
+  ('a -> (unit, 'da) Writer.basic_p) ->
+  ('b -> (unit, 'db) Writer.single_p) ->
   (('a -> 'b -> accu -> accu) -> 'c -> accu -> accu) -> 'c ->
   (unit, _, ('da, 'db) ddict) Writer.one
     (** Same thing but for dictionnaries, the type of elements is not
@@ -103,10 +110,11 @@ val wdict :
 
 (** {8 Predefined array writers} *)
 
-val wlist : (unit, 'a) sannot -> ('b -> (unit, unit, 'a) Writer.one) -> 'b list -> (unit, _, 'a darray) Writer.one
+val wlist : 'da OBus_annot.single_p -> ('a -> (unit, 'da) Writer.single_p) -> 'b list -> (unit, _, 'a darray) Writer.one
   (** Write a list as an array *)
 
-val wassoc : ('a -> 'b -> (unit, unit, 'c * ('d * unit)) Writer.t) -> ('a * 'b) list -> (unit, _, ('c, 'd) ddict) Writer.one
+val wassoc : ('a -> (unit, 'da) Writer.basic_p) -> ('b -> (unit, 'db) Writer.single_p) ->
+  ('a * 'b) list -> (unit, _, ('da, 'db) ddict) Writer.one
   (** Write an associative list as a dictionnary *)
 
 val wbyte_array : string -> (unit, _, dbyte darray) Writer.one
@@ -122,7 +130,7 @@ val wvariant : OBus_value.single -> (unit, _, dvariant) Writer.one
   (** This writer will write a variant from a dynamically typed
       value *)
 
-val wfixed : (unit, unit, 'a) Writer.one -> (unit, _, dvariant) Writer.one
+val wfixed : (unit, 'da) Writer.single_p -> (unit, _, dvariant) Writer.one
   (** This writer will write a variant from a value of a fixed
       type. For example here is a way to serialize a caml variant:
 
@@ -175,10 +183,10 @@ val rpath : (string, _, dobject_path) Reader.one
 
 (** {8 Containers} *)
 
-val rstruct : ('a, unit, 'b) Reader.t -> ('a, _, 'b dstruct) Reader.one
+val rstruct : ('a, 'da) Reader.sequence_p -> ('a, _, 'da dstruct) Reader.one
 
-val rarray : ?reverse:bool -> (unit, 'da) sannot ->
-  ('a, unit, 'da) Reader.one ->
+val rarray : ?reverse:bool -> 'da OBus_annot.single_p ->
+  ('a, 'da) Reader.single_p ->
   ('a -> 'b -> 'b) -> 'b -> ('b, _, 'da darray) Reader.one
   (** [rarray reverse typ element_reader add empty] construct an array
       reader.
@@ -195,23 +203,22 @@ val rarray : ?reverse:bool -> (unit, 'da) sannot ->
       Passing [true] for [reverse] will change this behaviour but the
       function will not be tail-recursive.  *)
 
-val rdict : ?reverse:bool ->
-  ('a, unit, 'da) Reader.one ->
-  ('b, unit, 'db) Reader.one ->
+val rdict : ?reverse:bool -> ('a, 'da) Reader.basic_p -> ('b, 'db) Reader.single_p ->
   ('a -> 'b -> 'c -> 'c) -> 'c -> ('c, _, ('da, 'da) ddict) Reader.one
   (** Same thing but for dictionnaries *)
 
 (** {8 Predefined array readers} *)
 
-val rlist : (unit, 'a) sannot -> ('b, unit, 'a) Reader.one -> ('b list, _, 'a darray) Reader.one
+val rlist : 'da OBus_annot.single_p -> ('a, 'da) Reader.single_p -> ('a list, _, 'da darray) Reader.one
   (** Read a list. The order of element is kept with this reader *)
 
-val rset : (unit, 'a) sannot -> ('b, unit, 'a) Reader.one -> ('b list, _, 'a darray) Reader.one
+val rset : 'da OBus_annot.single_p -> ('a, 'da) Reader.single_p -> ('a list, _, 'da darray) Reader.one
   (** Same thing as [rlist] but the list will be in reverse order. *)
 
-val rassoc : ('a * 'b, unit, 'c * ('d * unit)) Reader.t -> (('a * 'b) list, _, ('c, 'd) ddict) Reader.one
-  (** Read a dictionnary as a an associative list. Elements are in
-      reverse order. *)
+val rassoc : ('a, 'da) Reader.basic_p -> ('b, 'db) Reader.single_p ->
+  (('a * 'b) list, _, ('da, 'db) ddict) Reader.one
+    (** Read a dictionnary as a an associative list. Elements are in
+        reverse order. *)
 
 val rbyte_array : (string, _, dbyte darray) Reader.one
   (** Read an array of byte as a string *)
@@ -221,7 +228,7 @@ val rbyte_array : (string, _, dbyte darray) Reader.one
 val rvariant : (OBus_value.one, _, dvariant) Reader.one
   (** Read a variant as a dynamic value *)
 
-val rfixed : ('a, unit, 'b) Reader.one -> ('a, _, dvariant) Reader.one
+val rfixed : ('a, 'da) Reader.single_p -> ('a, _, dvariant) Reader.one
   (** Read a variant with a fixed reader. It will fail if types do not
       match. *)
 

@@ -8,6 +8,7 @@
  *)
 
 open OBus_types
+open OBus_annot
 open OBus_wire
 
 type ('a, +'b, +'c) simple = ('b, 'c) annot * ('a, 'b, 'c) reader * ('a -> (unit, 'b, 'c) writer)
@@ -23,13 +24,13 @@ let wrap (typ, reader, writer) f g =
   (typ,
    (perform with module Reader in
       x <-- reader;
-      return (f x)),
+      Reader.return (f x)),
    (fun x -> writer (g x)))
 
 open OBus_intern_conv
 
 let return (typ, reader, writer) = {
-  in_signature = [];
+  in_signature = Ta_nil;
   out_signature = sequence_type_of_annot typ;
   send = (* TODO *);
   recv = (* TODO *);
@@ -37,6 +38,6 @@ let return (typ, reader, writer) = {
 
 let abstract (typ, reader, writer) func =
   { out_signature = func.out_signature;
-    in_signature = sequence_type_of_annot typ @ func.in_signature;
+    in_signature = Ta_cons(sequence_type_of_annot typ, func.in_signature);
     send = (* TODO *);
     recv = (* TODO *) }

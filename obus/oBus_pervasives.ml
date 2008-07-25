@@ -24,6 +24,8 @@ let ob_int16 = from_wire dint16 rint16 wint16
 let ob_uint16 = from_wire duint16 ruint16 wuint16
 let ob_int = from_wire dint32 rint wint
 let ob_uint = from_wire duint32 ruint wuint
+let ob_int32 = from_wire dint32 rint32 wint32
+let ob_uint32 = from_wire duint32 ruint32 wuint32
 let ob_int64 = from_wire dint64 rint64 wint64
 let ob_uint64 = from_wire duint64 ruint64 wuint64
 let ob_double = from_wire ddouble rdouble wdouble
@@ -42,7 +44,7 @@ let ob_structure t = from_wire (dstructure (annot t)) (rstructure (reader t)) (w
 let ob_variant = from_wire dvariant rvariant wvariant
 let ob_unit = from_wire dnil (Reader.return ()) (Writer.return ())
 let ob_pair t1 t2 =
-  from_wire (annot t1 @@ annot t2)
+  from_wire (annot t1 ++ annot t2)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
@@ -53,7 +55,7 @@ let ob_pair t1 t2 =
 
 let ob_tuple2 = ob_pair
 let ob_tuple3 t1 t2 t3 =
-  from_wire (annot t1 @@ annot t2 @@ annot t3)
+  from_wire (annot t1 ++ annot t2 ++ annot t3)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
@@ -64,7 +66,7 @@ let ob_tuple3 t1 t2 t3 =
        writer t2 x2;
        writer t3 x3)
 let ob_tuple4 t1 t2 t3 t4 =
-  from_wire (annot t1 @@ annot t2 @@ annot t3 @@ annot t4)
+  from_wire (annot t1 ++ annot t2 ++ annot t3 ++ annot t4)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
@@ -77,7 +79,7 @@ let ob_tuple4 t1 t2 t3 t4 =
        writer t3 x3;
        writer t4 x4)
 let ob_tuple5 t1 t2 t3 t4 t5 =
-  from_wire (annot t1 @@ annot t2 @@ annot t3 @@ annot t4 @@ annot t5)
+  from_wire (annot t1 ++ annot t2 ++ annot t3 ++ annot t4 ++ annot t5)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
@@ -92,7 +94,7 @@ let ob_tuple5 t1 t2 t3 t4 t5 =
        writer t4 x4;
        writer t5 x5)
 let ob_tuple6 t1 t2 t3 t4 t5 t6 =
-  from_wire (annot t1 @@ annot t2 @@ annot t3 @@ annot t4 @@ annot t5 @@ annot t6)
+  from_wire (annot t1 ++ annot t2 ++ annot t3 ++ annot t4 ++ annot t5 ++ annot t6)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
@@ -109,7 +111,7 @@ let ob_tuple6 t1 t2 t3 t4 t5 t6 =
        writer t5 x5;
        writer t6 x6)
 let ob_tuple7 t1 t2 t3 t4 t5 t6 t7 =
-  from_wire (annot t1 @@ annot t2 @@ annot t3 @@ annot t4 @@ annot t5 @@ annot t6 @@ annot t7)
+  from_wire (annot t1 ++ annot t2 ++ annot t3 ++ annot t4 ++ annot t5 ++ annot t6 ++ annot t7)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
@@ -128,7 +130,7 @@ let ob_tuple7 t1 t2 t3 t4 t5 t6 t7 =
        writer t6 x6;
        writer t7 x7)
 let ob_tuple8 t1 t2 t3 t4 t5 t6 t7 t8 =
-  from_wire (annot t1 @@ annot t2 @@ annot t3 @@ annot t4 @@ annot t5 @@ annot t6 @@ annot t7 @@ annot t8)
+  from_wire (annot t1 ++ annot t2 ++ annot t3 ++ annot t4 ++ annot t5 ++ annot t6 ++ annot t7 ++ annot t8)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
@@ -149,7 +151,7 @@ let ob_tuple8 t1 t2 t3 t4 t5 t6 t7 t8 =
        writer t7 x7;
        writer t8 x8)
 let ob_tuple9 t1 t2 t3 t4 t5 t6 t7 t8 t9 =
-  from_wire (annot t1 @@ annot t2 @@ annot t3 @@ annot t4 @@ annot t5 @@ annot t6 @@ annot t7 @@ annot t8 @@ annot t9)
+  from_wire (annot t1 ++ annot t2 ++ annot t3 ++ annot t4 ++ annot t5 ++ annot t6 ++ annot t7 ++ annot t8 ++ annot t9)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
@@ -172,7 +174,7 @@ let ob_tuple9 t1 t2 t3 t4 t5 t6 t7 t8 t9 =
        writer t8 x8;
        writer t9 x9)
 let ob_tuple10 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 =
-  from_wire (annot t1 @@ annot t2 @@ annot t3 @@ annot t4 @@ annot t5 @@ annot t6 @@ annot t7 @@ annot t8 @@ annot t9 @@ annot t10)
+  from_wire (annot t1 ++ annot t2 ++ annot t3 ++ annot t4 ++ annot t5 ++ annot t6 ++ annot t7 ++ annot t8 ++ annot t9 ++ annot t10)
     (perform
        x1 <-- reader t1;
        x2 <-- reader t2;
