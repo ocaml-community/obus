@@ -242,6 +242,35 @@ let tobject_path = object
   method type_basic = Tobject_path
 end
 
+let twrap_basic (t : 'a #ty_basic) (f : 'a -> 'b) (g : 'b -> 'a) = object
+  inherit ['b] ty_basic
+  method make_basic x = t#make_basic (g x)
+  method cast_basic x = f (t#cast_basic x)
+  method type_basic = t#type_basic
+end
+
+let twrap_single (t : 'a #ty_single) (f : 'a -> 'b) (g : 'b -> 'a) = object
+  inherit ['b] ty_single
+  method make_single x = t#make_single (g x)
+  method cast_single x = f (t#cast_single x)
+  method type_single = t#type_single
+end
+
+let twrap_sequence (t : 'a #ty_sequence) (f : 'a -> 'b) (g : 'b -> 'a) = object
+  method make_sequence x = t#make_sequence (g x)
+  method cast_sequence x = f (t#cast_sequence x)
+  method type_sequence = t#type_sequence
+end
+
+let tint8 = twrap_basic tbyte (fun ch ->
+                                 let n = int_of_char ch in
+                                   if n <= 127
+                                   then n
+                                   else n - 256) Char.unsafe_chr
+let tuint8 = twrap_basic tbyte int_of_char Char.unsafe_chr
+let tint = twrap_basic tint32 Int32.to_int Int32.of_int
+let tuint = twrap_basic tuint32 Int32.to_int Int32.of_int
+
 let tarray (ty : 'a #ty_single) = object
   inherit ['a list] ty_single
   method make_single l = Array(type_of_single_ty ty, List.map (make_single ty) l)

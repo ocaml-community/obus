@@ -134,6 +134,8 @@ val with_sequence_ty : 'a with_sequence_ty -> OBus_types.sequence -> 'a
 (** {6 Typed constructors} *)
 
 val tbyte : char ty_basic
+val tint8 : int ty_basic
+val tuint8 : int ty_basic
 val tboolean : bool ty_basic
 val tint16 : int ty_basic
 val tint32 : int32 ty_basic
@@ -141,6 +143,8 @@ val tint64 : int64 ty_basic
 val tuint16 : int ty_basic
 val tuint32 : int32 ty_basic
 val tuint64 : int64 ty_basic
+val tint : int ty_basic
+val tuint : int ty_basic
 val tdouble : float ty_basic
 val tstring : string ty_basic
 val tsignature : OBus_types.signature ty_basic
@@ -153,6 +157,10 @@ val tvariant : single ty_single
 
 val tcons : 'a #ty_single -> 'b #ty_sequence -> ('a * 'b) ty_sequence
 val tnil : unit ty_sequence
+
+val twrap_basic : 'a #ty_basic -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_basic
+val twrap_single : 'a #ty_single -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_single
+val twrap_sequence : 'a #ty_sequence -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_sequence
 
 val tup0 :
   unit ty_sequence
@@ -237,4 +245,4 @@ val tup10 :
 
 (** {6 Combinators (for the syntax extension)} *)
 
-val ob_single : (single, _, OBus_types.dvariant) OBus_comb.one
+(*val ob_single : (single, _, OBus_types.dvariant) OBus_comb.one*)
