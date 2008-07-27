@@ -1,6 +1,6 @@
 (*
- * info.mli
- * --------
+ * oBus_info.mli
+ * -------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -11,10 +11,6 @@
 
 val protocol_version : int
   (** The version of the DBus protocol implemented by the library *)
-
-val native_byte_order : Wire.byte_order
-  (** Byte order of the current architecture. It is used as default
-      for sent message. *)
 
 val max_name_length : int
   (** Maximum length of a name (=255). This limit applies to bus
