@@ -9,6 +9,7 @@
 
 open OBus_wire
 open OBus_annot
+open OBus_pervasives
 
 let typ = dstruct (dint ++ dstring ++ ddict dstring dstring ++ darray (dstruct (duint64 ++ dbyte)))
 
@@ -32,8 +33,7 @@ let data = (1, "coucou",
 
 let buffer = String.make 160 '\x00'
 
-let test bo =
-  ignore (run (writer data) bo buffer 0);
+let read bo =
   let oc = Unix.open_process_out "xxd" in
     output_string oc buffer;
     close_out oc;
@@ -43,7 +43,23 @@ let test bo =
            (snd (run reader bo buffer 0)));
       close_out oc
 
+let test bo =
+  ignore (run (writer data) bo buffer 0);
+  read bo
+
+let testc comb =
+  OBus_comb.func_send comb (return ())
+    (fun w ->
+       let i, _ = run (wsignature [OBus_types.Tstruct
+                                     (sequence_type_of_ext
+                                        (OBus_comb.func_signature comb))]
+                       >> wstruct (return ()))
+         Little_endian buffer 0 in
+         ignore (run w Little_endian buffer i);
+         read Little_endian)
+
 let _ =
   test Little_endian;
   test Big_endian;
+  testc (ob_int --> (ob_string --> (ob_list ob_path --> ob_reply ob_uint)))  1 "coucou" ["/toto/klk"; "/sdfh/iuo"];
   Unix.sleep 1

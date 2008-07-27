@@ -58,7 +58,7 @@ let rec string_of_single = function
   | Tstruct tl -> sprintf "Tstruct %s" (string_of_sequence tl)
   | Tvariant -> "Tvariant"
 
-and string_of_sequence tl = sprintf "[%s]" (String.concat " * " (List.map string_of_single tl))
+and string_of_sequence tl = sprintf "[%s]" (String.concat "; " (List.map string_of_single tl))
 
 open Types_rw
 

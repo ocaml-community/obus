@@ -49,7 +49,3 @@ val signature_of_string : string -> signature
 val string_of_basic : basic -> string
 val string_of_single : single -> string
 val string_of_sequence : sequence -> string
-
-(** {6 Combinators (for the syntax extension)} *)
-
-(*val ob_signature : (signature, _, dsignature) OBus_comb.one*)

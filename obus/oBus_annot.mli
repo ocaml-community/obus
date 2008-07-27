@@ -62,7 +62,7 @@ val map_ext_sequence : (ext_single -> 'a) -> ext_sequence -> 'a list
 
 (** {6 Type of annotations} *)
 
-type (+'a, +'b) t
+type (+'a, +'b) t = private Annot of ext_sequence
     (** ['b] is the DBus type structure and ['a] is the tail
         variable:
 
@@ -175,8 +175,8 @@ val dbyte_array : (_, dbyte_array) one
 val ddict : 'a basic_p -> 'b single_p -> (_, ('a, 'b) ddict) one
 val dvariant : (_, dvariant) one
 
-val dpair : ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
-val (++) : ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
+val dpair : ('a, 'b) t -> ('c, 'a) t -> ('c, 'b) t
+val (++) : ('a, 'b) t -> ('c, 'a) t -> ('c, 'b) t
 val dnil : ('a, 'a) t
 
 (** {6 Convertion} *)
@@ -209,3 +209,8 @@ val string_of_sequence : bool -> ext_sequence -> string
   (** Return a caml-type style representation of a extended type. If
       the boolean flag is [true] the string represent an obus
       combinator, if [false] it is just a standard caml type *)
+
+(**/**)
+
+type dunknown
+val make_unknown : ('a, 'b) t -> (dunknown, dunknown) t

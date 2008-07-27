@@ -14,11 +14,6 @@
 
 open OBus_annot
 
-type toto = [ `ok | `not_ok ]
-    with_dbus: dtoto
-type dtoto
-val dtoto : dtoto
-
 val ob_byte : (char, _, dbyte) OBus_comb.one
 val ob_char : (char, _, dbyte) OBus_comb.one
 val ob_boolean : (bool, _, dboolean) OBus_comb.one
@@ -31,11 +26,12 @@ val ob_int32 : (int32, _, dint32) OBus_comb.one
 val ob_uint32 : (int32, _, duint32) OBus_comb.one
 val ob_int64 : (int64, _, dint64) OBus_comb.one
 val ob_uint64 : (int64, _, duint64) OBus_comb.one
-val ob_int : (int, _, dint32) OBus_comb.one
-val ob_uint : (int, _, duint32) OBus_comb.one
+val ob_int : (int, _, dint) OBus_comb.one
+val ob_uint : (int, _, duint) OBus_comb.one
 val ob_double : (float, _, ddouble) OBus_comb.one
 val ob_float : (float, _, ddouble) OBus_comb.one
-val ob_signature : (signature, _, dsignature) OBus_comb.one
+val ob_string : (string, _, dstring) OBus_comb.one
+val ob_signature : (OBus_types.signature, _, dsignature) OBus_comb.one
 val ob_object_path : (OBus_path.t, _, dobject_path) OBus_comb.one
 val ob_path : (OBus_path.t, _, dobject_path) OBus_comb.one
 val ob_list : ('a, 'da) OBus_comb.single_p -> ('a list, _, 'da darray) OBus_comb.one
@@ -50,83 +46,83 @@ val ob_structure : ('a, 'da) OBus_comb.sequence_p -> ('a, _, 'da dstruct) OBus_c
   (** Pack a sequence of values into one *)
 val ob_variant : (OBus_value.single, _, dvariant) OBus_comb.one
 val ob_unit : (unit, 'a, 'a) OBus_comb.t
-val ob_pair : ('a1, 'b1, 'b2) OBus_comb.t -> ('a2, 'b2, 'b3) OBus_comb.t -> ('a1 * 'a2, 'b1, 'b3) OBus_comb.t
+val ob_pair : ('a, 'b, 'c) OBus_comb.t -> ('d, 'e, 'b) OBus_comb.t -> ('a * 'd, 'e, 'c) OBus_comb.t
 
-val ob_return : ('a, unit, 'b) OBus_comb.t -> ('c, 'a, 'c) OBus_comb.func
-  (** Same as [OBus_conv.return] *)
+val ob_reply : ('a, 'b) OBus_comb.sequence_p -> ('c, 'c, 'a) OBus_comb.func
+  (** Same as [OBus_comb.reply] *)
 
-val (-->) : ('a, unit, 'da) OBus_comb.t -> ('b, 'c, 'd) OBus_comb.func -> ('a -> 'b, 'c, 'd) OBus_comb.func
-  (** Same as [OBus_conv.abstract] *)
+val (-->) : ('a, 'da) OBus_comb.sequence_p -> ('b, 'c, 'd) OBus_comb.func -> ('a -> 'b, 'c, 'd) OBus_comb.func
+  (** Same as [OBus_comb.abstract] *)
 
 val ob_tuple2 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a1 * 'a2, 'b1, 'b3) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('a * 'd, 'e, 'c) OBus_comb.t
 val ob_tuple3 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a3, 'b3, 'b4) OBus_comb.t ->
-  ('a1 * 'a2 * 'a3, 'b1, 'b4) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('f, 'g, 'e) OBus_comb.t ->
+  ('a * 'd * 'f, 'g, 'c) OBus_comb.t
 val ob_tuple4 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a3, 'b3, 'b4) OBus_comb.t ->
-  ('a4, 'b4, 'b5) OBus_comb.t ->
-  ('a1 * 'a2 * 'a3 * 'a4, 'b1, 'b5) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('f, 'g, 'e) OBus_comb.t ->
+  ('h, 'i, 'g) OBus_comb.t ->
+  ('a * 'd * 'f * 'h, 'i, 'c) OBus_comb.t
 val ob_tuple5 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a3, 'b3, 'b4) OBus_comb.t ->
-  ('a4, 'b4, 'b5) OBus_comb.t ->
-  ('a5, 'b5, 'b6) OBus_comb.t ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5, 'b1, 'b6) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('f, 'g, 'e) OBus_comb.t ->
+  ('h, 'i, 'g) OBus_comb.t ->
+  ('j, 'k, 'i) OBus_comb.t ->
+  ('a * 'd * 'f * 'h * 'j, 'k, 'c) OBus_comb.t
 val ob_tuple6 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a3, 'b3, 'b4) OBus_comb.t ->
-  ('a4, 'b4, 'b5) OBus_comb.t ->
-  ('a5, 'b5, 'b6) OBus_comb.t ->
-  ('a6, 'b6, 'b7) OBus_comb.t ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6, 'b1, 'b7) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('f, 'g, 'e) OBus_comb.t ->
+  ('h, 'i, 'g) OBus_comb.t ->
+  ('j, 'k, 'i) OBus_comb.t ->
+  ('l, 'm, 'k) OBus_comb.t ->
+  ('a * 'd * 'f * 'h * 'j * 'l, 'm, 'c) OBus_comb.t
 val ob_tuple7 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a3, 'b3, 'b4) OBus_comb.t ->
-  ('a4, 'b4, 'b5) OBus_comb.t ->
-  ('a5, 'b5, 'b6) OBus_comb.t ->
-  ('a6, 'b6, 'b7) OBus_comb.t ->
-  ('a7, 'b7, 'b8) OBus_comb.t ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7, 'b1, 'b8) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('f, 'g, 'e) OBus_comb.t ->
+  ('h, 'i, 'g) OBus_comb.t ->
+  ('j, 'k, 'i) OBus_comb.t ->
+  ('l, 'm, 'k) OBus_comb.t ->
+  ('n, 'o, 'm) OBus_comb.t ->
+  ('a * 'd * 'f * 'h * 'j * 'l * 'n, 'o, 'c) OBus_comb.t
 val ob_tuple8 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a3, 'b3, 'b4) OBus_comb.t ->
-  ('a4, 'b4, 'b5) OBus_comb.t ->
-  ('a5, 'b5, 'b6) OBus_comb.t ->
-  ('a6, 'b6, 'b7) OBus_comb.t ->
-  ('a7, 'b7, 'b8) OBus_comb.t ->
-  ('a8, 'b8, 'b9) OBus_comb.t ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8, 'b1, 'b9) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('f, 'g, 'e) OBus_comb.t ->
+  ('h, 'i, 'g) OBus_comb.t ->
+  ('j, 'k, 'i) OBus_comb.t ->
+  ('l, 'm, 'k) OBus_comb.t ->
+  ('n, 'o, 'm) OBus_comb.t ->
+  ('p, 'q, 'o) OBus_comb.t ->
+  ('a * 'd * 'f * 'h * 'j * 'l * 'n * 'p, 'q, 'c) OBus_comb.t
 val ob_tuple9 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a3, 'b3, 'b4) OBus_comb.t ->
-  ('a4, 'b4, 'b5) OBus_comb.t ->
-  ('a5, 'b5, 'b6) OBus_comb.t ->
-  ('a6, 'b6, 'b7) OBus_comb.t ->
-  ('a7, 'b7, 'b8) OBus_comb.t ->
-  ('a8, 'b8, 'b9) OBus_comb.t ->
-  ('a9, 'b8, 'b10) OBus_comb.t ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9, 'b1, 'b10) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('f, 'g, 'e) OBus_comb.t ->
+  ('h, 'i, 'g) OBus_comb.t ->
+  ('j, 'k, 'i) OBus_comb.t ->
+  ('l, 'm, 'k) OBus_comb.t ->
+  ('n, 'o, 'm) OBus_comb.t ->
+  ('p, 'q, 'o) OBus_comb.t ->
+  ('r, 's, 'q) OBus_comb.t ->
+  ('a * 'd * 'f * 'h * 'j * 'l * 'n * 'p * 'r, 's, 'c) OBus_comb.t
 val ob_tuple10 :
-  ('a1, 'b1, 'b2) OBus_comb.t ->
-  ('a2, 'b2, 'b3) OBus_comb.t ->
-  ('a3, 'b3, 'b4) OBus_comb.t ->
-  ('a4, 'b4, 'b5) OBus_comb.t ->
-  ('a5, 'b5, 'b6) OBus_comb.t ->
-  ('a6, 'b6, 'b7) OBus_comb.t ->
-  ('a7, 'b7, 'b8) OBus_comb.t ->
-  ('a8, 'b8, 'b9) OBus_comb.t ->
-  ('a9, 'b8, 'b10) OBus_comb.t ->
-  ('a10, 'b8, 'b11) OBus_comb.t ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10, 'b1, 'b11) OBus_comb.t
+  ('a, 'b, 'c) OBus_comb.t ->
+  ('d, 'e, 'b) OBus_comb.t ->
+  ('f, 'g, 'e) OBus_comb.t ->
+  ('h, 'i, 'g) OBus_comb.t ->
+  ('j, 'k, 'i) OBus_comb.t ->
+  ('l, 'm, 'k) OBus_comb.t ->
+  ('n, 'o, 'm) OBus_comb.t ->
+  ('p, 'q, 'o) OBus_comb.t ->
+  ('r, 's, 'q) OBus_comb.t ->
+  ('t, 'u, 's) OBus_comb.t ->
+  ('a * 'd * 'f * 'h * 'j * 'l * 'n * 'p * 'r * 't, 'u, 'c) OBus_comb.t

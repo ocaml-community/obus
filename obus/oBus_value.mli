@@ -242,7 +242,3 @@ val tup10 :
 
 (** Note that [tcons a (tcons b (tcons c (tcons d tnil)))], [tup4 a b
     c d], [tcons a (tup3 b c d)], ... represent the same DBus type *)
-
-(** {6 Combinators (for the syntax extension)} *)
-
-(*val ob_single : (single, _, OBus_types.dvariant) OBus_comb.one*)

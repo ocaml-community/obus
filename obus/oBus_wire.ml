@@ -19,11 +19,6 @@ let native_byte_order = Little_endian
 let (|>) f g x = g (f x)
 let ($) a b = a b
 
-(* Caculate the needed number of padding bytes *)
-let pad2 i = i land 1
-let pad4 i = (4 - i) land 3
-let pad8 i = (8 - i) land 7
-
 let ext_padded_on_8 = function
   | Ta_struct _
   | Ta_basic Ta_int64
@@ -48,6 +43,8 @@ type ('a, 'b, 'typ) basic_p = ('a, unit, 'b, 'typ) one
 constraint 'b = _ dbasic
 type ('a, 'b, 'typ) single_p = ('a, unit, 'b, 'typ) one
 type ('a, 'b, 'typ) sequence_p = ('a, unit, 'b, 'typ) t
+
+let make_unknown m = m
 
 let bind m f bo buf ptr =
   let ptr, v = m bo buf ptr in
@@ -128,10 +125,10 @@ let wsignature tl =
 
 let wstruct writer = wpad8 >> writer
 
-let _warray on8 writer fold l bo buf ptr =
+let __warray on8 writer bo buf ptr =
   let i = fst (wpad4 bo buf ptr) in
   let j = if on8 then fst (wpad8 bo buf (i + 4)) else i + 4 in
-  let k = fold (fun x ptr -> fst (writer x bo buf ptr)) l j in
+  let k = writer bo buf j in
   let len = k - j in
     write_check_array_len len;
     (match bo with
@@ -139,17 +136,37 @@ let _warray on8 writer fold l bo buf ptr =
        | Big_endian -> BEW.unsafe_write_int_as_uint32) buf i len;
     (k, ())
 
-let warray annot = _warray (ext_padded_on_8 (ext_single_of_annot annot))
-let wdict kwriter vwriter fold =
-  _warray true (fun (k, v) -> wpad8 >> kwriter k >> vwriter v)
-    (fun f l x -> fold (fun k v acc -> f (k, v) acc) l x)
+let _warray on8 writer fold bo buf ptr =
+  __warray on8 (fun bo buf -> fold (fun x ptr -> fst (writer x bo buf ptr))) bo buf ptr
 
-let _wlist on8 elt_writer = _warray on8 elt_writer
-  (fun f l x -> List.fold_left (fun acc x -> f x acc) x l)
+let warray annot = _warray (ext_padded_on_8 (ext_single_of_annot annot))
+let wdict writer = _warray true (fun x -> wpad8 >> writer x)
+
+let rec fold_list f acc = function
+  | [] -> acc
+  | x :: l -> fold_list f (f x acc) l
+
+let _wlist on8 elt_writer l = _warray on8 elt_writer (fun f acc -> fold_list f acc l)
 let wlist annot = _wlist (ext_padded_on_8 (ext_single_of_annot annot))
 
-let wassoc kwriter vwriter = wdict kwriter vwriter
-  (fun f l x -> List.fold_left (fun acc (k, v) -> f k v acc) x l)
+let wassoc kwriter vwriter l =
+  wdict
+    (fun (x, y) -> kwriter x >> vwriter y)
+    (fun f acc -> fold_list f acc l)
+
+module Seq =
+struct
+  type 'a t = byte_order -> string -> int -> int
+
+  let empty bo buf ptr = ptr
+  let append a b bo buf ptr = b bo buf (a bo buf ptr)
+  let concat l bo buf ptr =
+    List.fold_left (fun ptr m -> m bo buf ptr) ptr l
+  let one writer bo buf ptr = fst (writer bo buf ptr)
+end
+
+let warray_seq annot = __warray (ext_padded_on_8 (ext_single_of_annot annot))
+let wdict_seq seq = __warray true seq
 
 let wbyte_array str =
   let len = String.length str in

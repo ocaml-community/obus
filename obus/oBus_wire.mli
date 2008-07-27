@@ -55,13 +55,13 @@ type ('a, 'b, 'typ) single_p = ('a, unit, 'b, 'typ) one
 type ('a, 'b, 'typ) sequence_p = ('a, unit, 'b, 'typ) t
     (** Match any monads *)
 
-val bind : ('a, 'b, 'c, 'typ) t -> ('a -> ('d, 'c, 'e, 'typ) t) -> ('d, 'b, 'e, 'typ) t
+val bind : ('a, 'b, 'c, 'typ) t -> ('a -> ('d, 'e, 'b, 'typ) t) -> ('d, 'e, 'c, 'typ) t
 val return : 'a -> ('a, 'b, 'typ) null
 
 val failwith : string -> ('a, 'b, 'c, 'typ) t
 
-val (>>=) : ('a, 'b, 'c, 'typ) t -> ('a -> ('d, 'c, 'e, 'typ) t) -> ('d, 'b, 'e, 'typ) t
-val (>>) : (unit, 'a, 'b, 'typ) t -> ('c, 'b, 'd, 'typ) t -> ('c, 'a, 'd, 'typ) t
+val (>>=) : ('a, 'b, 'c, 'typ) t -> ('a -> ('d, 'e, 'b, 'typ) t) -> ('d, 'e, 'c, 'typ) t
+val (>>) : (_, 'a, 'b, 'typ) t -> ('c, 'd, 'a, 'typ) t -> ('c, 'd, 'b, 'typ) t
 
 val run : ('a, 'b, 'c, 'typ) t -> byte_order -> string -> int -> int * 'a
   (** [run monad byte_order buffer ptr] Run a monad on the given
@@ -102,21 +102,64 @@ val wstruct : (unit, 'da, writer) sequence_p -> (unit, _, 'da dstruct, writer) o
 type accu
 
 val warray : 'da OBus_annot.single_p -> ('a -> (unit, 'da, writer) single_p) ->
-  (('a -> accu -> accu) -> 'b -> accu -> accu) -> 'b ->
-  (unit, _, 'da darray, writer) one
+  (('a -> accu -> accu) -> accu -> accu) -> (unit, _, 'da darray, writer) one
     (** [warray typ element_writer fold] construct an array writer.
         [fold] must be a fold-like function for values of type ['c]
 
         Due to an obscure reason in the DBus wire protocol we need to
         know the type of the elements. *)
 
-val wdict :
-  ('a -> (unit, 'da, writer) basic_p) ->
-  ('b -> (unit, 'db, writer) single_p) ->
-  (('a -> 'b -> accu -> accu) -> 'c -> accu -> accu) -> 'c ->
-  (unit, _, ('da, 'db) ddict, writer) one
+val wdict : ('a -> (unit, 'da * ('db * unit), writer) sequence_p) ->
+  (('a -> accu -> accu) -> accu -> accu) -> (unit, _, ('da, 'db) ddict, writer) one
     (** Same thing but for dictionnaries, the type of elements is not
         required here. *)
+
+(** It also possible to make array writers by using the following
+    monoid: *)
+module Seq : sig
+  type 'a t
+    (** ['a] is the DBus annotation *)
+
+  val empty : 'a t
+  val append : 'a t -> 'a t -> 'a t
+  val concat : 'a t list -> 'a t
+
+  val one : (unit, 'a, writer) sequence_p -> 'a t
+    (** Make an element from a writer *)
+
+(** Here is an example of array writer which can be constructed with
+    this monoid:
+
+    Suppose you have a record of booleans and you want to represent it
+    as a set of integers corresponding to the field which are true:
+
+    {[
+      type flags = {
+        flag_a : bool; (* = 1 *)
+        flag_b : bool; (* = 2 *)
+        flag_c : bool; (* = 3 *)
+      }
+
+      let flag_writer x = function
+        | true -> Seq.one (wuint x)
+        | false -> Seq.empty
+
+      let (>>>) = List_writer.append
+
+      let flags_writer flags =
+        warray_seq duint
+          (flag_writer 1 flags.flag_a
+           >>> flag_writer 2 flags.flag_b
+           >>> flag_writer 3 flags.flag_c)
+    ]}
+*)
+
+(** Note that it is possible to construct all array writer with this
+    monoid but it is less efficient than with [warray] and [wdict] *)
+end
+
+val warray_seq : 'da OBus_annot.single_p -> ('da * unit) Seq.t -> (unit, _, 'da darray, writer) one
+val wdict_seq : ('k * ('v * unit)) Seq.t -> (unit, _, ('k, 'v) ddict, writer) one
 
 (** {8 Predefined array writers} *)
 
@@ -127,7 +170,7 @@ val wassoc : ('a -> (unit, 'da, writer) basic_p) -> ('b -> (unit, 'db, writer) s
   ('a * 'b) list -> (unit, _, ('da, 'db) ddict, writer) one
   (** Write an associative list as a dictionnary *)
 
-val wbyte_array : string -> (unit, _, dbyte darray, writer) one
+val wbyte_array : string -> (unit, _, dbyte_array, writer) one
   (** Write a string as an array of byte. This writer is more
       efficient the one we can write with [warray] *)
 
@@ -215,7 +258,7 @@ val rassoc : ('a, 'da, reader) basic_p -> ('b, 'db, reader) single_p ->
     (** Read a dictionnary as a an associative list. Elements are in
         reverse order. *)
 
-val rbyte_array : (string, _, dbyte darray, reader) one
+val rbyte_array : (string, _, dbyte_array, reader) one
   (** Read an array of byte as a string *)
 
 (** {8 Reading of variants} *)
@@ -234,3 +277,9 @@ val rfixed : 'da OBus_annot.single_p -> ('a, 'da, reader) single_p -> ('a, _, dv
 
 (*val rsender : (OBus_bus.name option, _, reader) null*)
   (** Return the sender of the message *)
+
+(**/**)
+
+val wsequence : OBus_value.sequence -> (unit, dunknown, dunknown, writer) t
+val rsequence : OBus_types.sequence -> (OBus_value.sequence, dunknown, dunknown, reader) t
+val make_unknown : ('a, 'b, 'c, 'd) t -> ('a, dunknown, dunknown, 'd) t

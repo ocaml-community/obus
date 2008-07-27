@@ -42,7 +42,7 @@ and ext_sequence =
   | Ta_one of ext_single
   | Ta_nil
 
-type (+'a, +'b) t = ext_sequence
+type (+'a, +'b) t = Annot of ext_sequence
 type (+'a, +'b) one = ('a, 'b * 'a) t
 type 'a dbasic
 type 'a basic_p = (unit, 'a) one
@@ -62,7 +62,7 @@ type 'a sequence_p = (unit, 'a) t
    following function is correct (i.e. [assert false] is never
    reached): *)
 
-let rec get_uniq (seq : 'a single_p) =
+let rec get_uniq seq =
   let rec aux seq cont _ = match seq with
     | Ta_one x -> x
     | Ta_cons(a, b) -> aux a (aux b cont) ()
@@ -78,38 +78,38 @@ let map_ext_sequence map seq =
   in
     aux seq (fun l -> l) []
 
-let ext_basic_of_annot (annot : 'a basic_p) = match get_uniq annot with
+let ext_basic_of_annot (Annot seq) = match get_uniq seq with
   | Ta_basic t -> t
   | _ -> assert false (* Same reason here *)
-let ext_single_of_annot = get_uniq
-let ext_sequence_of_annot annot = annot
+let ext_single_of_annot (Annot seq) = get_uniq seq
+let ext_sequence_of_annot (Annot seq) = seq
 
-let dbyte = Ta_one(Ta_basic Ta_byte)
-let dboolean = Ta_one(Ta_basic Ta_boolean)
-let dint8 = Ta_one(Ta_basic Ta_int8)
-let duint8 = Ta_one(Ta_basic Ta_uint8)
-let dint16 = Ta_one(Ta_basic Ta_int16)
-let dint32 = Ta_one(Ta_basic Ta_int32)
-let dint64 = Ta_one(Ta_basic Ta_int64)
-let duint16 = Ta_one(Ta_basic Ta_uint16)
-let duint32 = Ta_one(Ta_basic Ta_uint32)
-let duint64 = Ta_one(Ta_basic Ta_uint64)
-let dint = Ta_one(Ta_basic Ta_int)
-let duint = Ta_one(Ta_basic Ta_uint)
-let ddouble = Ta_one(Ta_basic Ta_double)
-let dstring = Ta_one(Ta_basic Ta_string)
-let dsignature = Ta_one(Ta_basic Ta_signature)
-let dobject_path = Ta_one(Ta_basic Ta_object_path)
-let dflag t n l = Ta_one(Ta_basic(Ta_flag(ext_basic_of_annot t, n, l)))
-let dbitwise t n l = Ta_one(Ta_basic(Ta_bitwise(ext_basic_of_annot t, n, l)))
-let dstruct tl = Ta_one(Ta_struct tl)
-let darray t = Ta_one(Ta_array(ext_single_of_annot t))
-let ddict tk tv = Ta_one(Ta_dict(ext_basic_of_annot tk, ext_single_of_annot tv))
-let dbyte_array = Ta_one Ta_byte_array
-let dvariant = Ta_one(Ta_variant)
-let dpair a b = Ta_cons(a, b)
+let dbyte = Annot(Ta_one(Ta_basic Ta_byte))
+let dboolean = Annot(Ta_one(Ta_basic Ta_boolean))
+let dint8 = Annot(Ta_one(Ta_basic Ta_int8))
+let duint8 = Annot(Ta_one(Ta_basic Ta_uint8))
+let dint16 = Annot(Ta_one(Ta_basic Ta_int16))
+let dint32 = Annot(Ta_one(Ta_basic Ta_int32))
+let dint64 = Annot(Ta_one(Ta_basic Ta_int64))
+let duint16 = Annot(Ta_one(Ta_basic Ta_uint16))
+let duint32 = Annot(Ta_one(Ta_basic Ta_uint32))
+let duint64 = Annot(Ta_one(Ta_basic Ta_uint64))
+let dint = Annot(Ta_one(Ta_basic Ta_int))
+let duint = Annot(Ta_one(Ta_basic Ta_uint))
+let ddouble = Annot(Ta_one(Ta_basic Ta_double))
+let dstring = Annot(Ta_one(Ta_basic Ta_string))
+let dsignature = Annot(Ta_one(Ta_basic Ta_signature))
+let dobject_path = Annot(Ta_one(Ta_basic Ta_object_path))
+let dflag t n l = Annot(Ta_one(Ta_basic(Ta_flag(ext_basic_of_annot t, n, l))))
+let dbitwise t n l = Annot(Ta_one(Ta_basic(Ta_bitwise(ext_basic_of_annot t, n, l))))
+let dstruct (Annot tl) = Annot(Ta_one(Ta_struct tl))
+let darray t = Annot(Ta_one(Ta_array(ext_single_of_annot t)))
+let ddict tk tv = Annot(Ta_one(Ta_dict(ext_basic_of_annot tk, ext_single_of_annot tv)))
+let dbyte_array = Annot(Ta_one Ta_byte_array)
+let dvariant = Annot(Ta_one(Ta_variant))
+let dpair (Annot a) (Annot b) = Annot(Ta_cons(a, b))
 let (++) = dpair
-let dnil = Ta_nil
+let dnil = Annot Ta_nil
 
 let rec basic_type_of_ext = function
   | Ta_byte -> Tbyte
@@ -291,3 +291,6 @@ type dbyte_array
 type ('a, 'b) ddict
 constraint 'a = _ dbasic
 type dvariant
+
+type dunknown
+let make_unknown t = (t :> (dunknown, dunknown) t)

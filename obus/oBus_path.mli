@@ -29,7 +29,3 @@ val split : t -> elt list
 
 val make : elt list -> t
   (** make a path from a list of component *)
-
-(** {6 Combinators (for the syntax extension)} *)
-
-val ob_t : (t, _, OBus_types.dobject_path) OBus_comb.one
