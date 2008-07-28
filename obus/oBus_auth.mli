@@ -1,6 +1,6 @@
 (*
- * auth.mli
- * --------
+ * oBus_auth.mli
+ * -------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -60,6 +60,6 @@ val default_mechanisms : mechanism list
 
 (** {6 Make authentification} *)
 
-val launch : ?mechanisms:mechanism list -> Transport.t -> Address.guid option
+val launch : ?mechanisms:mechanism list -> OBus_transport.t -> OBus_address.guid option Lwt.t
   (** [launch transport] launch authentification on the given
       transport *)

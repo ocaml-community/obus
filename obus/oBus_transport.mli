@@ -1,6 +1,6 @@
 (*
- * transport.mli
- * -------------
+ * oBus_transport.mli
+ * ------------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -27,16 +27,16 @@ exception Error of string * exn option
 type t
 
 type backend =
-  | Unix of Unix.file_descr
+  | Unix of Lwt_unix.file_descr
   | Other
 
-type recv = string -> int -> int -> int
-      (** A receiving function. Must behave as [Unix.read fd]. *)
+type recv = string -> int -> int -> int Lwt.t
+      (** A receiving function. Must behave as [Lwt_unix.read fd]. *)
 
-type send = string -> int -> int -> int
-      (** A receiving function. Must behave as [Unix.write fd]. *)
+type send = string -> int -> int -> int Lwt.t
+      (** A receiving function. Must behave as [Lwt_unix.write fd]. *)
 
-type close = unit -> unit
+type close = unit -> unit Lwt.t
       (** A function to shutdown a transport *)
 
 val make : backend:backend -> recv:recv -> send:send -> ?close:close -> unit -> t
@@ -48,23 +48,22 @@ val recv : t -> recv
 val send : t -> send
 val close : t -> close
   (** Access to basic functions of a transport, note that in case of
-      error an [Error.Transport] is raised instead of the original
-      error. *)
+      error an [Error] is raised instead of the original error. *)
 
-val recv_exactly : t -> string -> int -> int -> unit
-val send_exactly : t -> string -> int -> int -> unit
+val recv_exactly : t -> string -> int -> int -> unit Lwt.t
+val send_exactly : t -> string -> int -> int -> unit Lwt.t
   (** Same as [recv] and [send] but try to send/receive exactly the
       given amount of bytes, and raise an [Error(_)] if they
       failed. *)
 
-val fd : t -> Unix.file_descr
-  (** [fd transport] return the file descriptor used by the transport,
-      usefull for doing a select for example. If the transport does
-      not a file descriptor then it raise an [Invalid_argument]. *)
+val fd : t -> Lwt_unix.file_descr
+  (** [fd transport] return the file descriptor used by the
+      transport. If the transport does not have a file descriptor then
+      it raise an [Invalid_argument]. *)
 
 (** {6 Creation} *)
 
-val of_addresses : Address.t list -> t
+val of_addresses : OBus_address.t list -> t Lwt.t
   (** [create addresses] try to make a working transport from a list
       of addresses. This only works for transport which OBus
       internally handles *)

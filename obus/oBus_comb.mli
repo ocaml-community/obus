@@ -77,5 +77,5 @@ val abstract : ('a, 'da) sequence_p -> ('b, 'c, 'd) func -> ('a -> 'b, 'c, 'd) f
 
 val func_signature : ('a, 'b, 'c) func -> ext_sequence
 val func_reply : ('a, 'b, 'c) func -> ('c, dunknown, dunknown) t
-val func_send : ('a, 'b, 'c) func -> (unit, dunknown, dunknown, writer) OBus_wire.t -> ((unit, dunknown, dunknown, writer) OBus_wire.t -> 'b) -> 'a
+val func_send : ('a, 'b, 'c) func -> ((unit, dunknown, dunknown, writer) OBus_wire.t -> 'b) -> 'a
 val func_recv : ('a, 'b, 'c) func -> ('a -> 'b, dunknown, dunknown, reader) OBus_wire.t

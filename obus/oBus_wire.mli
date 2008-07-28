@@ -25,18 +25,12 @@
 
 open OBus_annot
 
-type byte_order = Little_endian | Big_endian
-
-val native_byte_order : byte_order
-  (** Byte order of the current architecture. It is used as default
-      for sending messages. *)
-
 (** {6 Wire Monad} *)
 
 type reader
 type writer
 
-type ('a, +'b, +'c, 'typ) t
+type ('a, +'b, +'c, 'typ) t = ('a, 'b, 'c, 'typ) OBus_intern.wire
   (** Type of a wire monad. ['a] is the type parameter of the monad,
       ['b] and ['c] have the same role as in [('b, 'c) annot]. ['typ]
       is one of [reader] or [writer]. *)
@@ -63,10 +57,10 @@ val failwith : string -> ('a, 'b, 'c, 'typ) t
 val (>>=) : ('a, 'b, 'c, 'typ) t -> ('a -> ('d, 'e, 'b, 'typ) t) -> ('d, 'e, 'c, 'typ) t
 val (>>) : (_, 'a, 'b, 'typ) t -> ('c, 'd, 'a, 'typ) t -> ('c, 'd, 'b, 'typ) t
 
-val run : ('a, 'b, 'c, 'typ) t -> byte_order -> string -> int -> int * 'a
-  (** [run monad byte_order buffer ptr] Run a monad on the given
-      buffer. It return the buffer position after the execution of the
-      monad and the result. *)
+val run : ('a, 'b, 'c, 'typ) t -> OBus_intern.connection -> string option -> OBus_info.byte_order -> string -> int -> int * 'a
+  (** [run monad connection sender/destination byte_order buffer ptr]
+      Run a monad on the given buffer. It return the buffer position
+      after the execution of the monad and the result. *)
 
 (** {6 Writing} *)
 
@@ -200,11 +194,11 @@ val wfixed : 'da OBus_annot.single_p -> (unit, 'da, writer) single_p -> (unit, _
 
 (** {8 Context} *)
 
-(*val wconnection : (OBus_connection.t, _, writer) null*)
+val wconnection : (OBus_intern.connection, _, writer) null
   (** Return the connection which will be used to send the message
       being written *)
 
-(*val wdestination : (OBus_bus.name option, _, writer) null*)
+val wdestination : (string option, _, writer) null
   (** Return the destination of the message being written *)
 
 (** {6 Reading} *)
@@ -272,14 +266,13 @@ val rfixed : 'da OBus_annot.single_p -> ('a, 'da, reader) single_p -> ('a, _, dv
 
 (** {8 Context} *)
 
-(*val rconnection : (OBus_connection.t, _, reader) null*)
+val rconnection : (OBus_intern.connection, _, reader) null
   (** Return the current from which came the message *)
 
-(*val rsender : (OBus_bus.name option, _, reader) null*)
+val rsender : (string option, _, reader) null
   (** Return the sender of the message *)
 
 (**/**)
 
 val wsequence : OBus_value.sequence -> (unit, dunknown, dunknown, writer) t
 val rsequence : OBus_types.sequence -> (OBus_value.sequence, dunknown, dunknown, reader) t
-val make_unknown : ('a, 'b, 'c, 'd) t -> ('a, dunknown, dunknown, 'd) t

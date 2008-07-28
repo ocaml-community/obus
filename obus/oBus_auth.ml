@@ -1,15 +1,17 @@
 (*
- * auth.ml
- * -------
+ * oBus_auth.ml
+ * ------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open ThreadImplem
+open Lwt
 
-open Unix
+let ($) a b = a b
+let (|>) a b x = b (a x)
+let (>>) a b = a >>= (fun _ -> b)
 
 type data = string
 type guid = string
@@ -106,15 +108,16 @@ let client_transition (state, mech, mechs) cmd = match state, cmd with
 
 let client_machine_exec recv send =
   let rec aux state =
-    try
-      match client_transition state (recv ()) with
-        | ClientFinal(guid) -> send `Begin; Some(guid)
-        | ClientTransition(cmd, state) -> send cmd; aux state
-        | ClientFailure(_) -> None
-    with
-      | Failure _ ->
-          send (`Error "parsing error");
-          aux state
+    catch (fun  _ -> recv () >>= fun x -> return $ Some x)
+      (function
+         | Failure _ -> send (`Error "parsing error") >> return None
+         | exn -> fail exn) >>= function
+        | None -> aux state
+        | Some cmd ->
+            match client_transition state cmd with
+              | ClientFinal(guid) -> send `Begin >> (return $ Some guid)
+              | ClientTransition(cmd, state) -> send cmd >> aux state
+              | ClientFailure(_) -> return None
   in aux
 
 let hexstring_of_data buf str =
@@ -136,16 +139,17 @@ let marshal_client_command buf = function
       Buffer.add_string buf message
 
 let launch ?(mechanisms=default_mechanisms) transport =
-  let read =
-    if Info.debug
-    then
-      (fun buf count -> let count = Transport.recv transport buf 0 count in
-         DEBUG("received: %S" (String.sub buf 0 count));
-         count)
-    else
-      (fun buf count -> Transport.recv transport buf 0 count)
+  let ic = Lwt_chan.make_in_channel
+    (if OBus_info.debug
+     then
+       (fun buf pos count ->
+          OBus_transport.recv transport buf pos count
+          >>= fun count ->
+            DEBUG("received: %S" (String.sub buf 0 count));
+            return count)
+     else
+       (fun buf pos count -> OBus_transport.recv transport buf pos count))
   in
-  let lexbuf = Lexing.from_function read in
 
   let send command =
     let buf = Buffer.create 42 in
@@ -154,15 +158,23 @@ let launch ?(mechanisms=default_mechanisms) transport =
       let line = Buffer.contents buf in
       let len = String.length line in
         DEBUG("sending: %S" line);
-        Transport.send_exactly transport line 0 len
+        OBus_transport.send_exactly transport line 0 len
 
   and recv () =
-    AuthLexer.command lexbuf
+    Lwt_chan.input_line ic >>=
+      (fun l ->
+         try
+           return $ Auth_lexer.command (Lexing.from_string l)
+         with
+             exn -> Lwt.fail exn)
   in
 
-    match find_mechanism mechanisms with
-      | Some(cmd, state) ->
-          Transport.send_exactly transport "\x00" 0 1;
-          send cmd;
-          client_machine_exec recv send state
-      | None -> None
+    Lwt.finalize
+      (fun _ ->match find_mechanism mechanisms with
+         | Some(cmd, state) ->
+             (perform
+                OBus_transport.send_exactly transport "\x00" 0 1;
+                send cmd;
+                client_machine_exec recv send state);
+         | None -> return None)
+      (fun _ -> Lwt_chan.close_in ic)

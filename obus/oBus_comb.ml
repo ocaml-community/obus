@@ -66,8 +66,8 @@ type ('a, 'b, 'c) func = {
 
 let reply { annot = annot; reader = reader; writer = writer } = {
   reply = { annot = OBus_annot.make_unknown annot;
-            reader = OBus_wire.make_unknown reader;
-            writer = fun x -> OBus_wire.make_unknown (writer x) };
+            reader = reader;
+            writer = writer };
   signature = Ta_nil;
   send = (fun acc cont -> cont acc);
   recv = return (fun f -> f);
@@ -76,14 +76,14 @@ let reply { annot = annot; reader = reader; writer = writer } = {
 let abstract { annot = Annot annot; reader = reader; writer = writer } func = {
   reply = func.reply;
   signature = Ta_cons(annot, func.signature);
-  send = (fun acc cont x -> func.send (OBus_wire.make_unknown $ acc >> OBus_wire.make_unknown (writer x)) cont);
-  recv = OBus_wire.make_unknown $ (perform
-                                     x <-- OBus_wire.make_unknown reader;
-                                     f <-- func.recv;
-                                     return $ fun g -> f (g x))
+  send = (fun acc cont x -> func.send (acc >> writer x) cont);
+  recv = (perform
+            x <-- reader;
+            f <-- func.recv;
+            return $ fun g -> f (g x))
 }
 
 let func_signature f = f.signature
 let func_reply f = f.reply
 let func_recv f = f.recv
-let func_send f = f.send
+let func_send f = f.send (return ())
