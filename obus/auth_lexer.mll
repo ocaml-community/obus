@@ -1,6 +1,6 @@
 (*
- * authLexer.mll
- * -------------
+ * auth_lexer.mll
+ * --------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -8,7 +8,7 @@
  *)
 
 rule eol = parse
-    | " "* "\r\n" { () }
+    | " "* "\r" { () }
 
 and data buf = parse
   | ([ '0'-'9' 'a'-'f' 'A'-'F' ] [ '0'-'9' 'a'-'f' 'A'-'F' ]) as str {
@@ -16,7 +16,7 @@ and data buf = parse
         (Scanf.sscanf str "%x" char_of_int);
       data buf lexbuf
     }
-  | " "* "\r\n" { Buffer.contents buf }
+  | " "* "\r" { Buffer.contents buf }
 
 and space_and_data = parse
   | " "* as space { if space = "" then (eol lexbuf; "") else
@@ -25,7 +25,7 @@ and space_and_data = parse
 and methods = parse
   | [ '\x21'-'\x7f'  ]+ as m { m :: methods lexbuf }
   | [ ' ' ]+ { methods lexbuf }
-  | " "* "\r\n" { [] }
+  | " "* "\r" { [] }
 
 and space_and_methods = parse
   | " "* as space { if space = "" then (eol lexbuf; []) else methods lexbuf }

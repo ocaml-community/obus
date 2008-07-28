@@ -1,6 +1,6 @@
 (*
- * addrLexer.mll
- * -------------
+ * addr_lexer.mll
+ * --------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *

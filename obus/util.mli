@@ -44,13 +44,15 @@ module type Monad = sig
 end
 
 module Maybe : sig
-  include Monad with type 'a t ='a option
+  include Monad with type 'a t = 'a option
+  val failwith : string -> 'a t
   val wrap : ('a -> 'b) -> 'a t -> 'b t
   val fold : ('a -> 'a t) -> 'a list -> 'a list t
 end
 
 module MaybeT(M : Monad) : sig
   include Monad with type 'a t = 'a option M.t
+  val failwith : string -> 'a t
   val wrap : ('a -> 'b) -> 'a t -> 'b t
   val fold : ('a -> 'a t) -> 'a list -> 'a list t
 end

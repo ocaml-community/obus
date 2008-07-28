@@ -56,11 +56,15 @@ end
 let run_and_read = Ocamlbuild_pack.My_unix.run_and_read
 let blank_sep_strings = Ocamlbuild_pack.Lexers.blank_sep_strings
 
-(* this lists all supported packages *)
-let find_packages () =
+let exec cmd =
   blank_sep_strings &
     Lexing.from_string &
-    run_and_read "ocamlfind list | cut -d' ' -f1"
+    run_and_read cmd
+
+(* this lists all supported packages *)
+let find_packages () = exec "ocamlfind list | cut -d' ' -f1"
+
+let query pkg = List.hd & exec ("ocamlfind query " ^ pkg)
 
 (* this is supposed to list available syntaxes, but I don't know how to do it. *)
 let find_syntaxes () = ["camlp4o"; "camlp4r"]
@@ -94,10 +98,11 @@ let _ =
         Pathname.define_context "obus" [ "obus/threadsigs"; "common" ];
         Pathname.define_context "binder" [ "common" ];
         Pathname.define_context "tools" [ "common"; "binder"; "obus"; "interfaces" ];
-        Pathname.define_context "samples" [ "interfaces" ];
+        Pathname.define_context "samples" [ "obus" ];
         Pathname.define_context "samples/threaded" [ "interfaces" ];
         Pathname.define_context "interfaces" [ "obus" ];
-        Pathname.define_context "test" [ "common"; "binder" ];
+        Pathname.define_context "test" [ "common"; "obus" ];
+        Pathname.define_context "syntax" [ "common" ];
 
         (* rule for building dbus interface binding *)
         rule "obus-binding"
@@ -130,15 +135,15 @@ let _ =
         end (find_syntaxes ());
 
         List.iter begin fun tag ->
-          flag ["ocaml"; "pp"; tag] & A("syntax/" ^ tag ^ ".cmo");
+          flag ["ocaml"; "compile"; tag] & S[A"-ppopt"; A("syntax/" ^ tag ^ ".cmo")];
+          flag ["ocaml"; "ocamldep"; tag] & S[A"-ppopt"; A("syntax/" ^ tag ^ ".cmo")];
+          flag ["ocaml"; "doc"; tag] & S[A"-ppopt"; A("syntax/" ^ tag ^ ".cmo")];
           dep ["ocaml"; "ocamldep"; tag] ["syntax/" ^ tag ^ ".cmo"]
         end Config.syntaxes;
 
         (* Internal libraries *)
         intern_lib "obus" "obus";
         intern_lib "obus" "obus-thread";
-
-
 
         rule "obus_pack"
           ~prod:"obus/OBus.mlpack"

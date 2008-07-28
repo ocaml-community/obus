@@ -15,7 +15,8 @@ let section file_name =
     | s -> s
 
 let make_format loc section prefix fmt =
-  Ast.ExStr(loc, "obus(" ^ section ^ "):" ^ prefix ^ " " ^ fmt ^ "\\n%!")
+  let i = try String.index section '_' + 1 with _ -> 0 in
+    Ast.ExStr(loc, "obus(" ^ String.sub section i (String.length section - i) ^ "):" ^ prefix ^ " " ^ fmt ^ "\\n%!")
 
 let rec insert section prefix =
   let rec aux = function
@@ -28,12 +29,12 @@ let rec insert section prefix =
 let map_expr = function
   | <:expr@_loc< LOG($x$) >> ->
     let section = section (Loc.file_name _loc) in
-      <:expr< if Info.verbose
+      <:expr< if OBus_info.verbose
       then $insert section "" x$
       else () >>
   | <:expr@_loc< DEBUG($x$) >> ->
     let section = section (Loc.file_name _loc) in
-      <:expr< if Info.debug
+      <:expr< if OBus_info.debug
       then $insert section "" x$
       else () >>
   | <:expr@_loc< ERROR($x$) >> ->

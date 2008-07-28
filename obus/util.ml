@@ -68,6 +68,7 @@ struct
     | Some v -> f v
     | None -> None
   let return v = Some v
+  let failwith _ = None
   let wrap f m = bind m (fun x -> return (f x))
   let rec fold f l =
     List.fold_right (fun x acc ->
@@ -85,6 +86,7 @@ struct
                 | Some v -> f v
                 | None -> M.return None)
   let return v = M.return (Some v)
+  let failwith _ = M.return None
   let wrap f m = bind m (fun x -> return (f x))
   let rec fold f l =
     List.fold_right (fun x acc ->

@@ -24,6 +24,12 @@ val max_message_size : int
   (** Maximum size of a message. In this version of the protocol this
       is 2^27 bytes (128MB). *)
 
+type byte_order = Little_endian | Big_endian
+
+val native_byte_order : byte_order
+  (** Byte order of the current architecture. It is used as default
+      for sending messages. *)
+
 val verbose : bool
   (** [true] is the environment variable OBUSLOG is set *)
 

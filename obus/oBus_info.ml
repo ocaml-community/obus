@@ -7,6 +7,9 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+type byte_order = Little_endian | Big_endian
+let native_byte_order = Little_endian
+
 let max_name_length = 255
 
 let max_array_size = 1 lsl 26

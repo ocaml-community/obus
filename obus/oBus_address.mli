@@ -1,6 +1,6 @@
 (*
- * address.mli
- * -----------
+ * oBus_address.mli
+ * ----------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -31,8 +31,8 @@ val of_string : string -> t list
   (** [of_string str] parse [str] and return the list of addresses
       defined in it. It can raise a [Parse_error]. *)
 
-val system : unit -> t list
+val system : t list Lazy.t
   (** [system] list of addresses for system bus *)
 
-val session : unit -> t list
+val session : t list Lazy.t
   (** [session] list of addresses for session bus *)

@@ -33,6 +33,8 @@ let data = (1, "coucou",
 
 let buffer = String.make 160 '\x00'
 
+let run m bo p = run m (Obj.magic 0) None bo buffer p
+
 let read bo =
   let oc = Unix.open_process_out "xxd" in
     output_string oc buffer;
@@ -40,11 +42,11 @@ let read bo =
     let oc = Unix.open_process_out "camlp4o -impl /dev/stdin" in
       Printf.fprintf oc "let result = %s"
         (OBus_value.string_of_single
-           (snd (run reader bo buffer 0)));
+           (snd (run reader bo 0)));
       close_out oc
 
 let test bo =
-  ignore (run (writer data) bo buffer 0);
+  ignore (run (writer data) bo 0);
   read bo
 
 let testc comb =
@@ -54,12 +56,12 @@ let testc comb =
                                      (sequence_type_of_ext
                                         (OBus_comb.func_signature comb))]
                        >> wstruct (return ()))
-         Little_endian buffer 0 in
-         ignore (run w Little_endian buffer i);
-         read Little_endian)
+         OBus_info.Little_endian 0 in
+         ignore (run w OBus_info.Little_endian i);
+         read OBus_info.Little_endian)
 
 let _ =
-  test Little_endian;
-  test Big_endian;
+  test OBus_info.Little_endian;
+  test OBus_info.Big_endian;
   testc (ob_int --> (ob_string --> (ob_list ob_path --> ob_reply ob_uint)))  1 "coucou" ["/toto/klk"; "/sdfh/iuo"];
   Unix.sleep 1

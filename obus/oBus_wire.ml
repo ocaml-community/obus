@@ -11,10 +11,9 @@ open Printf
 open OBus_types
 open OBus_value
 open OBus_annot
+open OBus_intern
+open OBus_info
 open Wire
-
-type byte_order = Little_endian | Big_endian
-let native_byte_order = Little_endian
 
 let (|>) f g x = g (f x)
 let ($) a b = a b
@@ -36,7 +35,7 @@ let padded_on_8 = function
 type accu = int
 type reader
 type writer
-type ('a, +'b, +'c, 'typ) t = byte_order -> string -> int -> int * 'a
+type ('a, +'b, +'c, 'typ) t = context -> int -> int * 'a
 type ('a, +'b, +'c, 'typ) one = ('a, 'b, 'c * 'b, 'typ) t
 type ('a, +'b, 'typ) null = ('a, 'b, 'b, 'typ) t
 type ('a, 'b, 'typ) basic_p = ('a, unit, 'b, 'typ) one
@@ -44,59 +43,51 @@ constraint 'b = _ dbasic
 type ('a, 'b, 'typ) single_p = ('a, unit, 'b, 'typ) one
 type ('a, 'b, 'typ) sequence_p = ('a, unit, 'b, 'typ) t
 
-let make_unknown m = m
-
-let bind m f bo buf ptr =
-  let ptr, v = m bo buf ptr in
-    f v bo buf ptr
-let return v bo buf ptr = (ptr, v)
-let failwith msg bo buf ptr = Pervasives.failwith msg
+let bind m f ctx ptr =
+  let ptr, v = m ctx ptr in
+    f v ctx ptr
+let return v ctx ptr = (ptr, v)
+let failwith msg ctx ptr = Pervasives.failwith msg
 let (>>=) = bind
 let (>>) a b = a >>= (fun _ -> b)
-let run m = m
+let run m con bus_name bo buf ptr = m { connection = con;
+                                        bus_name = bus_name;
+                                        byte_order = bo;
+                                        buffer = buf } ptr
 
-let throw exn bo buf ptr = raise exn
+let throw exn ctx ptr = raise exn
 
-let check len bo buf ptr =
-    if len < 0 || ptr + len > String.length buf
+let check len ctx ptr =
+    if len < 0 || ptr + len > String.length ctx.buffer
     then out_of_bounds ()
     else (ptr, ())
 
+let wrap count le be ctx ptr =
+  if ptr + count > String.length ctx.buffer then out_of_bounds ();
+  let result = (match ctx.byte_order with | Little_endian -> le | Big_endian -> be) ctx.buffer ptr in
+    (ptr + count, result)
+
 (***** Writing *****)
 
-let wcheck_array len bo buf ptr = (ptr, write_check_array_len len)
+let wconnection ctx ptr = (ptr, ctx.connection)
+let wdestination ctx ptr = (ptr, ctx.bus_name)
 
-let wpadn f bo buffer i =
-  let count = f i in
-    if i + count > String.length buffer then out_of_bounds ();
-    for j = 0 to count - 1 do
-      String.unsafe_set buffer (i + j) '\x00'
-    done;
-    (i + count, ())
+let wcheck_array len ctx ptr = (ptr, write_check_array_len len)
 
-let wpad2 = wpadn pad2
-let wpad4 = wpadn pad4
-let wpad8 = wpadn pad8
-
-let wblit str bo buf ptr =
+let wblit str ctx ptr =
   let len = String.length str in
-    if ptr + len > String.length buf then out_of_bounds ();
-    String.unsafe_blit str 0 buf ptr len;
+    if ptr + len > String.length ctx.buffer then out_of_bounds ();
+    String.unsafe_blit str 0 ctx.buffer ptr len;
     (ptr + len, ())
 
 module Types_writer = Types_rw.Make_writer(OBus_types)
 
-let unsafe_write_types x bo buf ptr = (Types_writer.write_sequence buf ptr x, ())
+let unsafe_write_types x ctx ptr = (Types_writer.write_sequence ctx.buffer ptr x, ())
 
-let wrap count le be x bo buf ptr =
-  if ptr + count > String.length buf then out_of_bounds ();
-  (match bo with | Little_endian -> le | Big_endian -> be) buf ptr x;
-  (ptr + count, ())
-
-let write1 w x = wrap 1 w w x
-let write2 le be x = wpad2 >> wrap 2 le be x
-let write4 le be x = wpad4 >> wrap 4 le be x
-let write8 le be x = wpad8 >> wrap 8 le be x
+let write1 w x = wrap 1 (w x) (w x)
+let write2 le be x = wpad2 >> wrap 2 (le x) (be x)
+let write4 le be x = wpad4 >> wrap 4 (le x) (be x)
+let write8 le be x = wpad8 >> wrap 8 (le x) (be x)
 
 let wbyte = write1 unsafe_write_char_as_byte
 let wchar = wbyte
@@ -125,19 +116,19 @@ let wsignature tl =
 
 let wstruct writer = wpad8 >> writer
 
-let __warray on8 writer bo buf ptr =
-  let i = fst (wpad4 bo buf ptr) in
-  let j = if on8 then fst (wpad8 bo buf (i + 4)) else i + 4 in
-  let k = writer bo buf j in
+let __warray on8 writer ctx ptr =
+  let i = fst (wpad4 ctx ptr) in
+  let j = if on8 then fst (wpad8 ctx (i + 4)) else i + 4 in
+  let k = writer ctx j in
   let len = k - j in
     write_check_array_len len;
-    (match bo with
+    (match ctx.byte_order with
        | Little_endian -> LEW.unsafe_write_int_as_uint32
-       | Big_endian -> BEW.unsafe_write_int_as_uint32) buf i len;
+       | Big_endian -> BEW.unsafe_write_int_as_uint32) len ctx.buffer i;
     (k, ())
 
-let _warray on8 writer fold bo buf ptr =
-  __warray on8 (fun bo buf -> fold (fun x ptr -> fst (writer x bo buf ptr))) bo buf ptr
+let _warray on8 writer fold =
+  __warray on8 (fun ctx -> fold (fun x ptr -> fst (writer x ctx ptr)))
 
 let warray annot = _warray (ext_padded_on_8 (ext_single_of_annot annot))
 let wdict writer = _warray true (fun x -> wpad8 >> writer x)
@@ -156,13 +147,13 @@ let wassoc kwriter vwriter l =
 
 module Seq =
 struct
-  type 'a t = byte_order -> string -> int -> int
+  type 'a t = context -> int -> int
 
-  let empty bo buf ptr = ptr
-  let append a b bo buf ptr = b bo buf (a bo buf ptr)
-  let concat l bo buf ptr =
-    List.fold_left (fun ptr m -> m bo buf ptr) ptr l
-  let one writer bo buf ptr = fst (writer bo buf ptr)
+  let empty ctx ptr = ptr
+  let append a b ctx ptr = b ctx (a ctx ptr)
+  let concat l ctx ptr =
+    List.fold_left (fun ptr m -> m ctx ptr) ptr l
+  let one writer ctx ptr = fst (writer ctx ptr)
 end
 
 let warray_seq annot = __warray (ext_padded_on_8 (ext_single_of_annot annot))
@@ -205,25 +196,15 @@ let wfixed annot writer =
 
 (***** Reading *****)
 
-let rcheck_array len bo buf ptr = (ptr, read_check_array_len len)
+let rconnection ctx ptr = (ptr, ctx.connection)
+let rsender ctx ptr = (ptr, ctx.bus_name)
 
-let rpadn f bo buffer i =
-  let count = f i in
-    if i + count > String.length buffer then out_of_bounds ();
-    for j = 0 to count - 1 do
-      if String.unsafe_get buffer (i + j) <> '\x00'
-      then raise (Reading_error "unitialized padding bytes")
-    done;
-    (i + count, ())
+let rcheck_array len ctx ptr = (ptr, read_check_array_len len)
 
-let rpad2 = rpadn pad2
-let rpad4 = rpadn pad4
-let rpad8 = rpadn pad8
-
-let rblit len bo buf ptr =
-  if len < 0 || ptr + len > String.length buf then out_of_bounds ();
+let rblit len ctx ptr =
+  if len < 0 || ptr + len > String.length ctx.buffer then out_of_bounds ();
   let str = String.create len in
-    String.unsafe_blit buf ptr str 0 len;
+    String.unsafe_blit ctx.buffer ptr str 0 len;
     (ptr + len, str)
 
 module Types_reader = Types_rw.Make_reader(OBus_types)
@@ -231,11 +212,6 @@ module Types_reader = Types_rw.Make_reader(OBus_types)
      let get = String.unsafe_get
      let terminated str i = String.unsafe_get str i = '\x00'
    end)
-
-let wrap count le be bo buf ptr =
-  if ptr + count > String.length buf then out_of_bounds ();
-  let result = (match bo with | Little_endian -> le | Big_endian -> be) buf ptr in
-    (ptr + count, result)
 
 let read1 r = wrap 1 r r
 let read2 le be = rpad2 >> wrap 2 le be
@@ -276,18 +252,18 @@ let rstring =
      return str)
 let robject_path = rstring
 let rpath = robject_path
-let rsignature bo buf i =
-  let i, len = ruint8 bo buf i in
-    if len < 0 || i + len > String.length buf then out_of_bounds ();
-    if String.unsafe_get buf (i + len) <> '\x00'
+let rsignature ctx i =
+  let i, len = ruint8 ctx i in
+    if len < 0 || i + len > String.length ctx.buffer then out_of_bounds ();
+    if String.unsafe_get ctx.buffer (i + len) <> '\x00'
     then raise (Reading_error "signature does not end with a null byte");
     try
-      Types_reader.read_sequence buf i
+      Types_reader.read_sequence ctx.buffer i
     with
         Types_rw.Parse_failure(j, msg) ->
           raise (Reading_error
                    (sprintf "invalid signature %S, at position %d: %s"
-                      (String.sub buf i len) (j - i) msg))
+                      (String.sub ctx.buffer i len) (j - i) msg))
 
 let rstruct reader = rpad8 >> reader
 

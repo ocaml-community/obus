@@ -129,26 +129,26 @@ struct
     | Tobject_path -> 'o'
     | Tsignature -> 'g'
 
-  let rec unsafe_write_single buffer i = function
+  let rec write_single buffer i = function
     | Tbasic t ->
         String.unsafe_set buffer i (char_of_basic t);
         i + 1
     | Tarray t ->
         String.unsafe_set buffer i 'a';
-        unsafe_write_single buffer (i + 1) t
+        write_single buffer (i + 1) t
     | Tdict(tk, tv) ->
         String.unsafe_set buffer i 'a';
         String.unsafe_set buffer (i + 1) '{';
         String.unsafe_set buffer (i + 2) (char_of_basic tk);
-        let i = unsafe_write_single buffer (i + 3) tv in
+        let i = write_single buffer (i + 3) tv in
           String.unsafe_set buffer i '}';
           i + 1
     | Tstruct ts ->
         String.unsafe_set buffer i '(';
-        let i = unsafe_write_sequence buffer (i + 1) ts in
+        let i = write_sequence buffer (i + 1) ts in
           String.unsafe_set buffer i ')';
           i + 1
     | Tvariant ->  String.unsafe_set buffer i 'v'; i + 1
 
-  and unsafe_write_sequence buffer = List.fold_left (unsafe_write_single buffer)
+  and write_sequence buffer = List.fold_left (write_single buffer)
 end

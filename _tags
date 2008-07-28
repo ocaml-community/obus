@@ -1,25 +1,15 @@
 # -*- conf -*-
 # Syntaxes
 <syntax/*>: camlp4of, use_camlp4
-# Real thread modules need the thread library
-<obus/with_threads/*>: thread
-"obus/DBus.xml": internal
-#<obus/*.ml>: camlp4o, trace
-# Tags for the library
-<obus/{auth,address,transport,connection,error}.ml>: camlp4o, pa_log
-# Tags for the binder and the binding plugin library
-<binder/*.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
-<binder/*.ml>: camlp4of
-<binder/{genSerializer,genImplem}.ml>: pa_seq
+# Most of the file use pa_monad
+<{obus,test,samples}/*.ml>: syntax_camlp4o, pkg_monad
+<**/*.*>: pkg_lwt
+# pa_log is a bit expensive so we do not apply it to all files
+<obus/oBus_{auth,address,transport,connection,error}.ml>: pa_log
 # Tools
 <tools/obus-binder.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
 <tools/obus-binder.ml>: camlp4of
 <tools/obus-introspect.*>: use_obus, pkg_unix, pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
 # Samples
-<samples/*.*>: pkg_unix, use_obus
-<samples/lowlevels/*.*>: pkg_unix, use_obus, camlp4o, pa_dbus_typval
-<samples/threaded/*.*>: pkg_unix, use_obus-thread, thread
 # Tests
-<test/**>: pkg_unix, use_camlp4_full, use_dynlink, pkg_str, pkg_xml-light
-<test/*.ml>: camlp4of, pa_seq
-<test/serialization/*.*>: use_obus
+<test/**>: pkg_unix, pkg_str, pkg_xml-light

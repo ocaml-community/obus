@@ -1,6 +1,6 @@
 (*
- * signal.ml
- * ---------
+ * oBus_signal.ml
+ * --------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -45,3 +45,11 @@ let make_set interface get_reader =
              and proxy = Proxy.make connection interface ?destination:sender path in
                Some(fun () -> handler proxy signal)
          | None -> None)
+
+                         match handler message with
+                           | None ->
+                               DEBUG("signal %S with signature %S on interface %S, from object %S \
+                                    dropped by signal handler"
+                                       member (signature message) interface path);
+                               None
+                           | x -> x)
