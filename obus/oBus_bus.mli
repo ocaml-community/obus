@@ -34,14 +34,14 @@ val register_connection : OBus_connection.t -> unit Lwt.t
   (** This function just request a unique name to the other side of
       the connection which is supposed to be a message bus.
 
-      If this is not the, it will (probably) raise an
-      [Unknown_method] *)
+      If this is nqot the case, it will (probably) raise an
+      [OBus_error.Unknown_method] *)
 
 (** {6 Informations} *)
 
 type name = string
 
-val name : t -> name Lwt.t
+val name : t -> name
   (** Return the unique name of a connection. It is given by the
       message bus for the lifetime of the connection to it. *)
 
@@ -96,7 +96,7 @@ val name_has_owner : t -> name -> bool Lwt.t
 val list_names : t -> name list Lwt.t
   (** List names currently running on the message bus *)
 
-val list_activatable_names : t -> name list Lwt.t
+val list_activable_names : t -> name list Lwt.t
   (** List services that can be activated. A service is automatically
       activated when you call one of its method or when you use
       [start_service_by_name] *)
@@ -121,7 +121,7 @@ val match_rule :
   ?sender:name ->
   ?interface:string ->
   ?member:string ->
-  ?path:Path.t ->
+  ?path:OBus_path.t ->
   ?destination:name ->
   ?args:(int * string) list ->
   unit -> match_rule
@@ -158,12 +158,12 @@ val get_id : t -> string Lwt.t
 (** You will always receive these signals, you do not have to add
     matching rules for that *)
 
-val on_name_owner_changed : t -> (name -> name option -> name option -> unit) -> unit
+(*val on_name_owner_changed : t -> (name -> name option -> name option -> unit) -> unit*)
   (** [name_owner_changer name old_owner new_owner] is emitted each
       time a name owner change. This can be used to detect
       connection/disconnection. *)
 
-val on_name_lost : t -> (name -> unit) -> unit
-val on_name_acquired : t -> (name -> unit) -> unit
+(*val on_name_lost : t -> (name -> unit) -> unit*)
+(*val on_name_acquired : t -> (name -> unit) -> unit*)
   (** You receive these signals when you became the owner of a name or
       when you loose a name *)

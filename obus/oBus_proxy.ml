@@ -8,78 +8,51 @@
  *)
 
 
-type name = string
-type path = string
-
-type 'a t = {
-  connection : Connection.t;
-  interface : 'a Interface.t;
-  name : name option;
-  path : path;
+type t = {
+  connection : OBus_connection.t;
+  service : string option;
+  path : OBus_path.t;
 }
 
-let make connection interface ?destination path =
-  { connection = connection;
-    interface = interface;
-    name = destination;
-    path = path }
-
-let path { path = x } = x
-let name { name = x } = x
-let connection { connection = x } = x
-
-open Wire
-
-type ('a, 'b) intern_method_call_desc = {
-  intern_mcd_interface : 'a Interface.t;
-  intern_mcd_member : string;
-  intern_mcd_input_signature : string;
-  intern_mcd_output_signature : string;
-  intern_mcd_reader : 'b body_reader;
+let make ~connection ?service ~path = {
+  connection = connection;
+  service = service;
+  path = path;
 }
 
-open Message
-open Connection
+let connection p = p.connection
+let path p = p.path
+let service p = p.service
 
-let fail desc message =
-  failwith
-    (Printf.sprintf
-       "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
-       desc.intern_mcd_member
-       (Interface.name desc.intern_mcd_interface)
-       desc.intern_mcd_output_signature
-       (WireMessage.signature message))
+let kmethod_call cont proxy ?interface ~member =
+  OBus_connection.ksend_message_with_reply (fun w -> Lwt.bind w (fun (header, value) -> cont value))
+    proxy.connection
+    (OBus_header.method_call
+       ?destination:proxy.service
+       ~path:proxy.path
+       ?interface
+       ~member ())
 
-let handle_reply desc message =
-  let signature, (byte_order, buffer, ptr) = message.body in
-    if signature = desc.intern_mcd_output_signature
-    then desc.intern_mcd_reader byte_order buffer ptr
-    else fail desc message
+let method_call p = kmethod_call (fun x -> Lwt.return x) p
 
-let handle_reply_async desc f message =
-  let signature, (byte_order, buffer, ptr) = message.body in
-    if signature = desc.intern_mcd_output_signature
-    then
-      let x = desc.intern_mcd_reader byte_order buffer ptr in
-        (fun () -> f x)
-    else fail desc message
+let umethod_call proxy ?interface ~member body =
+  Lwt.bind
+    (OBus_connection.usend_message_with_reply proxy.connection
+       (OBus_header.method_call
+          ?destination:proxy.service
+          ~path:proxy.path
+          ?interface
+          ~member ())
+       body)
+    (fun (header, value) -> Lwt.return value)
 
-let make_message desc ?(flags=default_flags) proxy body_writer =
-  { flags = flags;
-    serial = 0l;
-    sender = None;
-    destination = name proxy;
-    typ = `Method_call(path proxy, Some (Interface.name desc.intern_mcd_interface), desc.intern_mcd_member);
-    body = (desc.intern_mcd_input_signature, body_writer) }
+open OBus_wire
 
-let intern_proxy_call_sync proxy desc writer =
-  intern_send_message_sync (connection proxy) (make_message desc proxy writer) (handle_reply desc)
-let intern_proxy_call_async proxy desc writer ?on_error f =
-  intern_send_message_async (connection proxy) (make_message desc proxy writer) ?on_error (handle_reply_async desc f)
-let intern_proxy_call_cookie proxy desc writer =
-  intern_send_message_cookie (connection proxy) (make_message desc proxy writer) (handle_reply desc)
-let intern_proxy_call_no_reply proxy desc writer =
-  intern_send_message (connection proxy)
-    (make_message desc ~flags:{ no_reply_expected = true;
-                                no_auto_start = true }
-       proxy writer)
+let ob_t = OBus_comb.make
+  ~annot:OBus_annot.dobject_path
+  ~reader:(perform
+             path <-- robject_path;
+             connection <-- rconnection;
+             sender <-- rsender;
+             return (make ~connection ?service:sender ~path))
+  ~writer:(fun proxy -> wobject_path proxy.path)
