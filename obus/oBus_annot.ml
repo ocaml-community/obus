@@ -26,6 +26,7 @@ type ext_basic =
   | Ta_string
   | Ta_signature
   | Ta_object_path
+  | Ta_proxy of string option
   | Ta_flag of ext_basic * string * string list
   | Ta_bitwise of ext_basic * string * string list
 
@@ -100,6 +101,7 @@ let ddouble = Annot(Ta_one(Ta_basic Ta_double))
 let dstring = Annot(Ta_one(Ta_basic Ta_string))
 let dsignature = Annot(Ta_one(Ta_basic Ta_signature))
 let dobject_path = Annot(Ta_one(Ta_basic Ta_object_path))
+let dproxy t = Annot(Ta_one(Ta_basic (Ta_proxy t)))
 let dflag t n l = Annot(Ta_one(Ta_basic(Ta_flag(ext_basic_of_annot t, n, l))))
 let dbitwise t n l = Annot(Ta_one(Ta_basic(Ta_bitwise(ext_basic_of_annot t, n, l))))
 let dstruct (Annot tl) = Annot(Ta_one(Ta_struct tl))
@@ -128,6 +130,7 @@ let rec basic_type_of_ext = function
   | Ta_string -> Tstring
   | Ta_signature -> Tsignature
   | Ta_object_path -> Tobject_path
+  | Ta_proxy _ -> Tobject_path
   | Ta_flag(t, name, l) -> basic_type_of_ext t
   | Ta_bitwise(t, name, l) -> basic_type_of_ext t
 
@@ -153,7 +156,7 @@ let default_ext_of_basic = function
   | Tdouble -> Ta_double
   | Tstring -> Ta_string
   | Tsignature -> Ta_signature
-  | Tobject_path -> Ta_object_path
+  | Tobject_path -> Ta_proxy None
 
 let rec default_ext_of_single = function
   | Tbasic t -> Ta_basic(default_ext_of_basic t)
@@ -212,6 +215,8 @@ let string_of_basic ob = function
   | Ta_string -> "string"
   | Ta_signature -> select ob "signature" "OBus_types.signature"
   | Ta_object_path -> select ob "path" "OBus_path.t"
+  | Ta_proxy None -> select ob "proxy" "OBus_proxy.t"
+  | Ta_proxy (Some t) -> t
   | Ta_flag(_, name, _) -> name
   | Ta_bitwise(_, name, _) -> name
 

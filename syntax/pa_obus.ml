@@ -122,7 +122,7 @@ struct
       parse_type ctyp
 
   let rec func_combinator_of_ctyp = function
-    | <:ctyp@_loc< $a$ -> $b$ >> -> <:expr< $func_combinator_of_ctyp a$ --> $func_combinator_of_ctyp b$ >>
+    | <:ctyp@_loc< $a$ -> $b$ >> -> <:expr< $combinator_of_ctyp a$ --> $func_combinator_of_ctyp b$ >>
     | t -> let _loc = Ast.loc_of_ctyp t in <:expr< ob_reply $combinator_of_ctyp t$ >>
 
   (***** Bitwise and flag definitions *****)
@@ -184,7 +184,7 @@ struct
 
       (* Construct the new annotation with semantical
          information *)
-      let $lid:"d" ^ name$ = OBus_annot.dbitwise (OBus_comb.annot $key_comb$) $lid:name$
+      let $lid:"d" ^ name$ = OBus_annot.dbitwise (OBus_comb.annot $key_comb$) $str:name$
         $ List.fold_right (fun (patt, expr, _loc, id) acc ->
                              <:expr< $str:string_of_key patt ^ "=" ^ id$ :: $acc$ >>)
             cstrs <:expr< [] >> $
@@ -228,10 +228,11 @@ struct
                     ~reader:(OBus_wire.bind (OBus_comb.reader $key_comb$)
                                (fun x ->
                                   OBus_wire.return
-                                    $ List.fold_left
-                                      (fun acc (patt, expr, _loc, id) ->
-                                         <:expr< let l = if $bw_read patt$ then $make_vrn_expr vrntyp _loc id$ :: l else l in $acc$ >>)
-                                         <:expr< [] >> cstrs $))
+                                    (let l = [] in
+                                       $ List.fold_left
+                                         (fun acc (patt, expr, _loc, id) ->
+                                            <:expr< let l = if $bw_read patt$ then $make_vrn_expr vrntyp _loc id$ :: l else l in $acc$ >>)
+                                       <:expr< l >> cstrs $)))
                     ~writer:(fun l ->
                                OBus_comb.writer $key_comb$
                                  (List.fold_left
@@ -257,13 +258,13 @@ struct
                     ~reader:(OBus_wire.bind (OBus_comb.reader $key_comb$)
                                (fun x ->
                                   OBus_wire.return
-                                    (match (x : $lid:name$) with
+                                    (match x with
                                          $ Ast.mcOr_of_list
                                              ((List.map
                                                  (fun (patt, expr, _loc, id) ->
                                                     <:match_case< $patt$ -> $make_vrn_expr vrntyp _loc id$ >>)
                                                  cstrs) @
-                                                [ <:match_case< _ -> failwith $str:"invalid value for " ^ name$ >> ]) $)))
+                                                [ <:match_case< _ -> (failwith $str:"invalid value for " ^ name$ : $lid:name$) >> ]) $)))
                     ~writer:(fun x ->
                                OBus_comb.writer $key_comb$
                                  (match x with

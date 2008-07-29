@@ -10,8 +10,12 @@
 (* Just open a connection with the message bus and print the assigned
    unique name *)
 
-open OBus
+open Lwt
+
+let main =
+  (perform
+     bus <-- OBus_bus.session ();
+     return (Printf.printf "My unique connection name is: %s\n" (OBus_bus.name bus)))
 
 let _ =
-  let bus = Bus.session () in
-    Printf.printf "My unique connection name is: %s\n" (Bus.name bus)
+  Lwt_unix.run main

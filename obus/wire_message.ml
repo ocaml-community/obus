@@ -120,7 +120,7 @@ struct
     let protocol_version = unsafe_read_byte_as_int buffer 3 in
       (* Check the protocol version first, since we can not do
          anything if it is not the same as our *)
-      if protocol_version <> Constant.protocol_version
+      if protocol_version <> OBus_info.protocol_version
       then raise (Reading_error (sprintf "invalid protocol version: %d" protocol_version));
 
       let message_maker = let code = unsafe_read_byte_as_int buffer 1 in

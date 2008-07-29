@@ -34,7 +34,10 @@ let annot { annot = x } = x
 let reader { reader = x } = x
 let writer { writer = x } = x
 
-let wrap comb f g = make (annot comb) (reader comb >>= (f |> return)) (g |> writer comb)
+let wrap comb ?annot f g = make (match annot with
+                                   | Some a -> a
+                                   | None -> comb.annot)
+  (reader comb >>= (f |> return)) (g |> writer comb)
 
 type ('a, 'b, 'c) func = {
   (* Input signature of the combinator *)

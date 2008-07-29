@@ -34,6 +34,7 @@ val ob_string : (string, _, dstring) OBus_comb.one
 val ob_signature : (OBus_types.signature, _, dsignature) OBus_comb.one
 val ob_object_path : (OBus_path.t, _, dobject_path) OBus_comb.one
 val ob_path : (OBus_path.t, _, dobject_path) OBus_comb.one
+val ob_proxy : (OBus_proxy.t, _, dobject_path) OBus_comb.one
 val ob_list : ('a, 'da) OBus_comb.single_p -> ('a list, _, 'da darray) OBus_comb.one
 val ob_set : ('a, 'da) OBus_comb.single_p -> ('a list, _, 'da darray) OBus_comb.one
   (** The difference between [ob_set] and [ob_list] is that [ob_set]

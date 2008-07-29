@@ -11,11 +11,11 @@
    filters. Filters are part of the lowlevel api. *)
 
 open Printf
-open OBus
-open Rules
-open Message
+open Lwt
+open OBus_bus
+open OBus_header
 
-let filter what_bus message =
+let filter what_bus header body =
   let opt = function
     | Some s -> sprintf "Some %S" s
     | None -> "None"
@@ -30,8 +30,8 @@ let filter what_bus message =
   body_type = %s
   body = %s
 
-%!" what_bus message.flags.no_reply_expected message.flags.no_auto_start message.serial
-      (match message.typ with
+%!" what_bus header.flags.no_reply_expected header.flags.no_auto_start header.serial
+      (match header.typ with
          | `Method_call(path, interface, member) ->
              sprintf "method_call { path = %S ; interface = %s ; member = %S }"
                path (opt interface) member
@@ -42,30 +42,25 @@ let filter what_bus message =
          | `Signal(path, interface, member) ->
              sprintf "signal { path = %S ; interface = %S ; member = %S }"
                path interface member)
-      (opt message.destination)
-      (opt message.sender)
-      (Message.signature message)
-      (String.concat ", " (List.map (fun v -> Types.to_string (Values.typ v)) (body message)))
-      (String.concat "; " (List .map Values.to_string (body message)))
+      (opt header.destination)
+      (opt header.sender)
+      (OBus_types.string_of_signature (OBus_value.type_of_sequence body))
+      (OBus_types.string_of_sequence  (OBus_value.type_of_sequence body))
+      (OBus_value.string_of_sequence body)
 
-let match_all bus =
-  (* Filtering method calls seems to make the bus to disconnect us *)
-  List.iter (fun typ -> DBus.add_match bus [ Type typ ])
-    [ Method_return; Error; Signal ]
+let add_filter what_bus get_bus =
+  get_bus () >>= fun bus ->
+    ignore (OBus_connection.add_filter bus (filter what_bus));
+
+    (* Filtering method calls seems to make the bus to disconnect us *)
+    List.iter (fun typ -> ignore_result (OBus_bus.add_match bus (OBus_bus.match_rule ~typ ())))
+      [ `method_return; `error; `signal ];
+
+    return ()
 
 let _ =
-  let session = Bus.session () in
-  let system = Bus.system () in
+  ignore_result (add_filter "session" OBus_bus.session);
+  ignore_result (add_filter "system" OBus_bus.system);
 
-    ignore (Connection.add_filter session (filter "session"));
-    ignore (Connection.add_filter system (filter "system"));
-
-    (* filter everything *)
-    match_all session;
-    match_all system;
-
-    (* Nothing more to do a thread already handles messages on each
-       connections! *)
-    Thread.delay 0.1;
-    printf "type Ctrl+C to stop\n%!";
-    Thread.delay 10000.0
+  printf "type Ctrl+C to stop\n%!";
+  Lwt_unix.run (wait ())

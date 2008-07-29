@@ -247,33 +247,3 @@ let read_until reader empty len ctx i =
   in
     aux (i, empty)
 
-open OBus_intern
-
-let pad2 i = i land 1
-let pad4 i = (4 - i) land 3
-let pad8 i = (8 - i) land 7
-
-let wpadn f ctx i =
-  let count = f i in
-    if i + count > String.length ctx.buffer then out_of_bounds ();
-    for j = 0 to count - 1 do
-      String.unsafe_set ctx.buffer (i + j) '\x00'
-    done;
-    (i + count, ())
-
-let wpad2 = wpadn pad2
-let wpad4 = wpadn pad4
-let wpad8 = wpadn pad8
-
-let rpadn f ctx i =
-  let count = f i in
-    if i + count > String.length ctx.buffer then out_of_bounds ();
-    for j = 0 to count - 1 do
-      if String.unsafe_get ctx.buffer (i + j) <> '\x00'
-      then raise (Reading_error "unitialized padding bytes")
-    done;
-    (i + count, ())
-
-let rpad2 = rpadn pad2
-let rpad4 = rpadn pad4
-let rpad8 = rpadn pad8

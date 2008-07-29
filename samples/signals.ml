@@ -38,6 +38,8 @@ let _ =
        route us signals from this interface *)
     Signal.bus_register session DBus.signals bus_handler;
 
+    Hal_devices.
+
     (* We can also add manually the match rules on the message
        bus. That way we can put finer rules *)
     DBus.add_match system

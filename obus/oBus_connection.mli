@@ -62,6 +62,10 @@ val send_message_with_reply : t -> OBus_header.method_call -> ('b, (OBus_header.
   (** [send_message_with_reply connection header typ ...] Send a
       message and return a thread which wait for the reply *)
 
+val ksend_message : (unit -> 'c) -> t -> 'a OBus_header.t -> ('b, 'c, unit) OBus_comb.func -> 'b
+val ksend_message_with_reply : ((OBus_header.method_return * 'c) Lwt.t -> 'd Lwt.t) -> t -> OBus_header.method_call -> ('b, 'd Lwt.t, 'c) OBus_comb.func -> 'b
+  (** Same thing but with continuation *)
+
 val send_error : t -> OBus_header.method_call -> OBus_error.name -> OBus_error.message -> unit
   (** Send an error message in reply to a method call *)
 

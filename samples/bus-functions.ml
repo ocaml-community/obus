@@ -11,32 +11,42 @@
    message bus *)
 
 open Printf
-open OBus
+open Lwt
 
 let service = "org.freedesktop.Notifications"
 let name = "org.ocamlcore.forge.obus"
 
-let _ =
-  let bus = Bus.session () in
-    printf "the message bus id is: %S\n" (DBus.get_id bus);
+let ($) a b = a b
 
-    printf "names on the session bus:\n";
-    List.iter (printf "  %s\n") (DBus.list_names bus);
+let main =
+  (perform
+     bus <-- OBus_bus.session ();
+     id <-- OBus_bus.get_id bus;
+     return $ printf "the message bus id is: %S\n" id;
 
-    printf "these names are activable:\n";
-    List.iter (printf "  %s\n") (DBus.list_activatable_names bus);
+     return $ printf "names on the session bus:\n";
+     names <-- OBus_bus.list_names bus;
+     return $ List.iter (Printf.printf "  %s\n") names;
 
-    printf "trying to start service %S: %!" service;
-    print_endline
-      (match DBus.start_service_by_name bus service [] with
-         | `Success -> "success"
-         | `Already_running -> "already running");
+     return $ printf "these names are activable:\n";
+     names <-- OBus_bus.list_activable_names bus;
+     return $ List.iter (Printf.printf "  %s\n") names;
 
-    printf "trying to acquire the name %S: %!" name;
-    print_endline
-      (match DBus.request_name bus name [ `Replace_existing; `Do_not_queue ] with
-         | `Primary_owner -> "success"
-         | `In_queue -> "in queue"
-         | `Exists -> "the name already exists"
-         | `Already_owner -> "i already own the name")
+     return $ printf "trying to start service %S: %!" service;
+     result <-- OBus_bus.start_service_by_name bus service [];
+     return $ print_endline
+       (match result with
+          | `success -> "success"
+          | `already_running -> "already running");
+
+     return $ printf "trying to acquire the name %S: %!" name;
+     result <-- OBus_bus.request_name bus name [ `replace_existing; `do_not_queue ];
+     return $ print_endline
+       (match result with
+          | `primary_owner -> "success"
+          | `in_queue -> "in queue"
+          | `exists -> "the name already exists"
+          | `already_owner -> "i already own the name"))
+
+let _ = Lwt_unix.run main
 

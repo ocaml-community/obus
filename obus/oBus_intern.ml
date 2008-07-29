@@ -84,7 +84,7 @@ and running_connection = {
   shared : bool;
 
   (* Unique name of the connection *)
-  mutable name : string option;
+  mutable name : string;
 
   (* The server guid *)
   guid : OBus_address.guid;
@@ -126,3 +126,40 @@ let with_running connection f = match !connection with
 let lwt_with_running connection f = match !connection with
   | Crashed exn -> Lwt.fail exn
   | Running running -> f running
+
+
+(* The following function should be in [Wire] because they are needed
+   by [OBus_wire] and [Wire_message] but the depend on the definition
+   of context so they must be here to avoid circular dependencies
+   problem *)
+
+open Wire
+
+let pad2 i = i land 1
+let pad4 i = (4 - i) land 3
+let pad8 i = (8 - i) land 7
+
+let wpadn f ctx i =
+  let count = f i in
+    if i + count > String.length ctx.buffer then out_of_bounds ();
+    for j = 0 to count - 1 do
+      String.unsafe_set ctx.buffer (i + j) '\x00'
+    done;
+    (i + count, ())
+
+let wpad2 = wpadn pad2
+let wpad4 = wpadn pad4
+let wpad8 = wpadn pad8
+
+let rpadn f ctx i =
+  let count = f i in
+    if i + count > String.length ctx.buffer then out_of_bounds ();
+    for j = 0 to count - 1 do
+      if String.unsafe_get ctx.buffer (i + j) <> '\x00'
+      then raise (Reading_error "unitialized padding bytes")
+    done;
+    (i + count, ())
+
+let rpad2 = rpadn pad2
+let rpad4 = rpadn pad4
+let rpad8 = rpadn pad8

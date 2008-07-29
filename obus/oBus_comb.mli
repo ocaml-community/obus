@@ -56,7 +56,7 @@ val make :
   writer:('a -> (unit, 'b, 'c, writer) OBus_wire.t) ->
   ('a, 'b, 'c) t
 
-val wrap : ('a, 'b, 'c) t -> ('a -> 'd) -> ('d -> 'a) -> ('d, 'b, 'c) t
+val wrap : ('a, 'b, 'c) t -> ?annot:('b, 'c) OBus_annot.t -> ('a -> 'd) -> ('d -> 'a) -> ('d, 'b, 'c) t
   (** Wrap a convertor with the given functions *)
 
 (** {6 Functionnal combinators} *)

@@ -1,15 +1,17 @@
 # -*- conf -*-
-# Syntaxes
+# Syntax extensions
 <syntax/*>: camlp4of, use_camlp4
 # Most of the file use pa_monad
 <{obus,test,samples}/*.ml>: syntax_camlp4o, pkg_monad
 <**/*.*>: pkg_lwt
-# pa_log is a bit expensive so we do not apply it to all files
+# Library
 <obus/oBus_{auth,address,transport,connection,error}.ml>: pa_log
-# Tools
-<tools/obus-binder.*>: pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
-<tools/obus-binder.ml>: camlp4of
-<tools/obus-introspect.*>: use_obus, pkg_unix, pkg_xml-light, pkg_str, use_camlp4_full, use_dynlink
+<obus/oBus_bus.ml>: pa_obus
 # Samples
+<samples/*.*>: use_obus
+<samples/*.ml>: pa_obus
+# Tools
+<tools/*.*>: use_obus
+<tools/obus-{binder,introspect}.*>: pkg_xml-light
 # Tests
-<test/**>: pkg_unix, pkg_str, pkg_xml-light
+<test/**>: pkg_str, pkg_xml-light, pa_obus

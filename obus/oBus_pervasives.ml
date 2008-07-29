@@ -35,6 +35,7 @@ let ob_string = make dstring rstring wstring
 let ob_signature = make dsignature rsignature wsignature
 let ob_object_path = make dobject_path robject_path wobject_path
 let ob_path = ob_object_path
+let ob_proxy = OBus_proxy.ob_t
 let ob_list t = make (darray(annot t)) (rlist (annot t) (reader t)) (wlist (annot t) (writer t))
 let ob_set t = make (darray(annot t)) (rset (annot t) (reader t)) (wlist (annot t) (writer t))
 let ob_assoc tk tv =

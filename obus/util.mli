@@ -32,6 +32,21 @@ type ('a, 'b) either =
 val split : ('a -> ('b, 'c) either) -> 'a list -> 'b list * 'c list
   (** Split a list *)
 
+val split_upper : string -> string list
+  (** Apply the following transformation:
+
+      "SetCPUFreqGovernor" -> ["set"; "cpufreq"; "governor"] *)
+
+val camlize_lid : string -> string
+  (** Apply the following transformation:
+
+      "SetCPUFreqGovernor" -> "set_cpufreq_governor" *)
+
+val camlize_uid : string -> string
+  (** Apply the following transformation:
+
+      "SetCPUFreqGovernor" -> "Set_cpufreq_governor" *)
+
 val with_open_in : string -> (in_channel -> 'a) -> 'a
 val with_open_out : string -> (out_channel -> 'a) -> 'a
   (** [with_open_* fname f] open [fname], apply [f] on the channel and

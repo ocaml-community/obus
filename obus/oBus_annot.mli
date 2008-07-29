@@ -40,6 +40,8 @@ type ext_basic =
   | Ta_string
   | Ta_signature
   | Ta_object_path
+  | Ta_proxy of string option
+      (** Proxy of a custom type. The parameter is type name *)
   | Ta_flag of ext_basic * string * string list
   | Ta_bitwise of ext_basic * string * string list
 
@@ -165,6 +167,7 @@ val ddouble : (_, ddouble) one
 val dstring : (_, dstring) one
 val dsignature : (_, dsignature) one
 val dobject_path : (_, dobject_path) one
+val dproxy : string option -> (_, dobject_path) one
 
 val dflag : 'a single_p -> string -> string list -> (_, 'a) one
 val dbitwise : 'a sequence_p -> string -> string list -> (_, 'a) one

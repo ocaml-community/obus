@@ -11,7 +11,6 @@ open Printf
 open OBus_header
 open OBus_intern
 open Wire_message
-open OBus_pervasives
 open OBus_types
 open Lwt
 
@@ -146,17 +145,21 @@ let register_ureply_handler w running serial =
 
 let isig_of_func f = OBus_annot.sequence_type_of_ext (OBus_comb.func_signature f)
 
-let send_message connection header typ =
+let ksend_message cont connection header typ =
   with_running connection $ fun running ->
     OBus_comb.func_send typ
-      (send_message_backend connection running header (fun _ _ -> ()) (isig_of_func typ))
+      (fun writer ->
+         send_message_backend connection running header (fun _ _ -> ()) (isig_of_func typ) writer;
+         cont ())
+
+let send_message connection = ksend_message (fun x -> x) connection
 
 let usend_message connection header body =
   with_running connection $ fun running ->
     send_message_backend connection running header (fun _ _ -> ())
       (OBus_value.type_of_sequence body) (OBus_wire.wsequence body)
 
-let send_message_with_reply connection header typ =
+let ksend_message_with_reply cont connection header typ =
   OBus_comb.func_send typ
     (fun writer ->
        lwt_with_running connection $ fun running ->
@@ -164,7 +167,9 @@ let send_message_with_reply connection header typ =
            send_message_backend connection running header
              (register_reply_handler header w typ)
              (isig_of_func typ) writer;
-           w)
+           cont w)
+
+let send_message_with_reply connection = ksend_message_with_reply (fun x -> x) connection
 
 let usend_message_with_reply connection header body =
   lwt_with_running connection $ fun running ->
@@ -174,13 +179,16 @@ let usend_message_with_reply connection header body =
         (OBus_value.type_of_sequence body) (OBus_wire.wsequence body);
       w
 
+let ob_string = OBus_comb.make OBus_annot.dstring OBus_wire.rstring OBus_wire.wstring
+let ob_unit = OBus_comb.make OBus_annot.dnil (OBus_wire.return ()) (fun _ -> OBus_wire.return ())
+
 let send_error connection { destination = destination; serial = serial } name msg =
   send_message connection { destination = destination;
                             sender = None;
                             flags = { no_reply_expected = true; no_auto_start = true };
                             serial = 0l;
                             typ = `Error(serial, name) }
-    (ob_string --> ob_reply ob_unit) msg
+    (OBus_comb.abstract ob_string (OBus_comb.reply ob_unit)) msg
 
 let send_exn connection method_call exn =
   match OBus_error.unmake exn with
@@ -392,7 +400,7 @@ let of_authenticated_transport ?(shared=true) transport guid =
       filters = [];
       next_filter_id = 0;
       guid = guid;
-      name = None;
+      name = "";
       shared = shared;
       on_disconnect = on_disconnect;
     } in
