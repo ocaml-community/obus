@@ -7,25 +7,18 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Camlp4.PreCast
-open Types
-open Introspect
-
-let _loc = Loc.ghost
+open Common
 
 let output_file_prefix = ref None
 let xml_files = ref []
-let internal = ref false
 
 let args = [
   "-o", Arg.String (fun s -> output_file_prefix := Some s),
-  "output file prefix";
-  "-internal", Arg.Set internal,
-  "generate a module bound to be part of the obus library";
+  "output file prefix"
 ]
 
 let usage_msg = Printf.sprintf "Usage: %s <options> <xml-files>
-Generate an ocaml module from DBus introspection xml files.
+Generate an ocaml module from DBus introspection files.
 options are:" (Filename.basename (Sys.argv.(0)))
 
 let choose_output_file_prefix () = match !output_file_prefix with
@@ -34,39 +27,18 @@ let choose_output_file_prefix () = match !output_file_prefix with
       | [f] -> begin
           try
             let i = String.rindex f '.' in
-              if String.lowercase (Str.string_after f i) = ".xml"
-              then String.sub f 0 i
-              else f
+            if String.lowercase (Str.string_after f i) = ".xml"
+            then String.sub f 0 i
+            else f
           with
               Not_found -> f
         end
       | _ -> "obus.out"
 
-let source_xml_parser = XmlParser.make ()
-let _ = XmlParser.prove source_xml_parser false
-
-let parse_file fname =
-  try
-    Xparser.parse Parser.document ~filename:fname (XmlParser.parse source_xml_parser (XmlParser.SFile fname))
-  with
-      Xml.Error err ->
-        Log.print "error while parsing file %S: %s\n" fname (Xml.error err);
-        exit 2
-
-let open_print_header fname =
-  let oc = open_out fname in
-  let fname = Filename.basename fname in
-    Printf.fprintf oc "\
-(*
- * %s
- * %s
- *
- * File generated with obus-binder.
- *)
-" fname (String.make (String.length fname) '-');
-    oc
-
-module Printer = Camlp4.Printers.OCaml.Make(Syntax)
+let with_pp fname f = Util.with_open_out fname
+  (fun oc ->
+     f (Format.formatter_of_out_channel oc);
+     Printf.eprintf "File %S written.\n" fname)
 
 let _ =
   Arg.parse args
@@ -77,31 +49,14 @@ let _ =
   then Arg.usage args usage_msg;
 
   let output_file_prefix = choose_output_file_prefix () in
-  let node = List.fold_left
-    (fun node fname ->
-       List.fold_left
-         (fun node (dbus_name, caml_names, content, proxy_typ, to_proxy) ->
-            Tree.insert caml_names (dbus_name, content, proxy_typ, to_proxy) node)
-         node
-         (parse_file fname))
-    Tree.empty
-    !xml_files in
-  let implem = GenImplem.gen node in
 
-  let implem_fname = output_file_prefix ^ ".ml"
-  and interf_fname = output_file_prefix ^ ".mli" in
+  let interfaces = List.flatten
+    (List.map
+       (fun name -> fst (parse_source IParser.document (XmlParser.SFile name)))
+       !xml_files) in
 
-  let printer = new Printer.printer () in
-  let oc = open_print_header implem_fname in
+  with_pp (output_file_prefix ^ ".mli")
+    (fun pp -> List.iter (print_interf pp) interfaces);
 
-    printer#str_item (Format.formatter_of_out_channel oc)
-      (if !internal
-       then
-         implem
-       else
-         <:str_item< open OBus;; $implem$ >>);
-
-    let oc = open_print_header interf_fname in
-      if not !internal
-      then output_string oc "\nopen OBus\n";
-      PrintInterf.print true oc node
+  with_pp (output_file_prefix ^ ".ml")
+    (fun pp -> List.iter (print_implem pp) interfaces)
