@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-module type Interface_params = sig
+module type Custom_params = sig
   type t
   val name : string
   val of_proxy : OBus_proxy.t -> t
@@ -17,55 +17,104 @@ module type Interface = sig
   type t
   val of_proxy : OBus_proxy.t -> t
   val to_proxy : t -> OBus_proxy.t
-  val ob_t : (t, _, OBus_annot.dobject_path) OBus_comb.one
-  val call : t -> string -> ('a, 'b Lwt.t, 'b) OBus_comb.func -> 'a
-  val kcall : ('b -> 'c Lwt.t) -> t -> string -> ('a, 'c Lwt.t, 'b) OBus_comb.func -> 'a
+  val ob_t : (t, _, OBus_types.dobject_path) OBus_comb.one
+  val call : t -> string -> ('a, 'b Lwt.t, 'b, _, _) OBus_comb.func -> 'a
+  val kcall : ('b Lwt.t -> 'c) -> t -> string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
 end
-module type Service_params = sig
+module type Fixed_params = sig
   val name : string
+  val path : string
+  val service : string option
 end
-module type Service = sig
-  module Make(Params : Interface_params) : Interface
-    with type t = Params.t
-  module Make_simple(Params : sig val name : string end) : Interface
-    with type t = OBus_proxy.t
+module type Uniq_params = sig
+  val name : string
+  val service : string option
+  val connection : unit -> OBus_connection.t Lwt.t
 end
 
-module Make_service(Params : Service_params) =
+let register_exn interface error_name = OBus_error.register (interface ^ "." ^ error_name)
+
+module Make(Name : sig val name : string end) =
 struct
-  module Make(Params : Interface_params) =
-  struct
-    include Params
+  type t = OBus_proxy.t
+  let to_proxy x = x
+  let of_proxy x = x
+  let ob_t = OBus_proxy.ob_t
+  let call proxy member = OBus_proxy.method_call proxy ~interface:Name.name ~member
+  let kcall cont proxy member = OBus_proxy.kmethod_call cont proxy ~interface:Name.name ~member
+  let register_exn = register_exn Name.name
+end
 
-    let ob_t =
-      let len = String.length name in
-      let str = String.create (len + 2) in
-        (* Create a module name from the interface name *)
-        for i = 0 to len - 1 do
-          if name.[i] = '.'
-          then begin
-            str.[i] <- '_';
-            if i > 0 then str.[i - 1] <- Char.uppercase str.[i - 1]
-          end else str.[i] <- name.[i];
-          str.[len] <- '.';
-          str.[len + 1] <- 't'
-        done;
-        OBus_comb.wrap ~annot:(OBus_annot.dproxy (Some str)) OBus_proxy.ob_t of_proxy to_proxy
+module Make_custom(Params : Custom_params) =
+struct
+  include Params
 
-    let call obj member =
-      OBus_proxy.method_call (to_proxy obj) ~interface:name ~member
-    let kcall cont obj member =
-      OBus_proxy.kmethod_call cont (to_proxy obj) ~interface:name ~member
+  let ob_t = OBus_comb.wrap OBus_proxy.ob_t of_proxy to_proxy
 
-    let register_exn error_name = OBus_error.register (name ^ "." ^ error_name)
-  end
+  let call obj member =
+    OBus_proxy.method_call (to_proxy obj) ~interface:name ~member
+  let kcall cont obj member =
+    OBus_proxy.kmethod_call cont (to_proxy obj) ~interface:name ~member
 
-  module Make_simple(Params : sig val name : string end) =
-    Make(struct
-           type t = OBus_proxy.t
-           let name = Params.name
-           let to_proxy x = x
-           let of_proxy x = x
-         end)
+  let register_exn = register_exn Params.name
+end
+
+module Make_fixed(Params : Fixed_params) =
+struct
+  type t = OBus_connection.t
+  let to_proxy c = OBus_proxy.make ~connection:c ~path:Params.path ?service:Params.service
+  let of_proxy = OBus_proxy.connection
+
+  let kcall cont connection member =
+    OBus_connection.ksend_message_with_reply (fun w -> cont (Lwt.bind w (fun (header, value) -> Lwt.return value)))
+      connection
+      (OBus_header.method_call
+         ?destination:Params.service
+         ~path:Params.path
+         ~interface:Params.name
+         ~member ())
+
+  let call connection = kcall (fun x -> x) connection
+
+  let register_exn = register_exn Params.name
+
+  open OBus_wire
+  let ob_t = OBus_comb.make
+    ~annot:OBus_types.dobject_path
+    ~reader:(perform
+               _ <-- robject_path;
+               c <-- rconnection;
+               return c)
+    ~writer:(fun _ -> wobject_path Params.path)
+end
+
+module Make_uniq(Params : Uniq_params) =
+struct
+  type t = OBus_path.t
+  let to_proxy _ = failwith "not implemented"
+  let of_proxy = OBus_proxy.path
+  let ob_t = OBus_pervasives.ob_path
+
+  open OBus_intern
+  open Lwt
+
+  let kcall cont path member typ =
+    OBus_comb.func_make_writer typ $ fun writer ->
+      let reply = OBus_comb.func_reply typ in
+      cont
+        (Params.connection () >>= fun connection ->
+           OBus_connection.wire_send_message_with_reply connection
+             (OBus_header.method_call
+                ?destination:Params.service
+                ~path
+                ~interface:Params.name
+                ~member ())
+             (OBus_comb.func_signature typ) writer
+             (OBus_comb.annot reply) (OBus_comb.reader reply)
+           >>= (snd |> return))
+
+  let call path = kcall (fun x -> x) path
+
+  let register_exn = register_exn Params.name
 end

@@ -49,29 +49,6 @@ let rec split f l =
                      | Left x -> (x :: a, b)
                      | Right x -> (a, x :: b)) l ([], [])
 
-let split_upper name =
-  let len = String.length name in
-  let rec find_end_word previous_is_upper i =
-    if i = len
-    then i
-    else let ch = name.[i] in
-      match previous_is_upper, ch >= 'A' && ch <= 'Z' with
-        | true, true -> find_end_word true (i + 1)
-        | true, false -> find_end_word false (i + 1)
-        | false, true -> i
-        | false, false -> find_end_word false (i + 1)
-  in
-  let rec split i =
-    if i = len
-    then []
-    else let j = find_end_word true (i + 1) in
-      String.lowercase (String.sub name i (j - i)) :: split j
-  in
-    split 0
-
-let camlize_lid str = String.concat "_" (split_upper str)
-let camlize_uid str = String.capitalize (String.concat "_" (split_upper str))
-
 let with_open_in fname f =
   try_finally f close_in (open_in fname)
 

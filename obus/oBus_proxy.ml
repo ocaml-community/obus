@@ -24,8 +24,10 @@ let connection p = p.connection
 let path p = p.path
 let service p = p.service
 
+let compare a b = Pervasives.compare (service a, path a) (service b, path b)
+
 let kmethod_call cont proxy ?interface ~member =
-  OBus_connection.ksend_message_with_reply (fun w -> Lwt.bind w (fun (header, value) -> cont value))
+  OBus_connection.ksend_message_with_reply (fun w -> cont (Lwt.bind w (fun (header, value) -> Lwt.return value)))
     proxy.connection
     (OBus_header.method_call
        ?destination:proxy.service
@@ -33,7 +35,7 @@ let kmethod_call cont proxy ?interface ~member =
        ?interface
        ~member ())
 
-let method_call p = kmethod_call (fun x -> Lwt.return x) p
+let method_call p = kmethod_call (fun x -> x) p
 
 let umethod_call proxy ?interface ~member body =
   Lwt.bind
@@ -49,7 +51,7 @@ let umethod_call proxy ?interface ~member body =
 open OBus_wire
 
 let ob_t = OBus_comb.make
-  ~annot:OBus_annot.dobject_path
+  ~annot:OBus_types.dobject_path
   ~reader:(perform
              path <-- robject_path;
              connection <-- rconnection;

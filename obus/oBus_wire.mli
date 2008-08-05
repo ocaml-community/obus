@@ -23,7 +23,7 @@
     So it is safe to write your own writing/reading monad.
 *)
 
-open OBus_annot
+open OBus_types
 
 (** {6 Wire Monad} *)
 
@@ -70,12 +70,12 @@ val run : ('a, 'b, 'c, 'typ) t -> OBus_intern.connection -> string option -> OBu
 
 val wbyte : char -> (unit, _, dbyte, writer) one
 val wchar : char -> (unit, _, dbyte, writer) one
-val wint8 : int -> (unit, _, dint8, writer) one
-val wuint8 : int -> (unit, _, duint8, writer) one
+val wint8 : int -> (unit, _, dbyte, writer) one
+val wuint8 : int -> (unit, _, dbyte, writer) one
 val wint16 : int -> (unit, _, dint16, writer) one
 val wuint16 : int -> (unit, _, duint16, writer) one
-val wint : int -> (unit, _, dint, writer) one
-val wuint : int -> (unit, _, duint, writer) one
+val wint : int -> (unit, _, dint32, writer) one
+val wuint : int -> (unit, _, duint32, writer) one
 val wint32 : int32 -> (unit, _, dint32, writer) one
 val wuint32 : int32 -> (unit, _, duint32, writer) one
 val wint64 : int64 -> (unit, _, dint64, writer) one
@@ -85,7 +85,7 @@ val wfloat : float -> (unit, _, ddouble, writer) one
 val wboolean : bool -> (unit, _, dboolean, writer) one
 val wbool : bool -> (unit, _, dboolean, writer) one
 val wstring : string -> (unit, _, dstring, writer) one
-val wsignature : OBus_types.signature -> (unit, _, dsignature, writer) one
+val wsignature : signature -> (unit, _, dsignature, writer) one
 val wobject_path : string -> (unit, _, dobject_path, writer) one
 val wpath : string -> (unit, _, dobject_path, writer) one
 
@@ -95,7 +95,7 @@ val wstruct : (unit, 'da, writer) sequence_p -> (unit, _, 'da dstruct, writer) o
 
 type accu
 
-val warray : 'da OBus_annot.single_p -> ('a -> (unit, 'da, writer) single_p) ->
+val warray : 'da OBus_types.single_p -> ('a -> (unit, 'da, writer) single_p) ->
   (('a -> accu -> accu) -> accu -> accu) -> (unit, _, 'da darray, writer) one
     (** [warray typ element_writer fold] construct an array writer.
         [fold] must be a fold-like function for values of type ['c]
@@ -141,7 +141,7 @@ module Seq : sig
       let (>>>) = List_writer.append
 
       let flags_writer flags =
-        warray_seq duint
+        warray_seq duint32
           (flag_writer 1 flags.flag_a
            >>> flag_writer 2 flags.flag_b
            >>> flag_writer 3 flags.flag_c)
@@ -152,19 +152,19 @@ module Seq : sig
     monoid but it is less efficient than with [warray] and [wdict] *)
 end
 
-val warray_seq : 'da OBus_annot.single_p -> ('da * unit) Seq.t -> (unit, _, 'da darray, writer) one
+val warray_seq : 'da OBus_types.single_p -> ('da * unit) Seq.t -> (unit, _, 'da darray, writer) one
 val wdict_seq : ('k * ('v * unit)) Seq.t -> (unit, _, ('k, 'v) ddict, writer) one
 
 (** {8 Predefined array writers} *)
 
-val wlist : 'da OBus_annot.single_p -> ('a -> (unit, 'da, writer) single_p) -> 'a list -> (unit, _, 'da darray, writer) one
+val wlist : 'da OBus_types.single_p -> ('a -> (unit, 'da, writer) single_p) -> 'a list -> (unit, _, 'da darray, writer) one
   (** Write a list as an array *)
 
 val wassoc : ('a -> (unit, 'da, writer) basic_p) -> ('b -> (unit, 'db, writer) single_p) ->
   ('a * 'b) list -> (unit, _, ('da, 'db) ddict, writer) one
   (** Write an associative list as a dictionnary *)
 
-val wbyte_array : string -> (unit, _, dbyte_array, writer) one
+val wbyte_array : string -> (unit, _, dbyte darray, writer) one
   (** Write a string as an array of byte. This writer is more
       efficient the one we can write with [warray] *)
 
@@ -177,7 +177,7 @@ val wvariant : OBus_value.single -> (unit, _, dvariant, writer) one
   (** This writer will write a variant from a dynamically typed
       value *)
 
-val wfixed : 'da OBus_annot.single_p -> (unit, 'da, writer) single_p -> (unit, _, dvariant, writer) one
+val wfixed : 'da OBus_types.single_p -> (unit, 'da, writer) single_p -> (unit, _, dvariant, writer) one
   (** This writer will write a variant from a value of a fixed
       type. For example here is a way to serialize a caml variant:
 
@@ -187,7 +187,7 @@ val wfixed : 'da OBus_annot.single_p -> (unit, 'da, writer) single_p -> (unit, _
         | C of int * string (* key = 3 *)
 
       let toto_writer = function
-        | A i -> wbyte 1 >> wfixed dint (wint u)
+        | A i -> wbyte 1 >> wfixed dint32 (wint u)
         | B s -> wbyte 2 >> wfixed dstring (wstring s)
         | C(i, s) -> wbyte 3 >> wfixed (wstruct (wint i >> wstring s))
   *)
@@ -207,12 +207,12 @@ val wdestination : (string option, _, writer) null
 
 val rbyte : (char, _, dbyte, reader) one
 val rchar : (char, _, dbyte, reader) one
-val rint8 : (int, _, dint8, reader) one
-val ruint8 : (int, _, duint8, reader) one
+val rint8 : (int, _, dbyte, reader) one
+val ruint8 : (int, _, dbyte, reader) one
 val rint16 : (int, _, dint16, reader) one
 val ruint16 : (int, _, duint16, reader) one
-val rint : (int, _, dint, reader) one
-val ruint : (int, _, duint, reader) one
+val rint : (int, _, dint32, reader) one
+val ruint : (int, _, duint32, reader) one
 val rint32 : (int32, _, dint32, reader) one
 val ruint32 : (int32, _, duint32, reader) one
 val rint64 : (int64, _, dint64, reader) one
@@ -222,7 +222,7 @@ val rfloat : (float, _, ddouble, reader) one
 val rboolean : (bool, _, dboolean, reader) one
 val rbool : (bool, _, dboolean, reader) one
 val rstring : (string, _, dstring, reader) one
-val rsignature : (OBus_types.signature, _, dsignature, reader) one
+val rsignature : (signature, _, dsignature, reader) one
 val robject_path : (string, _, dobject_path, reader) one
 val rpath : (string, _, dobject_path, reader) one
 
@@ -230,7 +230,7 @@ val rpath : (string, _, dobject_path, reader) one
 
 val rstruct : ('a, 'da, reader) sequence_p -> ('a, _, 'da dstruct, reader) one
 
-val rarray : 'da OBus_annot.single_p -> ('a -> ('a, 'da, reader) single_p) -> 'a -> ('a, _, 'da darray, reader) one
+val rarray : 'da OBus_types.single_p -> ('a -> ('a, 'da, reader) single_p) -> 'a -> ('a, _, 'da darray, reader) one
   (** [rarray typ reader acc] construct an array reader.
 
       [reader] must read an element and add it to the accumulator, and
@@ -241,10 +241,10 @@ val rdict : ('a -> ('a, 'k * ('v * unit), reader) sequence_p) -> 'a -> ('a, _, (
 
 (** {8 Predefined array readers} *)
 
-val rlist : 'da OBus_annot.single_p -> ('a, 'da, reader) single_p -> ('a list, _, 'da darray, reader) one
+val rlist : 'da OBus_types.single_p -> ('a, 'da, reader) single_p -> ('a list, _, 'da darray, reader) one
   (** Read a list. The order of element is kept with this reader *)
 
-val rset : 'da OBus_annot.single_p -> ('a, 'da, reader) single_p -> ('a list, _, 'da darray, reader) one
+val rset : 'da OBus_types.single_p -> ('a, 'da, reader) single_p -> ('a list, _, 'da darray, reader) one
   (** Same thing as [rlist] but the list will be in reverse order. *)
 
 val rassoc : ('a, 'da, reader) basic_p -> ('b, 'db, reader) single_p ->
@@ -252,7 +252,7 @@ val rassoc : ('a, 'da, reader) basic_p -> ('b, 'db, reader) single_p ->
     (** Read a dictionnary as a an associative list. Elements are in
         reverse order. *)
 
-val rbyte_array : (string, _, dbyte_array, reader) one
+val rbyte_array : (string, _, dbyte darray, reader) one
   (** Read an array of byte as a string *)
 
 (** {8 Reading of variants} *)
@@ -260,7 +260,7 @@ val rbyte_array : (string, _, dbyte_array, reader) one
 val rvariant : (OBus_value.single, _, dvariant, reader) one
   (** Read a variant as a dynamic value *)
 
-val rfixed : 'da OBus_annot.single_p -> ('a, 'da, reader) single_p -> ('a, _, dvariant, reader) one
+val rfixed : 'da OBus_types.single_p -> ('a, 'da, reader) single_p -> ('a, _, dvariant, reader) one
   (** Read a variant with a fixed reader. It will fail if types do not
       match. *)
 
@@ -274,5 +274,6 @@ val rsender : (string option, _, reader) null
 
 (**/**)
 
-val wsequence : OBus_value.sequence -> (unit, dunknown, dunknown, writer) t
-val rsequence : OBus_types.sequence -> (OBus_value.sequence, dunknown, dunknown, reader) t
+type priv
+val wsequence : OBus_value.sequence -> (unit, priv, priv, writer) t
+val rsequence : OBus_types.sequence -> (OBus_value.sequence, priv, priv, reader) t

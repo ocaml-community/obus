@@ -20,13 +20,11 @@ val session : unit -> t Lwt.t
       beginning of each user session. *)
 
 val system : unit -> t Lwt.t
-  (** The system message bus. A given computer have at most one system
-      bus. System services lived on it, and system events will be
-      broadcasted on it. *)
+  (** The system message bus. It is unique given one system. *)
 
 (** {6 Creation} *)
 
-val connect : OBus_address.t list -> t Lwt.t
+val of_addresses : OBus_address.t list -> t Lwt.t
   (** Establish a connection with a message bus. The bus must be
       accessible with at least one of the given addresses *)
 
@@ -158,7 +156,7 @@ val get_id : t -> string Lwt.t
 (** You will always receive these signals, you do not have to add
     matching rules for that *)
 
-(*val on_name_owner_changed : t -> (name -> name option -> name option -> unit) -> unit*)
+(*val name_owner_changed : t -> (name -> name option -> name option -> unit) OBus_signal.t*)
   (** [name_owner_changer name old_owner new_owner] is emitted each
       time a name owner change. This can be used to detect
       connection/disconnection. *)

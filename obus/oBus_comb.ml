@@ -8,14 +8,13 @@
  *)
 
 open OBus_types
-open OBus_annot
 open OBus_wire
 
 let ($) a b = a b
 let (|>) a b x = b (a x)
 
 type ('a, +'b, +'c) t = {
-  annot : ('b, 'c) OBus_annot.t;
+  annot : ('b, 'c) OBus_types.annot;
   reader : ('a, 'b, 'c, reader) OBus_wire.t;
   writer : 'a -> (unit, 'b, 'c, writer) OBus_wire.t;
 }
@@ -34,24 +33,21 @@ let annot { annot = x } = x
 let reader { reader = x } = x
 let writer { writer = x } = x
 
-let wrap comb ?annot f g = make (match annot with
-                                   | Some a -> a
-                                   | None -> comb.annot)
-  (reader comb >>= (f |> return)) (g |> writer comb)
+let wrap comb f g = make (annot comb) (reader comb >>= (f |> return)) (g |> writer comb)
 
-type ('a, 'b, 'c) func = {
+type ('a, 'b, 'c, 'd, 'e) func = {
   (* Input signature of the combinator *)
-  signature : ext_sequence;
+  signature : (unit, 'd) OBus_types.annot;
 
   (* Combinator used to read/write the reply of a method call *)
-  reply : ('c, dunknown, dunknown) t;
+  reply : ('c, unit, 'e) t;
 
   (* If used to send a message.
 
      It take as argument an accumulator, which is a writer monad, and
      a continuation. [send] must construct a writer monad from the
      argument passed after and pass it to the continuation. *)
-  send : (unit, dunknown, dunknown, writer) OBus_wire.t -> ((unit, dunknown, dunknown, writer) OBus_wire.t -> 'b) -> 'a;
+  send : (unit, unit, unit, writer) OBus_wire.t -> ((unit, unit, 'd, writer) OBus_wire.t -> 'b) -> 'a;
 
   (* If used to receive a message.
 
@@ -64,21 +60,19 @@ type ('a, 'b, 'c) func = {
      this message [recv] must return:
 
      [fun f -> f 1 "toto"] *)
-  recv : ('a -> 'b, dunknown, dunknown, reader) OBus_wire.t;
+  recv : ('a -> 'b, unit, 'd, reader) OBus_wire.t;
 }
 
-let reply { annot = annot; reader = reader; writer = writer } = {
-  reply = { annot = OBus_annot.make_unknown annot;
-            reader = reader;
-            writer = writer };
-  signature = Ta_nil;
+let reply comb = {
+  reply = comb;
+  signature = dnil;
   send = (fun acc cont -> cont acc);
   recv = return (fun f -> f);
 }
 
-let abstract { annot = Annot annot; reader = reader; writer = writer } func = {
+let abstract { annot = annot; reader = reader; writer = writer } func = {
   reply = func.reply;
-  signature = Ta_cons(annot, func.signature);
+  signature = annot ++ func.signature;
   send = (fun acc cont x -> func.send (acc >> writer x) cont);
   recv = (perform
             x <-- reader;
@@ -88,5 +82,5 @@ let abstract { annot = Annot annot; reader = reader; writer = writer } func = {
 
 let func_signature f = f.signature
 let func_reply f = f.reply
-let func_recv f = f.recv
-let func_send f = f.send (return ())
+let func_make_reader f = f.recv
+let func_make_writer f = f.send (return ())

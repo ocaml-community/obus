@@ -7,11 +7,15 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** Inerface for DBus connection *)
+(** Inerface to DBus connection *)
 
-(** A DBus connection is a channel opened with another application
+(** This module implement low-level manipulation of a DBus connection.
+    A DBus connection is a channel opened with another application
     which also implement the DBus protocol. It is used to exchange
-    DBus messages. *)
+    DBus messages.
+
+    It is low-level because functions of this module deals directly
+    with DBus messages, as header + body. *)
 
 type t = OBus_intern.connection
 
@@ -54,22 +58,31 @@ val guid : t -> OBus_address.guid
 
 (** {6 Sending messages} *)
 
-val send_message : t -> 'a OBus_header.t -> ('b, unit, unit) OBus_comb.func -> 'b
+val send_message : t -> 'a OBus_header.t -> ('b, unit Lwt.t, unit, _, _) OBus_comb.func -> 'b
   (** [send_message connection header typ ...] send a message without
       expecting a reply *)
 
-val send_message_with_reply : t -> OBus_header.method_call -> ('b, (OBus_header.method_return * 'c) Lwt.t, 'c) OBus_comb.func -> 'b
+val send_message_with_reply : t -> OBus_header.method_call -> ('b, (OBus_header.method_return * 'c) Lwt.t, 'c, _, _) OBus_comb.func -> 'b
   (** [send_message_with_reply connection header typ ...] Send a
       message and return a thread which wait for the reply *)
 
-val ksend_message : (unit -> 'c) -> t -> 'a OBus_header.t -> ('b, 'c, unit) OBus_comb.func -> 'b
-val ksend_message_with_reply : ((OBus_header.method_return * 'c) Lwt.t -> 'd Lwt.t) -> t -> OBus_header.method_call -> ('b, 'd Lwt.t, 'c) OBus_comb.func -> 'b
+val ksend_message : (unit Lwt.t -> 'c) -> t -> 'a OBus_header.t -> ('b, 'c, unit, _, _) OBus_comb.func -> 'b
+val ksend_message_with_reply : ((OBus_header.method_return * 'c) Lwt.t -> 'd) -> t -> OBus_header.method_call -> ('b, 'd, 'c, _, _) OBus_comb.func -> 'b
   (** Same thing but with continuation *)
 
-val send_error : t -> OBus_header.method_call -> OBus_error.name -> OBus_error.message -> unit
+val wire_send_message : t -> 'a OBus_header.t ->
+  'b OBus_types.sequence_p -> (unit, 'b, OBus_wire.writer) OBus_wire.sequence_p -> unit Lwt.t
+val wire_send_message_with_reply : t -> OBus_header.method_call ->
+  'b OBus_types.sequence_p -> (unit, 'b, OBus_wire.writer) OBus_wire.sequence_p ->
+  'c OBus_types.sequence_p -> ('d, 'c, OBus_wire.reader) OBus_wire.sequence_p ->
+  (OBus_header.method_return * 'd) Lwt.t
+    (** Send a message by directly providing writer/reader monads,
+        this could be used for more complex cases *)
+
+val send_error : t -> OBus_header.method_call -> OBus_error.name -> OBus_error.message -> unit Lwt.t
   (** Send an error message in reply to a method call *)
 
-val send_exn : t -> OBus_header.method_call -> exn -> unit
+val send_exn : t -> OBus_header.method_call -> exn -> unit Lwt.t
   (** [send_exn connection method_call exn] equivalent of:
 
       {[
@@ -97,7 +110,7 @@ val send_exn : t -> OBus_header.method_call -> exn -> unit
     ]}
 *)
 
-val usend_message : t -> 'a OBus_header.t -> OBus_value.sequence -> unit
+val usend_message : t -> 'a OBus_header.t -> OBus_value.sequence -> unit Lwt.t
 val usend_message_with_reply : t -> OBus_header.method_call -> OBus_value.sequence ->
   (OBus_header.method_return * OBus_value.sequence) Lwt.t
 

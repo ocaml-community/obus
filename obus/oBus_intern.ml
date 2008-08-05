@@ -11,7 +11,6 @@
    different modules of OBus *)
 
 open OBus_header
-open OBus_annot
 
 let ($) a b = a b
 let (|>) a b x = b (a x)
@@ -119,14 +118,29 @@ and context = {
 
 and ('a, 'b, 'c, 'typ) wire = context -> int -> int * 'a
 
+open Lwt
+
+let lwt_with_running connection f = match !connection with
+  | Crashed exn -> fail exn
+  | Running running -> f running
+
 let with_running connection f = match !connection with
   | Crashed exn -> raise exn
   | Running running -> f running
 
-let lwt_with_running connection f = match !connection with
-  | Crashed exn -> Lwt.fail exn
-  | Running running -> f running
+(* Do an IO operation, and verify before and after that the connection
+   is OK *)
+let wrap_io func connection buffer pos count =
+  lwt_with_running connection
+    (fun running -> func running.transport buffer pos count
+       >>= fun result -> match !connection with
+         | Crashed exn -> fail exn
+         | _ -> return result)
 
+let recv = wrap_io OBus_transport.recv
+let send = wrap_io OBus_transport.send
+let recv_exactly = wrap_io OBus_transport.recv_exactly
+let send_exactly = wrap_io OBus_transport.send_exactly
 
 (* The following function should be in [Wire] because they are needed
    by [OBus_wire] and [Wire_message] but the depend on the definition

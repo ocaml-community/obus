@@ -16,9 +16,6 @@ module type XML = sig
     pcdata:(string -> 'a) -> t -> 'a
 end
 
-type attributes = (string * string) list
-type stack = (string * attributes) list
-
 module type S = sig
   type xml
   type 'a t
@@ -27,7 +24,7 @@ module type S = sig
   val return : 'a -> 'a t
   val (>>=) : 'a t -> ('a -> 'b t) -> 'b t
   val failwith : string -> 'a t
-  val parse : 'a node -> xml -> [ `Right of 'a | `Left of stack * string ]
+  val parse : 'a node -> xml -> 'a
   val ar : string -> string t
   val ao : string -> string option t
   val ad : string -> string -> string t
@@ -43,6 +40,10 @@ module type S = sig
   val opt : 'a node -> 'a option t
   val any : 'a node -> 'a list t
 end
+
+type attributes = (string * string) list
+type stack = (string * attributes) list
+exception Parse_failure of stack * string
 
 let print_stack fmt stack =
   match stack with
@@ -172,7 +173,8 @@ struct
   let opt (typ, f) xmls attrs =
     match Util.part_map f xmls with
       | [], rest -> (rest, Value None)
-      | [x], rest -> (rest, Value None)
+      | [Value x], rest -> (rest, Value (Some x))
+      | [Error _ as err], rest -> (rest, err)
       | _, rest -> (rest, Error([], "too many nodes of type: " ^ string_of_type typ))
 
   let one (typ, f) =
@@ -191,6 +193,6 @@ struct
 
   let parse node xml =
     match execute (one node) [xml] [] with
-      | Value x -> `Right x
-      | Error(stack, msg) -> `Left(stack, msg)
+      | Value x -> x
+      | Error(stack, msg) -> raise (Parse_failure(stack, msg))
 end

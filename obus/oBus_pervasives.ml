@@ -9,7 +9,6 @@
 
 open OBus_types
 open OBus_wire
-open OBus_annot
 open OBus_comb
 
 let (-->) = abstract
@@ -19,12 +18,12 @@ let ob_byte = make dbyte rbyte wbyte
 let ob_char = ob_byte
 let ob_boolean = make dboolean rboolean wboolean
 let ob_bool = ob_boolean
-let ob_int8 = make dint8 rint8 wint8
-let ob_uint8 = make duint8 ruint8 wuint8
+let ob_int8 = make dbyte rint8 wint8
+let ob_uint8 = make dbyte ruint8 wuint8
 let ob_int16 = make dint16 rint16 wint16
 let ob_uint16 = make duint16 ruint16 wuint16
-let ob_int = make dint rint wint
-let ob_uint = make duint ruint wuint
+let ob_int = make dint32 rint wint
+let ob_uint = make duint32 ruint wuint
 let ob_int32 = make dint32 rint32 wint32
 let ob_uint32 = make duint32 ruint32 wuint32
 let ob_int64 = make dint64 rint64 wint64
@@ -42,7 +41,7 @@ let ob_assoc tk tv =
   make (ddict (annot tk) (annot tv))
     (rassoc (reader tk) (reader tv))
     (wassoc (writer tk) (writer tv))
-let ob_byte_array = make dbyte_array rbyte_array wbyte_array
+let ob_byte_array = make (darray dbyte) rbyte_array wbyte_array
 let ob_structure t = make (dstruct (annot t)) (rstruct (reader t)) (fun x -> wstruct (writer t x))
 let ob_variant = make dvariant rvariant wvariant
 let ob_unit = make dnil (return ()) (fun _ -> return ())
@@ -56,6 +55,9 @@ let ob_pair t1 t2 =
        perform
          writer t1 x1;
          writer t2 x2)
+
+let ob_sender = make dnil rsender (fun _ -> return ())
+let ob_connection = make dnil rconnection (fun _ -> return ())
 
 let ob_tuple2 = ob_pair
 let ob_tuple3 t1 t2 t3 =

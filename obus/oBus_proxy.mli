@@ -23,19 +23,26 @@ type t = {
   (** Path of the object on the application owning it *)
 }
 
-val ob_t : (t, _, OBus_annot.dobject_path) OBus_comb.one
+val ob_t : (t, _, OBus_types.dobject_path) OBus_comb.one
   (** Type combinator *)
+
+val compare : t -> t -> int
+  (** Proxy comparaison function *)
 
 val make : connection:OBus_connection.t -> ?service:string -> path:OBus_path.t -> t
 val connection : t -> OBus_connection.t
 val path : t -> OBus_path.t
 val service : t -> string option
 
-val method_call : t -> ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b) OBus_comb.func -> 'a
+val method_call : t -> ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b, _, _) OBus_comb.func -> 'a
   (** Send a method call on a proxy *)
 
-val kmethod_call : ('b -> 'c Lwt.t) -> t -> ?interface:string -> member:string -> ('a, 'c Lwt.t, 'b) OBus_comb.func -> 'a
+val kmethod_call : ('b Lwt.t -> 'c) -> t -> ?interface:string -> member:string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
   (** Same thing but with continuation *)
 
 val umethod_call : t -> ?interface:string -> member:string -> OBus_value.sequence -> OBus_value.sequence Lwt.t
   (** Send a method call with dynamically typed datas *)
+
+(*val connect : t -> interface:string -> member:string -> ('a, unit, unit) OBus_comb.func -> 'a -> OBus_signal.id*)
+  (** Connect a callback function to the given signal. It is possible
+      to connect multiple functions to the same signal. *)

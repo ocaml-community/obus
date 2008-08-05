@@ -10,20 +10,12 @@
 open Printf
 open OBus_types
 open OBus_value
-open OBus_annot
 open OBus_intern
 open OBus_info
 open Wire
 
 let (|>) f g x = g (f x)
 let ($) a b = a b
-
-let ext_padded_on_8 = function
-  | Ta_struct _
-  | Ta_basic Ta_int64
-  | Ta_basic Ta_uint64
-  | Ta_basic Ta_double -> true
-  | _ -> false
 
 let padded_on_8 = function
   | Tstruct _
@@ -35,6 +27,7 @@ let padded_on_8 = function
 type accu = int
 type reader
 type writer
+type priv
 type ('a, +'b, +'c, 'typ) t = context -> int -> int * 'a
 type ('a, +'b, +'c, 'typ) one = ('a, 'b, 'c * 'b, 'typ) t
 type ('a, +'b, 'typ) null = ('a, 'b, 'b, 'typ) t
@@ -130,7 +123,7 @@ let __warray on8 writer ctx ptr =
 let _warray on8 writer fold =
   __warray on8 (fun ctx -> fold (fun x ptr -> fst (writer x ctx ptr)))
 
-let warray annot = _warray (ext_padded_on_8 (ext_single_of_annot annot))
+let warray annot = _warray (padded_on_8 (single_of_annot annot))
 let wdict writer = _warray true (fun x -> wpad8 >> writer x)
 
 let rec fold_list f acc = function
@@ -138,7 +131,7 @@ let rec fold_list f acc = function
   | x :: l -> fold_list f (f x acc) l
 
 let _wlist on8 elt_writer l = _warray on8 elt_writer (fun f acc -> fold_list f acc l)
-let wlist annot = _wlist (ext_padded_on_8 (ext_single_of_annot annot))
+let wlist annot = _wlist (padded_on_8 (single_of_annot annot))
 
 let wassoc kwriter vwriter l =
   wdict
@@ -156,7 +149,7 @@ struct
   let one writer ctx ptr = fst (writer ctx ptr)
 end
 
-let warray_seq annot = __warray (ext_padded_on_8 (ext_single_of_annot annot))
+let warray_seq annot = __warray (padded_on_8 (single_of_annot annot))
 let wdict_seq seq = __warray true seq
 
 let wbyte_array str =
@@ -192,7 +185,7 @@ and wsequence = function
   | x :: l -> wsingle x >> wsequence l
 
 let wfixed annot writer =
-  wsignature [single_type_of_ext (ext_single_of_annot annot)] >> writer
+  wsignature [single_of_annot annot] >> writer
 
 (***** Reading *****)
 
@@ -274,14 +267,14 @@ let _rarray on8 reader acc =
      if on8 then rpad8 else return ();
      read_until reader acc len)
 
-let rarray annot = _rarray (ext_padded_on_8 $ ext_single_of_annot annot)
+let rarray annot = _rarray (padded_on_8 $ single_of_annot annot)
 let rdict reader = _rarray true (fun acc -> rpad8 >> reader acc)
 
 let _rlist on8 reader = _rarray on8
   (fun f -> reader >>= fun x -> return $ fun l -> f $ x :: l) (fun l -> l)
   >>= (fun f -> return $ f [])
 
-let rlist annot = _rlist (ext_padded_on_8 $ ext_single_of_annot annot)
+let rlist annot = _rlist (padded_on_8 $ single_of_annot annot)
 
 let rset annot reader = rarray annot
   (fun l -> reader >>= fun x -> return $ x :: l) []
@@ -335,7 +328,7 @@ and rsequence = function
 and rvariant bo = (rvariant_type >>= rsingle) bo
 
 let rfixed annot reader =
-  let t = single_type_of_ext (ext_single_of_annot annot) in
+  let t = single_of_annot annot in
     rvariant_type
     >>= (fun t' ->
            if t <> t'

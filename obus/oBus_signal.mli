@@ -9,15 +9,33 @@
 
 (** High-level handling of signals *)
 
+(** This module let you to connect callback function to signal and to
+    emit signal.
+
+    Note that when the connection used as backend is a message bus,
+    the matching rules will be automatically added so you do not have
+    to do it. *)
+
 type 'a t
-  (** Type of a signal, ['a] is the type of an handler *)
+  (** Type of a signal, ['a] is the type of a callback function *)
 
-val attach : connection -> 'a t -> 'a -> unit
-  (** Attach a function to a signal. The function will be called every
-      time the signal is received *)
+type id
+  (** Id of a connected callback function *)
 
-val emit : ?destination:name -> 'a t -> 'a
+val remove : id -> unit
+
+val connect : 'a t -> 'a -> id
+  (** [connect signal func] connect [func] to [signal].
+
+      Note: multiple callback function can be connected to the same
+      signal. *)
+
+val disconnect : id -> unit
+  (** Remove a previously registred callback function. It do nothing
+      if the callback function has already been disconnected *)
+
+val emit : ?destination:string -> path:OBus_path.t -> 'a t -> 'a
   (** emit a signal *)
 
-val make : interface:name -> member:name -> ('a, unit, unit, [> `func ]) OBus_conv.t -> 'a t
-  (** Create a signal *)
+val make : interface:string -> member:string -> ('a, unit, unit) OBus_comb.func -> 'a t
+  (** [make interface member typ] create a signal *)

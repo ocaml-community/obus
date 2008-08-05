@@ -12,7 +12,6 @@ open Wire
 open OBus_header
 open OBus_intern
 open OBus_types
-open OBus_annot
 open OBus_info
 open OBus_wire
 
@@ -116,60 +115,58 @@ struct
   module R = Make_unsafe_reader(BO)
   open R
 
-  let read connection transport buffer =
+  let read connection buffer =
     let protocol_version = unsafe_read_byte_as_int buffer 3 in
-      (* Check the protocol version first, since we can not do
-         anything if it is not the same as our *)
-      if protocol_version <> OBus_info.protocol_version
-      then raise (Reading_error (sprintf "invalid protocol version: %d" protocol_version));
+    (* Check the protocol version first, since we can not do
+       anything if it is not the same as our *)
+    if protocol_version <> OBus_info.protocol_version
+    then raise (Reading_error (sprintf "invalid protocol version: %d" protocol_version));
 
-      let message_maker = let code = unsafe_read_byte_as_int buffer 1 in
-        match code with
-          | 1 -> method_call_of_raw
-          | 2 -> method_return_of_raw
-          | 3 -> error_of_raw
-          | 4 -> signal_of_raw
-          | n -> raise (Reading_error (sprintf "unknown message type: %d" n))
+    let message_maker = let code = unsafe_read_byte_as_int buffer 1 in
+    match code with
+      | 1 -> method_call_of_raw
+      | 2 -> method_return_of_raw
+      | 3 -> error_of_raw
+      | 4 -> signal_of_raw
+      | n -> raise (Reading_error (sprintf "unknown message type: %d" n))
 
-      and flags =
-        let n = unsafe_read_byte_as_int buffer 2 in
-          { no_reply_expected = n land 1 = 1;
-            no_auto_start = n land 2 = 2 }
+    and flags =
+      let n = unsafe_read_byte_as_int buffer 2 in
+      { no_reply_expected = n land 1 = 1;
+        no_auto_start = n land 2 = 2 }
 
-      and length = unsafe_read_uint32_as_int buffer 4
-      and serial = unsafe_read_uint32_as_int32 buffer 8
-      and fields_length = unsafe_read_uint32_as_int buffer 12 in
+    and length = unsafe_read_uint32_as_int buffer 4
+    and serial = unsafe_read_uint32_as_int32 buffer 8
+    and fields_length = unsafe_read_uint32_as_int buffer 12 in
 
-      (* Header fields array start on byte #16 and message start
-         aligned on a 8-boundary after it, so we have: *)
-      let total_length = 16 + fields_length + (pad8 fields_length) + length in
-        (* Safety checking *)
-        read_check_array_len fields_length;
+    (* Header fields array start on byte #16 and message start
+       aligned on a 8-boundary after it, so we have: *)
+    let total_length = 16 + fields_length + (pad8 fields_length) + length in
+    (* Safety checking *)
+    read_check_array_len fields_length;
 
-        if total_length > OBus_info.max_message_size
-        then raise (Reading_error (sprintf "message size exceed the limit: %d" total_length));
+    if total_length > OBus_info.max_message_size
+    then raise (Reading_error (sprintf "message size exceed the limit: %d" total_length));
 
-        Lwt.bind
-          (OBus_transport.recv_exactly transport buffer 0 (total_length - 16))
-          (fun _ ->
-             lwt_with_running connection $
-               fun _ ->
-                 try
-                   let ptr, fields = read_fields fields_length { connection = connection;
-                                                                 byte_order = BO.byte_order;
-                                                                 bus_name = None;
-                                                                 buffer = buffer } 0 in
-                     Lwt.return { recv_header = { flags = flags;
-                                                  sender = fields._sender;
-                                                  destination = fields._destination;
-                                                  serial = serial;
-                                                  typ = message_maker fields };
-                                  recv_signature = fields._signature;
-                                  recv_byte_order = BO.byte_order;
-                                  recv_body_start = ptr;
-                                  recv_buffer = buffer;
-                                  recv_length = length }
-                 with exn -> Lwt.fail exn)
+    Lwt.bind
+      (recv_exactly connection buffer 0 (total_length - 16))
+      (fun _ ->
+         try
+           let ptr, fields = read_fields fields_length { connection = connection;
+                                                         byte_order = BO.byte_order;
+                                                         bus_name = None;
+                                                         buffer = buffer } 0 in
+           Lwt.return { recv_header = { flags = flags;
+                                        sender = fields._sender;
+                                        destination = fields._destination;
+                                        serial = serial;
+                                        typ = message_maker fields };
+                        recv_signature = fields._signature;
+                        recv_byte_order = BO.byte_order;
+                        recv_body_start = ptr;
+                        recv_buffer = buffer;
+                        recv_length = length }
+         with exn -> Lwt.fail exn)
 end
 
 module Writer(BO : Byte_order) =
@@ -237,7 +234,7 @@ struct
             byte_order = BO.byte_order;
             buffer = buffer } in
       let i, _ =
-        (warray_seq (dstruct (duint8 ++ dvariant))
+        (warray_seq (dstruct (dbyte ++ dvariant))
            (let (>>>) = Seq.append in
               wfield 1 dobject_path wpath fields._path
               >>> wfield 2 dstring wstring fields._interface
@@ -261,45 +258,47 @@ module BER = Reader(Big_endian)
 open Lwt
 
 let recv_one_message connection buffer =
-  lwt_with_running connection $
-    fun running ->
-      let buffer =
-        if String.length buffer < 16
-        then String.create 65536
-        else buffer in
+  let buffer =
+    if String.length buffer < 16
+    then String.create 65536
+    else buffer in
 
-        (* Read the minimum for knowing the total size of the message *)
-        OBus_transport.recv_exactly running.transport buffer 0 16
-        >>= (fun _ -> lwt_with_running connection $ fun running ->
-               (* We immediatly look for the byte order *)
-               Lwt.catch
-                 (fun _ -> match unsafe_read_byte_as_char buffer 0 with
-                    | 'l' -> LER.read connection running.transport buffer
-                    | 'B' -> BER.read connection running.transport buffer
-                    | c -> fail (Reading_error (Printf.sprintf "invalid byte order: %s" (Char.escaped c))))
-                 (function
-                    | Out_of_bounds ->
-                        fail (Reading_error "invalid message size")
-                    | exn -> fail exn))
+  (* Read the minimum for knowing the total size of the message *)
+  recv_exactly connection buffer 0 16
+  >>= (fun _ -> lwt_with_running connection $ fun running ->
+         (* We immediatly look for the byte order *)
+         Lwt.catch
+           (fun _ -> match unsafe_read_byte_as_char buffer 0 with
+              | 'l' -> LER.read connection buffer
+              | 'B' -> BER.read connection buffer
+              | c -> fail (Reading_error (Printf.sprintf "invalid byte order: %s" (Char.escaped c))))
+           (function
+              | Out_of_bounds ->
+                  fail (Reading_error "invalid message size")
+              | exn -> fail exn))
 
 let rec try_write f connection send buffer =
   try
-    return (f connection send buffer, buffer)
+    return (f connection send buffer, buffer, None)
   with
     | Out_of_bounds ->
         try_write f connection send $ String.create (String.length buffer * 2)
-    | exn -> fail exn
+    | exn -> return (0, buffer, Some exn)
 
 let send_one_message connection send buffer =
-  lwt_with_running connection $ fun running ->
-    (perform
-       (ptr, buffer) <-- try_write
-         (match send.send_byte_order with
-            | Little_endian -> LEW.write
-            | Big_endian -> BEW.write)
-         connection send
-         (if String.length buffer < 16
-          then String.create 65536
-          else buffer);
-       OBus_transport.send_exactly running.transport buffer 0 ptr;
-       return buffer)
+  (perform
+     (ptr, buffer, exn_opt) <-- try_write
+       (match send.send_byte_order with
+          | Little_endian -> LEW.write
+          | Big_endian -> BEW.write)
+       connection send
+       (if String.length buffer < 16
+        then String.create 65536
+        else buffer);
+
+     match exn_opt with
+       | Some exn -> return (buffer, Some exn)
+       | None ->
+           try_bind (fun _ -> send_exactly connection buffer 0 ptr)
+             (fun _ -> return (buffer, None))
+             (fun exn -> return (buffer, Some exn)))

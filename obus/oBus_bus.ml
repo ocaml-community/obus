@@ -10,21 +10,11 @@
 open Lwt
 open OBus_intern
 
-module S = OBus_client.Make_service
+include OBus_client.Make_fixed
   (struct
      let name = "org.freedesktop.DBus"
-   end)
-
-include S.Make
-  (struct
-     let name = "org.freedesktop.DBus"
-     type t = OBus_connection.t
-     let of_proxy = OBus_proxy.connection
-     let to_proxy bus =
-       OBus_proxy.make
-         ~connection:bus
-         ~path:"/org/freedesktop/DBus"
-         ~service:"org.freedesktop.DBus"
+     let path = "/org/freedesktop/DBus"
+     let service = Some "org.freedesktop.DBus"
    end)
 
 type name = string
@@ -40,7 +30,7 @@ let register_connection connection =
       running.name <- name;
       return ()
 
-let connect addresses =
+let of_addresses addresses =
   (perform
      connection <-- OBus_connection.of_addresses addresses ~shared:true;
      register_connection connection;
@@ -50,15 +40,15 @@ let session_bus = ref None
 let system_bus = ref None
 
 let get bus_ref addr = match !bus_ref with
-  | Some c -> return c
+  | Some t -> t
   | None ->
-      connect (Lazy.force addr)
+      of_addresses (Lazy.force addr)
       >>= fun bus ->
-        bus_ref := Some bus;
+        bus_ref := Some (return bus);
         return bus
 
-let session () = get session_bus OBus_address.session
-let system () = get system_bus OBus_address.system
+let session _ = get session_bus OBus_address.session
+let system _ = get system_bus OBus_address.system
 
 OBUS_EXN Name_has_no_owner = "Error.NameHasNoOwner"
 OBUS_EXN Match_rule_not_found = "Error.MatchRuleNotFound"
@@ -85,7 +75,7 @@ let release_name bus = call bus "ReleaseName" [: string -> release_name_result ]
 
 type start_service_flag
 let ob_start_service_flag =
-  OBus_comb.make OBus_annot.duint
+  OBus_comb.make OBus_types.duint32
     (OBus_wire.failwith "not implemented")
     (fun _ -> OBus_wire.wuint 0)
 

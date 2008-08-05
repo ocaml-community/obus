@@ -35,10 +35,11 @@ type 'a send = {
   send_serial : int32;
 }
 
-val send_one_message : OBus_intern.connection -> 'a send -> string -> string Lwt.t
+val send_one_message : OBus_intern.connection -> 'a send -> string -> (string * exn option) Lwt.t
   (** [send_one_message connection send buffer] write and send one
       message on the given connection. It return the same buffer as
       given in argument or a new buffer if a growing was needed.
 
-      can raise one of [Transport.Error], [Wire.Writing_error]. Others
-      errors are convertion errors. *)
+      It also return exception which may have been raised during the
+      marshaling/sending of the message. It can be [Transport.Error]
+      or [Wire.Writing_error]. Others errors are convertion errors. *)

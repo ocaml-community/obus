@@ -27,6 +27,8 @@ type stack = (string * attributes) list
     (** The stack represent the location of an error. It is a list of
         (element name, attributes). *)
 
+exception Parse_failure of stack * string
+
 val print_stack : Format.formatter -> stack -> unit
   (** Print a stack.
 
@@ -57,9 +59,9 @@ module type S = sig
   val failwith : string -> 'a t
     (** Fail at current position with this error message *)
 
-  val parse : 'a node -> xml -> [ `Right of 'a | `Left of stack * string ]
-    (** Run a parser on an xml document. If it fail it return the
-        stack of error and an error message. *)
+  val parse : 'a node -> xml -> 'a
+    (** Run a parser on an xml document. If it fail it raise a
+        [Parse_failure] *)
 
   (** {6 Parsing of attributes} *)
 
