@@ -15,7 +15,7 @@ open Lwt
 let main =
   (perform
      bus <-- OBus_bus.session ();
-     return (Printf.printf "My unique connection name is: %s\n" (OBus_bus.name bus)))
+     let _ = Printf.printf "My unique connection name is: %s\n" (OBus_bus.name bus) in
+     return ())
 
-let _ =
-  Lwt_unix.run main
+let _ = Lwt_unix.run main

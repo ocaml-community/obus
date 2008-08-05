@@ -20,8 +20,9 @@ let filter what_bus header body =
     | Some s -> sprintf "Some %S" s
     | None -> "None"
   in
-    printf "message intercepted on %s bus:
-  flags = { no_reply_expected = %B ; no_auto_start = %B }
+  printf "message intercepted on %s bus:
+  no_reply_expected = %B
+  no_auto_start = %B
   serial = %ld
   message_type = %s
   destination = %s
@@ -31,32 +32,41 @@ let filter what_bus header body =
   body = %s
 
 %!" what_bus header.flags.no_reply_expected header.flags.no_auto_start header.serial
-      (match header.typ with
-         | `Method_call(path, interface, member) ->
-             sprintf "method_call { path = %S ; interface = %s ; member = %S }"
-               path (opt interface) member
-         | `Method_return reply_serial ->
-             sprintf "method_return { reply_serial = %ld }" reply_serial
-         | `Error(reply_serial, error_name) ->
-             sprintf "error { reply_serial = %ld ; error_name = %S }" reply_serial error_name
-         | `Signal(path, interface, member) ->
-             sprintf "signal { path = %S ; interface = %S ; member = %S }"
-               path interface member)
-      (opt header.destination)
-      (opt header.sender)
-      (OBus_types.string_of_signature (OBus_value.type_of_sequence body))
-      (OBus_types.string_of_sequence  (OBus_value.type_of_sequence body))
-      (OBus_value.string_of_sequence body)
+    (match header.typ with
+       | `Method_call(path, interface, member) ->
+           sprintf "method_call
+  path = %S
+  interface = %s
+  member = %S" path (opt interface) member
+       | `Method_return reply_serial ->
+           sprintf "method_return
+  reply_serial = %ld" reply_serial
+       | `Error(reply_serial, error_name) ->
+           sprintf "error
+  reply_serial = %ld
+  error_name = %S" reply_serial error_name
+       | `Signal(path, interface, member) ->
+           sprintf "signal
+  path = %S
+  interface = %S
+  member = %S" path interface member)
+    (opt header.destination)
+    (opt header.sender)
+    (OBus_types.string_of_signature (OBus_value.type_of_sequence body))
+    (OBus_types.string_of_sequence  (OBus_value.type_of_sequence body))
+    (OBus_value.string_of_sequence body)
 
 let add_filter what_bus get_bus =
-  get_bus () >>= fun bus ->
-    ignore (OBus_connection.add_filter bus (filter what_bus));
+  (perform
+     bus <-- get_bus ();
+     let _ =
+       ignore (OBus_connection.add_filter bus (filter what_bus));
 
-    (* Filtering method calls seems to make the bus to disconnect us *)
-    List.iter (fun typ -> ignore_result (OBus_bus.add_match bus (OBus_bus.match_rule ~typ ())))
-      [ `method_return; `error; `signal ];
-
-    return ()
+       (* Filtering method calls seems to make the bus to disconnect us *)
+       List.iter (fun typ -> ignore_result (OBus_bus.add_match bus (OBus_bus.match_rule ~typ ())))
+         [ `method_return; `error; `signal ]
+     in
+     return ())
 
 let _ =
   ignore_result (add_filter "session" OBus_bus.session);

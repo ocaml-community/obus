@@ -23,7 +23,7 @@ let bus_handler proxy = function
       printf "from DBus: i got the name '%S!\n%!" name
 
 let hal_handler proxy = function
-  | Hal.Device.Condition("ButtonPressed", button) ->
+  | Hal_device.Condition("ButtonPressed", button) ->
       printf "from Hal: you pressed the button %S!\n%!" button;
       printf "          the signal come from the object %S\n%!" (Proxy.path proxy)
   | _ ->
@@ -34,35 +34,33 @@ let get_fd bus = Transport.fd (Connection.transport bus)
 let _ =
   let session = Bus.session () in
   let system = Bus.system () in
-    (* Bus register will add the signals handler + ask the bus to
-       route us signals from this interface *)
-    Signal.bus_register session DBus.signals bus_handler;
+  (* Bus register will add the signals handler + ask the bus to
+     route us signals from this interface *)
+  Signal.bus_register session DBus.signals bus_handler;
 
-    Hal_devices.
+  (* We can also add manually the match rules on the message
+     bus. That way we can put finer rules *)
+  DBus.add_match system
+    [ Type Signal;
+      Sender "org.freedesktop.Hal";
+      Interface (Interface.name Hal_device.interface);
+      Member "Condition";
+      Arg(0, "ButtonPressed") ];
 
-    (* We can also add manually the match rules on the message
-       bus. That way we can put finer rules *)
-    DBus.add_match system
-      [ Type Signal;
-        Sender "org.freedesktop.Hal";
-        Interface (Interface.name Hal.Device.interface);
-        Member "Condition";
-        Arg(0, "ButtonPressed") ];
+  (* Now we just add the handler *)
+  Signal.register system Hal_device.signals hal_handler;
 
-    (* Now we just add the handler *)
-    Signal.register system Hal.Device.signals hal_handler;
+  printf "You can now do other things with the bus or press one of your multimedia key to see something.\n\n%!";
 
-    printf "You can now do other things with the bus or press one of your multimedia key to see something.\n\n%!";
+  (* We retreive the file descriptor of the connections for our main
+     loop *)
+  let fd_map =
+    [ get_fd session, session;
+      get_fd system, system ] in
 
-    (* We retreive the file descriptor of the connections for our main
-       loop *)
-    let fd_map =
-      [ get_fd session, session;
-        get_fd system, system ] in
-
-      while true do
-        (* Now we just do a [Unix.select] on all file descriptors and
-           do one dispatch operation on the concerned connection *)
-        let (fds, _, _) = Unix.select (List.map fst fd_map) [] [] (-1.0) in
-          List.iter (fun fd -> Connection.dispatch (List.assoc fd fd_map)) fds
-      done
+  while true do
+    (* Now we just do a [Unix.select] on all file descriptors and
+       do one dispatch operation on the concerned connection *)
+    let (fds, _, _) = Unix.select (List.map fst fd_map) [] [] (-1.0) in
+    List.iter (fun fd -> Connection.dispatch (List.assoc fd fd_map)) fds
+  done

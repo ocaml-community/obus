@@ -7,15 +7,18 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open OBus
+(* Simple sample which eject all cdroms using Hal *)
 
-let _ =
-  let bus = Bus.system () in
-  let manager = Hal.Manager.proxy bus in
-  let cdroms = Hal.Manager.find_device_by_capability manager "storage.cdrom" in
-    Printf.printf "cdrom(s) found: %d\n" (List.length cdroms);
-    List.iter begin function cdrom_path ->
-      let cdrom = Hal.Device.Volume.proxy bus cdrom_path in
-        Printf.printf "eject on device %s\n" cdrom_path;
-        ignore (Hal.Device.Volume.eject cdrom [])
-    end cdroms
+open Lwt
+open Printf
+
+let main =
+  (perform
+     cdroms <-- Hal_manager.find_device_by_capability "storage.cdrom";
+     let _ = printf "cdrom(s) found: %d\n" (List.length cdroms) in
+     Lwt_util.iter begin function cdrom ->
+       Printf.printf "eject on device %s\n" cdrom;
+       Hal_device.Volume.eject cdrom [] >>= fun _ -> return ();
+     end cdroms)
+
+let _ = Lwt_unix.run main

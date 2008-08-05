@@ -46,16 +46,16 @@ let _ =
   let bus = Bus.system () in
   let server = Bus.make_proxy bus Server.interface "org.freedesktop.Avahi" "/" in
 
-    Signal.register bus ServiceBrowser.signals (browser_handler bus server);
-    Signal.register bus ServiceResolver.signals resolver_handler;
+  Signal.register bus ServiceBrowser.signals (browser_handler bus server);
+  Signal.register bus ServiceResolver.signals resolver_handler;
 
-    Server.service_browser_new_async server (-1) (-1) "_workstation._tcp" "" 0
-      (fun browser ->
-         DBus.add_match bus
-           [ Type Signal;
-             Sender (Interface.name ServiceBrowser.interface);
-             Path browser ]);
+  Server.service_browser_new_async server (-1) (-1) "_workstation._tcp" "" 0
+    (fun browser ->
+       DBus.add_match bus
+         [ Type Signal;
+           Sender (Interface.name ServiceBrowser.interface);
+           Path browser ]);
 
-    while true do
-      Connection.dispatch bus
-    done
+  while true do
+    Connection.dispatch bus
+  done

@@ -21,32 +21,39 @@ let ($) a b = a b
 let main =
   (perform
      bus <-- OBus_bus.session ();
+
      id <-- OBus_bus.get_id bus;
-     return $ printf "the message bus id is: %S\n" id;
+     let _ = printf "the message bus id is: %S\n" id in
 
-     return $ printf "names on the session bus:\n";
      names <-- OBus_bus.list_names bus;
-     return $ List.iter (Printf.printf "  %s\n") names;
+     let _ =
+       printf "names on the session bus:\n";
+       List.iter (Printf.printf "  %s\n") names
+     in
 
-     return $ printf "these names are activable:\n";
      names <-- OBus_bus.list_activable_names bus;
-     return $ List.iter (Printf.printf "  %s\n") names;
+     let _ =
+       printf "these names are activable:\n";
+       List.iter (Printf.printf "  %s\n") names
+     in
 
-     return $ printf "trying to start service %S: %!" service;
+     let _ = printf "trying to start service %S: %!" service in
      result <-- OBus_bus.start_service_by_name bus service [];
-     return $ print_endline
+     let _ = print_endline
        (match result with
           | `success -> "success"
-          | `already_running -> "already running");
+          | `already_running -> "already running")
+     in
 
-     return $ printf "trying to acquire the name %S: %!" name;
+     let _ = printf "trying to acquire the name %S: %!" name in
      result <-- OBus_bus.request_name bus name [ `replace_existing; `do_not_queue ];
-     return $ print_endline
+     let _ = print_endline
        (match result with
           | `primary_owner -> "success"
           | `in_queue -> "in queue"
           | `exists -> "the name already exists"
-          | `already_owner -> "i already own the name"))
+          | `already_owner -> "i already own the name")
+     in
+     return ())
 
 let _ = Lwt_unix.run main
-
