@@ -2,28 +2,77 @@ OC = ocamlbuild
 OF = ocamlfind
 PREFIX = /usr/local
 
-.PHONY: samples
+# Targets
+SAMPLES = hello bus-functions eject notify monitor
+LIB = obus
+BINDINGS = hal notify
+TOOLS = obus-introspect obus-binder
 
-all: samples
+.PHONY: tools samples bindings all
+
+all: samples-byte
+
+# +------------------+
+# | Specific targets |
+# +------------------+
+
+lib-byte:
+	$(OC) $(LIB:=.cma)
+
+lib-native:
+	$(OC) $(LIB:=.cmxa)
 
 lib:
-	$(OC) lib.otarget
+	$(OC) $(LIB:=.{cma,cmxa})
+
+bindings-byte:
+	$(OC) $(BINDINGS:=.cma)
+
+bindings-native:
+	$(OC) $(BINDINGS:=.cmxa)
+
+bindings:
+	$(OC) $(BINDINGS:=.{cma,cmxa})
+
+samples-byte:
+	$(OC) $(SAMPLES:%=samples/%.byte)
+
+samples-native:
+	$(OC) $(SAMPLES:%=samples/%.native)
+
+samples:
+	$(OC) $(SAMPLES:%=samples/%.{byte,native})
+
+tools-byte:
+	$(OC) $(TOOLS:%=tools/%.byte)
+
+tools-native:
+	$(OC) $(TOOLS:%=tools/%.native)
+
+tools:
+	$(OC) $(TOOLS:%=tools/%.{byte,native})
+
+# +---------------+
+# | Documentation |
+# +---------------+
 
 doc:
 	$(OC) obus.docdir/index.html
 
-tools:
-	$(OC) `cat tools.itarget`
+dot:
+	$(OC) obus.docdir/index.dot
 
-samples:
-	$(OC) `cat samples.itarget`
+# +--------------------+
+# | Installation stuff |
+# +--------------------+
 
-install:
-	$(OC) META lib.otarget lib-dist tools.otarget obus.docdir/index.html
+install: lib bindings tools doc
+	$(OC) META lib-dist
 	cd _build
-	$(OF) install obus META `cat lib-dist` `cat lib.itarget`
-	install -vm 0755 tools/obus-binder.byte $(PREFIX)/bin/obus-binder
-	install -vm 0755 tools/obus-introspect.byte $(PREFIX)/bin/obus-introspect
+	$(OF) install obus META `cat lib-dist` $(LIB:=.{cma,cmxa}) $(BINDINGS:=.{cma,cmxa})
+	for tool in tools; do \
+	  install -vm 0755 tools/$tool.byte $(PREFIX)/bin/$tool \
+	done
 	mkdir -p $(PREFIX)/share/doc/obus/{samples,html}
 	install -vm 0644 ../LICENSE $(PREFIX)/share/doc/obus
 	install -vm 0644 obus.docdir/* $(PREFIX)/share/doc/obus/html
@@ -31,11 +80,16 @@ install:
 
 uninstall:
 	$(OF) remove obus
-	rm -vf $(PREFIX)/bin/obus-binder $(PREFIX)/bin/obus-introspect
+	rm -vf $(TOOLS:%=$(PREFIX)/bin/%)
 	rm -rvf $(PREFIX)/share/doc/obus
+
+# +-------+
+# | Other |
+# +-------+
 
 clean:
 	$(OC) -clean
 
+# "make" is shorter than "ocamlbuild"...
 %:
 	$(OC) $*

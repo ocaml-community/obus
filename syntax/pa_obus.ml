@@ -176,21 +176,6 @@ struct
     | <:patt@_loc< $int64:n$ >> -> <:expr< 0L >>
     | p -> invalid_key (Ast.loc_of_patt p)
 
-  (* Produce annotation and type definition *)
-  let common_data_type_definitions _loc name key_comb vrntyp cstrs =
-    <:str_item<
-      (* First create the caml type definition *)
-      type $make_caml_type_def _loc name vrntyp cstrs$
-
-      (* Construct the new annotation with semantical
-         information *)
-      let $lid:"d" ^ name$ = OBus_annot.dbitwise (OBus_comb.annot $key_comb$) $str:name$
-        $ List.fold_right (fun (patt, expr, _loc, id) acc ->
-                             <:expr< $str:string_of_key patt ^ "=" ^ id$ :: $acc$ >>)
-            cstrs <:expr< [] >> $
-     >>
-
-
   EXTEND Gram
     GLOBAL:expr str_item;
 
@@ -218,13 +203,14 @@ struct
       [ [ "OBUS_BITWISE"; name = a_LIDENT; "[:"; key_type = ctyp; "]"; "="; (vrntyp, cstrs) = obus_data_type ->
             let key_comb = combinator_of_ctyp key_type in
               <:str_item<
-                $common_data_type_definitions _loc name key_comb vrntyp cstrs$
+                (* First create the caml type definition *)
+                type $make_caml_type_def _loc name vrntyp cstrs$
 
                 (* Construct the combinator by providing a reader and a
                    writer monad *)
                 let $lid:"ob_" ^ name ^ "_list"$ =
                   OBus_comb.make
-                    ~annot:$lid:"d" ^ name$
+                    ~annot:(OBus_comb.annot $key_comb$)
                     ~reader:(OBus_wire.bind (OBus_comb.reader $key_comb$)
                                (fun x ->
                                   OBus_wire.return
@@ -250,11 +236,11 @@ struct
 
             let key_comb = combinator_of_ctyp key_type in
               <:str_item<
-                $common_data_type_definitions _loc name key_comb vrntyp cstrs$
+                type $make_caml_type_def _loc name vrntyp cstrs$
 
                 let $lid:"ob_" ^ name$ =
                   OBus_comb.make
-                    ~annot:$lid:"d" ^ name$
+                    ~annot:(OBus_comb.annot $key_comb$)
                     ~reader:(OBus_wire.bind (OBus_comb.reader $key_comb$)
                                (fun x ->
                                   OBus_wire.return
