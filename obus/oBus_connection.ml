@@ -66,7 +66,7 @@ let set_crash connection on_crashed ret exn = match !connection with
       connection := Crashed exn;
       (* Abort the transport so the dispatcher will exit *)
       begin match OBus_transport.backend running.transport with
-        | OBus_transport.Unix fd -> Lwt_unix.abort fd exn
+        | OBus_transport.Socket fd -> Lwt_unix.abort fd exn
         | _ -> ()
       end;
       remove_connection_of_guid_map running;
@@ -441,7 +441,7 @@ let of_addresses ?(shared=true) addresses = match shared with
   | false -> OBus_transport.of_addresses addresses >>= of_transport ~shared:false
   | true ->
       (* Try to find a guid that we already have *)
-      let guids = Util.filter_map (fun (_, _, g) -> g) addresses in
+      let guids = Util.filter_map (fun ( _, g) -> g) addresses in
       match Util.find_map (fun guid -> Guid_map.lookup guid !guid_connection_map) guids with
         | Some connection -> return connection
         | None ->

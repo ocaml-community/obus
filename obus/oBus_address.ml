@@ -12,37 +12,50 @@ type key = string
 type value = string
 type guid = string
 
-type raw = name * (key * value) list
+type family = Ipv4 | Ipv6
 
-type known =
+type desc =
   | Unix of string
-  | Unknown
+  | Tcp of string * string * family option
+  | Unknown of name * (key * value) list
 
-type t = raw * known * guid option
+type t = desc * guid option
 
 exception Parse_error of string
+
+let assoc key default list = match Util.assoc key list with
+  | Some v -> v
+  | None -> default
 
 let of_string str =
   try
     let buf = Buffer.create 42 in
     let addresses = List.rev (Addr_lexer.addresses [] buf (Lexing.from_string str)) in
-      List.map begin fun ((name, params) as raw) ->
-        (raw,
-         begin match name with
+      List.map begin fun (name, params) ->
+        (begin match name with
            | "unix" -> begin
                match Util.assoc "path" params, Util.assoc "abstract" params with
                  | Some path, None -> Unix path
                  | None, Some abst -> Unix ("\x00" ^ abst)
                  | None, None ->
                      ERROR("invalid unix address: can not specify \"path\" and \"abstract\" at the same time");
-                     Unknown
+                     Unknown(name, params)
                  | Some _, Some _ ->
                      ERROR("invalid unix address: must specify \"path\" or \"abstract\"");
-                     Unknown
+                     Unknown(name, params)
              end
-               (* XXX TODO: handle more addresses and transport
-                  (tcp, ...) XXX *)
-           | _ -> Unknown
+           | "tcp" ->
+               let host = assoc "host" "" params
+               and port = assoc "port" "0" params in
+               begin match Util.assoc "family" params with
+                 | Some "ipv4" -> Tcp(host, port, Some Ipv4)
+                 | Some "ipv6" -> Tcp(host, port, Some Ipv6)
+                 | Some f ->
+                     ERROR("unknown address family %s" f);
+                     Unknown(name, params)
+                 | None -> Tcp(host, port, None)
+               end
+           | _ -> Unknown(name, params)
          end,
          match Util.assoc "guid" params with
            | Some(guid_hex_encoded) ->

@@ -27,7 +27,7 @@ exception Error of string * exn option
 type t
 
 type backend =
-  | Unix of Lwt_unix.file_descr
+  | Socket of Lwt_unix.file_descr
   | Other
 
 type recv = string -> int -> int -> int Lwt.t

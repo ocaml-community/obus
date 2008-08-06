@@ -14,16 +14,18 @@ type key = string
 type value = string
 type guid = string
 
-type raw = name * (key * value) list
-    (** A just parsed address *)
+type family = Ipv4 | Ipv6
 
-type known =
+type desc =
     (** Addresses handled by obus *)
   | Unix of string
       (** A unix socket, the argument is the path *)
-  | Unknown
+  | Tcp of string * string * family option
+      (** [Tcp(host, service, family)] *)
+  | Unknown of name * (key * value) list
+      (** An unknown address *)
 
-type t = raw * known * guid option
+type t = desc * guid option
 
 exception Parse_error of string
 
