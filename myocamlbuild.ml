@@ -154,6 +154,9 @@ let _ =
         rule "mli_to_install" ~prod:"lib-dist"
           (fun _ _ -> Echo(List.map (fun s -> sprintf "obus/%s.mli\n" (String.uncapitalize s)) Config.modules, "lib-dist"));
 
+        rule "obus_version" ~prod:"obus/version.ml"
+          (fun _ _ -> Echo([sprintf "let version = %S\n" Config.obus_version], "obus/version.ml"));
+
         (* When one link an OCaml library/binary/package, one should use -linkpkg *)
         flag ["ocaml"; "link"] & A"-linkpkg";
 

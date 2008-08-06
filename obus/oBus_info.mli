@@ -9,6 +9,9 @@
 
 (** Various informations *)
 
+val version : string
+  (** version of obus *)
+
 val protocol_version : int
   (** The version of the DBus protocol implemented by the library *)
 

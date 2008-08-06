@@ -52,6 +52,7 @@ type mechanism = string * (unit -> mechanism_handlers)
 (** {6 Predefined mechanisms} *)
 
 val mech_external : mechanism
+val mech_anonymous : mechanism
 
 (** {6 Registration} *)
 

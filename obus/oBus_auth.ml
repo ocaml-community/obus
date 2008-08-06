@@ -58,7 +58,12 @@ let mech_external = ("EXTERNAL",
                      fun () ->
                        make ~init:(OK (string_of_int (Unix.getuid ()))) ())
 
-let default_mechanisms = [ mech_external ]
+let mech_anonymous = ("ANONYMOUS",
+                      fun () ->
+                        make ~init:(OK ("obus " ^ OBus_info.version)) ())
+
+let default_mechanisms = [mech_external;
+                          mech_anonymous]
 
 (* The protocol state machine for the client *)
 
@@ -73,14 +78,18 @@ type client_machine_transition =
 let rec find_mechanism = function
   | [] -> None
   | (name, create_mech) :: mechs ->
-      try
-        let mech = create_mech () in
+      match
+        try
+          let mech = create_mech () in
           match mech.mech_init with
             | Continue(resp) -> Some(`Auth(name, resp), (`Waiting_for_data, mech, mechs))
             | OK(resp)       -> Some(`Auth(name, resp), (`Waiting_for_ok,   mech, mechs))
-            | Error(_)       -> find_mechanism mechs
+            | Error(_)       -> None
+        with
+            _ -> None
       with
-          _ -> find_mechanism mechs
+        | None -> find_mechanism mechs
+        | x -> x
 
 let client_transition (state, mech, mechs) cmd = match state, cmd with
   | `Waiting_for_data, `Data(data) ->
