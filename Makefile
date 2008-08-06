@@ -3,7 +3,7 @@ OF = ocamlfind
 PREFIX = /usr/local
 
 # Targets
-SAMPLES = hello bus-functions eject notify monitor
+SAMPLES = hello bus-functions eject notif monitor
 LIB = obus
 BINDINGS = hal notify
 TOOLS = obus-introspect obus-binder

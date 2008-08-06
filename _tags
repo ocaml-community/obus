@@ -11,6 +11,7 @@
 <samples/*.*>: use_obus
 <samples/*.ml>: pa_obus
 <samples/eject.*>: use_hal
+<samples/notif.*>: use_notify
 # Tools
 <tools/*.*>: use_obus, pkg_xml-light, pkg_str
 <tools/obus-introspect.ml>: pa_obus
