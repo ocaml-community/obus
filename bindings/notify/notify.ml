@@ -9,11 +9,12 @@
 
 open OBus_value
 
-include OBus_client.Make_uniq
+include OBus_client.Make_fixed
   (struct
      let name = "org.freedesktop.Notifications"
+     let path = "/org/freedesktop/Notifications"
      let service = Some name
-     let connection = OBus_bus.session
+     let bus = OBus_bus.session
    end)
 
 type id = int32
@@ -68,9 +69,6 @@ let ob_hint = OBus_comb.make
 
 let app_name = ref (Filename.basename Sys.argv.(0))
 let desktop_entry = ref None
-
-let path = "/org/freedesktop/Notifications"
-let call member = call path member
 
 open Lwt
 

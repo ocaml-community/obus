@@ -15,11 +15,11 @@ type t = OBus_connection.t
 
 (** {6 Well-known instances} *)
 
-val session : unit -> t Lwt.t
+val session : t Lwt.t Lazy.t
   (** The session message bus. This is the one which is started at the
       beginning of each user session. *)
 
-val system : unit -> t Lwt.t
+val system : t Lwt.t Lazy.t
   (** The system message bus. It is unique given one system. *)
 
 (** {6 Creation} *)

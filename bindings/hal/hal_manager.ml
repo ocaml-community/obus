@@ -9,14 +9,13 @@
 
 open Lwt
 
-include OBus_client.Make_uniq
+include OBus_client.Make_fixed
   (struct
      let name = "org.freedesktop.Hal.Manager"
+     let path = "/org/freedesktop/Hal/Manager"
      let service = Some "org.freedesktop.Hal"
-     let connection = OBus_bus.system
+     let bus = OBus_bus.system
    end)
-
-let call member = call "/org/freedesktop/Hal/Manager" member
 
 let get_all_devices = call "GetAllDevices" [: unit -> Hal_device.udi list ]
 let get_all_devices_with_properties = call "GetAllDevicesWithProperties" [: unit -> (Hal_device.udi * (string, Hal_device.property) assoc) structure list ]

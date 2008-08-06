@@ -20,7 +20,7 @@ let ($) a b = a b
 
 let main =
   (perform
-     bus <-- OBus_bus.session ();
+     bus <-- Lazy.force OBus_bus.session;
 
      id <-- OBus_bus.get_id bus;
      let _ = printf "the message bus id is: %S\n" id in

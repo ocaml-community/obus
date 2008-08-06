@@ -71,14 +71,14 @@ let rec get (nodes, map) bus service path =
 
 let main service path =
   (perform
-     bus <-- begin match !session, !system with
+     bus <-- Lazy.force begin match !session, !system with
        | true, true ->
            prerr_endline "must specify at most one of -session, -system\n\n";
            Arg.usage args usage_msg;
            exit 1
        | false, false
-       | true, false -> OBus_bus.session ()
-       | false, true -> OBus_bus.system ()
+       | true, false -> OBus_bus.session
+       | false, true -> OBus_bus.system
      end;
      (nodes, map) <-- get ([], Interf_map.empty) bus service path;
      let _ = match !obj_mode with

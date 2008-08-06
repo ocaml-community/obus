@@ -10,7 +10,7 @@
 open Lwt
 open OBus_intern
 
-include OBus_client.Make_fixed
+include OBus_client.Make_fixed_path
   (struct
      let name = "org.freedesktop.DBus"
      let path = "/org/freedesktop/DBus"
@@ -36,19 +36,8 @@ let of_addresses addresses =
      register_connection connection;
      return connection)
 
-let session_bus = ref None
-let system_bus = ref None
-
-let get bus_ref addr = match !bus_ref with
-  | Some t -> t
-  | None ->
-      of_addresses (Lazy.force addr)
-      >>= fun bus ->
-        bus_ref := Some (return bus);
-        return bus
-
-let session _ = get session_bus OBus_address.session
-let system _ = get system_bus OBus_address.system
+let session = lazy(of_addresses (Lazy.force OBus_address.session))
+let system = lazy(of_addresses (Lazy.force OBus_address.system))
 
 OBUS_EXN Name_has_no_owner = "Error.NameHasNoOwner"
 OBUS_EXN Match_rule_not_found = "Error.MatchRuleNotFound"

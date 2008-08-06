@@ -56,9 +56,9 @@ let filter what_bus header body =
     (OBus_types.string_of_sequence  (OBus_value.type_of_sequence body))
     (OBus_value.string_of_sequence body)
 
-let add_filter what_bus get_bus =
+let add_filter what_bus lbus =
   (perform
-     bus <-- get_bus ();
+     bus <-- Lazy.force lbus;
      let _ =
        ignore (OBus_connection.add_filter bus (filter what_bus));
 

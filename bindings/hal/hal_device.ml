@@ -8,11 +8,11 @@
  *)
 
 module Make_interf(Name : sig val name : string end) =
-  OBus_client.Make_uniq
+  OBus_client.Make_fixed_bus
     (struct
        let name = Name.name
        let service = Some "org.freedesktop.Hal"
-       let connection = OBus_bus.system
+       let bus = OBus_bus.system
      end)
 
 include Make_interf(struct let name = "org.freedesktop.Hal.Device" end)

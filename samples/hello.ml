@@ -14,7 +14,7 @@ open Lwt
 
 let main =
   (perform
-     bus <-- OBus_bus.session ();
+     bus <-- Lazy.force OBus_bus.session;
      let _ = Printf.printf "My unique connection name is: %s\n" (OBus_bus.name bus) in
      return ())
 
