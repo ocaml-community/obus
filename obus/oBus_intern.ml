@@ -83,7 +83,7 @@ and running_connection = {
   shared : bool;
 
   (* Unique name of the connection *)
-  mutable name : string;
+  mutable name : string option;
 
   (* The server guid *)
   guid : OBus_address.guid;

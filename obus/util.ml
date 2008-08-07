@@ -55,6 +55,25 @@ let with_open_in fname f =
 let with_open_out fname f =
   try_finally f close_out (open_out fname)
 
+let with_process openp closep cmd f =
+  let c = openp cmd in
+  let result =
+    try
+      f c
+    with
+        exn ->
+          ignore (closep c);
+          raise exn
+  in
+  match closep c with
+    | Unix.WEXITED 0 -> result
+    | Unix.WEXITED n -> failwith (Printf.sprintf "command %S exited with status %d" cmd n)
+    | Unix.WSIGNALED n -> failwith (Printf.sprintf "command %S killed by signal %d" cmd n)
+    | Unix.WSTOPPED n -> failwith (Printf.sprintf "command %S stopped by signal %d" cmd n)
+
+let with_process_in cmd = with_process Unix.open_process_in Unix.close_process_in cmd
+let with_process_out cmd = with_process Unix.open_process_out Unix.close_process_out cmd
+
 module type Monad = sig
   type 'a t
   val bind : 'a t -> ('a -> 'b t) -> 'b t

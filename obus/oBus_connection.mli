@@ -21,6 +21,14 @@ type t = OBus_intern.connection
 
 (** {6 Creation} *)
 
+(** The following functions will return a connection which is ready to
+    send and receive messages. You should use them only for direct
+    connection to another application without passing through a
+    message bus.
+
+    Otherwise you should use [OBus_bus] or immediatly call
+    [OBus_bus.register_connection] after the creation. *)
+
 val of_transport : ?shared:bool -> OBus_transport.t -> t Lwt.t
   (** [of_transport shared transport] create a dbus connection over
       the given transport. If [shared] is true and a connection to the
@@ -29,7 +37,7 @@ val of_transport : ?shared:bool -> OBus_transport.t -> t Lwt.t
 
 val of_authenticated_transport : ?shared:bool -> OBus_transport.t -> OBus_address.guid -> t
   (** Same as of_transport but assume that the authentification is
-      done. *)
+      done. Use it only if you know what you are doing. *)
 
 val of_addresses : ?shared:bool -> OBus_address.t list -> t Lwt.t
   (** [of_addresses shared addresses] shorthand for obtaining
@@ -55,6 +63,18 @@ val transport : t -> OBus_transport.t
 val guid : t -> OBus_address.guid
   (** [guid connection] return the unique identifier of the server at
       the other side of the connection *)
+
+type name = string
+    (** A unique connection name, of the form ":X.XX" *)
+
+val name : t -> name option
+  (** Unique name of the connection. This is only relevant if the other
+      side of the connection is a message bus.
+
+      In this case this is the unique name assigned by the message bus
+      for the lifetime of the connection.
+
+      In other cases it is [None]. *)
 
 (** {6 Sending messages} *)
 

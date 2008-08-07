@@ -25,3 +25,20 @@ let verbose, debug =
       | _ -> (true, false)
   with
       Not_found -> (false, false)
+
+(* This location depends on where libdbus is installed *)
+let machine_uuid_file = "/var/lib/dbus/machine-id"
+
+let machine_uuid = lazy(
+  (* try to get the uuid with the dbus-uuidgen program, so we do not
+     have to care about where the uuid file is located *)
+  try Util.with_process_in "dbus-uuidgen --get" input_line with
+      exn ->
+        LOG("dbus-uuidgen failed: %s" (Printexc.to_string exn));
+        (* Try reading the file *)
+        try Util.with_open_in machine_uuid_file input_line with
+            _ ->
+              LOG("failed to read the local machine uuid file (%s): %s"
+                    machine_uuid_file (Printexc.to_string exn));
+              raise exn
+)

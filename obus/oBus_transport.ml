@@ -88,11 +88,19 @@ let rec try_one t fallback x =
     (fun exn -> fallback x)
 
 let rec of_addresses = function
-  | [] -> fail (Failure "no working address found")
+  | [] -> fail (Failure "no working DBus address found")
   | (desc, _) :: rest -> match desc with
-      | Unix path ->
+      | Unix_path path ->
           try_one (make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX(path)))
             of_addresses rest
+
+      | Unix_abstract path ->
+          try_one (make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ path)))
+            of_addresses rest
+
+      | Unix_tmpdir _ ->
+          ERROR("unix tmpdir can only be used as a listening address");
+          of_addresses rest
 
       | Tcp(host, service, family) ->
           let opts = [AI_SOCKTYPE SOCK_STREAM] in
@@ -107,4 +115,21 @@ let rec of_addresses = function
                   try_all ais
           in
           try_all (getaddrinfo host service opts)
+
+      | Autolaunch ->
+          of_addresses
+            ((try
+                let line = Util.with_process_in (sprintf "dbus-launch --autolaunch %s --binary-syntax"
+                                                   (Lazy.force OBus_info.machine_uuid)) input_line in
+                let line =
+                  try
+                    String.sub line 0 (String.index line '\000')
+                  with _ -> line
+                in
+                OBus_address.of_string line
+              with
+                  exn ->
+                    LOG("autolaunch failed: %s" (Printexc.to_string exn));
+                    []) @ rest)
+
       | _ -> of_addresses rest

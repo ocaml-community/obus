@@ -26,15 +26,19 @@ let rec insert section prefix =
   in
     aux
 
+let var _loc v = function
+  | "oBus_info" -> <:expr< $lid:v$ >>
+  | _ -> <:expr< OBus_info.$lid:v$ >>
+
 let map_expr = function
   | <:expr@_loc< LOG($x$) >> ->
     let section = section (Loc.file_name _loc) in
-      <:expr< if OBus_info.verbose
+      <:expr< if $var _loc "verbose" section$
       then $insert section "" x$
       else () >>
   | <:expr@_loc< DEBUG($x$) >> ->
     let section = section (Loc.file_name _loc) in
-      <:expr< if OBus_info.debug
+      <:expr< if $var _loc "debug" section$
       then $insert section "" x$
       else () >>
   | <:expr@_loc< ERROR($x$) >> ->

@@ -10,7 +10,7 @@
 open Lwt
 open OBus_intern
 
-include OBus_client.Make_fixed_path
+include OBus_client.Make_constant_path
   (struct
      let name = "org.freedesktop.DBus"
      let path = "/org/freedesktop/DBus"
@@ -23,12 +23,16 @@ let ob_name = ob_string
 
 let hello bus = call bus "Hello" [: name ]
 
-let name bus = with_running bus $ fun running -> running.name
 let register_connection connection =
-  hello connection >>= fun name ->
-    lwt_with_running connection $ fun running ->
-      running.name <- name;
-      return ()
+  lwt_with_running connection $ function
+    | { name = Some _ } ->
+        (* Do not call two times the Hello method *)
+        return ()
+    | { name = None } ->
+        hello connection >>= fun name ->
+          lwt_with_running connection $ fun running ->
+            running.name <- Some name;
+            return ()
 
 let of_addresses addresses =
   (perform

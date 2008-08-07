@@ -17,6 +17,7 @@ open Lwt
 type guid = OBus_address.guid
 type filter_id = int
 type filter = OBus_header.any -> OBus_value.sequence -> unit
+type name = string
 
 exception Protocol_error of string
 exception Connection_closed
@@ -415,7 +416,7 @@ let of_authenticated_transport ?(shared=true) transport guid =
       filters = [];
       next_filter_id = 0;
       guid = guid;
-      name = "";
+      name = None;
       shared = shared;
       on_disconnect = on_disconnect;
     } in
@@ -457,3 +458,5 @@ let transport connection =
   with_running connection $ fun running -> running.transport
 let guid connection =
   with_running connection $ fun running -> running.guid
+let name connection =
+  with_running connection $ fun running -> running.name

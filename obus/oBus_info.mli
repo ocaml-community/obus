@@ -12,6 +12,9 @@
 val version : string
   (** version of obus *)
 
+val machine_uuid : string Lazy.t
+  (** UUID of the machine we are running on *)
+
 val protocol_version : int
   (** The version of the DBus protocol implemented by the library *)
 

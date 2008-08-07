@@ -8,7 +8,7 @@
  *)
 
 module Make_interf(Name : sig val name : string end) =
-  OBus_client.Make_fixed_bus
+  OBus_client.Make_constant_bus
     (struct
        let name = Name.name
        let service = Some "org.freedesktop.Hal"

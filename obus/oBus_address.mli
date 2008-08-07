@@ -17,13 +17,15 @@ type guid = string
 type family = Ipv4 | Ipv6
 
 type desc =
-    (** Addresses handled by obus *)
-  | Unix of string
-      (** A unix socket, the argument is the path *)
+  | Unix_path of string
+  | Unix_abstract of string
+  | Unix_tmpdir of string
+      (** A unix socket *)
   | Tcp of string * string * family option
       (** [Tcp(host, service, family)] *)
+  | Autolaunch
   | Unknown of name * (key * value) list
-      (** An unknown address *)
+      (** An address which is not known by obus *)
 
 type t = desc * guid option
 

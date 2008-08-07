@@ -37,6 +37,10 @@ val with_open_out : string -> (out_channel -> 'a) -> 'a
   (** [with_open_* fname f] open [fname], apply [f] on the channel and
       close it after whatever happen *)
 
+val with_process_in : string -> (in_channel -> 'a) -> 'a
+val with_process_out : string -> (out_channel -> 'a) -> 'a
+  (** Same thing but for processes *)
+
 module type Monad = sig
   type 'a t
   val bind : 'a t -> ('a -> 'b t) -> 'b t

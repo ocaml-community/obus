@@ -23,7 +23,7 @@ module type Interface = sig
     (** Type of objects, without customization it is [OBus_proxy.t] *)
 
   val call : t -> string -> ('a, 'b Lwt.t, 'b, _, _) OBus_comb.func -> 'a
-    (** [call obj member typ] call a method. *)
+    (** [call obj member typ ...] call a method. *)
 
   val kcall : ('b Lwt.t -> 'c) -> t -> string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
     (** Same thing but with continuation *)
@@ -59,38 +59,38 @@ module Make_custom(Params : Custom_params) : Interface
 
 (** {6 Interface for single object} *)
 
-(** Interface implemented by only one object with a fixed path *)
+(** Interface implemented by only one object with a constant path *)
 
-module type Fixed_path_params = sig
+module type Constant_path_params = sig
   val name : string
   val path : OBus_path.t
   val service : string option
 end
 
-module Make_fixed_path(Params : Fixed_path_params) : Interface
+module Make_constant_path(Params : Constant_path_params) : Interface
   with type t = OBus_connection.t
 
-(** {6 Fixed message bus and service} *)
+(** {6 Constant message bus and service} *)
 
-module type Fixed_bus_params = sig
+module type Constant_bus_params = sig
   val name : string
   val service : string option
   val bus : OBus_connection.t Lwt.t Lazy.t
 end
 
-module Make_fixed_bus(Params : Fixed_bus_params) : Interface
+module Make_constant_bus(Params : Constant_bus_params) : Interface
   with type t = OBus_path.t
 
-(** {6 Everything fixed} *)
+(** {6 Everything constant} *)
 
-module type Fixed_params = sig
+module type Constant_params = sig
   val name : string
   val path : OBus_path.t
   val service : string option
   val bus : OBus_connection.t Lwt.t Lazy.t
 end
 
-module Make_fixed(Params : Fixed_params) : sig
+module Make_constant(Params : Constant_params) : sig
   val call : string -> ('a, 'b Lwt.t, 'b, _, _) OBus_comb.func -> 'a
   val kcall : ('b Lwt.t -> 'c) -> string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit

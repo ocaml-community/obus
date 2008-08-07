@@ -9,7 +9,7 @@
 
 open OBus_value
 
-include OBus_client.Make_fixed
+include OBus_client.Make_constant
   (struct
      let name = "org.freedesktop.Notifications"
      let path = "/org/freedesktop/Notifications"

@@ -35,15 +35,10 @@ val register_connection : OBus_connection.t -> unit Lwt.t
       If this is nqot the case, it will (probably) raise an
       [OBus_error.Unknown_method] *)
 
-(** {6 Informations} *)
+(** {6 Bus names acquiring} *)
 
 type name = string
-
-val name : t -> name
-  (** Return the unique name of a connection. It is given by the
-      message bus for the lifetime of the connection to it. *)
-
-(** {6 Bus names acquiring} *)
+    (** A bus name, for example "org.freedesktop.DBus" *)
 
 type request_name_flag =
     [ `allow_replacement
@@ -73,7 +68,7 @@ type release_name_result =
     | `non_existent
     | `not_owner ]
 
-val release_name : t -> string -> release_name_result Lwt.t
+val release_name : t -> name -> release_name_result Lwt.t
 
 (** {6 Service starting/discovering} *)
 
@@ -101,11 +96,11 @@ val list_activable_names : t -> name list Lwt.t
 
 exception Name_has_no_owner of string
 
-val get_name_owner : t -> name -> name Lwt.t
+val get_name_owner : t -> name -> OBus_connection.name Lwt.t
   (** Return the connection unique name of the given service. Raise a
       [Name_has_no_owner] if the given name does not have an owner. *)
 
-val list_queued_owners : t -> name -> name list Lwt.t
+val list_queued_owners : t -> name -> OBus_connection.name list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
@@ -156,7 +151,7 @@ val get_id : t -> string Lwt.t
 (** You will always receive these signals, you do not have to add
     matching rules for that *)
 
-(*val name_owner_changed : t -> (name -> name option -> name option -> unit) OBus_signal.t*)
+(*val name_owner_changed : t -> (name -> OBus_connection.name option -> OBus_connection.name option -> unit) OBus_signal.t*)
   (** [name_owner_changer name old_owner new_owner] is emitted each
       time a name owner change. This can be used to detect
       connection/disconnection. *)

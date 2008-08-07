@@ -9,7 +9,7 @@
 
 open Lwt
 
-include OBus_client.Make_fixed
+include OBus_client.Make_constant
   (struct
      let name = "org.freedesktop.Hal.Manager"
      let path = "/org/freedesktop/Hal/Manager"

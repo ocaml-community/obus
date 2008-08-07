@@ -19,17 +19,17 @@ module type Interface = sig
   val kcall : ('b Lwt.t -> 'c) -> t -> string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
 end
-module type Fixed_path_params = sig
+module type Constant_path_params = sig
   val name : string
   val path : string
   val service : string option
 end
-module type Fixed_bus_params = sig
+module type Constant_bus_params = sig
   val name : string
   val service : string option
   val bus : OBus_connection.t Lwt.t Lazy.t
 end
-module type Fixed_params = sig
+module type Constant_params = sig
   val name : string
   val path : OBus_path.t
   val service : string option
@@ -58,7 +58,7 @@ struct
   let register_exn = register_exn Params.name
 end
 
-module Make_fixed_path(Params : Fixed_path_params) =
+module Make_constant_path(Params : Constant_path_params) =
 struct
   type t = OBus_connection.t
 
@@ -76,7 +76,7 @@ struct
   let register_exn = register_exn Params.name
 end
 
-module Make_fixed_bus(Params : Fixed_bus_params) =
+module Make_constant_bus(Params : Constant_bus_params) =
 struct
   type t = OBus_path.t
 
@@ -103,8 +103,8 @@ struct
   let register_exn = register_exn Params.name
 end
 
-module Make_fixed(Params : Fixed_params) = struct
-  include Make_fixed_bus(Params)
+module Make_constant(Params : Constant_params) = struct
+  include Make_constant_bus(Params)
   let kcall cont = kcall cont Params.path
   let call member = call Params.path member
 end
