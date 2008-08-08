@@ -27,12 +27,11 @@ let padded_on_8 = function
 type accu = int
 type reader
 type writer
-type priv
 type ('a, +'b, +'c, 'typ) t = context -> int -> int * 'a
 type ('a, +'b, +'c, 'typ) one = ('a, 'b, 'c * 'b, 'typ) t
 type ('a, +'b, 'typ) null = ('a, 'b, 'b, 'typ) t
 type ('a, 'b, 'typ) basic_p = ('a, unit, 'b, 'typ) one
-constraint 'b = _ dbasic
+constraint 'b = [< abasic ]
 type ('a, 'b, 'typ) single_p = ('a, unit, 'b, 'typ) one
 type ('a, 'b, 'typ) sequence_p = ('a, unit, 'b, 'typ) t
 

@@ -23,7 +23,7 @@ type t = {
   (** Path of the object on the application owning it *)
 }
 
-val ob_t : (t, _, OBus_types.dobject_path) OBus_comb.one
+val ob_t : (t, _, [`object_path]) OBus_comb.one
   (** Type combinator *)
 
 val compare : t -> t -> int

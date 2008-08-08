@@ -20,7 +20,7 @@ type ('a, +'b, +'c) t = {
 }
 type ('a, +'b, +'c) one = ('a, 'b, 'c * 'b) t
 type ('a, 'b) basic_p = ('a, unit, 'b) one
-constraint 'b = _ dbasic
+constraint 'b = [< abasic ]
 type ('a, 'b) single_p = ('a, unit, 'b) one
 type ('a, 'b) sequence_p = ('a, unit, 'b) t
 

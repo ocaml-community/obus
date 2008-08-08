@@ -34,7 +34,7 @@ type ('a, +'b, +'c) one = ('a, 'b, 'c * 'b) t
     (** Sequence of length 1 *)
 
 type ('a, 'b) basic_p = ('a, unit, 'b) one
-constraint 'b = _ dbasic
+constraint 'b = [< abasic ]
     (** Match combinators with a signature of one basic type *)
 type ('a, 'b) single_p = ('a, unit, 'b) one
     (** Match combinators with a signature of length 1 *)
