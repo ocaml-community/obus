@@ -27,9 +27,11 @@ struct
   type tsingle =
     | Tbasic of tbasic
     | Tstruct of tsingle list
-    | Tarray of tsingle
-    | Tdict of tbasic * tsingle
+    | Tarray of telement
     | Tvariant
+  and telement =
+    | Tdict_entry of tbasic * tsingle
+    | Tsingle of tsingle
 end
 
 include T
@@ -53,10 +55,13 @@ let string_of_tbasic = function
 
 let rec string_of_tsingle = function
   | Tbasic t -> sprintf "Tbasic %s" (string_of_tbasic t)
-  | Tarray t -> sprintf "Tarray(%s)" (string_of_tsingle t)
-  | Tdict(k, v) -> sprintf "Tdict(%s, %s)" (string_of_tbasic k) (string_of_tsingle v)
+  | Tarray t -> sprintf "Tarray(%s)" (string_of_telement t)
   | Tstruct tl -> sprintf "Tstruct %s" (string_of_tsequence tl)
   | Tvariant -> "Tvariant"
+
+and string_of_telement = function
+  | Tdict_entry(tk, tv) -> sprintf "Tdict_entry(%s, %s)" (string_of_tbasic tk) (string_of_tsingle tv)
+  | Tsingle t -> sprintf "Tsingle(%s)" (string_of_tsingle t)
 
 and string_of_tsequence tl = sprintf "[%s]" (String.concat "; " (List.map string_of_tsingle tl))
 
@@ -105,10 +110,13 @@ type basic =
 
 type single =
   | Basic of basic
-  | Array of tsingle * single list
-  | Dict of tbasic * tsingle * (basic * single) list
+  | Array of telement * element list
   | Struct of single list
   | Variant of single
+
+and element =
+  | Dict_entry of basic * single
+  | Single of single
 
 type sequence = single list
 
@@ -129,9 +137,12 @@ let type_of_basic = function
 let rec type_of_single = function
   | Basic x -> Tbasic(type_of_basic x)
   | Array(t, x) -> Tarray t
-  | Dict(tk, tv, x) -> Tdict(tk, tv)
   | Struct x -> Tstruct(List.map type_of_single x)
   | Variant _ -> Tvariant
+
+let type_of_element = function
+  | Dict_entry(k, v) -> Tdict_entry(type_of_basic k, type_of_single v)
+  | Single x -> Tsingle(type_of_single x)
 
 let type_of_sequence = List.map type_of_single
 
@@ -150,16 +161,14 @@ let vobject_path x = Object_path x
 let vbasic x = Basic x
 let varray t l =
   List.iter (fun x ->
-               if type_of_single x <> t
+               if type_of_element x <> t
                then failwith "OBus_value.varray: unexpected type") l;
   Array(t, l)
-let vdict tk tv l =
-  List.iter (fun (k, v) ->
-               if type_of_basic k <> tk or type_of_single v <> tv
-               then failwith "OBus_value.vdict: unexpected type") l;
-  Dict(tk, tv, l)
 let vstruct l = Struct l
 let vvariant v = Variant v
+
+let vdict_entry k v = Dict_entry(k, v)
+let vsingle x = Single x
 
 open Printf
 
@@ -181,17 +190,13 @@ let rec string_of_single = function
   | Basic v -> sprintf "Basic(%s)" (string_of_basic v)
   | Array(t, l) ->
       sprintf "Array(%s, [%s])"
-        (string_of_tsingle t)
-        (String.concat "; " (List.map string_of_single l))
-  | Dict(tk, tv, l) ->
-      sprintf "Dict(%s, %s, [%s])"
-        (string_of_tbasic tk)
-        (string_of_tsingle tv)
-        (String.concat "; "
-           (List.map (fun (k, v) -> sprintf "(%s, %s)"
-                        (string_of_basic k)
-                        (string_of_single v)) l))
+        (string_of_telement t)
+        (String.concat "; " (List.map string_of_element l))
   | Struct l -> sprintf "Structure %s" (string_of_sequence l)
   | Variant x -> sprintf "Variant(%s)" (string_of_single x)
+
+and string_of_element = function
+  | Dict_entry(k, v) -> sprintf "Dict_entry(%s, %s)" (string_of_basic k) (string_of_single v)
+  | Single x -> sprintf "Single(%s)" (string_of_single x)
 
 and string_of_sequence l = sprintf "[%s]" (String.concat "; " (List.map string_of_single l))

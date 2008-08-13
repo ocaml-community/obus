@@ -34,7 +34,7 @@ type property =
 let tproperty = wrap_single tvariant
   (function
      | Basic (String s) -> Pstring s
-     | Array(Tbasic Tstring, _) as l -> Pstrlist(cast_single (tlist tstring) l)
+     | Array(Tsingle (Tbasic Tstring), _) as l -> Pstrlist(cast_single (tlist tstring) l)
      | Basic (Int32 x) -> Pint x
      | Basic (Uint64 x) -> Puint64 x
      | Basic (Boolean x) -> Pbool x

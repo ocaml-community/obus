@@ -272,10 +272,11 @@ let rpad4 = rpadn pad4
 let rpad8 = rpadn pad8
 
 let pad8_p = function
-  | Tstruct _
-  | Tbasic Tint64
-  | Tbasic Tuint64
-  | Tbasic Tdouble -> true
+  | Tdict_entry _
+  | Tsingle (Tstruct _)
+  | Tsingle (Tbasic Tint64)
+  | Tsingle (Tbasic Tuint64)
+  | Tsingle (Tbasic Tdouble) -> true
   | _ -> false
 
 (*** Writing ***)
@@ -343,11 +344,11 @@ let wtype t ctx i =
   String.unsafe_set ctx.buffer i '\000';
   i + 1
 
-let wstruct writer ctx i = writer ctx (wpad8 ctx i)
+let wstruct writer v ctx i = writer v ctx (wpad8 ctx i)
 
-let warray_backend on8 writer fold v ctx i =
+let warray typ writer fold v ctx i =
   let i = wpad4 ctx i in
-  let j = if on8 then wpad8 ctx (i + 4) else i + 4 in
+  let j = if pad8_p typ then wpad8 ctx (i + 4) else i + 4 in
   let k = fold (fun x -> writer x ctx) v j in
   let len = k - j in
   wcheck_array_len len;
@@ -356,15 +357,13 @@ let warray_backend on8 writer fold v ctx i =
      | Big_endian -> BEW.unsafe_write_int_as_uint32 len ctx.buffer i);
   k
 
-let warray typ = warray_backend (pad8_p typ)
-let wdict writer = warray_backend true writer
+let wdict_entry kwriter vwriter (k, v) ctx i = vwriter v ctx (kwriter k ctx (wpad8 ctx i))
 
 let rec fold_list f l acc = match l with
   | [] -> acc
   | x :: l -> fold_list f l (f x acc)
 
 let wlist typ writer = warray typ writer fold_list
-let wassoc kwriter vwriter = wdict (fun (k, v) ctx i -> vwriter v ctx (kwriter k ctx i)) fold_list
 
 let wbyte_array str ctx i =
   let len = String.length str in
@@ -393,10 +392,15 @@ let wbasic = function
 
 let rec wsingle = function
   | Basic x -> wbasic x
-  | Array(t, l) -> wlist t wsingle l
-  | Dict(tk, tv, l) -> wassoc wbasic wsingle l
-  | Struct l -> wstruct (wsequence l)
+  | Array(t, l) -> wlist t welement l
+  | Struct l -> wstruct wsequence l
   | Variant v -> wvariant v
+
+and welement = function
+  | Dict_entry(k, v) ->
+      wdict_entry wbasic wsingle (k, v)
+  | Single x ->
+      wsingle x
 
 and wvariant v ctx i =
   let i = wtype (type_of_single v) ctx i in
@@ -500,14 +504,17 @@ let read_until reader empty limit ctx i =
   in
   aux (i, empty)
 
-let rarray_backend on8 reader acc ctx i =
+let rarray typ reader acc ctx i =
   let i, len = ruint ctx i in
   rcheck_array_len len;
-  let i = if on8 then rpad8 ctx i else i in
+  let i = if pad8_p typ then rpad8 ctx i else i in
   read_until reader acc (i + len) ctx i
 
-let rarray typ = rarray_backend (pad8_p typ)
-let rdict reader = rarray_backend true reader
+let rdict_entry kreader vreader ctx i =
+  let i = rpad8 ctx i in
+  let i, k = kreader ctx i in
+  let i, v = vreader ctx i in
+  (i, (k, v))
 
 let rlist typ reader ctx i =
   let i, len = ruint ctx i in
@@ -529,11 +536,6 @@ let rlist typ reader ctx i =
 let rset typ reader = rarray typ (fun acc ctx i ->
                                     let i, v = reader ctx i in
                                     (i, v :: acc)) []
-
-let rassoc kreader vreader = rdict (fun acc ctx i ->
-                                      let i, k = kreader ctx i in
-                                      let i, v = vreader ctx i in
-                                      (i, (k, v) :: acc)) []
 
 let rbyte_array ctx i =
   let i, len = ruint ctx i in
@@ -567,8 +569,17 @@ let rbasic = function
 
 let rec rsingle = function
   | Tbasic t -> rwrap (rbasic t) vbasic
-  | Tarray t -> rwrap (rlist t (rsingle t)) (varray t)
-  | Tdict(tk, tv) -> rwrap (rassoc (rbasic tk) (rsingle tv)) (vdict tk tv)
+  | Tarray t -> rwrap (match t with
+                         | Tdict_entry(tk, tv) ->
+                             let kreader = rbasic tk
+                             and vreader = rsingle tv in
+                             rset t (fun ctx i ->
+                                       let i = rpad8 ctx i in
+                                       let i, k = kreader ctx i in
+                                       let i, v = vreader ctx i in
+                                       (i, Dict_entry(k, v)))
+                         | Tsingle t' ->
+                             rlist t (rwrap (rsingle t') vsingle)) (varray t)
   | Tstruct tl -> rwrap (rstruct (rsequence tl)) vstruct
   | Tvariant -> rvariant
 

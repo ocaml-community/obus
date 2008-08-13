@@ -28,9 +28,12 @@ type tbasic =
 type tsingle =
   | Tbasic of tbasic
   | Tstruct of tsingle list
-  | Tarray of tsingle
-  | Tdict of tbasic * tsingle
+  | Tarray of telement
   | Tvariant
+
+and telement =
+  | Tdict_entry of tbasic * tsingle
+  | Tsingle of tsingle
 
 type tsequence = tsingle list
 
@@ -65,10 +68,13 @@ type basic =
 type single =
     private
   | Basic of basic
-  | Array of tsingle * single list
-  | Dict of tbasic * tsingle * (basic * single) list
+  | Array of telement * element list
   | Struct of single list
   | Variant of single
+
+and element =
+  | Dict_entry of basic * single
+  | Single of single
 
 type sequence = single list
 
@@ -88,24 +94,29 @@ val vsignature : signature -> basic
 val vobject_path : OBus_path.t -> basic
 
 val vbasic : basic -> single
-val varray : tsingle -> single list -> single
-val vdict : tbasic -> tsingle -> (basic * single) list -> single
-  (** [varray] and [vdict] raise an [Invalid_argument] if one of the
-      value does not have the expected type *)
+val varray : telement -> element list -> single
+  (** [varray] raise an [Invalid_argument] if one of the value does
+      not have the expected type *)
 val vstruct : single list -> single
 val vvariant : single -> single
+
+val vdict_entry : basic -> single -> element
+val vsingle : single -> element
 
 (** {6 Utils} *)
 
 val type_of_basic : basic -> tbasic
 val type_of_single : single -> tsingle
+val type_of_element : element -> telement
 val type_of_sequence : sequence -> tsequence
   (** Return the type of a value *)
 
 val string_of_tbasic : tbasic -> string
 val string_of_tsingle : tsingle -> string
+val string_of_telement : telement -> string
 val string_of_tsequence : tsequence -> string
 val string_of_basic : basic -> string
 val string_of_single : single -> string
+val string_of_element : element -> string
 val string_of_sequence : sequence -> string
   (** Pretty-printing *)

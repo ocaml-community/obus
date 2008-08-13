@@ -49,8 +49,10 @@ let implem_term_of_basic = function
 let rec implem_term_of_single = function
   | Tbasic t -> implem_term_of_basic t
   | Tstruct tl -> term "structure" [implem_term_of_sequence tl]
-  | Tarray t -> term "list" [implem_term_of_single t]
-  | Tdict(tk, tv) -> term "assoc" [implem_term_of_basic tk; implem_term_of_single tv]
+  | Tarray t -> begin match t with
+      | Tsingle t ->  term "list" [implem_term_of_single t]
+      | Tdict_entry(tk, tv) -> term "assoc" [implem_term_of_basic tk; implem_term_of_single tv]
+    end
   | Tvariant -> term "variant" []
 
 and implem_term_of_sequence tl = tuple (List.map implem_term_of_single tl)
@@ -72,9 +74,12 @@ let interf_term_of_basic = function
 let rec interf_term_of_single = function
   | Tbasic t -> interf_term_of_basic t
   | Tstruct tl -> interf_term_of_sequence tl
-  | Tarray t -> term "list" [interf_term_of_single t]
-  | Tdict(tk, tv) -> term "list" [tuple [interf_term_of_basic tk; interf_term_of_single tv]]
+  | Tarray t -> term "list" [interf_term_of_element t]
   | Tvariant -> term "OBus_value.single" []
+
+and interf_term_of_element = function
+  | Tsingle t -> interf_term_of_single t
+  | Tdict_entry(tk, tv) -> tuple [interf_term_of_basic tk; interf_term_of_single tv]
 
 and interf_term_of_sequence tl = tuple (List.map interf_term_of_single tl)
 

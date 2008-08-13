@@ -26,9 +26,11 @@ module type Types = sig
   type tsingle =
     | Tbasic of tbasic
     | Tstruct of tsingle list
-    | Tarray of tsingle
-    | Tdict of tbasic * tsingle
+    | Tarray of telement
     | Tvariant
+  and telement =
+    | Tdict_entry of tbasic * tsingle
+    | Tsingle of tsingle
 end
 
 module type Parser_params =
@@ -72,17 +74,8 @@ struct
   let rec read_single buffer i =
     match get buffer i with
       | 'a' ->
-          if get buffer (i + 1) = '{'
-          then begin
-            let tk = read_dict_key_type buffer (i + 2) in
-            let i, tv = read_single buffer (i + 3) in
-              if get buffer i <> '}'
-              then fail i "'}' missing"
-              else (i + 1, Tdict(tk, tv))
-          end else begin
-            let i, t = read_single buffer (i + 1) in
-              (i, Tarray t)
-          end
+          let i, t = read_element buffer (i + 1) in
+          (i, Tarray t)
       | '(' ->
           let i, t = read_until (fun buffer i -> get buffer i = ')') buffer (i + 1) in
             (i, Tstruct t)
@@ -90,6 +83,18 @@ struct
       | ch ->
           (i + 1,
            Tbasic (basic_of_char (fun chr -> fail i "invalid type code: %c" chr) ch))
+
+  and read_element buffer i =
+    if get buffer i = '{'
+    then begin
+      let tk = read_dict_key_type buffer (i + 1) in
+      let i, tv = read_single buffer (i + 2) in
+      if get buffer i <> '}'
+      then fail i "'}' missing"
+      else (i + 1, Tdict_entry(tk, tv))
+    end else
+      let i, t = read_single buffer i in
+      (i, Tsingle t)
 
   and read_until f buffer i =
     if f buffer i
@@ -107,8 +112,10 @@ struct
   open Types
 
   let rec single_signature_size_aux acc = function
-    | Tarray t -> single_signature_size_aux (acc + 1) t
-    | Tdict(_, t) -> single_signature_size_aux (acc + 4) t
+    | Tarray t -> begin match t with
+        | Tdict_entry(_, t) -> single_signature_size_aux (acc + 4) t
+        | Tsingle t -> single_signature_size_aux (acc + 1) t
+      end
     | Tstruct tl -> List.fold_left single_signature_size_aux (acc + 2) tl
     | _ -> acc + 1
 
@@ -136,20 +143,23 @@ struct
         i + 1
     | Tarray t ->
         String.unsafe_set buffer i 'a';
-        write_single buffer (i + 1) t
-    | Tdict(tk, tv) ->
-        String.unsafe_set buffer i 'a';
-        String.unsafe_set buffer (i + 1) '{';
-        String.unsafe_set buffer (i + 2) (char_of_basic tk);
-        let i = write_single buffer (i + 3) tv in
-          String.unsafe_set buffer i '}';
-          i + 1
+        write_element buffer (i + 1) t
     | Tstruct ts ->
         String.unsafe_set buffer i '(';
         let i = write_sequence buffer (i + 1) ts in
           String.unsafe_set buffer i ')';
           i + 1
     | Tvariant ->  String.unsafe_set buffer i 'v'; i + 1
+
+  and write_element buffer i = function
+    | Tdict_entry(tk, tv) ->
+        String.unsafe_set buffer i '{';
+        String.unsafe_set buffer (i + 1) (char_of_basic tk);
+        let i = write_single buffer (i + 2) tv in
+        String.unsafe_set buffer i '}';
+        i + 1
+    | Tsingle t ->
+        write_single buffer i t
 
   and write_sequence buffer = List.fold_left (write_single buffer)
 end

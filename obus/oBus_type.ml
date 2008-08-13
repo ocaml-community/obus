@@ -50,11 +50,18 @@ type ('a, 'typ, 'make, 'cast) ty_desc = {
 
 type 'a ty_desc_basic = ('a, tbasic, 'a -> basic, basic -> 'a) ty_desc
 type 'a ty_desc_single =  ('a, tsingle, 'a -> single, single -> 'a) ty_desc
+type 'a ty_desc_element =  ('a, telement, 'a -> element, element -> 'a) ty_desc
 type 'a ty_desc_sequence = ('a, tsingle tree, 'a -> single tree, sequence -> 'a * sequence) ty_desc
 
 type 'a ty_basic = [ `basic of 'a ty_desc_basic ]
-type 'a ty_single = [ 'a ty_basic | `single of 'a ty_desc_single ]
-type 'a ty_sequence = [ 'a ty_single | `sequence of 'a ty_desc_sequence ]
+type 'a ty_single = [ `single of 'a ty_desc_single ]
+type 'a ty_element = [ `element of 'a ty_desc_element ]
+type 'a ty_sequence = [ `sequence of 'a ty_desc_sequence ]
+
+type 'a cl_basic = [ 'a ty_basic ]
+type 'a cl_single = [ 'a cl_basic | 'a ty_single ]
+type 'a cl_element = [ 'a cl_single | 'a ty_element ]
+type 'a cl_sequence = [ 'a cl_single | 'a ty_sequence ]
 
 type ('a, 'b, 'c) ty_function = {
   isignature : tsingle tree;
@@ -88,6 +95,10 @@ let type_basic (`basic { dtype = t }) = t
 let type_single = function
   | `basic { dtype = t } -> Tbasic t
   | `single { dtype = t } -> t
+let type_element = function
+  | `basic { dtype = t } -> Tsingle (Tbasic t)
+  | `single { dtype = t } -> Tsingle t
+  | `element { dtype = t } -> t
 let type_sequence = function
   | `basic { dtype = t } -> [Tbasic t]
   | `single { dtype = t } -> [t]
@@ -100,6 +111,10 @@ let make_basic (`basic { make = f }) = f
 let make_single = function
   | `basic { make = f } -> (fun x -> vbasic(f x))
   | `single { make = f } -> f
+let make_element =function
+  | `basic { make = f } -> (fun x -> Single(vbasic(f x)))
+  | `single { make = f } -> (fun x -> Single(f x))
+  | `element { make = f } -> f
 let make_sequence = function
   | `basic { make = f } -> (fun x -> [vbasic(f x)])
   | `single { make = f } -> (fun x -> [f x])
@@ -114,6 +129,16 @@ let cast_single = function
          | Basic x -> f x
          | _ -> raise Cast_failure)
   | `single { cast = f } -> f
+let cast_element = function
+  | `basic { cast = f } ->
+      (function
+         | Single(Basic x) -> f x
+         | _ -> raise Cast_failure)
+  | `single { cast = f } ->
+      (function
+         | Single x -> f x
+         | _ -> raise Cast_failure)
+  | `element { cast = f } -> f
 let cast_sequence = function
   | `basic { cast = f } ->
       (function
@@ -131,6 +156,7 @@ let cast_sequence = function
 let opt_cast f x = try Some(f x) with Cast_failure -> None
 let opt_cast_basic t = opt_cast (cast_basic t)
 let opt_cast_single t = opt_cast (cast_single t)
+let opt_cast_element t = opt_cast (cast_element t)
 let opt_cast_sequence t = opt_cast (cast_sequence t)
 
 let ty_function_send { send = f } = f (fun ctx ptr -> ptr)
@@ -140,10 +166,12 @@ let ty_function_reply_reader { reply_reader = f } = f
 let ty_writer = function
   | `basic { writer = f } -> f
   | `single { writer = f } -> f
+  | `element { writer = f } -> f
   | `sequence { writer = f } -> f
 let ty_reader = function
   | `basic { reader = f } -> f
   | `single { reader = f } -> f
+  | `element { reader = f } -> f
   | `sequence { reader = f } -> f
 
 let wrap t f g = {
@@ -155,19 +183,14 @@ let wrap t f g = {
 }
 
 let wrap_basic (`basic t) f g = `basic (wrap t f g)
-let wrap_single ty f g = match ty with
-  | `basic t -> `basic (wrap t f g)
-  | `single t -> `single (wrap t f g)
-let wrap_sequence ty f g = match ty with
-  | `basic t -> `basic (wrap t f g)
-  | `single t -> `single (wrap t f g)
-  | `sequence t ->`sequence {
-      dtype = t.dtype;
-      make = (fun x -> t.make (g x));
-      cast = (fun l -> let v, rest = t.cast l in (f v, rest));
-      writer = (fun x -> t.writer (g x));
-      reader = (fun ctx i -> let i, v = t.reader ctx i in (i, f v));
-    }
+let wrap_single (`single t) f g = `single (wrap t f g)
+let wrap_element (`element t) f g = `element (wrap t f g)
+let wrap_sequence (`sequence t) f g = `sequence
+  { dtype = t.dtype;
+    make = (fun x -> t.make (g x));
+    cast = (fun l -> let v, rest = t.cast l in (f v, rest));
+    writer = (fun x -> t.writer (g x));
+    reader = (fun ctx i -> let i, v = t.reader ctx i in (i, f v)) }
 
 (***** Predefined types *****)
 
@@ -328,40 +351,36 @@ let tproxy = `basic
     writer = (fun x -> wobject_path x.proxy_path) }
 
 let tlist ty =
-  let typ = type_single ty in
+  let typ = type_element ty in
   `single
     { dtype = Tarray typ;
-      make = (fun l ->
-                let f = make_single ty in
-                varray typ (List.map f l));
-      cast = (fun l ->
-                let f = cast_single ty in
-                match l with
-                  | Array(t, l) when t = typ -> List.map f l
-                  | _ -> raise Cast_failure);
-      reader = (fun ctx i -> rlist typ (ty_reader ty) ctx i);
-      writer = (fun x -> wlist typ (ty_writer ty) x) }
+      make = (let f = make_element ty in
+              fun l -> varray typ (List.map f l));
+      cast = (let f = cast_element ty in
+              function
+                | Array(t, l) when t = typ -> List.map f l
+                | _ -> raise Cast_failure);
+      reader = rlist typ (ty_reader ty);
+      writer = wlist typ (ty_writer ty) }
 
 let tset ty =
-  let typ = type_single ty in
+  let typ = type_element ty in
   `single
     { dtype = Tarray typ;
-      make = (fun l ->
-                let f = make_single ty in
-                varray typ (List.map f l));
-      cast = (fun l ->
-                let f = cast_single ty in
-                match l with
-                  | Array(t, l) when t = typ -> List.map f l
-                  | _ -> raise Cast_failure);
-      reader = (fun ctx i -> rset typ (ty_reader ty) ctx i);
-      writer = (fun x -> wlist typ (ty_writer ty) x) }
+      make = (let f = make_element ty in
+              fun l -> varray typ (List.map f l));
+      cast = (let f = cast_element ty in
+              function
+                | Array(t, l) when t = typ -> List.map f l
+                | _ -> raise Cast_failure);
+      reader = rset typ (ty_reader ty);
+      writer = wlist typ (ty_writer ty) }
 
 let list_of_string str =
   let rec aux i acc =
     if i = 0
     then acc
-    else aux (i - 1) (vbasic (Byte str.[i]) :: acc)
+    else aux (i - 1) (Single(vbasic (Byte str.[i])) :: acc)
   in
   aux (String.length str) []
 
@@ -369,7 +388,7 @@ let string_of_list l =
   let str = String.create (List.length l) in
   let rec aux i = function
     | [] -> str
-    | (Basic (Byte x)) :: l ->
+    | (Single (Basic (Byte x))) :: l ->
         str.[i] <- x;
         aux (i + 1) l
     | _ -> raise Cast_failure
@@ -377,41 +396,42 @@ let string_of_list l =
   aux 0 l
 
 let tbyte_array = `single
-  { dtype = Tarray (Tbasic Tbyte);
-    make = (fun s -> varray (Tbasic Tbyte) (list_of_string s));
+  { dtype = Tarray (Tsingle (Tbasic Tbyte));
+    make = (fun s -> varray (Tsingle (Tbasic Tbyte)) (list_of_string s));
     cast =(function
-             | Array(Tarray (Tbasic Tbyte), l) -> string_of_list l
+             | Array(Tsingle (Tbasic Tbyte), l) -> string_of_list l
              | _ -> raise Cast_failure);
     reader = rbyte_array;
     writer = wbyte_array }
 
-let tassoc tyk tyv =
+let tdict_entry tyk tyv =
   let ktyp = type_basic tyk
   and vtyp = type_single tyv in
-  `single
-    { dtype = Tdict(ktyp, vtyp);
-      make = (fun l ->
-                let f = make_basic tyk
-                and g = make_single tyv in
-                vdict ktyp vtyp (List.map (fun (k, v) -> (f k, g v)) l));
-      cast = (fun l ->
-                let f = cast_basic tyk
-                and g = cast_single tyv in
-                match l with
-                  | Dict(tk, tv, l) when tk = ktyp && tv = vtyp ->
-                      List.map (fun (k, v) -> (f k, g v)) l
-                  | _ -> raise Cast_failure);
-      reader = (fun ctx i -> rassoc (ty_reader tyk) (ty_reader tyv) ctx i);
-      writer = (fun x -> wassoc (ty_writer tyk) (ty_writer tyv) x) }
+  `element
+    { dtype = Tdict_entry(ktyp, vtyp);
+      make = (let f = make_basic tyk
+              and g = make_single tyv in
+              fun (k, v) -> Dict_entry(f k, g v));
+      cast = (let f = cast_basic tyk
+              and g = cast_single tyv in
+              function
+                | Dict_entry(k, v) -> (f k, g v)
+                | _ -> raise Cast_failure);
+      reader = rdict_entry (ty_reader tyk) (ty_reader tyv);
+      writer = wdict_entry (ty_writer tyk) (ty_writer tyv) }
+
+let tassoc tyk tyv = tset (tdict_entry tyk tyv)
 
 let tstructure ty = `single
   { dtype = Tstruct(type_sequence ty);
-    make = (fun x -> vstruct (make_sequence ty x));
-    cast = (function
-              | Struct l -> cast_sequence ty l
+    make = (let f = make_sequence ty in
+            fun x -> vstruct (f x));
+    cast = (let f = cast_sequence ty in
+            function
+              | Struct l -> f l
               | _ -> raise Cast_failure);
-    reader = (fun ctx i -> rstruct (ty_reader ty) ctx i);
-    writer = (fun x -> wstruct (ty_writer ty x)) }
+    reader = rstruct (ty_reader ty);
+    writer = wstruct (ty_writer ty) }
 
 let tvariant = `single
   { dtype = Tvariant;
@@ -777,35 +797,60 @@ let tup10 ty1 ty2 ty3 ty4 ty5 ty6 ty7 ty8 ty9 ty10 = `sequence
                 let i, v10 = ty_reader ty10 ctx i in
                 (i, (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10))) }
 
-type 'a with_basic_ty = { with_basic_ty : 'b. 'b ty_basic -> 'a }
-type 'a with_single_ty = { with_single_ty : 'b. 'b ty_single -> 'a }
-type 'a with_sequence_ty = { with_sequence_ty : 'b. 'b ty_sequence -> 'a }
+type 'a with_ty_basic = { with_ty_basic : 'b. 'b ty_basic -> 'a }
+type 'a with_ty_single = { with_ty_single : 'b. 'b ty_single -> 'a }
+type 'a with_ty_element = { with_ty_element : 'b. 'b ty_element -> 'a }
+type 'a with_ty_sequence = { with_ty_sequence : 'b. 'b ty_sequence -> 'a }
 
-let with_basic_ty w = function
-  | Tbyte -> w.with_basic_ty tbyte
-  | Tboolean -> w.with_basic_ty tboolean
-  | Tint16 -> w.with_basic_ty tint16
-  | Tint32 -> w.with_basic_ty tint32
-  | Tint64 -> w.with_basic_ty tint64
-  | Tuint16 -> w.with_basic_ty tuint16
-  | Tuint32 -> w.with_basic_ty tuint32
-  | Tuint64 -> w.with_basic_ty tuint64
-  | Tdouble -> w.with_basic_ty tdouble
-  | Tstring -> w.with_basic_ty tstring
-  | Tsignature -> w.with_basic_ty tsignature
-  | Tobject_path -> w.with_basic_ty tobject_path
+let with_ty_basic w = function
+  | Tbyte -> w.with_ty_basic tbyte
+  | Tboolean -> w.with_ty_basic tboolean
+  | Tint16 -> w.with_ty_basic tint16
+  | Tint32 -> w.with_ty_basic tint32
+  | Tint64 -> w.with_ty_basic tint64
+  | Tuint16 -> w.with_ty_basic tuint16
+  | Tuint32 -> w.with_ty_basic tuint32
+  | Tuint64 -> w.with_ty_basic tuint64
+  | Tdouble -> w.with_ty_basic tdouble
+  | Tstring -> w.with_ty_basic tstring
+  | Tsignature -> w.with_ty_basic tsignature
+  | Tobject_path -> w.with_ty_basic tobject_path
 
-let rec with_single_ty w = function
-  | Tbasic t -> with_basic_ty { with_basic_ty = fun t -> w.with_single_ty (t :> _ ty_single) } t
-  | Tarray t -> with_single_ty { with_single_ty = fun t -> w.with_single_ty (tlist t) } t
-  | Tdict(tk, tv) -> with_basic_ty { with_basic_ty = fun tk ->
-                                       with_single_ty { with_single_ty = fun tv -> w.with_single_ty (tassoc tk tv) } tv } tk
-  | Tstruct tl -> with_sequence_ty { with_sequence_ty = fun t -> w.with_single_ty (tstructure t) } tl
-  | Tvariant -> w.with_single_ty tvariant
+let single_of_basic (`basic t) = `single
+  { dtype = Tbasic t.dtype;
+    make = (fun x -> vbasic(t.make x));
+    cast = (function
+              | Basic x -> t.cast x
+              | _ -> raise Cast_failure);
+    reader = t.reader;
+    writer = t.writer }
 
-and with_sequence_ty w = function
-  | [] -> w.with_sequence_ty tunit
-  | tx :: tl -> with_single_ty
-      { with_single_ty = fun tx ->
-          with_sequence_ty
-            { with_sequence_ty = fun tl -> w.with_sequence_ty (tpair tx tl) } tl } tx
+let element_of_single (`single t) = `element
+  { dtype = Tsingle t.dtype;
+    make = (fun x -> Single(t.make x));
+    cast = (function
+              | Single x -> t.cast x
+              | _ -> raise Cast_failure);
+    reader = t.reader;
+    writer = t.writer }
+
+let rec with_ty_single w = function
+  | Tbasic t -> with_ty_basic { with_ty_basic = fun t -> w.with_ty_single (single_of_basic t) } t
+  | Tarray t -> with_ty_element { with_ty_element = fun t -> w.with_ty_single (tlist t) } t
+  | Tstruct tl -> with_ty_sequence { with_ty_sequence = fun t -> w.with_ty_single (tstructure t) } tl
+  | Tvariant -> w.with_ty_single tvariant
+
+and with_ty_element w = function
+  | Tdict_entry(tk, tv) ->
+      with_ty_basic { with_ty_basic = fun tk ->
+                        with_ty_single { with_ty_single = fun tv -> w.with_ty_element (tdict_entry tk tv) } tv } tk
+  | Tsingle t ->
+      with_ty_single { with_ty_single = fun t ->
+                         w.with_ty_element (element_of_single t) } t
+
+and with_ty_sequence w = function
+  | [] -> w.with_ty_sequence tunit
+  | tx :: tl -> with_ty_single
+      { with_ty_single = fun tx ->
+          with_ty_sequence
+            { with_ty_sequence = fun tl -> w.with_ty_sequence (tpair tx tl) } tl } tx

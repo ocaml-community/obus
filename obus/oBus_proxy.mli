@@ -18,15 +18,16 @@ val compare : t -> t -> int
   (** Proxy comparaison function *)
 
 val make : connection:OBus_connection.t -> ?service:string -> path:OBus_path.t -> t
+  (** [make connection service path] create a proxy,
+
+      - [connection] is used for serializing method calls on the object
+      - [service] is the application on which the object is living
+      - [path] is the path of the object on the application owning it *)
 
 val connection : t -> OBus_connection.t
-  (** Connection used for serializing method calls on the object *)
-
 val service : t -> string option
-  (** Service on which the object is living *)
-
 val path : t -> OBus_path.t
-  (** Path of the object on the application owning it *)
+  (** Access to proxy informations *)
 
 val method_call : t -> ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
   (** Send a method call on a proxy *)
