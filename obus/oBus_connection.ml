@@ -9,14 +9,16 @@
 
 open Printf
 open OBus_header
-open OBus_intern
+open Wire
+open OBus_internals
 open Wire_message
-open OBus_types
+open OBus_type
+open OBus_value
 open Lwt
 
 type guid = OBus_address.guid
 type filter_id = int
-type filter = OBus_header.any -> OBus_value.sequence -> unit
+type filter = OBus_header.any -> sequence -> unit
 type name = string
 
 exception Protocol_error of string
@@ -54,8 +56,8 @@ let remove_connection_of_guid_map running =
    make the connection to crash. *)
 let is_fatal = function
   | Protocol_error _
-  | Wire.Out_of_bounds
-  | Wire.Reading_error _
+  | Out_of_bounds
+  | Reading_error _
   | OBus_transport.Error _ -> true
   | _ -> false
 
@@ -83,13 +85,13 @@ let close connection =
 (* Read the error message of an error *)
 let get_error signature context body_ptr = match signature with
   | Tbasic Tstring :: _ ->
-      snd $ OBus_wire.rstring context body_ptr
+      snd & rstring context body_ptr
   | _ -> ""
 
 (***** Sending messages *****)
 
-let send_message_backend connection header with_serial signature writer =
-  lwt_with_running connection $ fun running ->
+let send_message_backend with_serial signature writer connection header =
+  lwt_with_running connection & fun running ->
     let outgoing = running.outgoing in
     let w = wait () in
     running.outgoing <- w;
@@ -139,7 +141,7 @@ let register_reply_handler call_header w osig reader running serial =
            else
              (* If not, notify the reply waiter *)
              let `Method_call(path, interf, member) = OBus_header.typ call_header in
-             wakeup_exn w $
+             wakeup_exn w &
                Failure (sprintf "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
                           member (match interf with Some i -> i | None -> "")
                           (string_of_signature osig)
@@ -155,46 +157,39 @@ let register_ureply_handler w running serial =
         (fun exn -> wakeup_exn w exn))
        running.reply_handlers)
 
-let wire_send_message connection header isig writer =
-  send_message_backend connection header (fun _ _ -> ())
-    (OBus_types.sequence_of_annot isig) writer
+let ksend_message cont typ =
+  ty_function_send typ & fun writer -> cont
+    (send_message_backend (fun _ _ -> ()) (isignature typ) writer)
 
-let ksend_message cont connection header typ =
-  OBus_comb.func_make_writer typ $ fun writer -> cont
-    (wire_send_message connection header (OBus_comb.func_signature typ) writer)
-
-let send_message connection = ksend_message (fun x -> x) connection
+let send_message connection header = ksend_message (fun f -> f connection header)
 
 let usend_message connection header body =
-  send_message_backend connection header (fun _ _ -> ())
-    (OBus_value.type_of_sequence body) (OBus_wire.wsequence body)
+  send_message_backend (fun _ _ -> ())
+    (type_of_sequence body)
+    (wsequence body) connection header
 
-let wire_send_message_with_reply connection header isig writer osig reader =
-  let w = wait () in
-  send_message_backend connection header
-    (register_reply_handler header w (OBus_types.sequence_of_annot osig) reader)
-    (OBus_types.sequence_of_annot isig) writer
-  >> w
-
-let ksend_message_with_reply cont connection header typ =
-  OBus_comb.func_make_writer typ $ fun writer ->
-    let reply = OBus_comb.func_reply typ in
+let ksend_message_with_reply cont typ =
+  ty_function_send typ & fun writer ->
     cont
-      (wire_send_message_with_reply connection header
-         (OBus_comb.func_signature typ) writer
-         (OBus_comb.annot reply) (OBus_comb.reader reply))
+      (fun connection header ->
+         let w = wait () in
+         send_message_backend
+           (register_reply_handler header w
+              (osignature typ)
+              (ty_function_reply_reader typ))
+           (isignature typ) writer connection header
+         >> w)
 
-let send_message_with_reply connection = ksend_message_with_reply (fun x -> x) connection
+let send_message_with_reply connection header = ksend_message_with_reply (fun f -> f connection header)
 
 let usend_message_with_reply connection header body =
   let w = wait () in
-  send_message_backend connection header
+  send_message_backend
     (register_ureply_handler w)
-    (OBus_value.type_of_sequence body) (OBus_wire.wsequence body)
+    (type_of_sequence body)
+    (wsequence body)
+    connection header
   >> w
-
-let ob_string = OBus_comb.make dstring OBus_wire.rstring OBus_wire.wstring
-let ob_unit = OBus_comb.make dnil (OBus_wire.return ()) (fun _ -> OBus_wire.return ())
 
 let send_error connection { destination = destination; serial = serial } name msg =
   send_message connection { destination = destination;
@@ -202,7 +197,7 @@ let send_error connection { destination = destination; serial = serial } name ms
                             flags = { no_reply_expected = true; no_auto_start = true };
                             serial = 0l;
                             typ = `Error(serial, name) }
-    (OBus_comb.abstract ob_string (OBus_comb.reply ob_unit)) msg
+    [: string -> unit ] msg
 
 let send_exn connection method_call exn =
   match OBus_error.unmake exn with
@@ -215,7 +210,7 @@ let send_exn connection method_call exn =
 (***** Filters *****)
 
 let add_filter connection filter =
-  with_running connection $
+  with_running connection &
     fun running ->
       let id = running.next_filter_id in
       running.next_filter_id <- id + 1;
@@ -223,7 +218,7 @@ let add_filter connection filter =
       id
 
 let remove_filter connection id =
-  with_running connection $
+  with_running connection &
     fun running -> running.filters <- List.remove_assoc id running.filters
 
 (***** Reading/dispatching *****)
@@ -243,7 +238,7 @@ let dispatch_message connection running header signature context body_ptr =
   (* Dynamic version of the message. It will probably not be used if
      the programmer only use the high-level interfaces, so we compute
      it only if needed *)
-  let dyn_body = lazy (snd $ OBus_wire.rsequence signature context body_ptr) in
+  let dyn_body = lazy (snd & rsequence signature context body_ptr) in
 
   (* First of all, pass the message through all filters *)
   begin match running.filters with
@@ -280,7 +275,7 @@ let dispatch_message connection running header signature context body_ptr =
     | { typ = `Error(reply_serial, error_name) } ->
         let msg = get_error signature context body_ptr in
         find_reply_handler running reply_serial
-          (fun  (handler, error_handler) -> error_handler $ OBus_error.make error_name msg)
+          (fun  (handler, error_handler) -> error_handler & OBus_error.make error_name msg)
           (fun _ ->
              DEBUG("error reply to message with serial %ld dropped because no reply was expected, \
                           the error is: %S: %S" reply_serial error_name msg))
@@ -298,7 +293,7 @@ let dispatch_message connection running header signature context body_ptr =
                 (fun (key, reader, handlers) ->
                    (* The explanation of what f is doing is in the
                       comment of [OBus_comb.func.recv] *)
-                   let f = snd $ reader context body_ptr in
+                   let f = snd & reader context body_ptr in
                    List.iter (fun handler ->
                                 f (handler header);
                                 check_crash connection) handlers) handlers
@@ -309,14 +304,14 @@ let dispatch_message connection running header signature context body_ptr =
     | { typ = `Method_call(path, Some(interface), member) } as header ->
         begin match Interf_map.lookup interface running.service_handlers with
           | None ->
-              ignore_send_exn connection header $ OBus_error.Unknown_method (sprintf "No such interface: %S" interface)
+              ignore_send_exn connection header & OBus_error.Unknown_method (sprintf "No such interface: %S" interface)
           | Some handler -> match handler header signature with
               | Mchr_no_such_method ->
-                  ignore_send_exn connection header $ OBus_error.Unknown_method
+                  ignore_send_exn connection header & OBus_error.Unknown_method
                     (sprintf "Method %S with signature %S on interface %S doesn't exist"
                        member (string_of_signature signature) interface)
               | Mchr_no_such_object ->
-                  ignore_send_exn connection header $ OBus_error.Failed (sprintf "No such object: %S" path)
+                  ignore_send_exn connection header & OBus_error.Failed (sprintf "No such object: %S" path)
               | Mchr_ok f -> f context body_ptr
         end
 
@@ -335,13 +330,13 @@ let dispatch_message connection running header signature context body_ptr =
             end running.service_handlers []
           with
             | [] ->
-                ignore_send_exn connection header $ OBus_error.Unknown_method
+                ignore_send_exn connection header & OBus_error.Unknown_method
                   (sprintf
                      "No interface have a method %S with signature %S on object %S"
                      member (string_of_signature signature) path)
             | [(f, interface)] -> f context body_ptr
             | l ->
-                ignore_send_exn connection header $ OBus_error.Failed
+                ignore_send_exn connection header & OBus_error.Failed
                   (sprintf
                      "Ambiguous choice for method %S with signature %S on object %S. \
                           The following interfaces have this method: \"%s\""
@@ -350,8 +345,8 @@ let dispatch_message connection running header signature context body_ptr =
         end
 
 let traduce = function
-  | Wire.Out_of_bounds -> Protocol_error "invalid message size"
-  | Wire.Reading_error msg -> Protocol_error msg;
+  | Out_of_bounds -> Protocol_error "invalid message size"
+  | Reading_error msg -> Protocol_error msg;
   | exn -> exn
 
 let default_on_disconnect exn =
@@ -394,7 +389,7 @@ let rec dispatch_forever connection on_disconnect buffer = match !connection wit
       | Connection_closed -> Lwt.return ()
       | exn ->
           begin try
-            return $ !on_disconnect exn
+            return & !on_disconnect exn
           with
               handler_exn ->
                 DEBUG("the error handler failed with this exception: %s" (Printexc.to_string handler_exn));
@@ -407,7 +402,7 @@ let rec dispatch_forever connection on_disconnect buffer = match !connection wit
 let of_authenticated_transport ?(shared=true) transport guid =
   let make () =
     let on_disconnect = ref default_on_disconnect in
-    let connection = ref $ Running {
+    let connection = ref & Running {
       transport = transport;
       outgoing = Lwt.return (0l, String.create 65536);
       reply_handlers = Serial_map.empty;
@@ -420,7 +415,7 @@ let of_authenticated_transport ?(shared=true) transport guid =
       shared = shared;
       on_disconnect = on_disconnect;
     } in
-    Lwt.ignore_result $ dispatch_forever connection on_disconnect (String.create 65536);
+    Lwt.ignore_result & dispatch_forever connection on_disconnect (String.create 65536);
     connection
   in
   match shared with
@@ -436,7 +431,7 @@ let of_authenticated_transport ?(shared=true) transport guid =
 let of_transport ?(shared=true) transport =
   OBus_auth.launch transport >>= function
     | None -> fail (Failure "cannot authentificate on the given transport")
-    | Some guid -> return $ of_authenticated_transport ~shared transport guid
+    | Some guid -> return & of_authenticated_transport ~shared transport guid
 
 let of_addresses ?(shared=true) addresses = match shared with
   | false -> OBus_transport.of_addresses addresses >>= of_transport ~shared:false
@@ -453,10 +448,10 @@ let of_addresses ?(shared=true) addresses = match shared with
             OBus_transport.of_addresses addresses >>= of_transport ~shared:true
 
 let on_disconnect connection =
-  with_running connection $ fun running -> running.on_disconnect
+  with_running connection & fun running -> running.on_disconnect
 let transport connection =
-  with_running connection $ fun running -> running.transport
+  with_running connection & fun running -> running.transport
 let guid connection =
-  with_running connection $ fun running -> running.guid
+  with_running connection & fun running -> running.guid
 let name connection =
-  with_running connection $ fun running -> running.name
+  with_running connection & fun running -> running.name

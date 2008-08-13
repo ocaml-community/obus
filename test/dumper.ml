@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open OBus_pervasives
+open OBus_type
 open Lwt
 
 let make prefix t =
@@ -44,14 +44,14 @@ let notify connection title msg =
           ~path:"/org/freedesktop/Notifications"
           ~interface:"org.freedesktop.Notifications"
           ~member:"Notify" ())
-       (ob_string -->
-          (ob_uint32 -->
-             (ob_string -->
-                (ob_string -->
-                   (ob_string -->
-                      (ob_list ob_string -->
-                         (ob_assoc ob_string ob_variant -->
-                            (ob_int32 --> ob_reply ob_uint32))))))))
+       (tstring -->
+          (tuint32 -->
+             (tstring -->
+                (tstring -->
+                   (tstring -->
+                      (tlist tstring -->
+                         (tassoc tstring tvariant -->
+                            (tint32 --> reply tuint32))))))))
        (Filename.basename Sys.argv.(0)) 0l "info" title msg [] [] 5000l;
      return id)
 
@@ -78,6 +78,6 @@ let _ =
             ~member:"Hello"
             ~path:"/org/freedesktop/DBus"
             ~interface:"org.freedesktop.DBus" ())
-         (ob_reply ob_string);
+         (reply tstring);
        return (Printf.printf "my name is: %s\n%!" name);
        notify bus "Hello, world!" "ocaml is fun!")

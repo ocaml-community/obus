@@ -7,49 +7,44 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Values
-open Message
-open WireMessage
-open Connection
 
-type ('a, 'b) handler = 'a Proxy.t -> 'b -> unit
-type ('a, 'b) set = 'a Interface.t * (Connection.t -> ('a, 'b) handler -> (signal_recv -> (unit -> unit) option))
+type id
 
-let register connection (interface, make_reader) handler =
-  intern_add_signal_handler connection (Interface.name interface)
-    (make_reader connection handler)
+open Wire
+open OBus_internals
 
-let bus_register bus (interface, make_reader) handler =
-  intern_add_signal_handler bus (Interface.name interface)
-    (make_reader bus handler);
-  ignore
-    (send_message_sync bus
-       (Message.method_call
-          ~destination:"org.freedesktop.DBus"
-          ~path:"/org/freedesktop/DBus"
-          ~interface:"org.freedesktop.DBus"
-          ~member:"AddMatch"
-          ~body:[string
-                   (Printf.sprintf "type='signal',interface='%s'" (Interface.name interface))]
-          ()))
+type ('a, 'b, 'c) filter = ('a, 'b, 'c) filter
 
-let make_set interface get_reader =
-  (interface,
-   fun connection handler
-     { typ = `Signal(path, _, member);
-       sender = sender;
-       body = signature, (byte_order, buffer, ptr) } ->
-       match get_reader (member, signature) with
-         | Some(reader) ->
-             let signal = reader byte_order buffer ptr
-             and proxy = Proxy.make connection interface ?destination:sender path in
-               Some(fun () -> handler proxy signal)
-         | None -> None)
+let wrap filter f = match filter with
+  | Some desc ->
+      Some { desc with
+               filter_reader = (filter.filter_reader
+                                >>= fun g -> return (fun h -> h (g f))) }
+  | None -> None
 
-                         match handler message with
-                           | None ->
-                               DEBUG("signal %S with signature %S on interface %S, from object %S \
-                                    dropped by signal handler"
-                                       member (signature message) interface path);
-                               None
-                           | x -> x)
+(* Since we will probably always make union of signals coming from the
+   same interface we can optimize this case *)
+let rec get_same_interface interface acc = function
+  | [(interface', members)] :: rest when interface = interface' ->
+      get_same_interface interface (Member_set.union acc members) rest
+  | [] -> Some acc
+  | _ -> None
+
+let rec slow_union acc = function
+  | [] -> acc
+  | sigs :: rest ->
+      slow_union (List.fold_left
+                    (fun acc (interface, members) ->
+                       
+
+let union filters = match Util.filter_map (fun x -> x) filters with
+  | [] -> None
+  | (desc :: rest) as l ->
+      Some { desc with
+               filter_signals =
+          match desc.filter_signals with
+            | [(interface, members)] -> begin match get_same_interface interface members rest with
+                | Some members -> [(interface, members)]
+                | None -> slow_union l
+              end
+            | _ -> slow_union [] l }

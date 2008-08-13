@@ -12,32 +12,26 @@
 (** A proxy is an object on which live on a different processus, but
     behave as a native ocaml value. *)
 
-type t = {
-  connection : OBus_connection.t;
-  (** Connection used for serializing method calls on the object *)
-
-  service : string option;
-  (** Service on which the object is living *)
-
-  path : OBus_path.t;
-  (** Path of the object on the application owning it *)
-}
-
-val ob_t : (t, _, [`object_path]) OBus_comb.one
-  (** Type combinator *)
+type t = OBus_internals.proxy
 
 val compare : t -> t -> int
   (** Proxy comparaison function *)
 
 val make : connection:OBus_connection.t -> ?service:string -> path:OBus_path.t -> t
-val connection : t -> OBus_connection.t
-val path : t -> OBus_path.t
-val service : t -> string option
 
-val method_call : t -> ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b, _, _) OBus_comb.func -> 'a
+val connection : t -> OBus_connection.t
+  (** Connection used for serializing method calls on the object *)
+
+val service : t -> string option
+  (** Service on which the object is living *)
+
+val path : t -> OBus_path.t
+  (** Path of the object on the application owning it *)
+
+val method_call : t -> ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
   (** Send a method call on a proxy *)
 
-val kmethod_call : ('b Lwt.t -> 'c) -> t -> ?interface:string -> member:string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
+val kmethod_call : ((t -> ?interface:string -> member:string -> 'b Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   (** Same thing but with continuation *)
 
 val umethod_call : t -> ?interface:string -> member:string -> OBus_value.sequence -> OBus_value.sequence Lwt.t

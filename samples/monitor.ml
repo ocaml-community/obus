@@ -14,6 +14,7 @@ open Printf
 open Lwt
 open OBus_bus
 open OBus_header
+open OBus_value
 
 let filter what_bus header body =
   let opt = function
@@ -52,9 +53,9 @@ let filter what_bus header body =
   member = %S" path interface member)
     (opt header.destination)
     (opt header.sender)
-    (OBus_types.string_of_signature (OBus_value.type_of_sequence body))
-    (OBus_types.string_of_sequence  (OBus_value.type_of_sequence body))
-    (OBus_value.string_of_sequence body)
+    (string_of_signature (type_of_sequence body))
+    (string_of_tsequence  (type_of_sequence body))
+    (string_of_sequence body)
 
 let add_filter what_bus lbus =
   (perform

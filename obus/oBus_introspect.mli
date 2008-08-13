@@ -14,7 +14,7 @@
 type name = string
 
 type annotation = name * string
-type argument = name option * OBus_types.single
+type argument = name option * OBus_value.tsingle
 
 type access = Read | Write | Read_write
     (** Access mode of properties *)
@@ -22,7 +22,7 @@ type access = Read | Write | Read_write
 type declaration =
   | Method of name * argument list * argument list * annotation list
   | Signal of name * argument list * annotation list
-  | Property of name * OBus_types.single * access * annotation list
+  | Property of name * OBus_value.tsingle * access * annotation list
 
 type interface = name * declaration list * annotation list
 type node = name

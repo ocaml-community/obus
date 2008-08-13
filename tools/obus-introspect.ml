@@ -8,6 +8,7 @@
  *)
 
 open Common
+open OBus_type
 
 let recursive = ref false
 let mli = ref false

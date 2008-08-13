@@ -7,23 +7,29 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open OBus_wire
-open OBus_annot
-open OBus_pervasives
+open Wire
+open OBus_type
+open OBus_value
+open OBus_type
+open OBus_internals
 
-let typ = dstruct (dint ++ dstring ++ ddict dstring dstring ++ darray (dstruct (duint64 ++ dbyte)))
+let typ = Tstruct [Tbasic Tint32;
+                   Tbasic Tstring;
+                   Tdict(Tstring, Tbasic Tstring);
+                   Tarray(Tstruct [Tbasic Tuint64;
+                                   Tbasic Tbyte])]
+
+let (>>) m f ctx i = f ctx (m ctx i)
 
 let writer (a, b, c, d) =
   wfixed typ
     (wstruct
-       (perform
-          wint a;
-          wstring b;
-          wassoc wstring wstring c;
-          wlist (dstruct (duint64 ++ dbyte))
-            (fun (x, y) -> wstruct (wuint64 x >> wbyte y)) d))
+       (wint a
+        >> wstring b
+        >> wassoc wstring wstring c
+        >> wlist (Tstruct[Tbasic Tuint64; Tbasic Tbyte]) (fun (x, y) -> wstruct (wuint64 x >> wbyte y)) d))
 
-let reader = rvariant
+let reader x = ty_reader tvariant x
 
 let data = (1, "coucou",
             [("truc", "machin"); ("titi", "toto")],
@@ -33,35 +39,33 @@ let data = (1, "coucou",
 
 let buffer = String.make 160 '\x00'
 
-let run m bo p = run m (Obj.magic 0) None bo buffer p
+let run w bo p = w { connection = Obj.magic 0;
+                     buffer= buffer;
+                     bus_name = None;
+                     byte_order = bo } p
 
 let read bo =
   let oc = Unix.open_process_out "xxd" in
-    output_string oc buffer;
-    close_out oc;
-    let oc = Unix.open_process_out "camlp4o -impl /dev/stdin" in
-      Printf.fprintf oc "let result = %s"
-        (OBus_value.string_of_single
-           (snd (run reader bo 0)));
-      close_out oc
+  output_string oc buffer;
+  close_out oc;
+  let oc = Unix.open_process_out "camlp4o -impl /dev/stdin" in
+  Printf.fprintf oc "let result = %s"
+    (string_of_single
+       (snd (run reader bo 0)));
+  close_out oc
 
 let test bo =
   ignore (run (writer data) bo 0);
   read bo
 
 let testc comb =
-  OBus_comb.func_send comb (return ())
+  ty_function_send comb
     (fun w ->
-       let i, _ = run (wsignature [OBus_types.Tstruct
-                                     (sequence_type_of_ext
-                                        (OBus_comb.func_signature comb))]
-                       >> wstruct (return ()))
-         OBus_info.Little_endian 0 in
-         ignore (run w OBus_info.Little_endian i);
-         read OBus_info.Little_endian)
+       ignore (run (wsignature [Tstruct (isignature comb)] >> w) OBus_info.Little_endian 0);
+       read OBus_info.Little_endian)
 
 let _ =
   test OBus_info.Little_endian;
   test OBus_info.Big_endian;
-  testc (ob_int --> (ob_string --> (ob_list ob_path --> ob_reply ob_uint)))  1 "coucou" ["/toto/klk"; "/sdfh/iuo"];
+  testc (tint --> (tstring --> (tlist tpath --> reply tuint)))  1 "coucou" ["/toto/klk"; "/sdfh/iuo"];
   Unix.sleep 1

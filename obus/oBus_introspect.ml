@@ -12,14 +12,14 @@ open OBus_xml_parser
 type name = string
 
 type annotation = name * string
-type argument = name option * OBus_types.single
+type argument = name option * OBus_value.tsingle
 
 type access = Read | Write | Read_write
 
 type declaration =
   | Method of name * argument list * argument list * annotation list
   | Signal of name * argument list * annotation list
-  | Property of name * OBus_types.single * access * annotation list
+  | Property of name * OBus_value.tsingle * access * annotation list
 
 type interface = name * declaration list * annotation list
 type node = name
@@ -42,7 +42,7 @@ struct
 
   let atype =
     ar "type" >>=
-      (fun signature -> match OBus_types.signature_of_string signature with
+      (fun signature -> match OBus_value.signature_of_string signature with
          | [] -> failwith "empty signature"
          | [t] -> return t
          | _ -> failwith (Printf.sprintf "this signature contains more than one single type: %S" signature))

@@ -15,8 +15,8 @@ module type Custom_params = sig
 end
 module type Interface = sig
   type t
-  val call : t -> string -> ('a, 'b Lwt.t, 'b, _, _) OBus_comb.func -> 'a
-  val kcall : ('b Lwt.t -> 'c) -> t -> string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
+  val call : t -> string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+  val kcall : ((t -> string -> 'b Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
 end
 module type Constant_path_params = sig
@@ -42,7 +42,7 @@ module Make(Name : sig val name : string end) =
 struct
   type t = OBus_proxy.t
   let call proxy member = OBus_proxy.method_call proxy ~interface:Name.name ~member
-  let kcall cont proxy member = OBus_proxy.kmethod_call cont proxy ~interface:Name.name ~member
+  let kcall cont = OBus_proxy.kmethod_call (fun f -> cont (fun proxy member -> f proxy ~interface:Name.name ~member))
   let register_exn = register_exn Name.name
 end
 
@@ -52,26 +52,32 @@ struct
 
   let call obj member =
     OBus_proxy.method_call (to_proxy obj) ~interface:name ~member
-  let kcall cont obj member =
-    OBus_proxy.kmethod_call cont (to_proxy obj) ~interface:name ~member
+  let kcall cont =
+    OBus_proxy.kmethod_call (fun f -> cont (fun obj member -> f (to_proxy obj) ~interface:name ~member))
 
   let register_exn = register_exn Params.name
 end
+
+let (&) a b = a b
 
 module Make_constant_path(Params : Constant_path_params) =
 struct
   type t = OBus_connection.t
 
-  let kcall cont connection member =
-    OBus_connection.ksend_message_with_reply (fun w -> cont (Lwt.bind w (fun (header, value) -> Lwt.return value)))
-      connection
-      (OBus_header.method_call
-         ?destination:Params.service
-         ~path:Params.path
-         ~interface:Params.name
-         ~member ())
+  let kcall cont =
+    OBus_connection.ksend_message_with_reply & fun f ->
+      cont
+        (fun connection member ->
+           (Lwt.bind
+              (f connection
+                 (OBus_header.method_call
+                    ?destination:Params.service
+                    ~path:Params.path
+                    ~interface:Params.name
+                    ~member ()))
+              (fun (header, value) -> Lwt.return value)))
 
-  let call connection = kcall (fun x -> x) connection
+  let call connection member = kcall (fun f -> f connection member)
 
   let register_exn = register_exn Params.name
 end
@@ -80,31 +86,29 @@ module Make_constant_bus(Params : Constant_bus_params) =
 struct
   type t = OBus_path.t
 
-  open OBus_intern
+  open OBus_internals
   open Lwt
 
-  let kcall cont path member typ =
-    OBus_comb.func_make_writer typ $ fun writer ->
-      let reply = OBus_comb.func_reply typ in
+  let kcall cont =
+    OBus_connection.ksend_message_with_reply & fun f ->
       cont
-        (Lazy.force Params.bus >>= fun bus ->
-           OBus_connection.wire_send_message_with_reply bus
-             (OBus_header.method_call
-                ?destination:Params.service
-                ~path
-                ~interface:Params.name
-                ~member ())
-             (OBus_comb.func_signature typ) writer
-             (OBus_comb.annot reply) (OBus_comb.reader reply)
-           >>= (snd |> return))
+        (fun path member ->
+           perform
+             bus <-- Lazy.force Params.bus;
+             (header, value) <-- f bus (OBus_header.method_call
+                                          ?destination:Params.service
+                                          ~path
+                                          ~interface:Params.name
+                                          ~member ());
+             return value)
 
-  let call path = kcall (fun x -> x) path
+  let call path member = kcall (fun f -> f path member)
 
   let register_exn = register_exn Params.name
 end
 
 module Make_constant(Params : Constant_params) = struct
   include Make_constant_bus(Params)
-  let kcall cont = kcall cont Params.path
+  let kcall cont = kcall (fun f -> cont (f Params.path))
   let call member = call Params.path member
 end

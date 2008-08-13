@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open OBus_type
 open Lwt
 
 include OBus_client.Make_constant

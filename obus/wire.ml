@@ -7,21 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(* Low-level, unsafe serialization/deserialization *)
-
-exception Out_of_bounds
-exception Reading_error of string
-exception Writing_error of string
-
-let out_of_bounds _ = raise Out_of_bounds
-
-let write_check_array_len len =
-  if len < 0 || len > OBus_info.max_array_size
-  then raise (Writing_error (Printf.sprintf "array too big to be send: %d" len))
-
-let read_check_array_len len =
-  if len < 0 || len > OBus_info.max_array_size
-  then raise (Reading_error (Printf.sprintf "array size exceed the limit: %d" len))
+(***** Low-level, unsafe serialization/deserialization *****)
 
 module type Byte_order =
 sig
@@ -235,15 +221,365 @@ module BEW = Make_unsafe_writer(Big_endian)
 module LER = Make_unsafe_reader(Little_endian)
 module BER = Make_unsafe_reader(Big_endian)
 
-let read_until reader empty len ctx i =
-  let limit = i + len in
+(***** Safe functions *****)
+
+open Printf
+open OBus_value
+open OBus_info
+open OBus_internals
+
+exception Out_of_bounds
+exception Reading_error of string
+exception Writing_error of string
+
+let wcheck_array_len len =
+  if len < 0 || len > OBus_info.max_array_size
+  then raise (Writing_error (Printf.sprintf "array too big to be send: %d" len))
+
+let rcheck_array_len len =
+  if len < 0 || len > OBus_info.max_array_size
+  then raise (Reading_error (Printf.sprintf "array size exceed the limit: %d" len))
+
+(*** Padding functions ***)
+
+let pad2 i = i land 1
+let pad4 i = (4 - i) land 3
+let pad8 i = (8 - i) land 7
+
+let wpadn f ctx i =
+  let count = f i in
+  if i + count > String.length ctx.buffer then raise Out_of_bounds;
+  for j = 0 to count - 1 do
+    String.unsafe_set ctx.buffer (i + j) '\x00'
+  done;
+  i + count
+
+let wpad2 = wpadn pad2
+let wpad4 = wpadn pad4
+let wpad8 = wpadn pad8
+
+let rpadn f ctx i =
+  let count = f i in
+  if i + count > String.length ctx.buffer then raise Out_of_bounds;
+  for j = 0 to count - 1 do
+    if String.unsafe_get ctx.buffer (i + j) <> '\x00'
+    then raise (Reading_error "unitialized padding bytes")
+  done;
+  i + count
+
+let rpad2 = rpadn pad2
+let rpad4 = rpadn pad4
+let rpad8 = rpadn pad8
+
+let pad8_p = function
+  | Tstruct _
+  | Tbasic Tint64
+  | Tbasic Tuint64
+  | Tbasic Tdouble -> true
+  | _ -> false
+
+(*** Writing ***)
+
+let write1 unsafe_writer v ctx i =
+  if i + 1 > String.length ctx.buffer then raise Out_of_bounds;
+  unsafe_writer v ctx.buffer i;
+  i + 1
+
+let writen padding size unsafe_le_writer unsafe_be_writer v ctx i =
+  let count = padding i in
+  let end_ptr = i + count + size in
+  if end_ptr > String.length ctx.buffer then raise Out_of_bounds;
+  for j = 0 to count - 1 do
+    String.unsafe_set ctx.buffer (i + j) '\x00'
+  done;
+  (match ctx.byte_order with
+     | Little_endian -> unsafe_le_writer v ctx.buffer (i + count)
+     | Big_endian -> unsafe_be_writer v ctx.buffer (i + count));
+  end_ptr
+
+let write2 le be = writen pad2 2 le be
+let write4 le be = writen pad4 4 le be
+let write8 le be = writen pad8 8 le be
+
+let wbyte = write1 unsafe_write_char_as_byte
+let wint8 v = wbyte & Char.unsafe_chr & v land 0xff
+let wint16 = write2 LEW.unsafe_write_int_as_int16 BEW.unsafe_write_int_as_int16
+let wint32 = write4 LEW.unsafe_write_int32_as_int32 BEW.unsafe_write_int32_as_int32
+let wint64 = write8 LEW.unsafe_write_int64_as_int64 BEW.unsafe_write_int64_as_int64
+let wint = write4 LEW.unsafe_write_int_as_int32 BEW.unsafe_write_int_as_int32
+let wuint8 = wint8
+let wuint16 = write2 LEW.unsafe_write_int_as_uint16 BEW.unsafe_write_int_as_uint16
+let wuint32 = write4 LEW.unsafe_write_int32_as_uint32 BEW.unsafe_write_int32_as_uint32
+let wuint64 = write8 LEW.unsafe_write_int64_as_uint64 BEW.unsafe_write_int64_as_uint64
+let wuint = write4 LEW.unsafe_write_int_as_uint32 BEW.unsafe_write_int_as_uint32
+let wdouble v = wuint64 & Int64.of_float v
+let wboolean = function
+  | false -> wuint 0
+  | true -> wuint 1
+let wstring str ctx i =
+  let len = String.length str in
+  let i = wuint len ctx i in
+  if i + len + 1 > String.length ctx.buffer then raise Out_of_bounds;
+  String.unsafe_blit str 0 ctx.buffer i len;
+  String.unsafe_set ctx.buffer (i + len) '\000';
+  i + len + 1
+let wobject_path = wstring
+
+module Types_writer = Types_rw.Make_writer(OBus_value)
+
+let wsignature tl ctx i =
+  let len = Types_writer.signature_size tl in
+  let i = wuint8 len ctx i in
+  if i + len + 1 > String.length ctx.buffer then raise Out_of_bounds;
+  let i = Types_writer.write_sequence ctx.buffer i tl in
+  String.unsafe_set ctx.buffer i '\000';
+  i + 1
+
+let wtype t ctx i =
+  let len = Types_writer.single_signature_size t in
+  let i = wuint8 len ctx i in
+  if i + len + 1 > String.length ctx.buffer then raise Out_of_bounds;
+  let i = Types_writer.write_single ctx.buffer i t in
+  String.unsafe_set ctx.buffer i '\000';
+  i + 1
+
+let wstruct writer ctx i = writer ctx (wpad8 ctx i)
+
+let warray_backend on8 writer fold v ctx i =
+  let i = wpad4 ctx i in
+  let j = if on8 then wpad8 ctx (i + 4) else i + 4 in
+  let k = fold (fun x -> writer x ctx) v j in
+  let len = k - j in
+  wcheck_array_len len;
+  (match ctx.byte_order with
+     | Little_endian -> LEW.unsafe_write_int_as_uint32 len ctx.buffer i
+     | Big_endian -> BEW.unsafe_write_int_as_uint32 len ctx.buffer i);
+  k
+
+let warray typ = warray_backend (pad8_p typ)
+let wdict writer = warray_backend true writer
+
+let rec fold_list f l acc = match l with
+  | [] -> acc
+  | x :: l -> fold_list f l (f x acc)
+
+let wlist typ writer = warray typ writer fold_list
+let wassoc kwriter vwriter = wdict (fun (k, v) ctx i -> vwriter v ctx (kwriter k ctx i)) fold_list
+
+let wbyte_array str ctx i =
+  let len = String.length str in
+  let i = wuint len ctx i in
+  wcheck_array_len len;
+  String.unsafe_blit str 0 ctx.buffer i len;
+  i + len
+
+let wfixed typ writer ctx i =
+  let i = wtype typ ctx i in
+  writer ctx i
+
+let wbasic = function
+  | Byte x -> wbyte x
+  | Boolean x -> wboolean x
+  | Int16 x -> wint16 x
+  | Int32 x -> wint32 x
+  | Int64 x -> wint64 x
+  | Uint16 x -> wuint16 x
+  | Uint32 x -> wuint32 x
+  | Uint64 x -> wuint64 x
+  | Double x -> wdouble x
+  | String x -> wstring x
+  | Signature x -> wsignature x
+  | Object_path x -> wobject_path x
+
+let rec wsingle = function
+  | Basic x -> wbasic x
+  | Array(t, l) -> wlist t wsingle l
+  | Dict(tk, tv, l) -> wassoc wbasic wsingle l
+  | Struct l -> wstruct (wsequence l)
+  | Variant v -> wvariant v
+
+and wvariant v ctx i =
+  let i = wtype (type_of_single v) ctx i in
+  wsingle v ctx i
+
+and wsequence v ctx i = match v with
+  | [] -> i
+  | x :: l -> wsequence l ctx (wsingle x ctx i)
+
+(*** Reading ***)
+
+let read1 unsafe_reader ctx i =
+  if i + 1 > String.length ctx.buffer then raise Out_of_bounds;
+  let v = unsafe_reader ctx.buffer i in
+  (i + 1, v)
+
+let readn padding size unsafe_le_reader unsafe_be_reader ctx i =
+  let count = padding i in
+  let end_ptr = i + count + size in
+  if end_ptr > String.length ctx.buffer then raise Out_of_bounds;
+  for j = 0 to count - 1 do
+    if String.unsafe_get ctx.buffer (i + j) <> '\x00'
+    then raise (Reading_error "unitialized padding bytes")
+  done;
+  match ctx.byte_order with
+    | Little_endian -> end_ptr, unsafe_le_reader ctx.buffer (i + count)
+    | Big_endian -> end_ptr, unsafe_be_reader ctx.buffer (i + count)
+
+let read2 le be = readn pad2 2 le be
+let read4 le be = readn pad4 4 le be
+let read8 le be = readn pad8 8 le be
+
+let rwrap reader f ctx i = let i, v = reader ctx i in (i, f v)
+
+let rbyte = read1 unsafe_read_byte_as_char
+let rint8 = rwrap rbyte (fun v ->
+                           let v = int_of_char v in
+                           if v >= 128 then v - 256 else v)
+let rint16 = read2 LER.unsafe_read_int16_as_int BER.unsafe_read_int16_as_int
+let rint32 = read4 LER.unsafe_read_int32_as_int32 BER.unsafe_read_int32_as_int32
+let rint64 = read8 LER.unsafe_read_int64_as_int64 BER.unsafe_read_int64_as_int64
+let rint = read4 LER.unsafe_read_int32_as_int BER.unsafe_read_int32_as_int
+let ruint8 = rwrap rbyte int_of_char
+let ruint16 = read2 LER.unsafe_read_uint16_as_int BER.unsafe_read_uint16_as_int
+let ruint32 = read4 LER.unsafe_read_uint32_as_int32 BER.unsafe_read_uint32_as_int32
+let ruint64 = read8 LER.unsafe_read_uint64_as_int64 BER.unsafe_read_uint64_as_int64
+let ruint = read4 LER.unsafe_read_uint32_as_int BER.unsafe_read_uint32_as_int
+let rdouble = rwrap ruint64 Int64.to_float
+let rboolean = rwrap ruint
+  (function
+     | 0 -> false
+     | 1 -> true
+     | n -> raise & Reading_error ("invalid boolean value: " ^ string_of_int n))
+let rstring ctx i =
+  let i, len = ruint ctx i in
+  let end_ptr = i + len + 1 in
+  if len < 0 || end_ptr > String.length ctx.buffer then raise Out_of_bounds;
+  let str = String.create len in
+  String.unsafe_blit ctx.buffer i str 0 len;
+  match String.unsafe_get ctx.buffer (i + len) with
+    | '\x00' -> (end_ptr, str)
+    | _ -> raise & Reading_error "terminating null byte missing"
+let robject_path = rstring
+
+module Types_reader = Types_rw.Make_reader(OBus_value)
+  (struct
+     let get = String.unsafe_get
+     let terminated str i = String.unsafe_get str i = '\x00'
+   end)
+
+let rsignature ctx i =
+  let i, len = ruint8 ctx i in
+  if len < 0 || i + len + 1 > String.length ctx.buffer then raise Out_of_bounds;
+  if String.unsafe_get ctx.buffer (i + len) <> '\x00'
+  then raise & Reading_error "signature does not end with a null byte";
+  try
+    Types_reader.read_sequence ctx.buffer i
+  with
+      Types_rw.Parse_failure(j, msg) ->
+        raise & Reading_error
+          (sprintf "invalid signature %S, at position %d: %s"
+             (String.sub ctx.buffer i len) (j - i) msg)
+
+let rtype ctx i = rwrap rsignature
+  (function
+     | [t] -> t
+     | [] -> raise & Reading_error "empty variant signature"
+     | _ -> raise & Reading_error "variant signature contain more than one single type")
+  ctx i
+
+let rstruct reader ctx i = reader ctx (rpad8 ctx i)
+
+let read_until reader empty limit ctx i =
   let rec aux (i, acc) =
     if i < limit
     then aux (reader acc ctx i)
     else
       if i > limit
-      then raise (Reading_error "invalid array size")
+      then raise & Reading_error "invalid array size"
       else (i, acc)
   in
-    aux (i, empty)
+  aux (i, empty)
 
+let rarray_backend on8 reader acc ctx i =
+  let i, len = ruint ctx i in
+  rcheck_array_len len;
+  let i = if on8 then rpad8 ctx i else i in
+  read_until reader acc (i + len) ctx i
+
+let rarray typ = rarray_backend (pad8_p typ)
+let rdict reader = rarray_backend true reader
+
+let rlist typ reader ctx i =
+  let i, len = ruint ctx i in
+  rcheck_array_len len;
+  let i = if pad8_p typ then rpad8 ctx i else i in
+  let limit = i + len in
+  let rec aux i =
+    if i < limit
+    then
+      let i, v = reader ctx i in
+      v :: aux i
+    else
+      if i > limit
+      then raise (Reading_error "invalid array size")
+      else []
+  in
+  (limit, aux i)
+
+let rset typ reader = rarray typ (fun acc ctx i ->
+                                    let i, v = reader ctx i in
+                                    (i, v :: acc)) []
+
+let rassoc kreader vreader = rdict (fun acc ctx i ->
+                                      let i, k = kreader ctx i in
+                                      let i, v = vreader ctx i in
+                                      (i, (k, v) :: acc)) []
+
+let rbyte_array ctx i =
+  let i, len = ruint ctx i in
+  rcheck_array_len len;
+  let str = String.create len in
+  String.unsafe_blit ctx.buffer i str 0 len;
+  (i + len, str)
+
+let rfixed typ reader ctx i =
+  let i, typ' = rtype ctx i in
+  if typ = typ'
+  then reader ctx i
+  else failwith
+    (sprintf "invalid variant signature, expected '%s', got '%s'"
+       (string_of_signature [typ])
+       (string_of_signature [typ]))
+
+let rbasic = function
+  | Tbyte -> rwrap rbyte vbyte
+  | Tboolean -> rwrap rboolean vboolean
+  | Tint16 -> rwrap rint16 vint16
+  | Tint32 -> rwrap rint32 vint32
+  | Tint64 -> rwrap rint64 vint64
+  | Tuint16 -> rwrap ruint16 vuint16
+  | Tuint32 -> rwrap ruint32 vuint32
+  | Tuint64 -> rwrap ruint64 vuint64
+  | Tdouble -> rwrap rdouble vdouble
+  | Tstring -> rwrap rstring vstring
+  | Tsignature -> rwrap rsignature vsignature
+  | Tobject_path -> rwrap robject_path vobject_path
+
+let rec rsingle = function
+  | Tbasic t -> rwrap (rbasic t) vbasic
+  | Tarray t -> rwrap (rlist t (rsingle t)) (varray t)
+  | Tdict(tk, tv) -> rwrap (rassoc (rbasic tk) (rsingle tv)) (vdict tk tv)
+  | Tstruct tl -> rwrap (rstruct (rsequence tl)) vstruct
+  | Tvariant -> rvariant
+
+and rvariant ctx i =
+  let i, t = rtype ctx i in
+  let i, v = rsingle t ctx i in
+  (i, vvariant v)
+
+and rsequence t ctx i = match t with
+  | [] -> (i, [])
+  | t :: tl ->
+      let i, x = rsingle t ctx i in
+      let i, l = rsequence tl ctx i in
+      (i, x :: l)

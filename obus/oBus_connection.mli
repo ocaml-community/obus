@@ -17,7 +17,7 @@
     It is low-level because functions of this module deals directly
     with DBus messages, as header + body. *)
 
-type t = OBus_intern.connection
+type t = OBus_internals.connection
 
 (** {6 Creation} *)
 
@@ -78,26 +78,17 @@ val name : t -> name option
 
 (** {6 Sending messages} *)
 
-val send_message : t -> 'a OBus_header.t -> ('b, unit Lwt.t, unit, _, _) OBus_comb.func -> 'b
+val send_message : t -> 'a OBus_header.t -> ('b, unit Lwt.t, unit) OBus_type.ty_function -> 'b
   (** [send_message connection header typ ...] send a message without
       expecting a reply *)
 
-val send_message_with_reply : t -> OBus_header.method_call -> ('b, (OBus_header.method_return * 'c) Lwt.t, 'c, _, _) OBus_comb.func -> 'b
+val send_message_with_reply : t -> OBus_header.method_call -> ('b, (OBus_header.method_return * 'c) Lwt.t, 'c) OBus_type.ty_function -> 'b
   (** [send_message_with_reply connection header typ ...] Send a
       message and return a thread which wait for the reply *)
 
-val ksend_message : (unit Lwt.t -> 'c) -> t -> 'a OBus_header.t -> ('b, 'c, unit, _, _) OBus_comb.func -> 'b
-val ksend_message_with_reply : ((OBus_header.method_return * 'c) Lwt.t -> 'd) -> t -> OBus_header.method_call -> ('b, 'd, 'c, _, _) OBus_comb.func -> 'b
+val ksend_message : ((t -> 'a OBus_header.t -> unit Lwt.t) -> 'c) -> ('b, 'c, unit) OBus_type.ty_function -> 'b
+val ksend_message_with_reply : ((t -> OBus_header.method_call -> (OBus_header.method_return * 'c) Lwt.t) -> 'd) -> ('b, 'd, 'c) OBus_type.ty_function -> 'b
   (** Same thing but with continuation *)
-
-val wire_send_message : t -> 'a OBus_header.t ->
-  'b OBus_types.sequence_p -> (unit, 'b, OBus_wire.writer) OBus_wire.sequence_p -> unit Lwt.t
-val wire_send_message_with_reply : t -> OBus_header.method_call ->
-  'b OBus_types.sequence_p -> (unit, 'b, OBus_wire.writer) OBus_wire.sequence_p ->
-  'c OBus_types.sequence_p -> ('d, 'c, OBus_wire.reader) OBus_wire.sequence_p ->
-  (OBus_header.method_return * 'd) Lwt.t
-    (** Send a message by directly providing writer/reader monads,
-        this could be used for more complex cases *)
 
 val send_error : t -> OBus_header.method_call -> OBus_error.name -> OBus_error.message -> unit Lwt.t
   (** Send an error message in reply to a method call *)

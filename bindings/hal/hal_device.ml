@@ -7,6 +7,9 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open OBus_type
+open OBus_value
+
 module Make_interf(Name : sig val name : string end) =
   OBus_client.Make_constant_bus
     (struct
@@ -28,13 +31,10 @@ type property =
   | Pbool of bool
   | Pdouble of float
 
-open OBus_types
-open OBus_value
-
-let ob_property = OBus_comb.wrap ob_variant
+let tproperty = wrap_single tvariant
   (function
      | Basic (String s) -> Pstring s
-     | Array(Tbasic Tstring, _) as l -> Pstrlist(cast_single (tarray tstring) l)
+     | Array(Tbasic Tstring, _) as l -> Pstrlist(cast_single (tlist tstring) l)
      | Basic (Int32 x) -> Pint x
      | Basic (Uint64 x) -> Puint64 x
      | Basic (Boolean x) -> Pbool x
@@ -42,12 +42,12 @@ let ob_property = OBus_comb.wrap ob_variant
      | v -> failwith ("invalid device property: " ^ OBus_value.string_of_single v))
   (function
      | Pstring s -> vbasic (String s)
-     | Pstrlist l -> make_single (tarray tstring) l
+     | Pstrlist l -> make_single (tlist tstring) l
      | Pint x -> vbasic (Int32 x)
      | Puint64 x -> vbasic (Uint64 x)
      | Pbool x -> vbasic (Boolean x)
      | Pdouble x -> vbasic (Double x))
-let ob_udi = ob_path
+let tudi = tpath
 
 let get_all_properties p = call p "GetAllProperties" [: (string, property) assoc ]
 let set_multiple_properties p = call p "SetMultipleProperties" [: (string, property) assoc -> unit ]

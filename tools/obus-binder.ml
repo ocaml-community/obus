@@ -59,4 +59,6 @@ let _ =
     (fun pp -> List.iter (print_interf pp) interfaces);
 
   with_pp (output_file_prefix ^ ".ml")
-    (fun pp -> List.iter (print_implem pp) interfaces)
+    (fun pp ->
+       Format.fprintf pp "open OBus_type\n";
+       List.iter (print_implem pp) interfaces)

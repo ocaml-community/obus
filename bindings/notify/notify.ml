@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open OBus_type
 open OBus_value
 
 include OBus_client.Make_constant
@@ -18,7 +19,7 @@ include OBus_client.Make_constant
    end)
 
 type id = int32
-let ob_id = ob_uint32
+let tid = tuint32
 
 type server_info = {
   server_name : string;
@@ -41,31 +42,25 @@ type urgency =
     | `normal
     | `critical ]
 
-open OBus_wire
-open OBus_types
-
 type hint =
   | Hint_image of image
   | Hint_basic of OBus_value.basic
   | Hint_single of OBus_value.single
 
-let ob_hint = OBus_comb.make
-  ~annot:dvariant
-  ~reader:(failwith "not implemented")
-  ~writer:(function
-             | Hint_image img ->
-                 wfixed (dstruct (dint32 ++ dint32 ++ dint32 ++ dboolean ++ dint32 ++ dint32 ++ darray dbyte))
-                   (wstruct
-                      (perform
-                         wint img.img_width;
-                         wint img.img_height;
-                         wint img.img_rowstride;
-                         wbool img.img_has_alpha;
-                         wint img.img_bits_per_sample;
-                         wint img.img_channels;
-                         wbyte_array img.img_data))
-             | Hint_basic value -> wvariant (vbasic value)
-             | Hint_single value -> wvariant value)
+let thint = wrap_single tvariant
+  (fun _ -> failwith "not implemented")
+  (function
+     | Hint_image img ->
+         make_single (tstructure (tup7 tint tint tint tbool tint tint tbyte_array))
+           (img.img_width,
+            img.img_height,
+            img.img_rowstride,
+            img.img_has_alpha,
+            img.img_bits_per_sample,
+            img.img_channels,
+            img.img_data)
+     | Hint_basic value -> vvariant (vbasic value)
+     | Hint_single value -> vvariant value)
 
 let app_name = ref (Filename.basename Sys.argv.(0))
 let desktop_entry = ref None

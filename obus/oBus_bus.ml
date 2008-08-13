@@ -8,7 +8,8 @@
  *)
 
 open Lwt
-open OBus_intern
+open OBus_internals
+open OBus_type
 
 include OBus_client.Make_constant_path
   (struct
@@ -19,18 +20,18 @@ include OBus_client.Make_constant_path
 
 type name = string
 
-let ob_name = ob_string
+let tname = tstring
 
 let hello bus = call bus "Hello" [: name ]
 
 let register_connection connection =
-  lwt_with_running connection $ function
+  lwt_with_running connection & function
     | { name = Some _ } ->
         (* Do not call two times the Hello method *)
         return ()
     | { name = None } ->
         hello connection >>= fun name ->
-          lwt_with_running connection $ fun running ->
+          lwt_with_running connection & fun running ->
             running.name <- Some name;
             return ()
 
@@ -67,10 +68,9 @@ OBUS_FLAG release_name_result [:uint] =
 let release_name bus = call bus "ReleaseName" [: string -> release_name_result ]
 
 type start_service_flag
-let ob_start_service_flag =
-  OBus_comb.make OBus_types.duint32
-    (OBus_wire.failwith "not implemented")
-    (fun _ -> OBus_wire.wuint 0)
+let tstart_service_flag : start_service_flag list ty_basic = wrap_basic tuint
+  (fun _ -> failwith "not implemented")
+  (fun _ -> 0)
 
 OBUS_FLAG start_service_by_name_result [:uint] =
   [ 1 -> `success
@@ -84,7 +84,7 @@ let get_name_owner bus = call bus "GetNameOwner" [: name -> name ]
 let list_queued_owners bus = call bus "ListQueuedOwners" [: name -> name list ]
 
 type match_rule = string
-let ob_match_rule = ob_string
+let tmatch_rule = tstring
 
 let match_rule ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
   let buf = Buffer.create 42 in

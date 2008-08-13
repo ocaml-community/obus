@@ -30,7 +30,7 @@ end
 
 include T
 
-open OBus_types
+open OBus_value
 
 let implem_term_of_basic = function
   | Tbyte -> term "char" []

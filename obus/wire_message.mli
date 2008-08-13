@@ -9,18 +9,16 @@
 
 (** Module used to receive or send an entire message *)
 
-open OBus_wire
-
 type recv = {
   recv_header : OBus_header.any;
-  recv_signature : OBus_types.signature;
+  recv_signature : OBus_value.signature;
   recv_byte_order : OBus_info.byte_order;
   recv_body_start : int;
   recv_length : int;
   recv_buffer : string;
 }
 
-val recv_one_message : OBus_intern.connection -> string -> recv Lwt.t
+val recv_one_message : OBus_internals.connection -> string -> recv Lwt.t
   (** [recv_one_message connection buffer] read one a message from the given
       connection.
 
@@ -29,13 +27,13 @@ val recv_one_message : OBus_intern.connection -> string -> recv Lwt.t
 
 type 'a send = {
   send_header : 'a OBus_header.t;
-  send_signature : OBus_types.signature;
-  send_writer : (unit, unit, unit, writer) OBus_intern.wire;
+  send_signature : OBus_value.signature;
+  send_writer : OBus_internals.writer;
   send_byte_order : OBus_info.byte_order;
   send_serial : int32;
 }
 
-val send_one_message : OBus_intern.connection -> 'a send -> string -> (string * exn option) Lwt.t
+val send_one_message : OBus_internals.connection -> 'a send -> string -> (string * exn option) Lwt.t
   (** [send_one_message connection send buffer] write and send one
       message on the given connection. It return the same buffer as
       given in argument or a new buffer if a growing was needed.

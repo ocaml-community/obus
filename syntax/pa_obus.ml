@@ -59,45 +59,41 @@ struct
   (*** Utils ***)
 
   let abstract args expr =
-    List.fold_right (fun arg acc -> let _loc = Ast.loc_of_patt arg in
+    List.fold_right (fun arg acc ->
+                       let _loc = Ast.loc_of_patt arg in
                        <:expr< fun $arg$ -> $acc$ >>)
       args expr
 
   let gen_vars l =
-    snd (List.fold_left (fun (n, l) _ ->
-                           (n - 1, Printf.sprintf "x%d" n :: l))
+    snd (List.fold_left (fun (n, l) e ->
+                           (n - 1, (Ast.loc_of_expr e, Printf.sprintf "x%d" n) :: l))
            (List.length l - 1, []) l)
 
   (***** Big tuple combinator creation *****)
 
-  let make_tuple_annot _loc l =
-    List.fold_right (fun comb acc ->
-                       let _loc = Ast.loc_of_expr comb in
-                         <:expr< OBus_annot.pair (OBus_comb.annot $comb$) $acc$ >>)
-      l <:expr< OBus_annot.dnil >>
+  let make_tuple_type _loc l =
+    List.fold_right (fun typ acc ->
+                       let _loc = Ast.loc_of_expr typ in
+                       <:expr< OBus_value.tpair $typ$ $acc$ >>)
+      l <:expr< OBus_value.dunit >>
 
-  let make_tuple_reader _loc l =
+  let make_tuple_of_seq _loc l =
     let vars = gen_vars l in
-      List.fold_right2 (fun comb var acc ->
-                          let _loc = Ast.loc_of_expr comb in
-                            <:expr< OBus_wire.bind (OBus_comb.reader $comb$) (fun $lid:var$ -> $acc$) >>)
-        l vars <:expr< OBus_wire.return ( $ Ast.exCom_of_list (List.map (fun var -> <:expr< $lid:var$ >>) vars) $ ) >>
+    <:expr< fun $ List.fold_right (fun (_loc, var) acc -> <:patt< ($lid:var$, $acc$) >>) vars <:patt< () >> $ ->
+              ( $ Ast.exCom_of_list (List.map (fun (_loc, var) -> <:expr< $lid:var$ >>) vars) $ ) >>
 
-  let make_tuple_writer _loc l =
+  let make_tuple_to_seq _loc l =
     let vars = gen_vars l in
-      <:expr< fun ( $ Ast.paCom_of_list (List.map (fun var -> <:patt< $lid:var$ >>) vars) $ ) ->
-        $ List.fold_right2 (fun comb var acc ->
-                              let _loc = Ast.loc_of_expr comb in
-                                <:expr< OBus_wire.bind (OBus_comb.writer $comb$ $lid:var$) (fun _ -> $acc$) >>)
-          l vars <:expr< OBus_wire.return () >> $ >>
+    <:expr< fun $ Ast.PaTup(_loc, Ast.paCom_of_list (List.map (fun (_loc, var) -> <:patt< $lid:var$ >>) vars)) $ ->
+      $ List.fold_right (fun (_loc, var) acc -> <:expr< ($lid:var$, $acc$) >>) vars <:expr< () >> $ >>
 
-  (*** Convertion ctyp --> combinators ***)
+  (*** Convertion ctyp --> type combinator ***)
 
-  let combinator_of_ctyp ctyp =
+  let ty_of_ctyp ctyp =
     let fail loc = Loc.raise loc (Stream.Error "syntax error") in
 
     let rec parse_id = function
-      | <:ident@_loc< $lid:a$ >> -> <:ident< $lid:"ob_" ^ a$ >>
+      | <:ident@_loc< $lid:a$ >> -> <:ident< $lid:"t" ^ a$ >>
       | <:ident@_loc< $a$ . $b$ >> -> <:ident< $a$ . $parse_id b$ >>
       | t -> fail (Ast.loc_of_ident t)
 
@@ -107,12 +103,12 @@ struct
           let count = List.length l in
             if count <= 10
               (* if there is less than 10 type, use a predefined tuple combinator *)
-            then List.fold_left (fun acc e -> <:expr< $acc$ $e$ >>) <:expr< $lid:"ob_tuple" ^ string_of_int count$ >> l
+            then List.fold_left (fun acc e -> <:expr< $acc$ $e$ >>) <:expr< $lid:"tup" ^ string_of_int count$ >> l
               (* if there is more, create on a new specific one *)
-            else <:expr< OBus_comb.make
-              ~annot:$make_tuple_annot _loc l$
-              ~reader:$make_tuple_reader _loc l$
-              ~writer:$make_tuple_writer _loc l$ >>
+            else <:expr< OBus_value.wrap_sequence
+              $make_tuple_type _loc l$
+              $make_tuple_of_seq _loc l$
+              $make_tuple_to_seq _loc l$ >>
       | <:ctyp@_loc< '$x$ >> -> <:expr< $lid:x$ >>
       | <:ctyp@_loc< $a$ $b$ >> -> <:expr< $parse_type b$ $parse_type a$ >>
       | <:ctyp@_loc< $id:t$ >> -> <:expr< $id:parse_id t$ >>
@@ -121,9 +117,9 @@ struct
     in
       parse_type ctyp
 
-  let rec func_combinator_of_ctyp = function
-    | <:ctyp@_loc< $a$ -> $b$ >> -> <:expr< $combinator_of_ctyp a$ --> $func_combinator_of_ctyp b$ >>
-    | t -> let _loc = Ast.loc_of_ctyp t in <:expr< ob_reply $combinator_of_ctyp t$ >>
+  let rec ty_function_of_ctyp = function
+    | <:ctyp@_loc< $a$ -> $b$ >> -> <:expr< OBus_type.abstract $ty_of_ctyp a$ $ty_function_of_ctyp b$ >>
+    | t -> let _loc = Ast.loc_of_ctyp t in <:expr< OBus_type.reply $ty_of_ctyp t$ >>
 
   (***** Bitwise and flag definitions *****)
 
@@ -197,69 +193,50 @@ struct
         ] ];
 
     expr: LEVEL "simple"
-      [ [ "[:"; typ = ctyp; "]" -> func_combinator_of_ctyp typ ] ];
+      [ [ "[:"; typ = ctyp; "]" -> ty_function_of_ctyp typ ] ];
 
     str_item:
-      [ [ "OBUS_BITWISE"; name = a_LIDENT; "[:"; key_type = ctyp; "]"; "="; (vrntyp, cstrs) = obus_data_type ->
-            let key_comb = combinator_of_ctyp key_type in
-              <:str_item<
-                (* First create the caml type definition *)
-                type $make_caml_type_def _loc name vrntyp cstrs$
+      [ [ "OBUS_BITWISE"; name = a_LIDENT; "[:"; key_ctyp = ctyp; "]"; "="; (vrntyp, cstrs) = obus_data_type ->
+            <:str_item<
+              (* First create the caml type definition *)
+              type $make_caml_type_def _loc name vrntyp cstrs$
 
-                (* Construct the combinator by providing a reader and a
-                   writer monad *)
-                let $lid:"ob_" ^ name ^ "_list"$ =
-                  OBus_comb.make
-                    ~annot:(OBus_comb.annot $key_comb$)
-                    ~reader:(OBus_wire.bind (OBus_comb.reader $key_comb$)
-                               (fun x ->
-                                  OBus_wire.return
-                                    (let l = [] in
-                                       $ List.fold_left
-                                         (fun acc (patt, expr, _loc, id) ->
-                                            <:expr< let l = if $bw_read patt$ then $make_vrn_expr vrntyp _loc id$ :: l else l in $acc$ >>)
-                                       <:expr< l >> cstrs $)))
-                    ~writer:(fun l ->
-                               OBus_comb.writer $key_comb$
-                                 (List.fold_left
-                                    (fun acc x -> match x with
-                                         $ Ast.mcOr_of_list
-                                              (List.map (fun (patt, expr, _loc, id) ->
-                                                           <:match_case< $make_vrn_patt vrntyp _loc id$ -> $bw_write expr$ >>)
-                                                 cstrs) $)
-                                    $ let (patt, expr, _loc, name) = List.hd cstrs in
-                                        bw_empty patt $
-                                    l))
-              >>
+              (* Construct the combinator *)
+              let $lid:"t" ^ name ^ "_list"$ = OBus_type.wrap_basic $ty_of_ctyp key_ctyp$
+                (fun x ->
+                   let l = [] in
+                   $ List.fold_left
+                       (fun acc (patt, expr, _loc, id) ->
+                          <:expr< let l = if $bw_read patt$ then $make_vrn_expr vrntyp _loc id$ :: l else l in $acc$ >>)
+                       <:expr< l >> cstrs $)
+                (List.fold_left
+                   (fun acc x -> match x with
+                        $ Ast.mcOr_of_list
+                          (List.map (fun (patt, expr, _loc, id) ->
+                                       <:match_case< $make_vrn_patt vrntyp _loc id$ -> $bw_write expr$ >>)
+                             cstrs) $)
+                   $ let (patt, expr, _loc, name) = List.hd cstrs in bw_empty patt $)
+            >>
 
-        | "OBUS_FLAG"; name = a_LIDENT; "[:"; key_type = ctyp; "]"; "="; (vrntyp, cstrs) = obus_data_type ->
+        | "OBUS_FLAG"; name = a_LIDENT; "[:"; key_ctyp = ctyp; "]"; "="; (vrntyp, cstrs) = obus_data_type ->
+            <:str_item<
+              type $make_caml_type_def _loc name vrntyp cstrs$
 
-            let key_comb = combinator_of_ctyp key_type in
-              <:str_item<
-                type $make_caml_type_def _loc name vrntyp cstrs$
-
-                let $lid:"ob_" ^ name$ =
-                  OBus_comb.make
-                    ~annot:(OBus_comb.annot $key_comb$)
-                    ~reader:(OBus_wire.bind (OBus_comb.reader $key_comb$)
-                               (fun x ->
-                                  OBus_wire.return
-                                    (match x with
-                                         $ Ast.mcOr_of_list
-                                             ((List.map
-                                                 (fun (patt, expr, _loc, id) ->
-                                                    <:match_case< $patt$ -> $make_vrn_expr vrntyp _loc id$ >>)
-                                                 cstrs) @
-                                                [ <:match_case< _ -> (failwith $str:"invalid value for " ^ name$ : $lid:name$) >> ]) $)))
-                    ~writer:(fun x ->
-                               OBus_comb.writer $key_comb$
-                                 (match x with
-                                      $ Ast.mcOr_of_list
-                                          (List.map
-                                             (fun (patt, expr, _loc, id) ->
-                                                <:match_case< $make_vrn_patt vrntyp _loc id$ -> $expr$ >>)
-                                             cstrs) $))
-              >>
+              let $lid:"t" ^ name$ = OBus_type.wrap_basic $ty_of_ctyp key_ctyp$
+                (function
+                     $ Ast.mcOr_of_list
+                       ((List.map
+                           (fun (patt, expr, _loc, id) ->
+                              <:match_case< $patt$ -> $make_vrn_expr vrntyp _loc id$ >>)
+                           cstrs) @
+                          [ <:match_case< _ -> (failwith $str:"invalid value for " ^ name$ : $lid:name$) >> ]) $)
+                (function
+                     $ Ast.mcOr_of_list
+                       (List.map
+                          (fun (patt, expr, _loc, id) ->
+                             <:match_case< $make_vrn_patt vrntyp _loc id$ -> $expr$ >>)
+                          cstrs) $)
+            >>
 
         | "OBUS_EXN"; name = a_UIDENT; "="; dbus_name = a_STRING ->
             <:str_item<
@@ -285,10 +262,3 @@ struct
 end
 
 let module M = Register.OCamlSyntaxExtension(Id)(Make) in ()
-
-let _ =
-  (* Automatic inclusion of [OBus_pervasives] *)
-  AstFilters.register_str_item_filter
-    (fun st ->
-       let _loc = Ast.loc_of_str_item st in
-         <:str_item< open OBus_pervasives ;; $st$ >>)

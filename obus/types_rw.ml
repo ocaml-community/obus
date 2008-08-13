@@ -10,7 +10,7 @@
 (* Types printer/parser *)
 
 module type Types = sig
-  type basic =
+  type tbasic =
     | Tbyte
     | Tboolean
     | Tint16
@@ -23,11 +23,11 @@ module type Types = sig
     | Tstring
     | Tsignature
     | Tobject_path
-  type single =
-    | Tbasic of basic
-    | Tstruct of single list
-    | Tarray of single
-    | Tdict of basic * single
+  type tsingle =
+    | Tbasic of tbasic
+    | Tstruct of tsingle list
+    | Tarray of tsingle
+    | Tdict of tbasic * tsingle
     | Tvariant
 end
 
@@ -106,14 +106,15 @@ module Make_writer(Types : Types) =
 struct
   open Types
 
-  let signature_size tl =
-    let rec aux acc = function
-      | Tarray t -> aux (acc + 1) t
-      | Tdict(_, t) -> aux (acc + 4) t
-      | Tstruct tl -> List.fold_left aux (acc + 2) tl
-      | _ -> acc + 1
-    in
-      List.fold_left aux 0 tl
+  let rec single_signature_size_aux acc = function
+    | Tarray t -> single_signature_size_aux (acc + 1) t
+    | Tdict(_, t) -> single_signature_size_aux (acc + 4) t
+    | Tstruct tl -> List.fold_left single_signature_size_aux (acc + 2) tl
+    | _ -> acc + 1
+
+  let single_signature_size = single_signature_size_aux 0
+
+  let signature_size = List.fold_left single_signature_size_aux 0
 
   let char_of_basic = function
     | Tbyte -> 'y'

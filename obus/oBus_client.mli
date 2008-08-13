@@ -22,11 +22,15 @@ module type Interface = sig
   type t
     (** Type of objects, without customization it is [OBus_proxy.t] *)
 
-  val call : t -> string -> ('a, 'b Lwt.t, 'b, _, _) OBus_comb.func -> 'a
+  val call : t -> string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
     (** [call obj member typ ...] call a method. *)
 
-  val kcall : ('b Lwt.t -> 'c) -> t -> string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
+  val kcall : ((t -> string -> 'b Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
     (** Same thing but with continuation *)
+
+(*  val on_signal : t -> string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.id*)
+    (** [on_signal obj member typ func] register a callback function
+        for the given signal *)
 
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
     (** Same as [OBus_error.register] but the error name will be
@@ -91,7 +95,8 @@ module type Constant_params = sig
 end
 
 module Make_constant(Params : Constant_params) : sig
-  val call : string -> ('a, 'b Lwt.t, 'b, _, _) OBus_comb.func -> 'a
-  val kcall : ('b Lwt.t -> 'c) -> string -> ('a, 'c, 'b, _, _) OBus_comb.func -> 'a
+  val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+  val kcall : ((string -> 'b Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
+    (*  val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.id*)
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
 end

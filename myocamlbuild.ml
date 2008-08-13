@@ -20,25 +20,22 @@ struct
       "Auth_lexer";
       "Util";
       "OBus_info";
-      "Wire";
       "Types_rw";
       "OBus_path";
-      "OBus_types";
       "OBus_value";
+      "Wire";
       "OBus_xml_parser";
       "OBus_introspect";
       "OBus_address";
       "OBus_transport";
       "OBus_auth";
       "OBus_header";
-      "OBus_intern";
-      "OBus_wire";
+      "OBus_internals";
       "Wire_message";
-      "OBus_comb";
       "OBus_error";
       "OBus_connection";
+      "OBus_type";
       "OBus_proxy";
-      "OBus_pervasives";
       "OBus_client";
       "OBus_bus" ]
 
@@ -50,7 +47,7 @@ struct
       "Util";
       "Wire";
       "Types_rw";
-      "OBus_intern" ]
+      "OBus_internals" ]
 
   (* Modules of the API *)
   let modules = List.filter (fun s -> not & List.mem s hidden_modules) all_modules

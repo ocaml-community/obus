@@ -24,8 +24,8 @@ type property =
   | Pdouble of float
       (** IEEE754 double precision floating point number  *)
 
-val ob_property : (property, _, [`variant]) OBus_comb.one
-val ob_udi : (udi, _, [`object_path]) OBus_comb.one
+val tproperty : property OBus_type.ty_single
+val tudi : udi OBus_type.ty_basic
 
 val computer : udi
   (** The computer device *)

@@ -11,11 +11,12 @@
    different modules of OBus *)
 
 open OBus_header
+open OBus_info
 
-let ($) a b = a b
+let (&) a b = a b
 let (|>) a b x = b (a x)
 let (<|) a b x = a (b x)
-let (>>) a b = Lwt.bind a $ fun _ -> b
+let (>>) a b = Lwt.bind a (fun _ -> b)
 
 module My_map(T : sig type t end) =
 struct
@@ -28,6 +29,8 @@ struct
         Not_found -> None
 end
 
+(***** Filters and connection *****)
+
 module Serial_map = My_map(struct type t = serial end)
 module Interf_map = My_map(struct type t = string end)
 module Signal_map = My_map(struct type t = string * string end)
@@ -37,7 +40,7 @@ type filter_id = int
 
 let gen_signal_handler_key = let c = ref 0 in fun () -> incr c; !c
 
-type reply_handler = method_return -> context -> OBus_types.signature -> int -> body Lazy.t -> unit
+type reply_handler = method_return -> context -> OBus_value.signature -> int -> body Lazy.t -> unit
   (* Type of a reply handler. Since the signature can be seen as a
      dynamically typed value or can be read with a custom reader (with
      a type combinator) it receive all the necessary information to
@@ -58,12 +61,12 @@ and method_call_handler_result =
          launch a thread executing the function handling the call and
          sending the reply *)
 
-and service_handler = method_call -> OBus_types.signature -> method_call_handler_result
+and service_handler = method_call -> OBus_value.signature -> method_call_handler_result
   (* A service handler take the header of the call, the signature of
      the message and must lookup for if it know how to handle the
      call *)
 
-and signal_handler = int * (Obj.t -> unit, unit, unit, unit) wire * (signal -> Obj.t) list
+and signal_handler = int * (Obj.t -> unit) reader * (signal -> Obj.t) list
     (* Handling of signal is a bit different from the others. The
        reason is that the user can define multiple handler for the
        same signal. In this case we want to use the same version of
@@ -110,15 +113,24 @@ and connection_state =
 and connection = connection_state ref
 
 and context = {
-  connection : connection;
+  buffer : string;
+  byte_order : byte_order;
   bus_name : string option;
-  byte_order : OBus_info.byte_order;
-  buffer : string
+  connection : connection;
 }
 
-and ('a, 'b, 'c, 'typ) wire = context -> int -> int * 'a
+and writer = context -> int -> int
+and 'a reader = context -> int -> int * 'a
+
+type proxy = {
+  proxy_connection : connection;
+  proxy_service : string option;
+  proxy_path : OBus_path.t;
+}
 
 open Lwt
+
+(***** Utils ****)
 
 let lwt_with_running connection f = match !connection with
   | Crashed exn -> fail exn
@@ -141,39 +153,3 @@ let recv = wrap_io OBus_transport.recv
 let send = wrap_io OBus_transport.send
 let recv_exactly = wrap_io OBus_transport.recv_exactly
 let send_exactly = wrap_io OBus_transport.send_exactly
-
-(* The following function should be in [Wire] because they are needed
-   by [OBus_wire] and [Wire_message] but the depend on the definition
-   of context so they must be here to avoid circular dependencies
-   problem *)
-
-open Wire
-
-let pad2 i = i land 1
-let pad4 i = (4 - i) land 3
-let pad8 i = (8 - i) land 7
-
-let wpadn f ctx i =
-  let count = f i in
-    if i + count > String.length ctx.buffer then out_of_bounds ();
-    for j = 0 to count - 1 do
-      String.unsafe_set ctx.buffer (i + j) '\x00'
-    done;
-    (i + count, ())
-
-let wpad2 = wpadn pad2
-let wpad4 = wpadn pad4
-let wpad8 = wpadn pad8
-
-let rpadn f ctx i =
-  let count = f i in
-    if i + count > String.length ctx.buffer then out_of_bounds ();
-    for j = 0 to count - 1 do
-      if String.unsafe_get ctx.buffer (i + j) <> '\x00'
-      then raise (Reading_error "unitialized padding bytes")
-    done;
-    (i + count, ())
-
-let rpad2 = rpadn pad2
-let rpad4 = rpadn pad4
-let rpad8 = rpadn pad8
