@@ -150,6 +150,30 @@ val tbyte_array : string ty_single
 val tpair : [< 'a cl_sequence ] -> [< 'b cl_sequence ] -> ('a * 'b) ty_sequence
 val tunit : unit ty_sequence
 
+type byte = char
+type boolean = bool
+type int8 = int
+type uint8 = int
+type int16 = int
+type uint16 = int
+type uint32 = int32
+type uint64 = int64
+type uint = int
+type double = float
+type signature = OBus_value.signature
+type object_path = OBus_path.t
+type path = OBus_path.t
+type proxy = OBus_internals.proxy
+type 'a set = 'a list
+type ('a, 'b) dict_entry = 'a * 'b
+type ('a, 'b) assoc = ('a, 'b) dict_entry set
+type 'a structure = 'a
+type variant = single
+type byte_array = string
+    (** Dummy type definition, they should be used in combination with
+        the syntax extension, to define the dbus type and the caml
+        type at the same time *)
+
 (** {6 Tuples} *)
 
 val tup2 :

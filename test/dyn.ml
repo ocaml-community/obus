@@ -13,7 +13,7 @@ open OBus_type
 
 let v = make_single (tlist tint32) [1l; 2l; 3l]
 
-let s = make_sequence <:obty< int16 * string * byte * int list >> (1, "toto", 'e', [1; 2])
+let s = make_sequence <:obus_type< int16 * string * byte * int list >> (1, "toto", 'e', [1; 2])
 let (w, (x, (y, z))) = cast_sequence (tpair tint16 (tpair tstring (tup2 tbyte (tlist tint)))) s
 
 let _ =

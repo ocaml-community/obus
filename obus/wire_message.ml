@@ -229,7 +229,7 @@ struct
       | Some v ->
           let i = wpad8 ctx i in
           let i = wuint8 code ctx i in
-          wfixed (Tbasic typ) (writer v) ctx i in
+          wfixed (Tbasic typ) writer v ctx i in
     let ctx = { connection = connection;
                 bus_name = header.destination;
                 byte_order = BO.byte_order;

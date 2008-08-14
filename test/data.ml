@@ -13,21 +13,19 @@ open OBus_value
 open OBus_type
 open OBus_internals
 
-let typ = Tstruct [Tbasic Tint32;
-                   Tbasic Tstring;
-                   Tdict(Tstring, Tbasic Tstring);
-                   Tarray(Tstruct [Tbasic Tuint64;
-                                   Tbasic Tbyte])]
+let typ = type_single
+  <:obus_type< [int32 * string * {string, string} list * [uint64 * byte] list] >>
 
 let (>>) m f ctx i = f ctx (m ctx i)
 
-let writer (a, b, c, d) =
+let writer =
   wfixed typ
     (wstruct
-       (wint a
-        >> wstring b
-        >> wassoc wstring wstring c
-        >> wlist (Tstruct[Tbasic Tuint64; Tbasic Tbyte]) (fun (x, y) -> wstruct (wuint64 x >> wbyte y)) d))
+       (fun (a, b, c, d) ->
+          wint a
+          >> wstring b
+          >> wlist (Tdict_entry(Tstring, Tbasic Tstring)) (wdict_entry wstring wstring) c
+          >> wlist (Tsingle (Tstruct[Tbasic Tuint64; Tbasic Tbyte])) (wstruct (fun (x, y) -> wuint64 x >> wbyte y)) d))
 
 let reader x = ty_reader tvariant x
 

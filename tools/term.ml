@@ -51,7 +51,7 @@ let rec implem_term_of_single = function
   | Tstruct tl -> term "structure" [implem_term_of_sequence tl]
   | Tarray t -> begin match t with
       | Tsingle t ->  term "list" [implem_term_of_single t]
-      | Tdict_entry(tk, tv) -> term "assoc" [implem_term_of_basic tk; implem_term_of_single tv]
+      | Tdict_entry(tk, tv) -> term "set" [term "dict_entry" [implem_term_of_basic tk; implem_term_of_single tv]]
     end
   | Tvariant -> term "variant" []
 
@@ -86,6 +86,10 @@ and interf_term_of_sequence tl = tuple (List.map interf_term_of_single tl)
 open Format
 
 let rec print_term top pp = function
+  | Term("structure", []) -> fprintf pp "[]"
+  | Term("structure", [Tuple tl]) -> fprintf pp "[%a]" (print_seq "*") tl
+  | Term("structure", [t]) -> fprintf pp "[%a]" (print_term true) t
+  | Term("dict_entry", [tk; tv]) -> fprintf pp "{%a, %a}" (print_term true) tk (print_term true) tv
   | Term(id, []) -> pp_print_string pp id
   | Term(id, [t]) -> fprintf pp "%a %s" (print_term false) t id
   | Term(id, tl) -> fprintf pp "(%a) %s" (print_seq ", ") tl id

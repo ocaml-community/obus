@@ -859,3 +859,24 @@ and with_ty_sequence w = function
       { with_ty_single = fun tx ->
           with_ty_sequence
             { with_ty_sequence = fun tl -> w.with_ty_sequence (tpair tx tl) } tl } tx
+
+type byte = char
+type boolean = bool
+type int8 = int
+type uint8 = int
+type int16 = int
+type uint16 = int
+type uint32 = int32
+type uint64 = int64
+type uint = int
+type double = float
+type signature = OBus_value.signature
+type object_path = OBus_path.t
+type path = OBus_path.t
+type proxy = OBus_internals.proxy
+type 'a set = 'a list
+type ('a, 'b) dict_entry = 'a * 'b
+type ('a, 'b) assoc = ('a, 'b) dict_entry set
+type 'a structure = 'a
+type variant = single
+type byte_array = string

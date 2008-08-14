@@ -372,9 +372,9 @@ let wbyte_array str ctx i =
   String.unsafe_blit str 0 ctx.buffer i len;
   i + len
 
-let wfixed typ writer ctx i =
+let wfixed typ writer v ctx i =
   let i = wtype typ ctx i in
-  writer ctx i
+  writer v ctx i
 
 let wbasic = function
   | Byte x -> wbyte x

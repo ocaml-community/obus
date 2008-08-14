@@ -18,28 +18,26 @@ include OBus_client.Make_constant
      let bus = OBus_bus.session
    end)
 
-type id = int32
-let tid = tuint32
+OBUS_type id = uint32
 
-type server_info = {
+OBUS_record server_info = {
   server_name : string;
   server_vendor : string;
   server_version : string;
   server_spec_version : string;
 }
-type image = {
+
+OBUS_struct image = {
   img_width : int;
   img_height : int;
   img_rowstride : int;
-  img_has_alpha: bool;
+  img_has_alpha : bool;
   img_bits_per_sample : int;
   img_channels : int;
-  img_data : string;
+  img_data : byte_array;
 }
 
-let timage = <:obus_type< (int * int * int * bool * int * int * byte_array) structure >>
-
-OBUS_FLAG urgency : uint8 =
+OBUS_flag urgency : uint8 =
   [ 0 -> `low
   | 1 -> `normal
   | 2 -> `critical ]
@@ -53,35 +51,11 @@ let thint = wrap_element (tdict_entry tstring tvariant)
      match name with
        | "image_data" -> begin match opt_cast_single timage value with
            | None -> Hint_variant(name, value)
-           | Some(img_width,
-                  img_height,
-                  img_rowstride,
-                  img_has_alpha,
-                  img_bits_per_sample,
-                  img_channels,
-                  img_data) ->
-               Hint_image {
-                 img_width = img_width;
-                 img_height = img_height;
-                 img_rowstride = img_rowstride;
-                 img_has_alpha = img_has_alpha;
-                 img_bits_per_sample = img_bits_per_sample;
-                 img_channels = img_channels;
-                 img_data = img_data;
-               }
+           | Some img -> Hint_image img
          end
        | _ -> Hint_variant(name, value))
   (function
-     | Hint_image img ->
-         ("image_data",
-          make_single timage
-            (img.img_width,
-             img.img_height,
-             img.img_rowstride,
-             img.img_has_alpha,
-             img.img_bits_per_sample,
-             img.img_channels,
-             img.img_data))
+     | Hint_image img -> ("image_data", make_single timage img)
      | Hint_variant(name, value) -> (name, vvariant value))
 
 let app_name = ref (Filename.basename Sys.argv.(0))
@@ -89,14 +63,7 @@ let desktop_entry = ref None
 
 open Lwt
 
-let get_server_information () =
-  call "GetServerInformation" << string * string * string * string >>
-  >>= fun (name, vendor, version, spec_version) ->
-    return { server_name = name;
-             server_vendor = vendor;
-             server_version = version;
-             server_spec_version = spec_version }
-
+let get_server_information = call "GetServerInformation" << unit -> server_info >>
 let get_capabilities = call "GetCapabilities" << unit -> string list >>
 let close_notification = call "CloseNotification" << id -> unit >>
 

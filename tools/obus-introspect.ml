@@ -54,7 +54,7 @@ let introspect bus service path =
        ~path:path
        ~interface:"org.freedesktop.DBus.Introspectable"
        ~member:"Introspect" ())
-    (<:obtyf< string >>)
+    (<< string >>)
 
 module Interf_map = Map.Make(struct type t = string let compare = compare end)
 

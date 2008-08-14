@@ -18,9 +18,7 @@ include OBus_client.Make_constant_path
      let service = Some "org.freedesktop.DBus"
    end)
 
-type name = string
-
-let tname = tstring
+OBUS_type name = string
 
 let hello bus = call bus "Hello" << name >>
 
@@ -44,15 +42,15 @@ let of_addresses addresses =
 let session = lazy(of_addresses (Lazy.force OBus_address.session))
 let system = lazy(of_addresses (Lazy.force OBus_address.system))
 
-OBUS_EXN Name_has_no_owner = "Error.NameHasNoOwner"
-OBUS_EXN Match_rule_not_found = "Error.MatchRuleNotFound"
+OBUS_exn Name_has_no_owner = "Error.NameHasNoOwner"
+OBUS_exn Match_rule_not_found = "Error.MatchRuleNotFound"
 
-OBUS_BITWISE request_name_flag : uint =
+OBUS_bitwise request_name_flag : uint =
   [ 1 -> `allow_replacement
   | 2 -> `replace_existing
   | 4 -> `do_not_queue ]
 
-OBUS_FLAG request_name_result : uint =
+OBUS_flag request_name_result : uint =
   [ 1 -> `primary_owner
   | 2 -> `in_queue
   | 3 -> `exists
@@ -60,7 +58,7 @@ OBUS_FLAG request_name_result : uint =
 
 let request_name bus = call bus "RequestName" << string -> request_name_flag_list -> request_name_result >>
 
-OBUS_FLAG release_name_result : uint =
+OBUS_flag release_name_result : uint =
     [ 1 -> `released
     | 2 -> `non_existent
     | 3 -> `not_owner ]
@@ -68,11 +66,9 @@ OBUS_FLAG release_name_result : uint =
 let release_name bus = call bus "ReleaseName" << string -> release_name_result >>
 
 type start_service_flag
-let tstart_service_flag : start_service_flag list ty_basic = wrap_basic tuint
-  (fun _ -> failwith "not implemented")
-  (fun _ -> 0)
+let tstart_service_flag : start_service_flag list ty_basic = wrap_basic tuint (fun _ -> []) (fun _ -> 0)
 
-OBUS_FLAG start_service_by_name_result : uint =
+OBUS_flag start_service_by_name_result : uint =
   [ 1 -> `success
   | 2 -> `already_running ]
 
@@ -83,8 +79,7 @@ let list_activable_names bus = call bus "ListActivatableNames" << name list >>
 let get_name_owner bus = call bus "GetNameOwner" << name -> name >>
 let list_queued_owners bus = call bus "ListQueuedOwners" << name -> name list >>
 
-type match_rule = string
-let tmatch_rule = tstring
+OBUS_type match_rule = string
 
 let match_rule ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
   let buf = Buffer.create 42 in

@@ -20,7 +20,7 @@ module Make_interf(Name : sig val name : string end) =
 
 include Make_interf(struct let name = "org.freedesktop.Hal.Device" end)
 
-type udi = OBus_path.t
+OBUS_type udi = path
 let computer = "/org/freedesktop/devices/computer"
 
 type property =
@@ -47,10 +47,9 @@ let tproperty = wrap_single tvariant
      | Puint64 x -> vbasic (Uint64 x)
      | Pbool x -> vbasic (Boolean x)
      | Pdouble x -> vbasic (Double x))
-let tudi = tpath
 
-let get_all_properties p = call p "GetAllProperties" << (string, property) assoc >>
-let set_multiple_properties p = call p "SetMultipleProperties" << (string, property) assoc -> unit >>
+let get_all_properties p = call p "GetAllProperties" << {string, property} set >>
+let set_multiple_properties p = call p "SetMultipleProperties" << {string, property} set -> unit >>
 let get_property p = call p "GetProperty" << string -> property >>
 let get_property_string p = call p "GetPropertyString" << string -> string >>
 let get_property_string_list p = call p "GetPropertyStringList" << string -> string list >>
