@@ -197,7 +197,7 @@ let send_error connection { destination = destination; serial = serial } name ms
                             flags = { no_reply_expected = true; no_auto_start = true };
                             serial = 0l;
                             typ = `Error(serial, name) }
-    [: string -> unit ] msg
+    << string -> unit >> msg
 
 let send_exn connection method_call exn =
   match OBus_error.unmake exn with

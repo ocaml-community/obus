@@ -37,12 +37,12 @@ type image = {
   img_data : string;
 }
 
-let timage = tstructure (tup7 tint tint tint tbool tint tint tbyte_array)
+let timage = <:obus_type< (int * int * int * bool * int * int * byte_array) structure >>
 
-type urgency =
-    [ `low
-    | `normal
-    | `critical ]
+OBUS_FLAG urgency : uint8 =
+  [ 0 -> `low
+  | 1 -> `normal
+  | 2 -> `critical ]
 
 type hint =
   | Hint_image of image
@@ -90,15 +90,15 @@ let desktop_entry = ref None
 open Lwt
 
 let get_server_information () =
-  call "GetServerInformation" [: string * string * string * string ]
+  call "GetServerInformation" << string * string * string * string >>
   >>= fun (name, vendor, version, spec_version) ->
     return { server_name = name;
              server_vendor = vendor;
              server_version = version;
              server_spec_version = spec_version }
 
-let get_capabilities = call "GetCapabilities" [: unit -> string list ]
-let close_notification = call "CloseNotification" [: id -> unit ]
+let get_capabilities = call "GetCapabilities" << unit -> string list >>
+let close_notification = call "CloseNotification" << id -> unit >>
 
 let de = desktop_entry
 
@@ -116,16 +116,12 @@ let notify ?(app_name= !app_name) ?desktop_entry
   let hints = Util.filter_map (fun x -> x)
     [mkstring desktop_entry "desktop_entry";
      mkhint image (fun img -> Hint_image img);
-     mkvariant urgency "urgency" (fun x -> make_single tuint8
-                                    (match x with
-                                       | `low -> 0
-                                       | `normal -> 1
-                                       | `critical -> 2));
+     mkvariant urgency "urgency" (make_single turgency);
      mkstring category "category";
      mkstring sound_file "sound-file";
      mkvariant suppress_sound "suppress-sound" (make_single tboolean);
      mkvariant pos "x" (fun (x, y) -> make_single tint x);
      mkvariant pos "y" (fun (x, y) -> make_single tint y)]
     @ List.map (fun (name, value) -> Hint_variant(name, value)) hints in
-  call "Notify" [: string -> id -> string -> string -> string -> string list -> hint set -> int -> id ]
+  call "Notify" << string -> id -> string -> string -> string -> string list -> hint set -> int -> id >>
     app_name replace icon summary body (List.fold_right (fun (key, text) acc -> key :: text :: acc) actions []) hints timeout

@@ -113,7 +113,7 @@ let print_implem pp (name, content, annots) =
   p "  include OBus_client.Make(struct let name = %S end)\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        p "  let %a p = call p %S [: %a ]\n" plid name name
+        p "  let %a p = call p %S << %a >>\n" plid name name
           (print_func (tuple (term_of_args  outs)))
           (term_of_args ins)
     | _ -> ()

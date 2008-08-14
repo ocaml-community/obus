@@ -44,7 +44,7 @@ let raw_document =
 
 open Lwt
 
-let ($) a b = a b
+let (&) a b = a b
 let (|>) a b x = b (a x)
 
 let introspect bus service path =
@@ -54,19 +54,19 @@ let introspect bus service path =
        ~path:path
        ~interface:"org.freedesktop.DBus.Introspectable"
        ~member:"Introspect" ())
-    [: string ]
+    (<:obtyf< string >>)
 
 module Interf_map = Map.Make(struct type t = string let compare = compare end)
 
 let rec get (nodes, map) bus service path =
   (perform
      (interfaces, subs) <-- introspect bus service path
-     >>= (fun (header, body) -> return $ parse_source raw_document (XmlParser.SString body));
+     >>= (fun (header, body) -> return & parse_source raw_document (XmlParser.SString body));
      let map = List.fold_left (fun map (name, content) -> Interf_map.add name content map) map interfaces in
      let nodes = (path, List.map fst interfaces) :: nodes in
      match !recursive with
        | true ->
-           Lwt_util.fold_left (fun acc name -> get acc bus service $ OBus_path.append path name) (nodes, map) subs
+           Lwt_util.fold_left (fun acc name -> get acc bus service & OBus_path.append path name) (nodes, map) subs
        | false ->
            return (nodes, map))
 
@@ -90,7 +90,7 @@ let main service path =
                                    map []) in
            begin match !mli with
              | false ->
-                 print_endline $ Xml.to_string_fmt xml
+                 print_endline & Xml.to_string_fmt xml
              | true ->
                  let interfaces, _ = parse_xml IParser.document xml in
                  List.iter (print_interf Format.std_formatter) interfaces
@@ -114,4 +114,4 @@ let _ =
     | _ -> Arg.usage args usage_msg; exit 1
   in
 
-    Lwt_unix.run $ main service path
+    Lwt_unix.run & main service path

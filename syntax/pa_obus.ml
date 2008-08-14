@@ -87,39 +87,85 @@ struct
     <:expr< fun $ Ast.PaTup(_loc, Ast.paCom_of_list (List.map (fun (_loc, var) -> <:patt< $lid:var$ >>) vars)) $ ->
       $ List.fold_right (fun (_loc, var) acc -> <:expr< ($lid:var$, $acc$) >>) vars <:expr< () >> $ >>
 
-  (*** Convertion ctyp --> type combinator ***)
+  (***** type combinator quotations *****)
 
-  let ty_of_ctyp ctyp =
-    let fail loc = Loc.raise loc (Stream.Error "syntax error") in
+  let expr_of_string loc str = Gram.parse_string expr_eoi loc str
 
-    let rec parse_id = function
-      | <:ident@_loc< $lid:a$ >> -> <:ident< $lid:"t" ^ a$ >>
-      | <:ident@_loc< $a$ . $b$ >> -> <:ident< $a$ . $parse_id b$ >>
-      | t -> fail (Ast.loc_of_ident t)
+  let _ = Camlp4_config.antiquotations := true
 
-    and parse_type = function
-      | Ast.TyTup(_loc, t) ->
-          let l = List.map parse_type (Ast.list_of_ctyp t []) in
-          let count = List.length l in
-            if count <= 10
-              (* if there is less than 10 type, use a predefined tuple combinator *)
-            then List.fold_left (fun acc e -> <:expr< $acc$ $e$ >>) <:expr< $lid:"tup" ^ string_of_int count$ >> l
-              (* if there is more, create on a new specific one *)
-            else <:expr< OBus_value.wrap_sequence
-              $make_tuple_type _loc l$
-              $make_tuple_of_seq _loc l$
-              $make_tuple_to_seq _loc l$ >>
-      | <:ctyp@_loc< '$x$ >> -> <:expr< $lid:x$ >>
-      | <:ctyp@_loc< $a$ $b$ >> -> <:expr< $parse_type b$ $parse_type a$ >>
-      | <:ctyp@_loc< $id:t$ >> -> <:expr< $id:parse_id t$ >>
-      | t -> fail (Ast.loc_of_ctyp t)
+  let typ = Gram.Entry.mk "obus type"
+  let typ_eoi = Gram.Entry.mk "obus type quotation"
 
-    in
-      parse_type ctyp
+  let ftyp = Gram.Entry.mk "obus functionnal type"
+  let ftyp_eoi = Gram.Entry.mk "obus functionnal type quotation"
 
-  let rec ty_function_of_ctyp = function
-    | <:ctyp@_loc< $a$ -> $b$ >> -> <:expr< OBus_type.abstract $ty_of_ctyp a$ $ty_function_of_ctyp b$ >>
-    | t -> let _loc = Ast.loc_of_ctyp t in <:expr< OBus_type.reply $ty_of_ctyp t$ >>
+  EXTEND Gram
+    GLOBAL: typ typ_eoi ftyp ftyp_eoi;
+
+    typ:
+      [ "star"
+          [ t = SELF; "*"; tl = star_typ ->
+              let l = t :: tl in
+              let count = List.length l in
+              if count <= 10
+                (* if there is less than 10 type, use a predefined tuple combinator *)
+              then List.fold_left (fun acc e -> <:expr< $acc$ $e$ >>) <:expr< $lid:"tup" ^ string_of_int count$ >> l
+                (* if there is more, create on a new specific one *)
+              else <:expr< OBus_value.wrap_sequence
+                $make_tuple_type _loc l$
+                $make_tuple_of_seq _loc l$
+                $make_tuple_to_seq _loc l$ >> ]
+      | "typ1"
+        [ t1 = SELF; t2 = SELF -> <:expr< $t2$ $t1$ >> ]
+      | "typ2"
+        [ t1 = SELF; "."; t2 = SELF ->
+            (try <:expr< $id:Ast.ident_of_expr t1$.$id:Ast.ident_of_expr t2$ >>
+             with Invalid_argument s -> raise (Stream.Error s))
+        | t1 = SELF; "("; t2 = SELF; ")" ->
+            let t = <:expr< $t1$ $t2$ >> in
+            (try <:expr< $id:Ast.ident_of_expr t$ >>
+             with Invalid_argument s -> raise (Stream.Error s)) ]
+      | "simple"
+        [ "'"; i = a_LIDENT -> <:expr< $lid:i$ >>
+        | i = a_LIDENT -> <:expr< $lid:"t" ^ i$ >>
+        | i = a_UIDENT -> <:expr< $uid:i$ >>
+        | `ANTIQUOT((""|"typ"), a) -> expr_of_string _loc a
+        | "("; t = SELF; ","; mk = comma_typ_app; ")"; i = typ LEVEL "typ2" -> mk <:expr< $i$ $t$ >>
+        | "("; t = SELF; ")" -> t
+        ] ];
+
+    comma_typ_app:
+      [ [ t1 = typ; ","; t2 = SELF -> fun acc -> t2 <:expr< $acc$ $t1$ >>
+        | t = typ -> fun acc -> <:expr< $acc$ $t$ >>
+        ] ];
+
+    star_typ:
+      [ [ `ANTIQUOT((""|"typ"), a) -> [expr_of_string _loc a]
+        | t1 = typ LEVEL "typ1"; "*"; t2 = SELF -> t1 :: t2
+        | t = typ LEVEL "typ1" -> [t]
+        ] ];
+
+    typ_eoi:
+      [ [ t = typ; `EOI -> t ] ];
+
+    ftyp:
+      [ [ t1 = typ; "->"; t2 = SELF -> <:expr< OBus_type.abstract $t1$ $t2$ >>
+        | t = typ -> <:expr< OBus_type.reply $t$ >> ] ];
+
+    ftyp_eoi:
+      [ [ t = ftyp; `EOI -> t ] ];
+  END
+
+  let expand_typ loc _loc_name_opt quotation_contents =
+    Gram.parse_string typ_eoi loc quotation_contents
+
+  let expand_ftyp loc _loc_name_opt quotation_contents =
+    Gram.parse_string ftyp_eoi loc quotation_contents
+
+  let _ =
+    Syntax.Quotation.add "obus_type" Syntax.Quotation.DynAst.expr_tag expand_typ;
+    Syntax.Quotation.add "obus_func_type" Syntax.Quotation.DynAst.expr_tag expand_ftyp;
+    Syntax.Quotation.default := "obus_func_type"
 
   (***** Bitwise and flag definitions *****)
 
@@ -192,17 +238,14 @@ struct
         | OPT "|"; l = LIST1 obus_constructor SEP "|" -> (Vrn_classic, l)
         ] ];
 
-    expr: LEVEL "simple"
-      [ [ "[:"; typ = ctyp; "]" -> ty_function_of_ctyp typ ] ];
-
     str_item:
-      [ [ "OBUS_BITWISE"; name = a_LIDENT; "[:"; key_ctyp = ctyp; "]"; "="; (vrntyp, cstrs) = obus_data_type ->
+      [ [ "OBUS_BITWISE"; name = a_LIDENT; ":"; key_typ = typ; "="; (vrntyp, cstrs) = obus_data_type ->
             <:str_item<
               (* First create the caml type definition *)
               type $make_caml_type_def _loc name vrntyp cstrs$
 
               (* Construct the combinator *)
-              let $lid:"t" ^ name ^ "_list"$ = OBus_type.wrap_basic $ty_of_ctyp key_ctyp$
+              let $lid:"t" ^ name ^ "_list"$ = OBus_type.wrap_basic $key_typ$
                 (fun x ->
                    let l = [] in
                    $ List.fold_left
@@ -218,11 +261,11 @@ struct
                    $ let (patt, expr, _loc, name) = List.hd cstrs in bw_empty patt $)
             >>
 
-        | "OBUS_FLAG"; name = a_LIDENT; "[:"; key_ctyp = ctyp; "]"; "="; (vrntyp, cstrs) = obus_data_type ->
+        | "OBUS_FLAG"; name = a_LIDENT; ":"; key_typ = typ; "="; (vrntyp, cstrs) = obus_data_type ->
             <:str_item<
               type $make_caml_type_def _loc name vrntyp cstrs$
 
-              let $lid:"t" ^ name$ = OBus_type.wrap_basic $ty_of_ctyp key_ctyp$
+              let $lid:"t" ^ name$ = OBus_type.wrap_basic $key_typ$
                 (function
                      $ Ast.mcOr_of_list
                        ((List.map

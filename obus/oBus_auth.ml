@@ -9,7 +9,7 @@
 
 open Lwt
 
-let ($) a b = a b
+let (&) a b = a b
 let (|>) a b x = b (a x)
 let (>>) a b = a >>= (fun _ -> b)
 
@@ -117,14 +117,14 @@ let client_transition (state, mech, mechs) cmd = match state, cmd with
 
 let client_machine_exec recv send =
   let rec aux state =
-    catch (fun  _ -> recv () >>= fun x -> return $ Some x)
+    catch (fun  _ -> recv () >>= fun x -> return & Some x)
       (function
          | Failure _ -> send (`Error "parsing error") >> return None
          | exn -> fail exn) >>= function
         | None -> aux state
         | Some cmd ->
             match client_transition state cmd with
-              | ClientFinal(guid) -> send `Begin >> (return $ Some guid)
+              | ClientFinal(guid) -> send `Begin >> (return & Some guid)
               | ClientTransition(cmd, state) -> send cmd >> aux state
               | ClientFailure(_) -> return None
   in aux
@@ -173,7 +173,7 @@ let launch ?(mechanisms=default_mechanisms) transport =
     Lwt_chan.input_line ic >>=
       (fun l ->
          try
-           return $ Auth_lexer.command (Lexing.from_string l)
+           return & Auth_lexer.command (Lexing.from_string l)
          with
              exn -> Lwt.fail exn)
   in

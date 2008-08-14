@@ -16,8 +16,6 @@ open Lwt
 let service = "org.freedesktop.Notifications"
 let name = "org.ocamlcore.forge.obus"
 
-let ($) a b = a b
-
 let main =
   (perform
      bus <-- Lazy.force OBus_bus.session;

@@ -25,7 +25,7 @@ type interface = name * declaration list * annotation list
 type node = name
 type document = interface list * node list
 
-let ($) a b = a b
+let (&) a b = a b
 
 module Make_parser(Parser : OBus_xml_parser.S) =
 struct
@@ -60,11 +60,11 @@ struct
       (perform
          name <-- ar "name";
          (ins, outs) <-- arguments >>= (fun args ->
-                                          return $ Util.split (function
+                                          return & Util.split (function
                                                                  | (In, x) -> Util.Left x
                                                                  | (Out, x) -> Util.Right x) args);
          annots <-- annotations;
-         return $ Method(name, ins, outs, annots))
+         return & Method(name, ins, outs, annots))
 
   let signal_decl =
     elt "signal"
@@ -72,7 +72,7 @@ struct
          name <-- ar "name";
          args <-- arguments;
          annots <-- annotations;
-         return $ Signal(name, List.map snd args, annots))
+         return & Signal(name, List.map snd args, annots))
 
   let property_decl =
     elt "property"
@@ -81,7 +81,7 @@ struct
          access <-- afr "access" [("read", Read); ("write", Write); ("readwrite", Read_write)];
          typ <-- atype;
          annots <-- annotations;
-         return $ Property(name, typ, access, annots))
+         return & Property(name, typ, access, annots))
 
   let node = elt "node" (ar "name")
 
