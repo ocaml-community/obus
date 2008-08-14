@@ -33,7 +33,9 @@ let tree_get_boundary t =
   in
   aux [] t
 
-(***** Type descriptions *****)
+(***** Type combinators *****)
+
+type context = connection * string option
 
 type ('a, 'typ, 'make, 'cast) ty_desc = {
   (* The dbus type *)
@@ -41,7 +43,7 @@ type ('a, 'typ, 'make, 'cast) ty_desc = {
 
   (* Value functions *)
   make : 'make;
-  cast : 'cast;
+  cast : ?context:context -> 'cast;
 
   (* Wire functions *)
   reader : 'a reader;
@@ -125,35 +127,35 @@ exception Cast_failure
 let cast_basic (`basic { cast = f }) = f
 let cast_single = function
   | `basic { cast = f } ->
-      (function
-         | Basic x -> f x
+      (fun ?context -> function
+         | Basic x -> f ?context x
          | _ -> raise Cast_failure)
   | `single { cast = f } -> f
 let cast_element = function
   | `basic { cast = f } ->
-      (function
-         | Single(Basic x) -> f x
+      (fun ?context -> function
+         | Single(Basic x) -> f ?context x
          | _ -> raise Cast_failure)
   | `single { cast = f } ->
-      (function
-         | Single x -> f x
+      (fun ?context -> function
+         | Single x -> f ?context x
          | _ -> raise Cast_failure)
   | `element { cast = f } -> f
 let cast_sequence = function
   | `basic { cast = f } ->
-      (function
-         | [Basic x] -> f x
+      (fun ?context -> function
+         | [Basic x] -> f ?context x
          | _ -> raise Cast_failure)
   | `single { cast = f } ->
-      (function
-         | [x] -> f x
+      (fun ?context -> function
+         | [x] -> f ?context x
          | _ -> raise Cast_failure)
   | `sequence { cast = f } ->
-      (fun l -> match f l with
+      (fun ?context -> fun l -> match f ?context l with
          | v, [] -> v
          | _ -> raise Cast_failure)
 
-let opt_cast f x = try Some(f x) with Cast_failure -> None
+let opt_cast f ?context x = try Some(f ?context x) with Cast_failure -> None
 let opt_cast_basic t = opt_cast (cast_basic t)
 let opt_cast_single t = opt_cast (cast_single t)
 let opt_cast_element t = opt_cast (cast_element t)
@@ -177,7 +179,7 @@ let ty_reader = function
 let wrap t f g = {
   dtype = t.dtype;
   make = (fun x -> t.make (g x));
-  cast = (fun x -> f (t.cast x));
+  cast = (fun ?context x -> f (t.cast ?context x));
   writer = (fun x -> t.writer (g x));
   reader = (fun ctx i -> let i, v = t.reader ctx i in (i, f v));
 }
@@ -188,7 +190,7 @@ let wrap_element (`element t) f g = `element (wrap t f g)
 let wrap_sequence (`sequence t) f g = `sequence
   { dtype = t.dtype;
     make = (fun x -> t.make (g x));
-    cast = (fun l -> let v, rest = t.cast l in (f v, rest));
+    cast = (fun ?context l -> let v, rest = t.cast ?context l in (f v, rest));
     writer = (fun x -> t.writer (g x));
     reader = (fun ctx i -> let i, v = t.reader ctx i in (i, f v)) }
 
@@ -197,7 +199,7 @@ let wrap_sequence (`sequence t) f g = `sequence
 let tbyte = `basic
   { dtype = Tbyte;
     make = vbyte;
-    cast = (function
+    cast = (fun ?context -> function
               | Byte x -> x
               | _ -> raise Cast_failure);
     reader = rbyte;
@@ -217,7 +219,7 @@ let tuint8 = wrap_basic tbyte
 let tboolean = `basic
   { dtype = Tboolean;
     make = vboolean;
-    cast = (function
+    cast = (fun ?context -> function
               | Boolean x -> x
               | _ -> raise Cast_failure);
     reader = rboolean;
@@ -228,7 +230,7 @@ let tbool = tboolean
 let tint16 = `basic
   { dtype = Tint16;
     make = vint16;
-    cast = (function
+    cast = (fun ?context -> function
               | Int16 x -> x
               | _ -> raise Cast_failure);
     reader = rint16;
@@ -237,7 +239,7 @@ let tint16 = `basic
 let tint32 = `basic
   { dtype = Tint32;
     make = vint32;
-    cast = (function
+    cast = (fun ?context -> function
               | Int32 x -> x
               | _ -> raise Cast_failure);
     reader = rint32;
@@ -246,7 +248,7 @@ let tint32 = `basic
 let tint = `basic
   { dtype = Tint32;
     make = (fun x -> Int32(Int32.of_int x));
-    cast = (function
+    cast = (fun ?context -> function
               | Int32 x -> Int32.to_int x
               | _ -> raise Cast_failure);
     reader = rint;
@@ -255,7 +257,7 @@ let tint = `basic
 let tint64 = `basic
   { dtype = Tint64;
     make = vint64;
-    cast = (function
+    cast = (fun ?context -> function
               | Int64 x -> x
               | _ -> raise Cast_failure);
     reader = rint64;
@@ -264,7 +266,7 @@ let tint64 = `basic
 let tuint16 = `basic
   { dtype = Tuint16;
     make = vuint16;
-    cast = (function
+    cast = (fun ?context -> function
               | Uint16 x -> x
               | _ -> raise Cast_failure);
     reader = ruint16;
@@ -273,7 +275,7 @@ let tuint16 = `basic
 let tuint32 = `basic
   { dtype = Tuint32;
     make = vuint32;
-    cast = (function
+    cast = (fun ?context -> function
               | Uint32 x -> x
               | _ -> raise Cast_failure);
     reader = ruint32;
@@ -282,7 +284,7 @@ let tuint32 = `basic
 let tuint = `basic
   { dtype = Tuint32;
     make = (fun x -> Uint32(Int32.of_int x));
-    cast = (function
+    cast = (fun ?context -> function
               | Uint32 x -> Int32.to_int x
               | _ -> raise Cast_failure);
     reader = ruint;
@@ -291,7 +293,7 @@ let tuint = `basic
 let tuint64 = `basic
   { dtype = Tuint64;
     make = vuint64;
-    cast = (function
+    cast = (fun ?context -> function
               | Uint64 x -> x
               | _ -> raise Cast_failure);
     reader = ruint64;
@@ -300,7 +302,7 @@ let tuint64 = `basic
 let tdouble = `basic
   { dtype = Tdouble;
     make = vdouble;
-    cast = (function
+    cast = (fun ?context -> function
               | Double x -> x
               | _ -> raise Cast_failure);
     reader = rdouble;
@@ -311,7 +313,7 @@ let tfloat = tdouble
 let tstring = `basic
   { dtype = Tstring;
     make = vstring;
-    cast = (function
+    cast = (fun ?context -> function
               | String x -> x
               | _ -> raise Cast_failure);
     reader = rstring;
@@ -320,7 +322,7 @@ let tstring = `basic
 let tsignature = `basic
   { dtype = Tsignature;
     make = vsignature;
-    cast = (function
+    cast = (fun ?context -> function
               | Signature x -> x
               | _ -> raise Cast_failure);
     reader = rsignature;
@@ -329,7 +331,7 @@ let tsignature = `basic
 let tobject_path = `basic
   { dtype = Tobject_path;
     make = vobject_path;
-    cast = (function
+    cast = (fun ?context -> function
               | Object_path x -> x
               | _ -> raise Cast_failure);
     reader = robject_path;
@@ -340,8 +342,11 @@ let tpath = tobject_path
 let tproxy = `basic
   { dtype = Tobject_path;
     make = (fun x -> Object_path x.proxy_path);
-    cast = (function
-              | Object_path x -> failwith "tproxy can not be used here"
+    cast = (fun ?context x -> match context, x with
+              | Some(connection, bus_name), Object_path x ->
+                  { proxy_connection = connection;
+                    proxy_service = bus_name;
+                    proxy_path = x }
               | _ -> raise Cast_failure);
     reader = (fun ctx i ->
                 let i, path = robject_path ctx i in
@@ -357,8 +362,8 @@ let tlist ty =
       make = (let f = make_element ty in
               fun l -> varray typ (List.map f l));
       cast = (let f = cast_element ty in
-              function
-                | Array(t, l) when t = typ -> List.map f l
+              fun ?context -> function
+                | Array(t, l) when t = typ -> List.map (f ?context) l
                 | _ -> raise Cast_failure);
       reader = rlist typ (ty_reader ty);
       writer = wlist typ (ty_writer ty) }
@@ -370,8 +375,8 @@ let tset ty =
       make = (let f = make_element ty in
               fun l -> varray typ (List.map f l));
       cast = (let f = cast_element ty in
-              function
-                | Array(t, l) when t = typ -> List.map f l
+              fun ?context -> function
+                | Array(t, l) when t = typ -> List.map (f ?context) l
                 | _ -> raise Cast_failure);
       reader = rset typ (ty_reader ty);
       writer = wlist typ (ty_writer ty) }
@@ -398,7 +403,7 @@ let string_of_list l =
 let tbyte_array = `single
   { dtype = Tarray (Tsingle (Tbasic Tbyte));
     make = (fun s -> varray (Tsingle (Tbasic Tbyte)) (list_of_string s));
-    cast =(function
+    cast =(fun ?context -> function
              | Array(Tsingle (Tbasic Tbyte), l) -> string_of_list l
              | _ -> raise Cast_failure);
     reader = rbyte_array;
@@ -414,8 +419,8 @@ let tdict_entry tyk tyv =
               fun (k, v) -> Dict_entry(f k, g v));
       cast = (let f = cast_basic tyk
               and g = cast_single tyv in
-              function
-                | Dict_entry(k, v) -> (f k, g v)
+              fun ?context -> function
+                | Dict_entry(k, v) -> (f ?context k, g ?context v)
                 | _ -> raise Cast_failure);
       reader = rdict_entry (ty_reader tyk) (ty_reader tyv);
       writer = wdict_entry (ty_writer tyk) (ty_writer tyv) }
@@ -427,8 +432,8 @@ let tstructure ty = `single
     make = (let f = make_sequence ty in
             fun x -> vstruct (f x));
     cast = (let f = cast_sequence ty in
-            function
-              | Struct l -> f l
+            fun ?context -> function
+              | Struct l -> f ?context l
               | _ -> raise Cast_failure);
     reader = rstruct (ty_reader ty);
     writer = wstruct (ty_writer ty) }
@@ -436,7 +441,7 @@ let tstructure ty = `single
 let tvariant = `single
   { dtype = Tvariant;
     make = vvariant;
-    cast = (function
+    cast = (fun ?context -> function
               | Variant v -> v
               | _ -> raise Cast_failure);
     reader = rvariant;
@@ -445,7 +450,7 @@ let tvariant = `single
 let tunit = `sequence
   { dtype = Tnil;
     make = (fun () -> Tnil);
-    cast = (fun l -> ((), l));
+    cast = (fun ?context l -> ((), l));
     reader = (fun ctx i -> (i, ()));
     writer = (fun () ctx i -> i) }
 
@@ -460,11 +465,11 @@ let make = function
   | `sequence { make = f } -> f
 let cast = function
   | `basic { cast = f } ->
-      (function
+      (fun ?context -> function
          | Basic x :: l -> f x, l
          | _ -> raise Cast_failure)
   | `single { cast = f } ->
-      (function
+      (fun ?context -> function
          |  x :: l -> f x, l
          | _ -> raise Cast_failure)
   | `sequence { cast = f } -> f
@@ -494,9 +499,9 @@ let tpair ty1 ty2 = `sequence
     make = (fun (x1, x2) ->
               make ty1 x1
               @ make ty2 x2);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
               ((v1, v2), l));
     writer = (fun (x1, x2) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -515,10 +520,10 @@ let tup3 ty1 ty2 ty3 = `sequence
               make ty1 x1
               @ make ty2 x2
               @ make ty3 x3);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
-              let v3, l = cast ty3 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
+              let v3, l = cast ty3 ?context l in
               ((v1, v2, v3), l));
     writer = (fun (x1, x2, x3) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -538,11 +543,11 @@ let tup4 ty1 ty2 ty3 ty4 = `sequence
               @ make ty2 x2
               @ make ty3 x3
               @ make ty4 x4);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
-              let v3, l = cast ty3 l in
-              let v4, l = cast ty4 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
+              let v3, l = cast ty3 ?context l in
+              let v4, l = cast ty4 ?context l in
               ((v1, v2, v3, v4), l));
     writer = (fun (x1, x2, x3, x4) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -565,12 +570,12 @@ let tup5 ty1 ty2 ty3 ty4 ty5 = `sequence
               @ make ty3 x3
               @ make ty4 x4
               @ make ty5 x5);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
-              let v3, l = cast ty3 l in
-              let v4, l = cast ty4 l in
-              let v5, l = cast ty5 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
+              let v3, l = cast ty3 ?context l in
+              let v4, l = cast ty4 ?context l in
+              let v5, l = cast ty5 ?context l in
               ((v1, v2, v3, v4, v5), l));
     writer = (fun (x1, x2, x3, x4, x5) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -596,13 +601,13 @@ let tup6 ty1 ty2 ty3 ty4 ty5 ty6 = `sequence
               @ make ty4 x4
               @ make ty5 x5
               @ make ty6 x6);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
-              let v3, l = cast ty3 l in
-              let v4, l = cast ty4 l in
-              let v5, l = cast ty5 l in
-              let v6, l = cast ty6 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
+              let v3, l = cast ty3 ?context l in
+              let v4, l = cast ty4 ?context l in
+              let v5, l = cast ty5 ?context l in
+              let v6, l = cast ty6 ?context l in
               ((v1, v2, v3, v4, v5, v6), l));
     writer = (fun (x1, x2, x3, x4, x5, x6) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -631,14 +636,14 @@ let tup7 ty1 ty2 ty3 ty4 ty5 ty6 ty7 = `sequence
               @ make ty5 x5
               @ make ty6 x6
               @ make ty7 x7);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
-              let v3, l = cast ty3 l in
-              let v4, l = cast ty4 l in
-              let v5, l = cast ty5 l in
-              let v6, l = cast ty6 l in
-              let v7, l = cast ty7 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
+              let v3, l = cast ty3 ?context l in
+              let v4, l = cast ty4 ?context l in
+              let v5, l = cast ty5 ?context l in
+              let v6, l = cast ty6 ?context l in
+              let v7, l = cast ty7 ?context l in
               ((v1, v2, v3, v4, v5, v6, v7), l));
     writer = (fun (x1, x2, x3, x4, x5, x6, x7) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -670,15 +675,15 @@ let tup8 ty1 ty2 ty3 ty4 ty5 ty6 ty7 ty8 = `sequence
               @ make ty6 x6
               @ make ty7 x7
               @ make ty8 x8);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
-              let v3, l = cast ty3 l in
-              let v4, l = cast ty4 l in
-              let v5, l = cast ty5 l in
-              let v6, l = cast ty6 l in
-              let v7, l = cast ty7 l in
-              let v8, l = cast ty8 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
+              let v3, l = cast ty3 ?context l in
+              let v4, l = cast ty4 ?context l in
+              let v5, l = cast ty5 ?context l in
+              let v6, l = cast ty6 ?context l in
+              let v7, l = cast ty7 ?context l in
+              let v8, l = cast ty8 ?context l in
               ((v1, v2, v3, v4, v5, v6, v7, v8), l));
     writer = (fun (x1, x2, x3, x4, x5, x6, x7, x8) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -713,16 +718,16 @@ let tup9 ty1 ty2 ty3 ty4 ty5 ty6 ty7 ty8 ty9 = `sequence
               @ make ty7 x7
               @ make ty8 x8
               @ make ty9 x9);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
-              let v3, l = cast ty3 l in
-              let v4, l = cast ty4 l in
-              let v5, l = cast ty5 l in
-              let v6, l = cast ty6 l in
-              let v7, l = cast ty7 l in
-              let v8, l = cast ty8 l in
-              let v9, l = cast ty9 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
+              let v3, l = cast ty3 ?context l in
+              let v4, l = cast ty4 ?context l in
+              let v5, l = cast ty5 ?context l in
+              let v6, l = cast ty6 ?context l in
+              let v7, l = cast ty7 ?context l in
+              let v8, l = cast ty8 ?context l in
+              let v9, l = cast ty9 ?context l in
               ((v1, v2, v3, v4, v5, v6, v7, v8, v9), l));
     writer = (fun (x1, x2, x3, x4, x5, x6, x7, x8, x9) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -760,17 +765,17 @@ let tup10 ty1 ty2 ty3 ty4 ty5 ty6 ty7 ty8 ty9 ty10 = `sequence
               @ make ty8 x8
               @ make ty9 x9
               @ make ty10 x10);
-    cast = (fun l ->
-              let v1, l = cast ty1 l in
-              let v2, l = cast ty2 l in
-              let v3, l = cast ty3 l in
-              let v4, l = cast ty4 l in
-              let v5, l = cast ty5 l in
-              let v6, l = cast ty6 l in
-              let v7, l = cast ty7 l in
-              let v8, l = cast ty8 l in
-              let v9, l = cast ty9 l in
-              let v10, l = cast ty10 l in
+    cast = (fun ?context l ->
+              let v1, l = cast ty1 ?context l in
+              let v2, l = cast ty2 ?context l in
+              let v3, l = cast ty3 ?context l in
+              let v4, l = cast ty4 ?context l in
+              let v5, l = cast ty5 ?context l in
+              let v6, l = cast ty6 ?context l in
+              let v7, l = cast ty7 ?context l in
+              let v8, l = cast ty8 ?context l in
+              let v9, l = cast ty9 ?context l in
+              let v10, l = cast ty10 ?context l in
               ((v1, v2, v3, v4, v5, v6, v7, v8, v9, v10), l));
     writer = (fun (x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) ctx i ->
                 let i = ty_writer ty1 x1 ctx i in
@@ -819,8 +824,8 @@ let with_ty_basic w = function
 let single_of_basic (`basic t) = `single
   { dtype = Tbasic t.dtype;
     make = (fun x -> vbasic(t.make x));
-    cast = (function
-              | Basic x -> t.cast x
+    cast = (fun ?context -> function
+              | Basic x -> t.cast ?context x
               | _ -> raise Cast_failure);
     reader = t.reader;
     writer = t.writer }
@@ -828,8 +833,8 @@ let single_of_basic (`basic t) = `single
 let element_of_single (`single t) = `element
   { dtype = Tsingle t.dtype;
     make = (fun x -> Single(t.make x));
-    cast = (function
-              | Single x -> t.cast x
+    cast = (fun ?context -> function
+              | Single x -> t.cast ?context x
               | _ -> raise Cast_failure);
     reader = t.reader;
     writer = t.writer }

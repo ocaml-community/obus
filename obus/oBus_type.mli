@@ -76,17 +76,22 @@ val make_sequence : [< 'a cl_sequence ] -> 'a -> sequence
 exception Cast_failure
   (** Exception raised when a cast fail *)
 
-val cast_basic : [< 'a cl_basic ] -> basic -> 'a
-val cast_single : [< 'a cl_single ] -> single -> 'a
-val cast_element : [< 'a cl_element ] -> element -> 'a
-val cast_sequence : [< 'a cl_sequence ] -> sequence -> 'a
-  (** Cast a dynamically typed value into a statically typed one. It
-      raise a [Cast_failure] if types do not match *)
+type context = OBus_internals.connection * string option
 
-val opt_cast_basic : [< 'a cl_basic ] -> basic -> 'a option
-val opt_cast_single : [< 'a cl_single ] -> single -> 'a option
-val opt_cast_element : [< 'a cl_element ] -> element -> 'a option
-val opt_cast_sequence : [< 'a cl_sequence ] -> sequence -> 'a option
+val cast_basic : [< 'a cl_basic ] -> ?context:context -> basic -> 'a
+val cast_single : [< 'a cl_single ] -> ?context:context -> single -> 'a
+val cast_element : [< 'a cl_element ] -> ?context:context -> element -> 'a
+val cast_sequence : [< 'a cl_sequence ] -> ?context:context -> sequence -> 'a
+  (** Cast a dynamically typed value into a statically typed one. It
+      raise a [Cast_failure] if types do not match.
+
+      If the type contain [tproxy] or a type derived from [tproxy] you
+      must also provide a context. *)
+
+val opt_cast_basic : [< 'a cl_basic ] -> ?context:context -> basic -> 'a option
+val opt_cast_single : [< 'a cl_single ] -> ?context:context -> single -> 'a option
+val opt_cast_element : [< 'a cl_element ] -> ?context:context -> element -> 'a option
+val opt_cast_sequence : [< 'a cl_sequence ] -> ?context:context -> sequence -> 'a option
   (** Same thing but return an option instead of raising an
       exception *)
 
