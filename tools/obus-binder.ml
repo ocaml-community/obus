@@ -11,10 +11,13 @@ open Common
 
 let output_file_prefix = ref None
 let xml_files = ref []
+let no_sugar = ref false
 
 let args = [
   "-o", Arg.String (fun s -> output_file_prefix := Some s),
-  "output file prefix"
+  "output file prefix";
+  "-no-sugar", Arg.Set no_sugar,
+  "disable the use of syntactic sugars in generated files"
 ]
 
 let usage_msg = Printf.sprintf "Usage: %s <options> <xml-files>
@@ -61,4 +64,4 @@ let _ =
   with_pp (output_file_prefix ^ ".ml")
     (fun pp ->
        Format.fprintf pp "open OBus_type\n";
-       List.iter (print_implem pp) interfaces)
+       List.iter (print_implem (not !no_sugar) pp) interfaces)

@@ -107,15 +107,20 @@ let print_interf pp (name, content, annots) =
 
 let term_of_args = List.map (fun (name, typ) -> implem_term_of_single typ)
 
-let print_implem pp (name, content, annots) =
+let print_implem sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
   p "  include OBus_client.Make(struct let name = %S end)\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        p "  let %a = call %S << %a >>\n" plid name name
-          (print_func (tuple (term_of_args  outs)))
-          (term_of_args ins)
+        if sugar then
+          p "  let %a = call %S << %a >>\n" plid name name
+            (print_func (tuple (term_of_args  outs)))
+            (term_of_args ins)
+        else
+          p "  let %a = call %S %a\n" plid name name
+            (print_func_no_sugar (tuple (term_of_args  outs)))
+            (term_of_args ins)
     | _ -> ()
   end content;
   p "end\n"

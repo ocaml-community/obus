@@ -87,7 +87,7 @@ open Format
 
 let rec print_term top pp = function
   | Term("structure", []) -> fprintf pp "[]"
-  | Term("structure", [Tuple tl]) -> fprintf pp "[%a]" (print_seq "*") tl
+  | Term("structure", [Tuple tl]) -> fprintf pp "[%a]" (print_seq " * ") tl
   | Term("structure", [t]) -> fprintf pp "[%a]" (print_term true) t
   | Term("dict_entry", [tk; tv]) -> fprintf pp "{%a, %a}" (print_term true) tk (print_term true) tv
   | Term(id, []) -> pp_print_string pp id
@@ -107,3 +107,28 @@ and print_seq sep pp = function
 let rec print_func ret pp = function
   | [] -> print_term true pp ret
   | arg :: args -> fprintf pp "%a -> %a" (print_term true) arg (print_func ret) args
+
+let paren top pp f = match top with
+  | true -> f pp ()
+  | false -> fprintf pp "(%a)" f ()
+
+let rec print_term_no_sugar top pp = function
+  | Term(id, []) -> fprintf pp "t%s" id
+  | Term(id, tl) -> paren top pp (fun pp _ -> fprintf pp "t%s %a" id print_seq_no_sugar tl)
+  | Var v -> fprintf pp "%s" v
+  | Tuple [] -> pp_print_string pp "tunit"
+  | Tuple tl -> paren top pp (fun pp _ -> fprintf pp "tup%d %a" (List.length tl) print_seq_no_sugar tl)
+
+and print_seq_no_sugar pp = function
+  | [] -> ()
+  | [t] -> print_term_no_sugar false pp t
+  | t :: tl -> fprintf pp "%a %a" (print_term_no_sugar false) t print_seq_no_sugar tl
+
+let print_func_no_sugar ret pp = function
+  | [] -> print_term_no_sugar false pp (term "reply" [ret])
+  | l ->
+      let rec aux pp = function
+        | [] -> print_term_no_sugar true pp (term "reply" [ret])
+        | arg :: args -> fprintf pp "(%a --> %a)" (print_term_no_sugar true) arg aux args
+      in
+      aux pp l
