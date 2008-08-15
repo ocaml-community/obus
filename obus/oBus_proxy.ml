@@ -23,9 +23,9 @@ let service p = p.proxy_service
 
 let compare a b = Pervasives.compare (service a, path a) (service b, path b)
 
-let kmethod_call cont =
+let kmethod_call cont ?interface ~member =
   OBus_connection.ksend_message_with_reply & fun f ->
-    cont (fun proxy ?interface ~member ->
+    cont (fun proxy ->
             Lwt.bind
               (f (connection proxy)
                  (OBus_header.method_call
@@ -35,9 +35,9 @@ let kmethod_call cont =
                     ~member ()))
               (fun (header, value) -> Lwt.return value))
 
-let method_call proxy ?interface ~member = kmethod_call (fun f -> f proxy ?interface ~member)
+let method_call ?interface ~member typ proxy = kmethod_call (fun f -> f proxy) ?interface ~member typ
 
-let umethod_call proxy ?interface ~member body =
+let umethod_call ?interface ~member proxy body =
   Lwt.bind
     (OBus_connection.usend_message_with_reply (connection proxy)
        (OBus_header.method_call

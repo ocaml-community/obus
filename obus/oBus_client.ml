@@ -15,8 +15,8 @@ module type Custom_params = sig
 end
 module type Interface = sig
   type t
-  val call : t -> string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
-  val kcall : ((t -> string -> 'b Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
+  val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> t -> 'a
+  val kcall : ((t -> 'b Lwt.t) -> 'c) -> string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
 end
 module type Constant_path_params = sig
@@ -41,8 +41,8 @@ let register_exn interface error_name = OBus_error.register (interface ^ "." ^ e
 module Make(Name : sig val name : string end) =
 struct
   type t = OBus_proxy.t
-  let call proxy member = OBus_proxy.method_call proxy ~interface:Name.name ~member
-  let kcall cont = OBus_proxy.kmethod_call (fun f -> cont (fun proxy member -> f proxy ~interface:Name.name ~member))
+  let call member = OBus_proxy.method_call ~interface:Name.name ~member
+  let kcall cont member = OBus_proxy.kmethod_call cont ~interface:Name.name ~member
   let register_exn = register_exn Name.name
 end
 
@@ -50,10 +50,10 @@ module Make_custom(Params : Custom_params) =
 struct
   include Params
 
-  let call obj member =
-    OBus_proxy.method_call (to_proxy obj) ~interface:name ~member
-  let kcall cont =
-    OBus_proxy.kmethod_call (fun f -> cont (fun obj member -> f (to_proxy obj) ~interface:name ~member))
+  let call member typ obj =
+    OBus_proxy.method_call ~interface:name ~member typ (to_proxy obj)
+  let kcall cont member =
+    OBus_proxy.kmethod_call (fun f -> cont (fun obj -> f (to_proxy obj))) ~interface:name ~member
 
   let register_exn = register_exn Params.name
 end
@@ -64,10 +64,10 @@ module Make_constant_path(Params : Constant_path_params) =
 struct
   type t = OBus_connection.t
 
-  let kcall cont =
+  let kcall cont member =
     OBus_connection.ksend_message_with_reply & fun f ->
       cont
-        (fun connection member ->
+        (fun connection ->
            (Lwt.bind
               (f connection
                  (OBus_header.method_call
@@ -77,7 +77,7 @@ struct
                     ~member ()))
               (fun (header, value) -> Lwt.return value)))
 
-  let call connection member = kcall (fun f -> f connection member)
+  let call member typ connection = kcall (fun f -> f connection) member typ
 
   let register_exn = register_exn Params.name
 end
@@ -89,10 +89,10 @@ struct
   open OBus_internals
   open Lwt
 
-  let kcall cont =
+  let kcall cont member =
     OBus_connection.ksend_message_with_reply & fun f ->
       cont
-        (fun path member ->
+        (fun path ->
            perform
              bus <-- Lazy.force Params.bus;
              (header, value) <-- f bus (OBus_header.method_call
@@ -102,7 +102,7 @@ struct
                                           ~member ());
              return value)
 
-  let call path member = kcall (fun f -> f path member)
+  let call member typ path = kcall (fun f -> f path) member typ
 
   let register_exn = register_exn Params.name
 end
@@ -110,5 +110,5 @@ end
 module Make_constant(Params : Constant_params) = struct
   include Make_constant_bus(Params)
   let kcall cont = kcall (fun f -> cont (f Params.path))
-  let call member = call Params.path member
+  let call member typ = call member typ Params.path
 end

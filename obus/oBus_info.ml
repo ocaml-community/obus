@@ -7,10 +7,10 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-include Version
-
 type byte_order = Little_endian | Big_endian
 let native_byte_order = Little_endian
+
+let version = OBUS_VERSION
 
 let max_name_length = 255
 

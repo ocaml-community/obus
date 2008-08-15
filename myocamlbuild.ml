@@ -16,8 +16,7 @@ struct
 
   (* All the modules of the obus library *)
   let all_modules =
-    [ "Version";
-      "Addr_lexer";
+    [ "Addr_lexer";
       "Auth_lexer";
       "Util";
       "OBus_info";
@@ -42,8 +41,7 @@ struct
 
   (* Internal modules, which are not be part of the API *)
   let hidden_modules =
-    [ "Version";
-      "Wire_message";
+    [ "Wire_message";
       "Addr_lexer";
       "Auth_lexer";
       "Util";
@@ -118,6 +116,15 @@ let ocamlfind x = S[A"ocamlfind"; x]
 
 let mk_mods_path p = List.map (fun s -> p ^ "/" ^ String.uncapitalize s)
 
+let flag_all_stages_except_link tag f =
+  flag ["ocaml"; "compile"; tag] f;
+  flag ["ocaml"; "ocamldep"; tag] f;
+  flag ["ocaml"; "doc"; tag] f
+
+let flag_all_stages tag f =
+  flag_all_stages_except_link tag f;
+  flag ["ocaml"; "link"; tag] f
+
 let _ =
   dispatch begin function
     | Before_options ->
@@ -161,36 +168,30 @@ let _ =
                                  Config.bindings)),
                            "lib-dist"));
 
-        rule "obus_version" ~prod:"obus/version.ml"
-          (fun _ _ -> Echo([sprintf "let version = %S\n" Config.obus_version], "obus/version.ml"));
-
         (* When one link an OCaml library/binary/package, one should use -linkpkg *)
         flag ["ocaml"; "link"] & A"-linkpkg";
 
         (* For each ocamlfind package one inject the -package option when
          * compiling, computing dependencies, generating documentation and
          * linking. *)
-        List.iter begin fun pkg ->
-          flag ["ocaml"; "compile";  "pkg_"^pkg] & S[A"-package"; A pkg];
-          flag ["ocaml"; "ocamldep"; "pkg_"^pkg] & S[A"-package"; A pkg];
-          flag ["ocaml"; "doc";      "pkg_"^pkg] & S[A"-package"; A pkg];
-          flag ["ocaml"; "link";     "pkg_"^pkg] & S[A"-package"; A pkg];
-        end (find_packages ());
+        List.iter
+          (fun pkg -> flag_all_stages ("pkg_" ^ pkg) (S[A"-package"; A pkg]))
+          (find_packages ());
 
         (* Like -package but for extensions syntax. Morover -syntax is useless
          * when linking. *)
-        List.iter begin fun syntax ->
-          flag ["ocaml"; "compile";  "syntax_"^syntax] & S[A"-syntax"; A syntax];
-          flag ["ocaml"; "ocamldep"; "syntax_"^syntax] & S[A"-syntax"; A syntax];
-          flag ["ocaml"; "doc";      "syntax_"^syntax] & S[A"-syntax"; A syntax];
-        end (find_syntaxes ());
+        List.iter
+          (fun syntax -> flag_all_stages_except_link ("syntax_" ^ syntax) (S[A"-syntax"; A syntax]))
+          (find_syntaxes ());
 
-        List.iter begin fun tag ->
-          flag ["ocaml"; "compile"; tag] & S[A"-ppopt"; A("syntax/" ^ tag ^ ".cmo")];
-          flag ["ocaml"; "ocamldep"; tag] & S[A"-ppopt"; A("syntax/" ^ tag ^ ".cmo")];
-          flag ["ocaml"; "doc"; tag] & S[A"-ppopt"; A("syntax/" ^ tag ^ ".cmo")];
-          dep ["ocaml"; "ocamldep"; tag] ["syntax/" ^ tag ^ ".cmo"]
-        end Config.intern_syntaxes;
+        List.iter
+          (fun tag ->
+             flag_all_stages_except_link tag & S[A"-ppopt"; A("syntax/" ^ tag ^ ".cmo")];
+             dep ["ocaml"; "ocamldep"; tag] ["syntax/" ^ tag ^ ".cmo"])
+          Config.intern_syntaxes;
+
+        (* Set the obus version number with pa_macro *)
+        flag_all_stages_except_link "file:obus/oBus_info.ml" & S[A"-ppopt"; A(sprintf "-D OBUS_VERSION=%S" Config.obus_version)]
 
     | _ -> ()
   end

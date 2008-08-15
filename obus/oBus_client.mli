@@ -22,10 +22,10 @@ module type Interface = sig
   type t
     (** Type of objects, without customization it is [OBus_proxy.t] *)
 
-  val call : t -> string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+  val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> t -> 'a
     (** [call obj member typ ...] call a method. *)
 
-  val kcall : ((t -> string -> 'b Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
+  val kcall : ((t -> 'b Lwt.t) -> 'c) -> string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
     (** Same thing but with continuation *)
 
 (*  val on_signal : t -> string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.id*)
@@ -96,7 +96,7 @@ end
 
 module Make_constant(Params : Constant_params) : sig
   val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
-  val kcall : ((string -> 'b Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
+  val kcall : ('b Lwt.t -> 'c) -> string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
     (*  val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.id*)
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
 end

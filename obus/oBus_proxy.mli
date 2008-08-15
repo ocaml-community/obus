@@ -29,13 +29,13 @@ val service : t -> string option
 val path : t -> OBus_path.t
   (** Access to proxy informations *)
 
-val method_call : t -> ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+val method_call : ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> t -> 'a
   (** Send a method call on a proxy *)
 
-val kmethod_call : ((t -> ?interface:string -> member:string -> 'b Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
+val kmethod_call : ((t -> 'b Lwt.t) -> 'c) -> ?interface:string -> member:string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   (** Same thing but with continuation *)
 
-val umethod_call : t -> ?interface:string -> member:string -> OBus_value.sequence -> OBus_value.sequence Lwt.t
+val umethod_call : ?interface:string -> member:string -> t -> OBus_value.sequence -> OBus_value.sequence Lwt.t
   (** Send a method call with dynamically typed datas *)
 
 (*val connect : t -> interface:string -> member:string -> ('a, unit, unit) OBus_comb.func -> 'a -> OBus_signal.id*)
