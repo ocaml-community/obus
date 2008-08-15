@@ -355,6 +355,25 @@ let tproxy = `basic
                      proxy_path = path });
     writer = (fun x -> wobject_path x.proxy_path) }
 
+type ('a, 'b) fold = { fold : 'c. ('a -> 'c -> 'c) -> 'b -> 'c -> 'c }
+
+let make_array ~empty ~add ~fold elt =
+  let typ = type_element elt in
+  `single
+    { dtype = Tarray typ;
+      make = (let f = make_element elt in
+              fun x ->
+                varray typ (fold.fold (fun x acc -> f x :: acc) x []));
+      cast = (let f = cast_element elt in
+              fun ?context -> function
+                | Array(t, l) when t = typ ->
+                    List.fold_left (fun acc x -> add (f x) acc) empty l
+                | _ -> raise Cast_failure);
+      reader = rarray typ (fun acc ctx i ->
+                             let i, x = ty_reader elt ctx i in
+                             (i, add x acc)) empty;
+      writer = warray typ (ty_writer elt) fold.fold }
+
 let tlist ty =
   let typ = type_element ty in
   `single
@@ -453,6 +472,34 @@ let tunit = `sequence
     cast = (fun ?context l -> ((), l));
     reader = (fun ctx i -> (i, ()));
     writer = (fun () ctx i -> i) }
+
+module type Ordered_element_type = sig
+  type t
+  val tt : t cl_element
+  val compare : t -> t -> int
+end
+
+module type Ordered_basic_type = sig
+  type t
+  val tt : t cl_basic
+  val compare : t -> t -> int
+end
+
+module Make_set(Ord : Ordered_element_type) =
+struct
+  include Set.Make(Ord)
+  let tt = make_array empty add { fold = fold } Ord.tt
+end
+
+module Make_map(Ord : Ordered_basic_type) =
+struct
+  include Map.Make(Ord)
+  let tt ty = make_array
+    ~empty
+    ~add:(fun (x, y) acc -> add x y acc)
+    ~fold:{ fold = fun f l x -> fold (fun x y acc -> f (x, y) acc) l x }
+    (tdict_entry Ord.tt ty)
+end
 
 let (@) a b = Tcons(a, b)
 let typ = function

@@ -110,6 +110,15 @@ val wrap_element : 'a ty_element -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_element
 val wrap_sequence : 'a ty_sequence -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_sequence
   (** Wrap a type description by applying a convertion function *)
 
+type ('a, 'b) fold = { fold : 'c. ('a -> 'c -> 'c) -> 'b -> 'c -> 'c }
+    (** Polymorphic fold-like function *)
+
+val make_array :
+  empty:'b ->
+  add:('a -> 'b -> 'b) ->
+  fold:('a, 'b) fold -> [< 'a cl_element ] -> 'b ty_single
+  (** Create a new array type by providing all necessary functions. *)
+
 (** {6 Default type combinators} *)
 
 val tbyte : char ty_basic
@@ -173,6 +182,30 @@ type byte_array = string
     (** Dummy type definition, they should be used in combination with
         the syntax extension, to define the dbus type and the caml
         type at the same time *)
+
+(** {6 map and set with obus type} *)
+
+module type Ordered_element_type = sig
+  type t
+  val tt : t cl_element
+  val compare : t -> t -> int
+end
+
+module Make_set(Ord : Ordered_element_type) : sig
+  include Set.S with type elt = Ord.t
+  val tt : t ty_single
+end
+
+module type Ordered_basic_type = sig
+  type t
+  val tt : t cl_basic
+  val compare : t -> t -> int
+end
+
+module Make_map(Ord : Ordered_basic_type) : sig
+  include Map.S with type key = Ord.t
+  val tt : [< 'a cl_single ] -> 'a t ty_single
+end
 
 (** {6 Tuples} *)
 
