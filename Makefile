@@ -9,11 +9,11 @@ BINDINGS = hal notify
 TOOLS = obus-introspect obus-binder
 TEST = data dyn dumper
 
-.PHONY: tools samples bindings all test lib default
+.PHONY: tools samples bindings all test lib default install
 
 default: samples-byte
 
-all: lib bindings tools samples
+all: lib bindings tools samples doc META lib-dist
 
 # +------------------+
 # | Specific targets |
@@ -75,17 +75,22 @@ dot:
 # | Installation stuff |
 # +--------------------+
 
-install: lib bindings tools doc
-	$(OC) META lib-dist
-	cd _build
-	$(OF) install obus META `cat lib-dist` $(LIB:=.cma) $(LIB:=.cmxa) $(BINDINGS:=.cma) $(BINDINGS:=.cmxa)
-	for tool in tools; do \
-	  install -vm 0755 tools/$tool.native $(PREFIX)/bin/$tool \
+install: all just-install
+
+just-install:
+	$(OF) install obus _build/META `cat _build/lib-dist` \
+	 $(LIB:%=_build/%.cma) \
+	 $(LIB:%=_build/%.cmxa) \
+	 $(BINDINGS:%=_build/%.cma) \
+	 $(BINDINGS:%=_build/%.cmxa)
+	for tool in $(TOOLS); do \
+	  install -vm 0755 _build/tools/$$tool.native $(PREFIX)/bin/$$tool; \
 	done
-	mkdir -p $(PREFIX)/share/doc/obus/{samples,html}
-	install -vm 0644 ../LICENSE $(PREFIX)/share/doc/obus
-	install -vm 0644 obus.docdir/* $(PREFIX)/share/doc/obus/html
-	install -vm 0644 ../samples/*.ml ../interfaces/*.xml $(PREFIX)/share/doc/obus/samples
+	mkdir -p $(PREFIX)/share/doc/obus/samples
+	mkdir -p $(PREFIX)/share/doc/obus/html
+	install -vm 0644 LICENSE $(PREFIX)/share/doc/obus
+	install -vm 0644 _build/obus.docdir/* $(PREFIX)/share/doc/obus/html
+	install -vm 0644 samples/*.ml $(PREFIX)/share/doc/obus/samples
 
 uninstall:
 	$(OF) remove obus

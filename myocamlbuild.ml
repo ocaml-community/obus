@@ -16,7 +16,8 @@ struct
 
   (* All the modules of the obus library *)
   let all_modules =
-    [ "Addr_lexer";
+    [ "Version";
+      "Addr_lexer";
       "Auth_lexer";
       "Util";
       "OBus_info";
@@ -41,7 +42,8 @@ struct
 
   (* Internal modules, which are not be part of the API *)
   let hidden_modules =
-    [ "Wire_message";
+    [ "Version";
+      "Wire_message";
       "Addr_lexer";
       "Auth_lexer";
       "Util";
@@ -75,7 +77,7 @@ archive(byte) = \"obus.cma\"
 archive(native) = \"obus.cmxa\"
 package \"syntax\" (
   version = \"[distrubuted with OBus]\"
-  description = \"Syntactic sugar for OBus: DBus types written as caml types + convertion function\"
+  description = \"Syntactic sugars for OBus\"
   requires = \"camlp4\"
   archive(syntax,preprocessor) = \"pa_obus.cmo\"
   archive(syntax,toploop) = \"pa_obus.cmo\"
@@ -86,8 +88,8 @@ package \"syntax\" (
   description = \"%s\"
   browse_interfaces = \"%s\"
   requires = \"obus\"
-  archives(byte) = \"%s.cma\"
-  archives(native) = \"%s.cmxa\"
+  archive(byte) = \"%s.cma\"
+  archive(native) = \"%s.cmxa\"
 )\n" b.name b.desc (String.concat " " b.modules) b.name b.name
     end bindings;
     Buffer.contents buf
@@ -113,6 +115,8 @@ let find_syntaxes () = ["camlp4o"; "camlp4r"]
 
 (* ocamlfind command *)
 let ocamlfind x = S[A"ocamlfind"; x]
+
+let mk_mods_path p = List.map (fun s -> p ^ "/" ^ String.uncapitalize s)
 
 let _ =
   dispatch begin function
@@ -149,7 +153,13 @@ let _ =
           (fun _ _ -> Echo(List.map (sprintf "obus/%s\n") Config.modules, "obus.odocl"));
 
         rule "mli_to_install" ~prod:"lib-dist"
-          (fun _ _ -> Echo(List.map (fun s -> sprintf "obus/%s.mli\n" (String.uncapitalize s)) Config.modules, "lib-dist"));
+          (fun _ _ -> Echo(List.map (fun s -> sprintf "%s.mli\n_build/%s.cmi\n" s s)
+                             (mk_mods_path "obus" Config.modules
+                              @ List.flatten
+                              (List.map (fun { name = name; modules = modules } ->
+                                           mk_mods_path ("bindings/" ^ name) modules)
+                                 Config.bindings)),
+                           "lib-dist"));
 
         rule "obus_version" ~prod:"obus/version.ml"
           (fun _ _ -> Echo([sprintf "let version = %S\n" Config.obus_version], "obus/version.ml"));
