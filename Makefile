@@ -1,3 +1,10 @@
+# Makefile
+# --------
+# Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
+# Licence   : BSD3
+#
+# This file is a part of obus, an ocaml implemtation of dbus.
+
 OC = ocamlbuild
 OF = ocamlfind
 PREFIX = /usr/local
@@ -14,6 +21,14 @@ TEST = data dyn dumper
 default: samples-byte
 
 all: lib bindings tools samples doc META lib-dist
+
+# List all package dependencies
+list-deps:
+	@sh check-deps.sh list
+
+# Check that all dependencies are present
+check-deps:
+	@sh check-deps.sh
 
 # +------------------+
 # | Specific targets |

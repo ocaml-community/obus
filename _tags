@@ -1,6 +1,6 @@
 # -*- conf -*-
 # Syntax extensions
-<syntax/*>: camlp4of, use_camlp4
+<syntax/*>: camlp4of, pkg_camlp4
 # Most of the file use pa_monad
 <{obus,tools,test,samples}/*.ml>: syntax_camlp4o, pkg_monad
 <{obus,tools,test,samples}/*.*>: pkg_lwt
