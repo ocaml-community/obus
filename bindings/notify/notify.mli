@@ -53,14 +53,16 @@ val notify :
   ?image:image ->
   summary:string ->
   ?body:string ->
-  ?actions:(string * string) list ->
+  ?actions:(string * (unit -> unit)) list ->
   ?urgency:urgency ->
   ?category:string ->
   ?sound_file:string ->
   ?suppress_sound:bool ->
   ?pos:int * int ->
   ?hints:(string * OBus_value.single) list ->
-  ?timeout:int -> unit -> id Lwt.t
+  ?timeout:int ->
+  ?on_close:(unit -> unit) ->
+  ?wakeup:(unit -> unit) -> unit -> id Lwt.t
   (** Open a notification.
 
       - [app_name] and [desktop_entry] can override default values
@@ -75,8 +77,8 @@ val notify :
       The body may contain simple markup as specified in Markup. It must be
       encoded using UTF-8.  If the body is omitted, just the summary is
       displayed.
-      - [action] is a list of (key, text) pair, [text] is the text displayed to the user
-      and [key] is the value returned when an action is invoked
+      - [action] is a list of (text, func) pair, [text] is the text displayed to the user
+      and [func] is the function which will be called when the action is invoked
       - [category] is a string representing the category of the
       notification, for example: "device.added", "email.arrived"
       (more category can be found in the specifications)
@@ -85,7 +87,10 @@ val notify :
       - [pos] is a screen position
       - [hints] is a list of additionnal hints
       - [timeout] is a timeout in millisecond
-  *)
+      - [on_close] is a function which will be called if the
+      notification will is closed by the user
+      - [wakeup] is a function which will always be called when the
+      notification is closed *)
 
 val close_notification : id -> unit Lwt.t
   (** Close a previously opened popup *)

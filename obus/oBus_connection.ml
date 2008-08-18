@@ -22,7 +22,7 @@ type filter = OBus_header.any -> body -> unit
 type name = string
 
 type filter_id = filter MSet.node
-type signal_receiver_id = (signal_match_rule * signal handler) MSet.node
+type signal_receiver = (signal_match_rule * signal handler) MSet.node
 
 exception Protocol_error of string
 exception Connection_closed

@@ -31,11 +31,11 @@ module type Interface = sig
   val dcall : string -> t -> OBus_value.sequence -> OBus_value.sequence Lwt.t
     (** Dynamically typed version. *)
 
-  val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
-    (** [on_signal obj member typ func] register a callback function
-        for the given signal *)
+  val on_signal : ?no_match_rule:bool -> string -> ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
+    (** [on_signal no_match_rule obj member typ func] register a
+        callback function for the given signal *)
 
-  val don_signal : string -> t -> (OBus_value.sequence -> unit) ->  OBus_signal.receiver Lwt.t
+  val don_signal : ?no_match_rule:bool -> string -> t -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
     (** Dynamically typed version. *)
 
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
@@ -105,8 +105,8 @@ module Make_constant(Params : Constant_params) : sig
   val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
   val kcall : ('b Lwt.t -> 'c) -> string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   val dcall : string -> OBus_value.sequence -> OBus_value.sequence Lwt.t
-  val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.receiver Lwt.t
-  val don_signal : string -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
+  val on_signal : ?no_match_rule:bool -> string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.receiver Lwt.t
+  val don_signal : ?no_match_rule:bool -> string -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
   val property : string -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> ('a, 'b) OBus_property.t
   val dproperty : string -> ([< OBus_property.access ] as 'a) -> 'a OBus_property.dt

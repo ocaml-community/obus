@@ -156,7 +156,7 @@ let print_implem sugar pp (name, content, annots) =
           | Read_write -> "rdwr"
         and term = implem_term_of_single typ in
         if sugar then
-          p "  let %a = property %S OBus_property.%s << %a >>\n" plid name name access
+          p "  let %a = property %S OBus_property.%s <:obus_type< %a >>\n" plid name name access
             (print_term true) term
         else
           p "  let %a = property %S OBus_property.%s %a\n" plid name name access

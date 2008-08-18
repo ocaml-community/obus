@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Lwt
 open OBus_type
 open OBus_value
 
@@ -17,8 +18,6 @@ include OBus_client.Make_constant
      let service = Some name
      let bus = OBus_bus.session
    end)
-
-OBUS_type id = uint32
 
 OBUS_record server_info = {
   server_name : string;
@@ -41,6 +40,22 @@ OBUS_flag urgency : uint8 =
   [ 0 -> `low
   | 1 -> `normal
   | 2 -> `critical ]
+
+OBUS_flag closed_reason : uint =
+    [ 1 -> `expired
+    | 2 -> `closed_by_user
+    | 3 -> `closed_explicitly
+    | 4 -> `undefined ]
+
+type id = {
+  id_id : int32;
+  mutable id_deleted : bool;
+  id_actions : (string * (unit -> unit)) list;
+  id_on_close : (unit -> unit) option;
+  id_wakeup : (unit -> unit) option;
+}
+
+let ids = ref []
 
 type hint =
   | Hint_image of image
@@ -65,13 +80,54 @@ open Lwt
 
 let get_server_information = call "GetServerInformation" << unit -> server_info >>
 let get_capabilities = call "GetCapabilities" << unit -> string list >>
-let close_notification = call "CloseNotification" << id -> unit >>
+let close_notification id =
+  if not id.id_deleted then begin
+    id.id_deleted <- true;
+    ids := List.remove_assoc id.id_id !ids;
+    call "CloseNotification" << uint32 -> unit >> id.id_id
+  end else return ()
 
 let de = desktop_entry
 
+let assoc x l =
+  try Some(List.assoc x l) with
+      Not_found -> None
+
+let call_func = function
+  | Some f -> f ()
+  | None -> ()
+
+let setup_closed_handler =
+  lazy(on_signal ~no_match_rule:true
+         "NotificationClosed" << uint32 -> unit >>
+        (fun n ->
+           match assoc n !ids with
+             | Some id ->
+                 id.id_deleted <- true;
+                 ids := List.remove_assoc n !ids;
+                 call_func id.id_on_close;
+                 call_func id.id_wakeup
+             | None -> ()))
+
+let setup_actions_handler =
+  lazy(on_signal ~no_match_rule:true
+         "ActionInvoked" << uint32 -> string -> unit >>
+        (fun n key ->
+           match assoc n !ids with
+             | Some id ->
+                 id.id_deleted <- true;
+                 ids := List.remove_assoc n !ids;
+                 (match assoc key id.id_actions with
+                    | Some f -> f ()
+                    | None -> ());
+                 call_func id.id_wakeup
+             | None -> ()))
+
 let notify ?(app_name= !app_name) ?desktop_entry
-    ?(replace=0l) ?(icon="") ?image ~summary ?(body="") ?(actions=[])
-    ?urgency ?category ?sound_file ?suppress_sound ?pos ?(hints=[]) ?(timeout= -1) () =
+    ?replace ?(icon="") ?image ~summary ?(body="") ?(actions=[])
+    ?urgency ?category ?sound_file ?suppress_sound ?pos ?(hints=[]) ?(timeout= -1) ?on_close ?wakeup () =
+
+  (*** Creation of hints ***)
   let desktop_entry = match desktop_entry with
     | None -> !de
     | x -> x in
@@ -90,5 +146,45 @@ let notify ?(app_name= !app_name) ?desktop_entry
      mkvariant pos "x" (fun (x, y) -> make_single tint x);
      mkvariant pos "y" (fun (x, y) -> make_single tint y)]
     @ List.map (fun (name, value) -> Hint_variant(name, value)) hints in
-  call "Notify" << string -> id -> string -> string -> string -> string list -> hint set -> int -> id >>
-    app_name replace icon summary body (List.fold_right (fun (key, text) acc -> key :: text :: acc) actions []) hints timeout
+
+  (*** Handling of actions ***)
+  let _, actions_list, actions_map =
+    List.fold_right
+      (fun (text, func) (acc, al, am) ->
+         (* For each action, generate a key and associate it to the
+            given function *)
+         let key = Printf.sprintf "key%d" acc in
+         (acc + 1, key :: text :: al, (key, func) :: am))
+      actions (0, [], []) in
+
+  perform
+    (* Setup signal handlers only if needed *)
+
+    if wakeup <> None || on_close <> None || actions <> []
+    then Lazy.force setup_closed_handler >>= fun _ -> return ()
+    else return ();
+
+    if actions <> []
+    then Lazy.force setup_actions_handler >>= fun _ -> return ()
+    else return ();
+
+    (* Create the notification *)
+    n <-- call "Notify" << string -> uint32 -> string -> string -> string -> string list -> hint set -> int -> uint32 >>
+      app_name (match replace with
+                  | Some id -> id.id_id
+                  | None -> 0l)
+      icon summary body actions_list hints timeout;
+
+    let id = { id_id = n;
+               id_deleted = false;
+               id_actions = actions_map;
+               id_on_close = on_close;
+               id_wakeup = wakeup } in
+
+    (* Register the handlers if needed *)
+    let _ =
+      if wakeup <> None || on_close <> None || actions <> []
+      then ids := (n, id) :: !ids
+    in
+
+    return id

@@ -58,11 +58,13 @@ let add_match bus =
     ~member:"AddMatch"
     (<< string -> unit >>)
 
-let on_signal ~interface ~member typ proxy f =
-  OBus_signal.add_receiver (connection proxy) ~interface ~member ~path:(path proxy) ?sender:(service proxy) typ (fun _ -> f)
+let on_signal ?no_match_rule ~interface ~member typ proxy f =
+  OBus_signal.add_receiver ?no_match_rule (connection proxy) ~interface ~member
+    ~path:(path proxy) ?sender:(service proxy) typ (fun _ -> f)
 
-let don_signal ~interface ~member proxy f =
-  OBus_signal.dadd_receiver (connection proxy) ~interface ~member ~path:(path proxy) ?sender:(service proxy) (fun _ -> f)
+let don_signal ?no_match_rule ~interface ~member proxy f =
+  OBus_signal.dadd_receiver ?no_match_rule  (connection proxy) ~interface ~member
+    ~path:(path proxy) ?sender:(service proxy) (fun _ -> f)
 
 let property ~interface ~name ~access typ proxy =
   OBus_property.make ~interface ~name ~access ~connection:(connection proxy) ?service:(service proxy) ~path:(path proxy) typ

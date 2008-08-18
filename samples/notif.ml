@@ -14,7 +14,19 @@ let main =
   (perform
      notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" ();
      Lwt_unix.sleep 0.5;
-     notify ~summary:"Test 2" ~category:"network" ~actions:[("a", "coucou"); ("b", "hoho")] ();
+
+     let w = wait () in
+
+     notify ~summary:"Actions test" ~body:"click on something!"
+       ~category:"network"
+       ~actions:[("coucou", fun _ -> print_endline "You pressed coucou!");
+                 ("plop", fun _ -> print_endline "You pressed plop!")]
+       ~on_close:(fun _ -> print_endline "popup closed")
+       ~wakeup:(wakeup w) ();
+
+     (* Wait for the notification to be closed *)
+     _ <-- w;
+
      return ())
 
 let _ = Lwt_unix.run main

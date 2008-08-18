@@ -173,15 +173,14 @@ val send_exn : t -> OBus_header.method_call -> exn -> unit Lwt.t
 
 (** {6 Receiving signals} *)
 
-type signal_receiver_id
-  (** Id of a signal receiver *)
+type signal_receiver
 
 val add_signal_receiver : t ->
   ?sender:string ->
   ?path:OBus_path.t ->
   ?interface:string ->
   ?member:string ->
-  ('a, unit, unit) OBus_type.ty_function -> (OBus_header.signal -> 'a) -> signal_receiver_id
+  ('a, unit, unit) OBus_type.ty_function -> (OBus_header.signal -> 'a) -> signal_receiver
   (** Add a signal receiver. [sender], [path], [interface] and
       [member] act as filters on the signal parameters.
 
@@ -193,16 +192,16 @@ val dadd_signal_receiver : t ->
   ?path:OBus_path.t ->
   ?interface:string ->
   ?member:string ->
-  (OBus_header.signal -> body -> unit) -> signal_receiver_id
+  (OBus_header.signal -> body -> unit) -> signal_receiver
   (** Dynamically-typed version. This one is more generic than
       [add_signal_handler] since it does not put constraint on the
       signal signature. *)
 
-val enable_signal_receiver : signal_receiver_id -> unit
-val disable_signal_receiver : signal_receiver_id -> unit
+val enable_signal_receiver : signal_receiver -> unit
+val disable_signal_receiver : signal_receiver -> unit
   (** Enable/disable a signal receiver *)
 
-val signal_receiver_enabled : signal_receiver_id -> bool
+val signal_receiver_enabled : signal_receiver -> bool
 
 (** {6 Filters} *)
 
