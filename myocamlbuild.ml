@@ -21,7 +21,7 @@ module Config =
 struct
   (***** Library configuration *****)
 
-  let obus_version = "0.1"
+  let obus_version = "0.2"
 
   (* All the modules of the obus library *)
   let all_modules =

@@ -368,6 +368,10 @@ let dispatch_message connection running header signature context body_ptr =
              end)
           running.signal_handlers
 
+    | _ -> ()
+
+(*  TODO: implement service proposal
+
     (* Method calls with interface fields, the easy case, we just
        ensure that the sender always get a reply. *)
     | { typ = `Method_call(path, Some(interface), member) } as header ->
@@ -412,6 +416,7 @@ let dispatch_message connection running header signature context body_ptr =
                      member (string_of_signature signature) path
                      (String.concat "\", \"" (List.map snd l)))
         end
+*)
 
 let traduce = function
   | Out_of_bounds -> Protocol_error "invalid message size"

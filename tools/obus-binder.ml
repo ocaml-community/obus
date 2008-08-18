@@ -51,7 +51,7 @@ let _ =
     usage_msg;
 
   if !xml_files = []
-  then Arg.usage args usage_msg;
+  then (Arg.usage args usage_msg; exit 1)
 
   let output_file_prefix = choose_output_file_prefix () in
 
