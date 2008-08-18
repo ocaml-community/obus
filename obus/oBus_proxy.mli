@@ -44,3 +44,9 @@ val on_signal : interface:string -> member:string -> ('a, unit, unit) OBus_type.
 
 val don_signal : interface:string -> member:string -> t -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
   (** Dynamically-typed version *)
+
+val property : interface:string -> name:string -> access:([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> t -> ('a, 'b) OBus_property.t
+  (** Create a property *)
+
+val dproperty : interface:string -> name:string -> access:([< OBus_property.access ] as 'a) -> t -> 'a OBus_property.dt
+  (** Dynamically-typed version *)

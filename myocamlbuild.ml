@@ -46,6 +46,7 @@ struct
       "OBus_connection";
       "OBus_type";
       "OBus_signal";
+      "OBus_property";
       "OBus_proxy";
       "OBus_client";
       "OBus_bus" ]

@@ -186,7 +186,7 @@ struct
         [ "'"; i = a_LIDENT -> Tvar(_loc, i)
         | i = a_LIDENT -> Tlid(_loc, i)
         | i = a_UIDENT -> Tuid(_loc, i)
-        | `ANTIQUOT((""|"obus_type"), a) -> Tanti(_loc, expr_of_string _loc a)
+        | `ANTIQUOT((""|"ty"), a) -> Tanti(_loc, expr_of_string _loc a)
         | "("; t = SELF; ","; mk = comma_typ_app; ")"; i = typ LEVEL "typ2" -> mk (Tapp(_loc, i, t))
         | "("; t = SELF; ")" -> t
         | "["; tl = struct_typ ; "]" -> Tstruct(_loc, tuple _loc tl)
@@ -199,7 +199,7 @@ struct
         ] ];
 
     star_typ:
-      [ [ `ANTIQUOT((""|"obus_type"), a) -> [Tanti(_loc, expr_of_string _loc a)]
+      [ [ `ANTIQUOT((""|"ty"), a) -> [Tanti(_loc, expr_of_string _loc a)]
         | t1 = typ LEVEL "typ1"; "*"; t2 = SELF -> t1 :: t2
         | t = typ LEVEL "typ1" -> [t]
         ] ];
@@ -213,7 +213,8 @@ struct
       [ [ t = typ; `EOI -> expr_of_ty t ] ];
 
     ftyp:
-      [ [ t1 = typ; "->"; t2 = SELF -> <:expr< OBus_type.abstract $expr_of_ty t1$ $t2$ >>
+      [ [ `ANTIQUOT("func", a) -> expr_of_string _loc a
+        | t1 = typ; "->"; t2 = SELF -> <:expr< OBus_type.abstract $expr_of_ty t1$ $t2$ >>
         | t = typ -> <:expr< OBus_type.reply $expr_of_ty t$ >> ] ];
 
     ftyp_eoi:

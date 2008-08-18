@@ -107,7 +107,16 @@ let print_interf pp (name, content, annots) =
           (match args with
              | [] -> [unit]
              | _ -> term_of_args args)
-    | _ -> ()
+    | Property(name, typ, access, annots) ->
+        p "  val %a : t -> %a\n" plid name
+          (print_term true)
+          (term "OBus_property.t"
+             [interf_term_of_single typ;
+              term
+                (match access with
+                   | Read -> "[ `readable ]"
+                   | Write -> "[ `writable ]"
+                   | Read_write -> "[ `readable | `writable ]") []])
   end content;
   p "end\n"
 
@@ -140,6 +149,17 @@ let print_implem sugar pp (name, content, annots) =
         else
           p "  let on_%a = on_signal %S %a\n" plid name name
             (print_func_no_sugar unit) args
-    | _ -> ()
+    | Property(name, typ, access, annots) ->
+        let access = match access with
+          | Read -> "rd_only"
+          | Write -> "wr_only"
+          | Read_write -> "rdwr"
+        and term = implem_term_of_single typ in
+        if sugar then
+          p "  let %a = property %S OBus_property.%s << %a >>\n" plid name name access
+            (print_term true) term
+        else
+          p "  let %a = property %S OBus_property.%s %a\n" plid name name access
+            (print_term_no_sugar false) term
   end content;
   p "end\n"

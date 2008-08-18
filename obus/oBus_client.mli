@@ -41,6 +41,10 @@ module type Interface = sig
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
     (** Same as [OBus_error.register] but the error name will be
         prefixed by the interface name *)
+
+  val property : string -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> t -> ('a, 'b) OBus_property.t
+  val dproperty : string -> ([< OBus_property.access ] as 'a) -> t -> 'a OBus_property.dt
+    (** Creation of properties *)
 end
 
 (** {6 Common case} *)
@@ -56,9 +60,6 @@ module type Custom_params = sig
 
   val name : string
     (** Interface name *)
-
-  val of_proxy : OBus_proxy.t -> t
-    (** Tell how to create an object of type [t] from a proxy *)
 
   val to_proxy : t -> OBus_proxy.t
     (** Tell how to create a proxy from an object of type [t] *)
@@ -107,4 +108,6 @@ module Make_constant(Params : Constant_params) : sig
   val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.receiver Lwt.t
   val don_signal : string -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
+  val property : string -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> ('a, 'b) OBus_property.t
+  val dproperty : string -> ([< OBus_property.access ] as 'a) -> 'a OBus_property.dt
 end

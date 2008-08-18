@@ -63,3 +63,9 @@ let on_signal ~interface ~member typ proxy f =
 
 let don_signal ~interface ~member proxy f =
   OBus_signal.dadd_receiver (connection proxy) ~interface ~member ~path:(path proxy) ?sender:(service proxy) (fun _ -> f)
+
+let property ~interface ~name ~access typ proxy =
+  OBus_property.make ~interface ~name ~access ~connection:(connection proxy) ?service:(service proxy) ~path:(path proxy) typ
+
+let dproperty ~interface ~name ~access proxy =
+  OBus_property.dmake ~interface ~name ~access ~connection:(connection proxy) ?service:(service proxy) ~path:(path proxy)

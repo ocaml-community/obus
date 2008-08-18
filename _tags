@@ -6,7 +6,7 @@
 <{obus,tools,test,samples}/*.*>: pkg_lwt
 # Library
 <obus/oBus_{auth,address,transport,connection,error,info}.ml>: pa_log
-<obus/oBus_{bus,connection,signal,proxy}.ml>: pa_obus
+<obus/oBus_{bus,connection,signal,proxy,property}.ml>: pa_obus
 <obus/oBus_info.ml>: pkg_camlp4.macro
 # Samples
 <samples/*.*>: use_obus
