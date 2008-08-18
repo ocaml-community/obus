@@ -81,45 +81,17 @@ let list_queued_owners = call "ListQueuedOwners" << name -> name list >>
 
 OBUS_type match_rule = string
 
-let match_rule ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
-  let buf = Buffer.create 42 in
-  let first = ref true in
-  let coma () =
-    if !first
-    then first := false
-    else Buffer.add_char buf ',' in
-  let add key value =
-    coma ();
-    Printf.bprintf buf "%s='%s'" key value in
-  let add_opt key = function
-    | None -> ()
-    | Some x -> add key x in
-    begin match typ with
-      | None -> ()
-      | Some t ->
-          add "type"
-            (match t with
-               | `method_call -> "method_call"
-               | `method_return -> "method_return"
-               | `error -> "error"
-               | `signal -> "signal")
-    end;
-    add_opt "sender" sender;
-    add_opt "interface" interface;
-    add_opt "member" member;
-    add_opt "path" path;
-    add_opt "destination" destination;
-    List.iter (fun (n, value) -> coma (); Printf.bprintf buf "arg%d='%s'" n value) args;
-    Buffer.contents buf
+let match_rule = Util.match_rule
 
 let add_match = call "AddMatch" << match_rule -> unit >>
 let remove_match = call "RemoveMatch" << match_rule -> unit >>
+
 let get_connection_unix_user = call "GetConnectionUnixUser" << string -> int >>
 let get_connection_unix_process_id = call "GetConnectionUnixProcessId" << string -> int >>
 let get_connection_selinux_security_context = call "GetConnectionSelinuxSecurityContext" << string -> byte_array >>
 let reload_config = call "ReloadConfig" << unit >>
 let get_id = call "GetId" << string >>
 
-(*let name_owner_changed = signal "NameOwnerChanged" [: string -> string -> string -> unit ]
-let name_lost = signal "NameLost" [: string -> unit ]
-let name_acquired = signal "NameAcquired" [: string -> unit ]*)
+let on_name_owner_changed = on_signal "NameOwnerChanged" << string -> string -> string -> unit >>
+let on_name_lost = on_signal "NameLost" << string -> unit >>
+let on_name_acquired = on_signal "NameAcquired" << string -> unit >>

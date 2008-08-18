@@ -535,9 +535,9 @@ let abstract ty fty =
       isignature = typ ty @ fty.isignature;
       send = (fun acc cont x -> fty.send (fun ctx i -> ty_writer ty x ctx (acc ctx i)) cont);
       recv = (fun ctx i ->
-                let ptr, x = ty_reader ty ctx i in
-                let ptr, f = fty.recv ctx i in
-                (ptr, fun g -> f (g x))) }
+                let i, x = ty_reader ty ctx i in
+                let i, f = fty.recv ctx i in
+                i, fun g -> f (g x)) }
 
 let (-->) = abstract
 

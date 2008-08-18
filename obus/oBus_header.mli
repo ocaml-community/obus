@@ -72,6 +72,12 @@ val serial : 'a t -> serial
 val typ : 'a t -> 'a
 val destination : 'a t -> string option
 val sender : 'a t -> string option
+val path : [< method_call_type | signal_type ] t -> OBus_path.t
+val interface : [< method_call_type | signal_type ] t -> interface option
+val signal_interface : signal -> interface
+val member : [< method_call_type | signal_type ] t -> member
+val reply_serial : [< method_return_type | error_type ] t -> reply_serial
+val error_name : error -> error_name
 
 (** {6 Creation of header} *)
 

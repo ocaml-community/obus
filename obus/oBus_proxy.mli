@@ -35,9 +35,12 @@ val method_call : ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b) OBus_
 val kmethod_call : ((t -> 'b Lwt.t) -> 'c) -> ?interface:string -> member:string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   (** Same thing but with continuation *)
 
-val umethod_call : ?interface:string -> member:string -> t -> OBus_value.sequence -> OBus_value.sequence Lwt.t
+val dmethod_call : ?interface:string -> member:string -> t -> OBus_value.sequence -> OBus_value.sequence Lwt.t
   (** Send a method call with dynamically typed datas *)
 
-(*val connect : t -> interface:string -> member:string -> ('a, unit, unit) OBus_comb.func -> 'a -> OBus_signal.id*)
+val on_signal : interface:string -> member:string -> ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
   (** Connect a callback function to the given signal. It is possible
       to connect multiple functions to the same signal. *)
+
+val don_signal : interface:string -> member:string -> t -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
+  (** Dynamically-typed version *)

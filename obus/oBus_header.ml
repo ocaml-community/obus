@@ -61,6 +61,20 @@ let serial message = message.serial
 let typ message = message.typ
 let destination message = message.destination
 let sender message = message.sender
+let path h = match h.typ with
+  | `Method_call(path, interface, member) -> path
+  | `Signal(path, interface, member) -> path
+let interface h = match h.typ with
+  | `Method_call(path, interface, member) -> interface
+  | `Signal(path, interface, member) -> Some(interface)
+let signal_interface { typ = `Signal(path, interface, member) } = interface
+let member h = match h.typ with
+  | `Method_call(path, interface, member) -> member
+  | `Signal(path, interface, member) -> member
+let reply_serial h = match h.typ with
+  | `Method_return serial -> serial
+  | `Error(serial, name) -> serial
+let error_name { typ = `Error(serial, name) } = name
 
 type method_call = method_call_type t
 type method_return = method_return_type t

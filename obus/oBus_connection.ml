@@ -17,9 +17,12 @@ open OBus_value
 open Lwt
 
 type guid = OBus_address.guid
-type filter_id = int
-type filter = OBus_header.any -> sequence -> unit
+type body = sequence
+type filter = OBus_header.any -> body -> unit
 type name = string
+
+type filter_id = filter MSet.node
+type signal_receiver_id = (signal_match_rule * signal handler) MSet.node
 
 exception Protocol_error of string
 exception Connection_closed
@@ -62,31 +65,58 @@ let is_fatal = function
   | _ -> false
 
 (* Change the state of the connection to [Crashed] and abort the
-   transport *)
-let set_crash connection on_crashed ret exn = match !connection with
-  | Crashed exn -> on_crashed exn
+   transport.
+
+   Return the exception the connection is really set to and a flag
+   telling if the connection was already crashed.
+*)
+let set_crash connection exn = match !connection with
+  | Crashed exn -> (true, exn)
   | Running running ->
       connection := Crashed exn;
+      remove_connection_of_guid_map running;
       (* Abort the transport so the dispatcher will exit *)
       begin match OBus_transport.backend running.transport with
         | OBus_transport.Socket fd -> Lwt_unix.abort fd exn
         | _ -> ()
       end;
-      remove_connection_of_guid_map running;
-      ret
+      (false, exn)
 
 let check_crash connection = match !connection with
   | Crashed exn -> raise exn
   | _ -> ()
 
-let close connection =
-  set_crash connection raise () Connection_closed
+let close connection = match set_crash connection Connection_closed with
+  | true, exn -> raise exn
+  | _ -> ()
 
 (* Read the error message of an error *)
 let get_error signature context body_ptr = match signature with
   | Tbasic Tstring :: _ ->
       snd & rstring context body_ptr
   | _ -> ""
+
+(* Header printing (for debugging) *)
+
+let string_of_header header signature =
+  let opt = function
+    | Some s -> sprintf "%S" s
+    | None -> "-"
+  in
+  sprintf "(%B, %B), %ldl, %s, %s -> %s, %S"
+    header.flags.no_reply_expected header.flags.no_auto_start header.serial
+    (match header.typ with
+       | `Method_call(path, interface, member) ->
+           sprintf "`Method_call(%S, %s, %S)" path (opt interface) member
+       | `Method_return reply_serial ->
+           sprintf "`Method_return(%ldl)" reply_serial
+       | `Error(reply_serial, error_name) ->
+           sprintf "`Error(%ldl, %S)" reply_serial error_name
+       | `Signal(path, interface, member) ->
+           sprintf "`Signal(%S, %S, %S)" path interface member)
+    (opt header.sender)
+    (opt header.destination)
+    (string_of_signature signature)
 
 (***** Sending messages *****)
 
@@ -102,6 +132,8 @@ let send_message_backend with_serial signature writer connection header =
 
       (* Maybe register a reply handler *)
       with_serial running serial;
+
+      DEBUG("sending on %S: %s" running.guid (string_of_header header signature));
 
       (* Write the message *)
       send_one_message connection
@@ -120,7 +152,7 @@ let send_message_backend with_serial signature writer connection header =
 
           | Some (OBus_transport.Error _ as exn) ->
               (* A fatal error, make the connection to crash *)
-              let exn = set_crash connection (fun x -> x) exn exn in
+              let exn = snd (set_crash connection exn) in
               wakeup_exn w exn;
               fail exn
 
@@ -133,13 +165,13 @@ let send_message_backend with_serial signature writer connection header =
 let register_reply_handler call_header w osig reader running serial =
   running.reply_handlers <-
     (Serial_map.add serial
-       ((fun header ctx sign ptr body ->
-           (* If signature match, just read the content of the
-              message with the given reader and wakeup the thread *)
+       ((fun header sign ctx ptr body ->
            if sign = osig
-           then wakeup w (header, snd (reader ctx ptr))
+           then
+             wakeup w (header, snd (reader ctx ptr))
            else
-             (* If not, notify the reply waiter *)
+             (* If the signature do not match, notify the reply
+                waiter *)
              let `Method_call(path, interf, member) = OBus_header.typ call_header in
              wakeup_exn w &
                Failure (sprintf "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
@@ -153,7 +185,7 @@ let register_reply_handler call_header w osig reader running serial =
 let register_ureply_handler w running serial =
   running.reply_handlers <-
     (Serial_map.add serial
-       ((fun header ctx sign ptr body -> wakeup w (header, Lazy.force body)),
+       ((fun header sign ctx ptr body -> wakeup w (header, Lazy.force body)),
         (fun exn -> wakeup_exn w exn))
        running.reply_handlers)
 
@@ -163,7 +195,7 @@ let ksend_message cont typ =
 
 let send_message connection header = ksend_message (fun f -> f connection header)
 
-let usend_message connection header body =
+let dsend_message connection header body =
   send_message_backend (fun _ _ -> ())
     (type_of_sequence body)
     (wsequence body) connection header
@@ -182,7 +214,7 @@ let ksend_message_with_reply cont typ =
 
 let send_message_with_reply connection header = ksend_message_with_reply (fun f -> f connection header)
 
-let usend_message_with_reply connection header body =
+let dsend_message_with_reply connection header body =
   let w = wait () in
   send_message_backend
     (register_ureply_handler w)
@@ -190,6 +222,32 @@ let usend_message_with_reply connection header body =
     (wsequence body)
     connection header
   >> w
+
+(***** Helpers *****)
+
+let kmethod_call cont ?flags ?sender ?destination ~path ?interface ~member =
+  ksend_message_with_reply
+    (fun f ->
+       cont
+         (fun connection ->
+            f connection (method_call ?flags ?sender ?destination ~path ?interface ~member ())
+            >>= (snd |> return)))
+
+let dmethod_call connection ?flags ?sender ?destination ~path ?interface ~member body =
+  dsend_message_with_reply connection (method_call ?flags ?sender ?destination ~path ?interface ~member ()) body
+  >>= (snd |> return)
+
+let method_call connection ?flags ?sender ?destination ~path ?interface ~member =
+  ksend_message_with_reply
+    (fun f ->
+       f connection (method_call ?flags ?sender ?destination ~path ?interface ~member ())
+       >>= (snd |> return))
+
+let emit_signal connection ?flags ?sender ?destination ~path ~interface ~member =
+  send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member ())
+
+let demit_signal connection ?flags ?sender ?destination ~path ~interface ~member =
+  dsend_message connection (signal ?flags ?sender ?destination ~path ~interface ~member ())
 
 let send_error connection { destination = destination; serial = serial } name msg =
   send_message connection { destination = destination;
@@ -207,19 +265,39 @@ let send_exn connection method_call exn =
         raise (Invalid_argument
                  (sprintf "not a DBus error: %s" (Printexc.to_string exn)))
 
-(***** Filters *****)
+(***** Signals and filters *****)
+
+let add_signal_receiver connection ?sender ?path ?interface ?member typ func =
+  with_running connection & fun running ->
+    MSet.add running.signal_handlers
+      ({ smr_sender = sender;
+         smr_path = path;
+         smr_interface = interface;
+         smr_member = member;
+         smr_signature = Some(isignature typ) },
+       fun header signature ctx ptr body ->
+         ignore (snd (ty_function_recv typ ctx ptr) (func header)))
+
+let dadd_signal_receiver connection ?sender ?path ?interface ?member func =
+  with_running connection & fun running ->
+    MSet.add running.signal_handlers
+      ({ smr_sender = sender;
+         smr_path = path;
+         smr_interface = interface;
+         smr_member = member;
+         smr_signature = None },
+       fun header signature ctx ptr body -> func header (Lazy.force body))
 
 let add_filter connection filter =
-  with_running connection &
-    fun running ->
-      let id = running.next_filter_id in
-      running.next_filter_id <- id + 1;
-      running.filters <- (id, filter) :: running.filters;
-      id
+  with_running connection & fun running -> MSet.add running.filters filter
 
-let remove_filter connection id =
-  with_running connection &
-    fun running -> running.filters <- List.remove_assoc id running.filters
+let signal_receiver_enabled = MSet.enabled
+let enable_signal_receiver = MSet.enable
+let disable_signal_receiver = MSet.disable
+
+let filter_enabled = MSet.enabled
+let enable_filter = MSet.enable
+let disable_filter = MSet.disable
 
 (***** Reading/dispatching *****)
 
@@ -235,22 +313,22 @@ let find_reply_handler running serial f g =
 let ignore_send_exn connection method_call exn = ignore_result (send_exn connection method_call exn)
 
 let dispatch_message connection running header signature context body_ptr =
+  DEBUG("received on %S: %s" running.guid (string_of_header header signature));
+
   (* Dynamic version of the message. It will probably not be used if
      the programmer only use the high-level interfaces, so we compute
      it only if needed *)
   let dyn_body = lazy (snd & rsequence signature context body_ptr) in
 
   (* First of all, pass the message through all filters *)
-  begin match running.filters with
-    | [] -> ()
-    | l ->
-        (* Do only one [Lazy.force] *)
-        let body = Lazy.force dyn_body in
-        List.iter (fun (id, filter) ->
-                     filter header body;
-                     (* The connection may have crash during the
-                        execution of the filter *)
-                     check_crash connection) l
+  if not (MSet.is_empty running.filters) then begin
+    (* Do only one [Lazy.force] *)
+    let body = Lazy.force dyn_body in
+    MSet.iter (fun filter ->
+                 filter header body;
+                 (* The connection may have crash during the execution
+                    of the filter *)
+                 check_crash connection) running.filters
   end;
 
   (* Now we do the specific dispatching *)
@@ -263,7 +341,7 @@ let dispatch_message connection running header signature context body_ptr =
         find_reply_handler running reply_serial
           (fun (handler, error_handler) ->
              try
-               handler header context signature body_ptr dyn_body
+               handler header signature context body_ptr dyn_body
              with
                  exn when not (is_fatal exn) ->
                    (* Always notify the user of non-fatal
@@ -280,24 +358,15 @@ let dispatch_message connection running header signature context body_ptr =
              DEBUG("error reply to message with serial %ld dropped because no reply was expected, \
                           the error is: %S: %S" reply_serial error_name msg))
 
-    (* For signals we get all the handlers defined for this
-       signal. *)
-    | { typ = `Signal(path, interface, member) } as header ->
-        begin match Signal_map.lookup (interface, member) running.signal_handlers with
-          | None ->
-              DEBUG("signal %S with signature %S on interface %S, from object %S dropped \
-                         because no signal handler where found for this interface and member"
-                      member (string_of_signature signature) interface path)
-          | Some handlers ->
-              List.iter
-                (fun (key, reader, handlers) ->
-                   (* The explanation of what f is doing is in the
-                      comment of [OBus_comb.func.recv] *)
-                   let f = snd & reader context body_ptr in
-                   List.iter (fun handler ->
-                                f (handler header);
-                                check_crash connection) handlers) handlers
-        end
+    | { typ = `Signal _ } as header ->
+        MSet.iter
+          (fun (match_rule, handler) ->
+             if signal_match match_rule header signature
+             then begin
+               handler header signature context body_ptr dyn_body;
+               check_crash connection
+             end)
+          running.signal_handlers
 
     (* Method calls with interface fields, the easy case, we just
        ensure that the sender always get a reply. *)
@@ -406,10 +475,9 @@ let of_authenticated_transport ?(shared=true) transport guid =
       transport = transport;
       outgoing = Lwt.return (0l, String.create 65536);
       reply_handlers = Serial_map.empty;
-      signal_handlers = Signal_map.empty;
+      signal_handlers = MSet.make ();
       service_handlers = Interf_map.empty;
-      filters = [];
-      next_filter_id = 0;
+      filters = MSet.make ();
       guid = guid;
       name = None;
       shared = shared;

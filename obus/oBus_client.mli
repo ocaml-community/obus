@@ -28,9 +28,15 @@ module type Interface = sig
   val kcall : ((t -> 'b Lwt.t) -> 'c) -> string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
     (** Same thing but with continuation *)
 
-(*  val on_signal : t -> string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.id*)
+  val dcall : string -> t -> OBus_value.sequence -> OBus_value.sequence Lwt.t
+    (** Dynamically typed version. *)
+
+  val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
     (** [on_signal obj member typ func] register a callback function
         for the given signal *)
+
+  val don_signal : string -> t -> (OBus_value.sequence -> unit) ->  OBus_signal.receiver Lwt.t
+    (** Dynamically typed version. *)
 
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
     (** Same as [OBus_error.register] but the error name will be
@@ -97,6 +103,8 @@ end
 module Make_constant(Params : Constant_params) : sig
   val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
   val kcall : ('b Lwt.t -> 'c) -> string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
-    (*  val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.id*)
+  val dcall : string -> OBus_value.sequence -> OBus_value.sequence Lwt.t
+  val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.receiver Lwt.t
+  val don_signal : string -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
 end

@@ -125,8 +125,7 @@ val match_rule :
 val add_match : t -> match_rule -> unit Lwt.t
   (** Add a matching rule on a message bus. This means that every
       message routed on the message bus matching the rules will be
-      sent to us. This can be used to receive signals from anotther
-      application.
+      sent to us.
 
       It can raise an [Out_of_memory]. *)
 
@@ -148,15 +147,13 @@ val get_id : t -> string Lwt.t
 
 (** {6 Signals} *)
 
-(** You will always receive these signals, you do not have to add
-    matching rules for that *)
+val on_name_owner_changed : t -> (name -> OBus_connection.name -> OBus_connection.name -> unit) -> OBus_signal.receiver Lwt.t
+  (** This signal is emited each the owner of a name (unique
+      connection name or service name) change.
 
-(*val name_owner_changed : t -> (name -> OBus_connection.name option -> OBus_connection.name option -> unit) OBus_signal.t*)
-  (** [name_owner_changer name old_owner new_owner] is emitted each
-      time a name owner change. This can be used to detect
-      connection/disconnection. *)
+      Connection message looks like: name: "" -> name
+      and disconnection message looks like: name: name -> ""
+      where is a connection unique name. *)
 
-(*val on_name_lost : t -> (name -> unit) -> unit*)
-(*val on_name_acquired : t -> (name -> unit) -> unit*)
-  (** You receive these signals when you became the owner of a name or
-      when you loose a name *)
+val on_name_lost : t -> (name -> unit) -> OBus_signal.receiver Lwt.t
+val on_name_acquired : t -> (name -> unit) -> OBus_signal.receiver Lwt.t

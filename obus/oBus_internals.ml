@@ -29,25 +29,53 @@ struct
         Not_found -> None
 end
 
+(***** Signal matching *****)
+
+type signal_match_rule = {
+  smr_sender : string option;
+  smr_path : string option;
+  smr_interface : string option;
+  smr_member : string option;
+  smr_signature : OBus_value.signature option;
+}
+
+let signal_match r { sender = sender; typ = `Signal(path, interface, member) } signature =
+  let tst m f = match m with
+    | None -> true
+    | Some r -> r = f
+  in
+  (match r.smr_sender, sender with
+     | None, _ -> true
+     | Some s, Some s' when s = s' -> true
+
+     (* Here is something i am not sure, sometimes signals come with
+        an sender fileds set to their connection unique name. If we
+        the filter specify instead a service name, we can not match
+        correctly this field. A solution can be to ask for the owner
+        of the service name. *)
+     | Some s, Some s' when s != "" && s.[0] <> ':' && s'.[0] = ':' -> true
+
+     | _ -> false) &&
+    (tst r.smr_path path) &&
+    (tst r.smr_interface interface) &&
+    (tst r.smr_member member) &&
+    (tst r.smr_signature signature)
+
 (***** Filters and connection *****)
 
 module Serial_map = My_map(struct type t = serial end)
 module Interf_map = My_map(struct type t = string end)
-module Signal_map = My_map(struct type t = string * string end)
 
 type body = OBus_value.sequence
-type filter_id = int
+type filter = OBus_header.any -> body -> unit
 
-let gen_signal_handler_key = let c = ref 0 in fun () -> incr c; !c
+type buffer = string
+type ptr = int
 
-type reply_handler = method_return -> context -> OBus_value.signature -> int -> body Lazy.t -> unit
-  (* Type of a reply handler. Since the signature can be seen as a
-     dynamically typed value or can be read with a custom reader (with
-     a type combinator) it receive all the necessary information to
-     unmarshal the message + a lazy version of the body as a
-     dynamically typed value. It is a lazy value because if several
-     function want the message like that it will be unmarshaled only
-     once. *)
+type 'a handler = 'a -> OBus_value.signature -> context -> ptr -> body Lazy.t -> unit
+  (* Type of a message handler. [context] and [ptr] are used to
+     unmarshal the message and [body] to see it as a dynamically typed
+     value *)
 
 and method_call_handler_result =
     (* Result of a method call handling *)
@@ -66,21 +94,6 @@ and service_handler = method_call -> OBus_value.signature -> method_call_handler
      the message and must lookup for if it know how to handle the
      call *)
 
-and signal_handler = int * (Obj.t -> unit) reader * (signal -> Obj.t) list
-    (* Handling of signal is a bit different from the others. The
-       reason is that the user can define multiple handler for the
-       same signal. In this case we want to use the same version of
-       the unmarshaled signal for all the handler.
-
-       So an it contain
-
-       - a key used to identify a reader
-       - a reader used to read the message
-       - a list of user-defined handlers
-    *)
-
-and filter = OBus_header.any -> body -> unit
-
 and running_connection = {
   transport : OBus_transport.t;
   shared : bool;
@@ -95,10 +108,10 @@ and running_connection = {
      result of this thread to the action of sending a message. *)
   mutable outgoing : (serial * string) Lwt.t;
 
-  mutable next_filter_id : int;
-  mutable filters : (filter_id * filter) list;
-  mutable reply_handlers : (reply_handler * (exn -> unit)) Serial_map.t;
-  mutable signal_handlers : signal_handler list Signal_map.t;
+  filters : filter MSet.t;
+  signal_handlers : (signal_match_rule * signal handler) MSet.t;
+
+  mutable reply_handlers : (method_return handler * (exn -> unit)) Serial_map.t;
   mutable service_handlers : service_handler Interf_map.t;
 
   (* Handling of fatal errors *)
@@ -113,14 +126,14 @@ and connection_state =
 and connection = connection_state ref
 
 and context = {
-  buffer : string;
+  buffer : buffer;
   byte_order : byte_order;
   bus_name : string option;
   connection : connection;
 }
 
-and writer = context -> int -> int
-and 'a reader = context -> int -> int * 'a
+and writer = context -> ptr -> ptr
+and 'a reader = context -> ptr -> ptr * 'a
 
 type proxy = {
   proxy_connection : connection;
@@ -132,6 +145,10 @@ open Lwt
 
 (***** Utils ****)
 
+let is_bus = function
+  | { name = Some _ } -> true
+  | _ -> false
+
 let lwt_with_running connection f = match !connection with
   | Crashed exn -> fail exn
   | Running running -> f running
@@ -139,6 +156,16 @@ let lwt_with_running connection f = match !connection with
 let with_running connection f = match !connection with
   | Crashed exn -> raise exn
   | Running running -> f running
+
+let with_bus connection f = with_running connection
+  (function
+     | { name = Some _ } -> f ()
+     | _ -> ())
+
+let lwt_with_bus connection f = lwt_with_running connection
+  (function
+     | { name = Some _ } -> f ()
+     | _ -> return ())
 
 (* Do an IO operation, and verify before and after that the connection
    is OK *)

@@ -88,6 +88,8 @@ let puid pp str = match split str with
 
 open Term
 
+let unit = term "unit" []
+
 let term_of_args = List.map (fun (name, typ) -> interf_term_of_single typ)
 
 let print_interf pp (name, content, annots) =
@@ -99,6 +101,12 @@ let print_interf pp (name, content, annots) =
         p "  val %a : %a\n" plid name
           (print_func (term "Lwt.t" [tuple (term_of_args  outs)]))
           (term "t" [] :: term_of_args ins)
+    | Signal(name, args, annots) ->
+        p "  val on_%a : t -> (%a) -> OBus_signal.receiver Lwt.t\n" plid name
+          (print_func unit)
+          (match args with
+             | [] -> [unit]
+             | _ -> term_of_args args)
     | _ -> ()
   end content;
   p "end\n"
@@ -121,6 +129,17 @@ let print_implem sugar pp (name, content, annots) =
           p "  let %a = call %S %a\n" plid name name
             (print_func_no_sugar (tuple (term_of_args  outs)))
             (term_of_args ins)
+    | Signal(name, args, annots) ->
+        let args = match args with
+          | [] -> [unit]
+          | _ -> term_of_args args
+        in
+        if sugar then
+          p "  let on_%a = on_signal %S << %a >>\n" plid name name
+            (print_func unit) args
+        else
+          p "  let on_%a = on_signal %S %a\n" plid name name
+            (print_func_no_sugar unit) args
     | _ -> ()
   end content;
   p "end\n"

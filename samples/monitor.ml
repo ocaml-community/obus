@@ -63,9 +63,8 @@ let add_filter what_bus lbus =
      let _ =
        ignore (OBus_connection.add_filter bus (filter what_bus));
 
-       (* Filtering method calls seems to make the bus to disconnect us *)
        List.iter (fun typ -> ignore_result (OBus_bus.add_match bus (OBus_bus.match_rule ~typ ())))
-         [ `method_return; `error; `signal ]
+         [ `method_call; `method_return; `error; `signal ]
      in
      return ())
 

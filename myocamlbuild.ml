@@ -28,6 +28,7 @@ struct
     [ "Addr_lexer";
       "Auth_lexer";
       "Util";
+      "MSet";
       "OBus_info";
       "Types_rw";
       "OBus_path";
@@ -44,22 +45,14 @@ struct
       "OBus_error";
       "OBus_connection";
       "OBus_type";
+      "OBus_signal";
       "OBus_proxy";
       "OBus_client";
       "OBus_bus" ]
 
-  (* Internal modules, which are not be part of the API *)
-  let hidden_modules =
-    [ "Wire_message";
-      "Addr_lexer";
-      "Auth_lexer";
-      "Util";
-      "Wire";
-      "Types_rw";
-      "OBus_internals" ]
-
   (* Modules of the API *)
-  let modules = List.filter (fun s -> not & List.mem s hidden_modules) all_modules
+  let modules = List.filter (fun s -> s <> "OBus_internals" &&
+                               (String.is_prefix "OBus_" s)) all_modules
 
   (***** Bindings *****)
 
@@ -150,6 +143,8 @@ let _ =
         Options.ocamldoc := ocamlfind & A"ocamldoc"
 
     | After_rules ->
+        Pathname.define_context "test" [ "obus" ];
+
         (***** Dependencies checking *****)
 
         if not (Pathname.exists "_build/dependencies-checked") then

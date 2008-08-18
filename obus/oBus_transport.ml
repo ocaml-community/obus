@@ -46,18 +46,22 @@ let send { send = send } buffer ofs len =
   catch (fun _ -> send buffer ofs len)
     (fun exn -> fail (Error(sprintf "send(%d)" len, Some exn)))
 
+let error action len count = match count with
+  | 0 -> Error("connection closed", None)
+  | _ -> Error(sprintf "tried to %s %d, %s effectively %d" action len action count, None)
+
 let recv_exactly t buffer ofs len =
   recv t buffer ofs len
   >>= (fun count ->
          if count <> len
-         then fail (Error(sprintf "tried to receive %d, receive effectively %d" len count, None))
+         then fail (error "receive" len count)
          else return ())
 
 let send_exactly t buffer ofs len =
   send t buffer ofs len
   >>= (fun count ->
          if count <> len
-         then fail (Error(sprintf "tried to send %d, send effectively %d" len count, None))
+         then fail (error "send" len count)
          else return ())
 
 let fd transport = match transport.backend with

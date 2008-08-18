@@ -7,44 +7,45 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Lwt
+open OBus_connection
+open OBus_type
 
-type id
+OBUS_type match_rule = string
 
-open Wire
-open OBus_internals
+type receiver = match_rule * OBus_connection.t * signal_receiver_id
 
-type ('a, 'b, 'c) filter = ('a, 'b, 'c) filter
+let call member bus mr =
+  OBus_internals.lwt_with_bus bus
+    (fun _ -> method_call bus
+       ~destination:"org.freedesktop.DBus"
+       ~path:"/org/freedesktop/DBus"
+       ~interface:"org.freedesktop.DBus"
+       ~member
+       (<< match_rule -> unit >>)
+       mr)
 
-let wrap filter f = match filter with
-  | Some desc ->
-      Some { desc with
-               filter_reader = (filter.filter_reader
-                                >>= fun g -> return (fun h -> h (g f))) }
-  | None -> None
+let add = call "AddMatch"
+let rem = call "RemoveMatch"
 
-(* Since we will probably always make union of signals coming from the
-   same interface we can optimize this case *)
-let rec get_same_interface interface acc = function
-  | [(interface', members)] :: rest when interface = interface' ->
-      get_same_interface interface (Member_set.union acc members) rest
-  | [] -> Some acc
-  | _ -> None
+let enable (mr, bus, id) =
+  match signal_receiver_enabled id with
+    | true -> return ()
+    | false -> enable_signal_receiver id; add bus mr
 
-let rec slow_union acc = function
-  | [] -> acc
-  | sigs :: rest ->
-      slow_union (List.fold_left
-                    (fun acc (interface, members) ->
-                       
+let disable (mr, bus, id) =
+  match signal_receiver_enabled id with
+    | false -> return ()
+    | true -> disable_signal_receiver id; rem bus mr
 
-let union filters = match Util.filter_map (fun x -> x) filters with
-  | [] -> None
-  | (desc :: rest) as l ->
-      Some { desc with
-               filter_signals =
-          match desc.filter_signals with
-            | [(interface, members)] -> begin match get_same_interface interface members rest with
-                | Some members -> [(interface, members)]
-                | None -> slow_union l
-              end
-            | _ -> slow_union [] l }
+let add_receiver bus ?sender ?path ?interface ?member typ func =
+  let id = add_signal_receiver bus ?sender ?path ?interface ?member typ func
+  and mr = Util.match_rule ~typ:`signal ?sender ?path ?interface ?member () in
+  add bus mr >>= (fun _ -> return (mr, bus, id))
+
+let dadd_receiver bus ?sender ?path ?interface ?member func =
+  let id = dadd_signal_receiver bus ?sender ?path ?interface ?member func
+  and mr = Util.match_rule ~typ:`signal ?sender ?path ?interface ?member () in
+  add bus mr >>= (fun _ -> return (mr, bus, id))
+
+let receiver_enabled (mr, bus, id) = signal_receiver_enabled id

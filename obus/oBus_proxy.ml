@@ -8,6 +8,8 @@
  *)
 
 open OBus_internals
+open OBus_type
+open Lwt
 
 type t = proxy
 
@@ -37,9 +39,9 @@ let kmethod_call cont ?interface ~member =
 
 let method_call ?interface ~member typ proxy = kmethod_call (fun f -> f proxy) ?interface ~member typ
 
-let umethod_call ?interface ~member proxy body =
+let dmethod_call ?interface ~member proxy body =
   Lwt.bind
-    (OBus_connection.usend_message_with_reply (connection proxy)
+    (OBus_connection.dsend_message_with_reply (connection proxy)
        (OBus_header.method_call
           ?destination:(service proxy)
           ~path:(path proxy)
@@ -47,3 +49,17 @@ let umethod_call ?interface ~member proxy body =
           ~member ())
        body)
     (fun (header, value) -> Lwt.return value)
+
+let add_match bus =
+  OBus_connection.method_call bus
+    ~destination:"org.freedesktop.DBus"
+    ~path:"/org/freedesktop/DBus"
+    ~interface:"org.freedesktop.DBus"
+    ~member:"AddMatch"
+    (<< string -> unit >>)
+
+let on_signal ~interface ~member typ proxy f =
+  OBus_signal.add_receiver (connection proxy) ~interface ~member ~path:(path proxy) ?sender:(service proxy) typ (fun _ -> f)
+
+let don_signal ~interface ~member proxy f =
+  OBus_signal.dadd_receiver (connection proxy) ~interface ~member ~path:(path proxy) ?sender:(service proxy) (fun _ -> f)
