@@ -7,8 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(* This sample illustrate signal handling + main loop without
-   threads *)
+(* This sample illustrate the use of signals *)
 
 open Lwt
 open Printf
@@ -26,7 +25,7 @@ let main : unit Lwt.t =
   perform
     session <-- Lazy.force OBus_bus.session;
 
-    (*** Message bus signals ***)
+    (*** Signals from Message bus ***)
 
     OBus_bus.on_name_owner_changed session
       (printf "from DBus: the owner of the name %S changed: %S -> %S\n%!");

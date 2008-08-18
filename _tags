@@ -13,6 +13,7 @@
 <samples/*.ml>: pa_obus
 <samples/{eject,signals}.*>: use_hal
 <samples/notif.*>: use_notify
+<samples/avahi-list-workstations.ml>: use_avahi
 # Tools
 <tools/*.*>: use_obus, pkg_xml-light, pkg_str
 <tools/obus-introspect.ml>: pa_obus

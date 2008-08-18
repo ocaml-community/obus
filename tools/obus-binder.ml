@@ -43,6 +43,8 @@ let with_pp fname f = Util.with_open_out fname
      f (Format.formatter_of_out_channel oc);
      Printf.eprintf "File %S written.\n" fname)
 
+module Interf_set = Set.Make(struct type t = OBus_introspect.interface let compare = compare end)
+
 let _ =
   Arg.parse args
     (fun s -> xml_files := s :: !xml_files)
@@ -53,15 +55,18 @@ let _ =
 
   let output_file_prefix = choose_output_file_prefix () in
 
-  let interfaces = List.flatten
-    (List.map
-       (fun name -> fst (parse_source IParser.document (XmlParser.SFile name)))
-       !xml_files) in
+  let interfaces = List.fold_left
+    (fun acc name ->
+       (List.fold_left
+          (fun acc interface -> Interf_set.add interface acc)
+          acc
+          (fst (parse_source IParser.document (XmlParser.SFile name)))))
+    Interf_set.empty !xml_files in
 
   with_pp (output_file_prefix ^ ".mli")
-    (fun pp -> List.iter (print_interf pp) interfaces);
+    (fun pp -> Interf_set.iter (print_interf pp) interfaces);
 
   with_pp (output_file_prefix ^ ".ml")
     (fun pp ->
        Format.fprintf pp "open OBus_type\n";
-       List.iter (print_implem (not !no_sugar) pp) interfaces)
+       Interf_set.iter (print_implem (not !no_sugar) pp) interfaces)

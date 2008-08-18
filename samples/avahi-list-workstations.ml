@@ -9,53 +9,39 @@
 
 (* Sample using the avahi DBus interfaces. If avahi is running on your
    computer then it will list the computers of your local network
-   using zero-conf *)
+   using zero-conf. *)
 
+open Lwt
 open Printf
-open OBus
-open Rules
 open Avahi
 
-let browser_handler bus server proxy = function
-  | ServiceBrowser.Item_new(interface, protocol, name, service, domain, flags) ->
-      printf "new workstation found:\n  name = %S\n  domain = %S\n\n%!" name domain;
+let main : unit Lwt.t =
+  perform
+    service_browser <-- Server.service_browser_new (-1) (-1) "_workstation._tcp" "" 0;
 
-      Server.service_resolver_new_async server interface protocol name service domain (-1) 0
-        (fun resolver ->
-           DBus.add_match bus
-             [ Type Signal;
-               Sender (Interface.name ServiceResolver.interface);
-               Path resolver ])
+    Service_browser.on_item_new service_browser
+      (fun interface protocol name service domain flags ->
+         printf "new workstation found:\n  name = %S\n  domain = %S\n\n%!" name domain;
 
-  | ServiceBrowser.Item_remove(interface, protocol, name, service, domain, flags) ->
-      printf "workstation removed:  name = %S\n  domain = %S\n\n%!" name domain
+         ignore_result
+           (perform
+              resolver <-- Server.service_resolver_new interface protocol name service domain (-1) 0;
 
-  | ServiceBrowser.Failure msg ->
-      Printf.printf "failure of the service browser: %S\n\n%!" msg
+              Service_resolver.on_found resolver
+                (fun interface protocol name typ domain host aprotocol address port txt flags ->
+                   printf "the resolver found:\n  name = %S\n  host = %S\n  address = %S\n\n%!" name host address);
 
-  | _ -> ()
+              Service_resolver.on_failure resolver
+                (printf "failure of the service resolver: %S\n\n%!")));
 
-let resolver_handler proxy = function
-  | ServiceResolver.Found(interface, protocol, name, typ, domain, host, aprotocol, address, port, txt, flags) ->
-      printf "the resolver found:\n  name = %S\n  host = %S\n  address = %S\n\n%!" name host address
+    Service_browser.on_item_remove service_browser
+      (fun interface protocol name service domain flags ->
+         printf "workstation removed:  name = %S\n  domain = %S\n\n%!" name domain);
 
-  | ServiceResolver.Failure msg ->
-      Printf.printf "failure of the service resolver: %S\n\n%!" msg
+    Service_browser.on_failure service_browser
+      (printf "failure of the service browser: %S\n\n%!");
 
-let _ =
-  let bus = Bus.system () in
-  let server = Bus.make_proxy bus Server.interface "org.freedesktop.Avahi" "/" in
+    let _ = printf "type Ctrl+C to stop\n%!" in
+    wait ()
 
-  Signal.register bus ServiceBrowser.signals (browser_handler bus server);
-  Signal.register bus ServiceResolver.signals resolver_handler;
-
-  Server.service_browser_new_async server (-1) (-1) "_workstation._tcp" "" 0
-    (fun browser ->
-       DBus.add_match bus
-         [ Type Signal;
-           Sender (Interface.name ServiceBrowser.interface);
-           Path browser ]);
-
-  while true do
-    Connection.dispatch bus
-  done
+let _ = Lwt_unix.run main

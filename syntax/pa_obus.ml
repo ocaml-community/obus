@@ -120,13 +120,13 @@ struct
   let make_tuple_type _loc l =
     List.fold_right (fun typ acc ->
                        let _loc = Ast.loc_of_expr typ in
-                       <:expr< OBus_value.tpair $typ$ $acc$ >>)
-      l <:expr< OBus_value.dunit >>
+                       <:expr< OBus_type.tpair $typ$ $acc$ >>)
+      l <:expr< OBus_type.tunit >>
 
   let make_tuple_of_seq _loc l =
     let vars = gen_vars Ast.loc_of_expr l in
     <:expr< fun $ List.fold_right (fun (_loc, var) acc -> <:patt< ($lid:var$, $acc$) >>) vars <:patt< () >> $ ->
-              ( $ Ast.exCom_of_list (evars vars) $ ) >>
+              $ Ast.ExTup(_loc, Ast.exCom_of_list (evars vars)) $ >>
 
   let make_tuple_to_seq _loc l =
     let vars = gen_vars Ast.loc_of_expr l in
@@ -142,7 +142,7 @@ struct
           (* if there is less than 10 type, use a predefined tuple combinator *)
         then List.fold_left (fun acc e -> <:expr< $acc$ $e$ >>) <:expr< $lid:"tup" ^ string_of_int count$ >> l
           (* if there is more, create on a new specific one *)
-        else <:expr< OBus_value.wrap_sequence
+        else <:expr< OBus_type.wrap_sequence
           $make_tuple_type _loc l$
           $make_tuple_of_seq _loc l$
           $make_tuple_to_seq _loc l$ >>

@@ -10,7 +10,7 @@ OF = ocamlfind
 PREFIX = /usr/local
 
 # Targets
-SAMPLES = hello bus-functions eject notif monitor signals list-services
+SAMPLES = hello bus-functions eject notif monitor signals list-services avahi-list-workstations
 LIB = obus
 BINDINGS = hal notify
 TOOLS = obus-introspect obus-binder

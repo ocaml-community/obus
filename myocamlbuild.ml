@@ -63,7 +63,10 @@ struct
         modules = ["Hal_device"; "Hal_manager"] };
       { name = "notify";
         desc = "Notifications service binding";
-        modules = ["Notify"] } ]
+        modules = ["Notify"] };
+      { name = "avahi";
+        desc = "Avahi binding";
+        modules = ["Avahi"] } ]
 
   (***** Generation of the META file *****)
 
