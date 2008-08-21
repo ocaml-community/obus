@@ -48,8 +48,8 @@ let tproperty = wrap_single tvariant
      | Pbool x -> vbasic (Boolean x)
      | Pdouble x -> vbasic (Double x))
 
-let get_all_properties = call "GetAllProperties" << {string, property} set >>
-let set_multiple_properties = call "SetMultipleProperties" << {string, property} set -> unit >>
+let get_all_properties = call "GetAllProperties" << {string, property} list >>
+let set_multiple_properties = call "SetMultipleProperties" << {string, property} list -> unit >>
 let get_property = call "GetProperty" << string -> property >>
 let get_property_string = call "GetPropertyString" << string -> string >>
 let get_property_string_list = call "GetPropertyStringList" << string -> string list >>

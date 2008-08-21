@@ -35,7 +35,7 @@ val method_call : ?interface:string -> member:string -> ('a, 'b Lwt.t, 'b) OBus_
 val kmethod_call : ((t -> 'b Lwt.t) -> 'c) -> ?interface:string -> member:string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   (** Same thing but with continuation *)
 
-val dmethod_call : ?interface:string -> member:string -> t -> OBus_value.sequence -> OBus_value.sequence Lwt.t
+val dmethod_call : ?interface:string -> member:string -> t -> OBus_message.body -> OBus_message.body Lwt.t
   (** Send a method call with dynamically typed datas *)
 
 val on_signal : ?no_match_rule:bool -> interface:string -> member:string ->
@@ -44,7 +44,7 @@ val on_signal : ?no_match_rule:bool -> interface:string -> member:string ->
       to connect multiple functions to the same signal. *)
 
 val don_signal : ?no_match_rule:bool -> interface:string -> member:string ->
-  t -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
+  t -> (OBus_message.body -> unit) -> OBus_signal.receiver Lwt.t
   (** Dynamically-typed version *)
 
 val property : interface:string -> name:string -> access:([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> t -> ('a, 'b) OBus_property.t

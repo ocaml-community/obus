@@ -9,6 +9,7 @@
 
 open OBus_internals
 open OBus_type
+open OBus_connection
 open Lwt
 
 type t = proxy
@@ -25,46 +26,39 @@ let service p = p.proxy_service
 
 let compare a b = Pervasives.compare (service a, path a) (service b, path b)
 
-let kmethod_call cont ?interface ~member =
-  OBus_connection.ksend_message_with_reply & fun f ->
-    cont (fun proxy ->
-            Lwt.bind
-              (f (connection proxy)
-                 (OBus_header.method_call
-                    ?destination:(service proxy)
-                    ~path:(path proxy)
-                    ?interface
-                    ~member ()))
-              (fun (header, value) -> Lwt.return value))
+let kmethod_call cont ?interface ~member typ =
+  call_and_cast_reply typ & fun body f ->
+    cont & fun proxy ->
+      f (connection proxy)
+        (OBus_message.method_call
+           ?destination:(service proxy)
+           ~path:(path proxy)
+           ?interface
+           ~member body)
 
-let method_call ?interface ~member typ proxy = kmethod_call (fun f -> f proxy) ?interface ~member typ
+let method_call ?interface ~member typ proxy =
+  method_call (connection proxy)
+    ?destination:(service proxy)
+    ~path:(path proxy)
+    ?interface
+    ~member
+    typ
 
 let dmethod_call ?interface ~member proxy body =
-  Lwt.bind
-    (OBus_connection.dsend_message_with_reply (connection proxy)
-       (OBus_header.method_call
-          ?destination:(service proxy)
-          ~path:(path proxy)
-          ?interface
-          ~member ())
-       body)
-    (fun (header, value) -> Lwt.return value)
-
-let add_match bus =
-  OBus_connection.method_call bus
-    ~destination:"org.freedesktop.DBus"
-    ~path:"/org/freedesktop/DBus"
-    ~interface:"org.freedesktop.DBus"
-    ~member:"AddMatch"
-    (<< string -> unit >>)
+  dmethod_call (connection proxy)
+    ?destination:(service proxy)
+    ~path:(path proxy)
+    ?interface
+    ~member
+    body
 
 let on_signal ?no_match_rule ~interface ~member typ proxy f =
   OBus_signal.add_receiver ?no_match_rule (connection proxy) ~interface ~member
-    ~path:(path proxy) ?sender:(service proxy) typ (fun _ -> f)
+    ~path:(path proxy) ?sender:(service proxy) typ f
 
 let don_signal ?no_match_rule ~interface ~member proxy f =
   OBus_signal.dadd_receiver ?no_match_rule  (connection proxy) ~interface ~member
-    ~path:(path proxy) ?sender:(service proxy) (fun _ -> f)
+    ~path:(path proxy) ?sender:(service proxy) f
 
 let property ~interface ~name ~access typ proxy =
   OBus_property.make ~interface ~name ~access ~connection:(connection proxy) ?service:(service proxy) ~path:(path proxy) typ

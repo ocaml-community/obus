@@ -78,98 +78,85 @@ val name : t -> name option
 
 (** {6 Sending messages} *)
 
-val send_message : t -> 'a OBus_header.t -> ('b, unit Lwt.t, unit) OBus_type.ty_function -> 'b
-  (** [send_message connection header typ ...] send a message without
+(** These functions are the low-level functions for sending
+    messages. They take and return a complete message description *)
+
+val send_message : t -> 'a OBus_message.t -> unit Lwt.t
+  (** [send_message connection message] send a message without
       expecting a reply *)
 
-val send_message_with_reply : t -> OBus_header.method_call -> ('a, (OBus_header.method_return * 'b) Lwt.t, 'b) OBus_type.ty_function -> 'a
-  (** [send_message_with_reply connection header typ ...] Send a
-      message and return a thread which wait for the reply *)
-
-val ksend_message : ((t -> 'a OBus_header.t -> unit Lwt.t) -> 'c) -> ('b, 'c, unit) OBus_type.ty_function -> 'b
-val ksend_message_with_reply : ((t -> OBus_header.method_call -> (OBus_header.method_return * 'b) Lwt.t) -> 'c) -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
-  (** Same thing but with continuation *)
-
-(** {6 Sending dynamically-typed messages} *)
-
-(** The following function are similar to the [send_*] function but
-    instead of taking a type combinator they take a dynamically typed
-    value.
-
-    For example the two codes are equivalent:
-
-    [send_message connection header [: int -> string -> unit ] 1 "toto"]
-
-    and:
-
-    {[
-       usend_message connection header
-            [Basic(Int32 1l);
-             Basic(String "toto")]
-    ]}
-*)
-
-type body = OBus_value.sequence
-
-val dsend_message : t -> 'a OBus_header.t -> body -> unit Lwt.t
-val dsend_message_with_reply : t -> OBus_header.method_call -> body ->
-  (OBus_header.method_return * body) Lwt.t
+val send_message_with_reply : t -> OBus_message.method_call -> OBus_message.method_return Lwt.t
+  (** [send_message_with_reply connection message] Send a message and
+      return a thread which wait for the reply *)
 
 (** {6 Helpers} *)
 
 val method_call : t ->
-  ?flags:OBus_header.flags ->
+  ?flags:OBus_message.flags ->
   ?sender:string ->
   ?destination:string ->
   path:OBus_path.t ->
   ?interface:string ->
   member:string ->
   ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+  (** Send a method call and wait for the reply *)
 
 val kmethod_call : ((t -> 'a Lwt.t) -> 'b) ->
-  ?flags:OBus_header.flags ->
+  ?flags:OBus_message.flags ->
   ?sender:string ->
   ?destination:string ->
   path:OBus_path.t ->
   ?interface:string ->
   member:string ->
   ('c, 'b, 'a) OBus_type.ty_function -> 'c
+  (** Same thing but take a continuation *)
 
 val dmethod_call : t ->
-  ?flags:OBus_header.flags ->
+  ?flags:OBus_message.flags ->
   ?sender:string ->
   ?destination:string ->
   path:OBus_path.t ->
   ?interface:string ->
   member:string ->
-  body -> body Lwt.t
+  OBus_message.body -> OBus_message.body Lwt.t
+  (** Dynamically-typed version, take the message body as a
+      dynamically-typed value *)
 
 val emit_signal : t ->
-  ?flags:OBus_header.flags ->
+  ?flags:OBus_message.flags ->
   ?sender:string ->
   ?destination:string ->
   path:OBus_path.t ->
   interface:string ->
   member:string ->
   ('a, unit Lwt.t, unit) OBus_type.ty_function -> 'a
+  (** Emit a signal *)
 
 val demit_signal : t ->
-  ?flags:OBus_header.flags ->
+  ?flags:OBus_message.flags ->
   ?sender:string ->
   ?destination:string ->
   path:OBus_path.t ->
   interface:string ->
   member:string ->
-  body -> unit Lwt.t
+  OBus_message.body -> unit Lwt.t
 
-val send_error : t -> OBus_header.method_call -> OBus_error.name -> OBus_error.message -> unit Lwt.t
+val send_error : t -> OBus_message.method_call -> OBus_error.name -> OBus_error.message -> unit Lwt.t
   (** Send an error message in reply to a method call *)
 
-val send_exn : t -> OBus_header.method_call -> exn -> unit Lwt.t
+val send_exn : t -> OBus_message.method_call -> exn -> unit Lwt.t
   (** [send_exn connection method_call exn] is a short-hand for
       passing [exn] through [OBus_error.unmake] then calling
       [send_error]. It raise an [Invalid_argument] if the exception is
       not registred as a DBus exception. *)
+
+val call_and_cast_reply : ('a, 'b, 'c) OBus_type.ty_function ->
+  (OBus_message.body -> (t -> OBus_message.method_call -> 'c Lwt.t) -> 'b) -> 'a
+  (** [call_and_cast_reply typ cont ...] Construct a message from
+      using the given functionnal type, then pass it to [cont]. The
+      second argument for [cont] is a function which will call the
+      method, cast its reply and raise the standart error message if
+      the cast fail *)
 
 (** {6 Receiving signals} *)
 
@@ -177,31 +164,37 @@ type signal_receiver
 
 val add_signal_receiver : t ->
   ?sender:string ->
+  ?destination:string ->
   ?path:OBus_path.t ->
   ?interface:string ->
   ?member:string ->
-  ('a, unit, unit) OBus_type.ty_function -> (OBus_header.signal -> 'a) -> signal_receiver
-  (** Add a signal receiver. [sender], [path], [interface] and
-      [member] act as filters on the signal parameters.
+  ?args:(int * string) list ->
+  ('a, unit, unit) OBus_type.ty_function -> 'a -> signal_receiver
+  (** Add a signal receiver. [sender], [path], [interface], [member]
+      and [args] act as filters on the signal parameters.
 
-      Note that with a message bus, you also need to add a matching
-      rule. *)
+      For [args], [(n, str)] will match any message for which the nth
+      parameter is a string equal to [str].
+
+      Note that with a message bus, you probably need to also add a
+      matching rule. *)
 
 val dadd_signal_receiver : t ->
   ?sender:string ->
+  ?destination:string ->
   ?path:OBus_path.t ->
   ?interface:string ->
   ?member:string ->
-  (OBus_header.signal -> body -> unit) -> signal_receiver
+  ?args:(int * string) list ->
+  (OBus_message.body -> unit) -> signal_receiver
   (** Dynamically-typed version. This one is more generic than
       [add_signal_handler] since it does not put constraint on the
       signal signature. *)
 
 val enable_signal_receiver : signal_receiver -> unit
 val disable_signal_receiver : signal_receiver -> unit
-  (** Enable/disable a signal receiver *)
-
 val signal_receiver_enabled : signal_receiver -> bool
+  (** Manipulation of registred receiver *)
 
 (** {6 Filters} *)
 
@@ -213,19 +206,15 @@ val signal_receiver_enabled : signal_receiver -> bool
     of use of filters). *)
 
 type filter_id
-type filter = OBus_header.any -> body -> unit
-  (** A filter will take as argument the header of the message and the
-      body as q dynamically typed value *)
 
-val add_filter : t -> filter -> filter_id
+val add_filter : t -> (OBus_message.any -> unit) -> filter_id
   (** [add_filter connection filter] add a filter to the given
       connection. *)
 
 val enable_filter : filter_id -> unit
 val disable_filter : filter_id -> unit
-  (** Enable/disable a filter *)
-
 val filter_enabled : filter_id -> bool
+  (** Manipulation of registred filters *)
 
 (** {6 Errors handling} *)
 

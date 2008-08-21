@@ -25,7 +25,7 @@ let main =
        ~wakeup:(wakeup w) ();
 
      (* Wait for the notification to be closed *)
-     _ <-- w;
+     w;
 
      return ())
 

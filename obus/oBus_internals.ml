@@ -10,7 +10,7 @@
 (* This file contain data type that need to be shared between the
    different modules of OBus *)
 
-open OBus_header
+open OBus_message
 open OBus_info
 
 let (&) a b = a b
@@ -33,13 +33,29 @@ end
 
 type signal_match_rule = {
   smr_sender : string option;
+  smr_destination : string option;
   smr_path : string option;
   smr_interface : string option;
   smr_member : string option;
-  smr_signature : OBus_value.signature option;
+  smr_args : (int * string) list;
 }
 
-let signal_match r { sender = sender; typ = `Signal(path, interface, member) } signature =
+open OBus_value
+
+(* Matching on signals arguments *)
+let rec tst_args args body = match args with
+  | [] -> true
+  | (n, p) :: rest -> tst_one_arg n p args body
+
+and tst_one_arg n p arest body = match n, body with
+  | 0, Basic (String s) :: brest when s = p -> tst_args arest brest
+  | n, _ :: brest -> tst_one_arg (n - 1) p arest brest
+  | _ -> false
+
+let signal_match r { sender = sender;
+                     destination = dest;
+                     typ = `Signal(path, interface, member);
+                     body = body } =
   let tst m f = match m with
     | None -> true
     | Some r -> r = f
@@ -56,10 +72,14 @@ let signal_match r { sender = sender; typ = `Signal(path, interface, member) } s
      | Some s, Some s' when s != "" && s.[0] <> ':' && s'.[0] = ':' -> true
 
      | _ -> false) &&
+    (match r.smr_destination, dest with
+       | None, _ -> true
+       | Some s, Some s' -> s = s'
+       | _ -> false) &&
     (tst r.smr_path path) &&
     (tst r.smr_interface interface) &&
     (tst r.smr_member member) &&
-    (tst r.smr_signature signature)
+    (tst_args r.smr_args body)
 
 (***** Filters and connection *****)
 
@@ -67,17 +87,15 @@ module Serial_map = My_map(struct type t = serial end)
 module Interf_map = My_map(struct type t = string end)
 
 type body = OBus_value.sequence
-type filter = OBus_header.any -> body -> unit
+type filter = OBus_message.any -> unit
 
 type buffer = string
 type ptr = int
 
-type 'a handler = 'a -> OBus_value.signature -> context -> ptr -> body Lazy.t -> unit
-  (* Type of a message handler. [context] and [ptr] are used to
-     unmarshal the message and [body] to see it as a dynamically typed
-     value *)
+type 'a handler = 'a -> unit
+  (* Type of a message handler. *)
 
-and method_call_handler_result =
+(*and method_call_handler_result =
     (* Result of a method call handling *)
   | Mchr_no_such_method
       (* The method do not exists *)
@@ -89,7 +107,7 @@ and method_call_handler_result =
          launch a thread executing the function handling the call and
          sending the reply *)
 
-and service_handler = method_call -> OBus_value.signature -> method_call_handler_result
+and service_handler = method_call -> OBus_value.signature -> method_call_handler_result*)
   (* A service handler take the header of the call, the signature of
      the message and must lookup for if it know how to handle the
      call *)
@@ -106,13 +124,13 @@ and running_connection = {
 
   (* The ougoing thread. To send a message we just have bind the
      result of this thread to the action of sending a message. *)
-  mutable outgoing : (serial * string) Lwt.t;
+  mutable outgoing : serial Lwt.t;
 
   filters : filter MSet.t;
   signal_handlers : (signal_match_rule * signal handler) MSet.t;
 
   mutable reply_handlers : (method_return handler * (exn -> unit)) Serial_map.t;
-  mutable service_handlers : service_handler Interf_map.t;
+(*  mutable service_handlers : service_handler Interf_map.t;*)
 
   (* Handling of fatal errors *)
   on_disconnect : (exn -> unit) ref;
@@ -124,16 +142,6 @@ and connection_state =
   | Running of running_connection
 
 and connection = connection_state ref
-
-and context = {
-  buffer : buffer;
-  byte_order : byte_order;
-  bus_name : string option;
-  connection : connection;
-}
-
-and writer = context -> ptr -> ptr
-and 'a reader = context -> ptr -> ptr * 'a
 
 type proxy = {
   proxy_connection : connection;

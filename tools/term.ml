@@ -49,10 +49,10 @@ let implem_term_of_basic = function
 let rec implem_term_of_single = function
   | Tbasic t -> implem_term_of_basic t
   | Tstruct tl -> term "structure" [implem_term_of_sequence tl]
-  | Tarray t -> begin match t with
-      | Tsingle t ->  term "list" [implem_term_of_single t]
-      | Tdict_entry(tk, tv) -> term "set" [term "dict_entry" [implem_term_of_basic tk; implem_term_of_single tv]]
-    end
+  | Tarray t -> term "list"
+      [match t with
+         | Tsingle t ->  implem_term_of_single t
+         | Tdict_entry(tk, tv) -> term "dict_entry" [implem_term_of_basic tk; implem_term_of_single tv]]
   | Tvariant -> term "variant" []
 
 and implem_term_of_sequence tl = tuple (List.map implem_term_of_single tl)

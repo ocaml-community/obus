@@ -13,8 +13,9 @@ type receiver
   (** Function which receive signals *)
 
 val add_receiver : OBus_connection.t -> ?no_match_rule:bool ->
-  ?sender:string -> ?path:OBus_path.t -> ?interface:string -> ?member:string ->
-  ('a, unit, unit) OBus_type.ty_function -> (OBus_header.signal -> 'a) -> receiver Lwt.t
+  ?sender:string -> ?destination:string ->
+  ?path:OBus_path.t -> ?interface:string -> ?member:string ->
+  ('a, unit, unit) OBus_type.ty_function -> 'a -> receiver Lwt.t
   (** [add_receiver connection sender path interface member typ func]
 
       Add a receiver on the given connection. If it is a message bus,
@@ -25,16 +26,17 @@ val add_receiver : OBus_connection.t -> ?no_match_rule:bool ->
       filters *)
 
 val dadd_receiver : OBus_connection.t -> ?no_match_rule:bool ->
-  ?sender:string -> ?path:OBus_path.t -> ?interface:string -> ?member:string ->
-  (OBus_header.signal -> OBus_value.sequence -> unit) -> receiver Lwt.t
+  ?sender:string ->  ?destination:string ->
+  ?path:OBus_path.t -> ?interface:string -> ?member:string ->
+  (OBus_message.body -> unit) -> receiver Lwt.t
   (** Same thing but the callback function receive a dynamically typed
       value, and there is no constraint on the message signature *)
 
-val disable : receiver -> unit Lwt.t
+val disable_receiver : receiver -> unit Lwt.t
   (** Disable a receiver. Do nothing if the receiver is already
       disabled *)
 
-val enable : receiver -> unit Lwt.t
+val enable_receiver : receiver -> unit Lwt.t
   (** Enable a receiver. Do nothing if the receiver is already
       enabled *)
 

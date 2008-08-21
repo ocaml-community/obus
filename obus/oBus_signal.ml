@@ -31,18 +31,18 @@ let call member bus mr =
 let add = call "AddMatch"
 let rem = call "RemoveMatch"
 
-let enable (mr, bus, id) =
+let enable_receiver (mr, bus, id) =
   match signal_receiver_enabled id with
     | true -> return ()
     | false -> enable_signal_receiver id; add bus mr
 
-let disable (mr, bus, id) =
+let disable_receiver (mr, bus, id) =
   match signal_receiver_enabled id with
     | false -> return ()
     | true -> disable_signal_receiver id; rem bus mr
 
-let add_receiver bus ?(no_match_rule=false) ?sender ?path ?interface ?member typ func =
-  let id = add_signal_receiver bus ?sender ?path ?interface ?member typ func in
+let add_receiver bus ?(no_match_rule=false) ?sender ?destination ?path ?interface ?member typ func =
+  let id = add_signal_receiver bus ?sender ?destination ?path ?interface ?member typ func in
   match no_match_rule with
     | false ->
         let mr = Util.match_rule ~typ:`signal ?sender ?path ?interface ?member () in
@@ -50,8 +50,8 @@ let add_receiver bus ?(no_match_rule=false) ?sender ?path ?interface ?member typ
     | true ->
         return (None, bus, id)
 
-let dadd_receiver bus ?(no_match_rule=false) ?sender ?path ?interface ?member func =
-  let id = dadd_signal_receiver bus ?sender ?path ?interface ?member func in
+let dadd_receiver bus ?(no_match_rule=false) ?sender ?destination ?path ?interface ?member func =
+  let id = dadd_signal_receiver bus ?sender ?destination ?path ?interface ?member func in
   match no_match_rule with
     | false ->
         let mr = Util.match_rule ~typ:`signal ?sender ?path ?interface ?member () in

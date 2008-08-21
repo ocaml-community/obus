@@ -39,7 +39,7 @@ struct
       "OBus_address";
       "OBus_transport";
       "OBus_auth";
-      "OBus_header";
+      "OBus_message";
       "OBus_internals";
       "Wire_message";
       "OBus_error";

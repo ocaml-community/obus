@@ -107,14 +107,14 @@ struct
       ?sender:Params.service
       ~path:Params.path
       ~interface:Params.name
-      ~member typ (fun _ -> f)
+      ~member typ f
 
   let don_signal ?no_match_rule member connection f =
     OBus_signal.dadd_receiver connection ?no_match_rule
       ?sender:Params.service
       ~path:Params.path
       ~interface:Params.name
-      ~member (fun _ -> f)
+      ~member f
 
   let property name access typ connection =
     OBus_property.make
@@ -146,21 +146,17 @@ struct
   open OBus_internals
   open Lwt
 
-  let kcall cont member =
-    ksend_message_with_reply & fun f ->
-      cont
-        (fun path ->
-           perform
-             bus <-- Lazy.force Params.bus;
-             (header, value) <-- f bus (OBus_header.method_call
-                                          ?destination:Params.service
-                                          ~path
-                                          ~interface:Params.name
-                                          ~member ());
-             return value)
+  let kcall cont member ty =
+    call_and_cast_reply ty & fun body f ->
+      cont & fun path ->
+        Lazy.force Params.bus >>= fun bus ->
+          f bus (OBus_message.method_call
+                   ?destination:Params.service
+                   ~path
+                   ~interface:Params.name
+                   ~member body)
 
-  let call member typ path =
-    kcall (fun f -> f path) member typ
+  let call member typ path = kcall (fun f -> f path) member typ
 
   let dcall member path body =
     Lazy.force Params.bus >>= fun bus ->
@@ -173,12 +169,12 @@ struct
   let on_signal ?no_match_rule member typ path f =
     Lazy.force Params.bus >>= fun bus ->
       OBus_signal.add_receiver bus ?no_match_rule
-        ?sender:Params.service ~path ~interface:Params.name ~member typ (fun _ -> f)
+        ?sender:Params.service ~path ~interface:Params.name ~member typ f
 
   let don_signal ?no_match_rule member path f =
     Lazy.force Params.bus >>= fun bus ->
       OBus_signal.dadd_receiver bus ?no_match_rule
-        ?sender:Params.service ~path ~interface:Params.name ~member (fun _ -> f)
+        ?sender:Params.service ~path ~interface:Params.name ~member f
 
   let property name access typ path =
     OBus_property.lmake

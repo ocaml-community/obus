@@ -13,10 +13,10 @@
 open Printf
 open Lwt
 open OBus_bus
-open OBus_header
+open OBus_message
 open OBus_value
 
-let filter what_bus header body =
+let filter what_bus message =
   let opt = function
     | Some s -> sprintf "Some %S" s
     | None -> "None"
@@ -32,8 +32,8 @@ let filter what_bus header body =
   body_type = %s
   body = %s
 
-%!" what_bus header.flags.no_reply_expected header.flags.no_auto_start header.serial
-    (match header.typ with
+%!" what_bus message.flags.no_reply_expected message.flags.no_auto_start message.serial
+    (match message.typ with
        | `Method_call(path, interface, member) ->
            sprintf "method_call
   path = %S
@@ -51,11 +51,11 @@ let filter what_bus header body =
   path = %S
   interface = %S
   member = %S" path interface member)
-    (opt header.destination)
-    (opt header.sender)
-    (string_of_signature (type_of_sequence body))
-    (string_of_tsequence  (type_of_sequence body))
-    (string_of_sequence body)
+    (opt message.destination)
+    (opt message.sender)
+    (string_of_signature (type_of_sequence message.body))
+    (string_of_tsequence  (type_of_sequence message.body))
+    (string_of_sequence message.body)
 
 let add_filter what_bus lbus =
   (perform

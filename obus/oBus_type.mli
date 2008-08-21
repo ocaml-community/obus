@@ -95,6 +95,20 @@ val opt_cast_sequence : [< 'a cl_sequence ] -> ?context:context -> sequence -> '
   (** Same thing but return an option instead of raising an
       exception *)
 
+val make_func : ('a, 'b, 'c) ty_function -> (sequence -> 'b) -> 'a
+  (** [make_func typ cont ...] make a sequence from extra parameters
+      and pass it to [cont] *)
+
+val cast_func : ('a, 'b, 'c) ty_function -> ?context:context -> sequence -> 'a -> 'b
+  (** [cast_func typ seq f] cast [seq] using [typ] and pass the
+      resulting values to [f] *)
+
+val opt_cast_func : ('a, 'b, 'c) ty_function -> ?context:context -> sequence -> 'a -> 'b option
+  (** Same as [cast_func] but do not raise an exception *)
+
+val func_reply : ('a, 'b, 'c) ty_function -> 'c cl_sequence
+  (** Return the return type of a functionnal type *)
+
 (** {6 Types construction} *)
 
 val reply : [< 'a cl_sequence ] -> ('b, 'b, 'a) ty_function
@@ -110,14 +124,21 @@ val wrap_element : 'a ty_element -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_element
 val wrap_sequence : 'a ty_sequence -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_sequence
   (** Wrap a type description by applying a convertion function *)
 
-type ('a, 'b) fold = { fold : 'c. ('a -> 'c -> 'c) -> 'b -> 'c -> 'c }
-    (** Polymorphic fold-like function *)
+val wrap_array : [< 'a cl_element ] ->
+  make:(('a -> element) -> 'b -> element list) ->
+  cast:((element -> 'a) -> element list -> 'b) -> 'b ty_single
+  (** [wrap_array t make cast] wrap an array type. It more efficient
+      than a [wrap_single (tlist t) ...] since it does not create an
+      intermediate list. *)
 
-val make_array :
-  empty:'b ->
-  add:('a -> 'b -> 'b) ->
-  fold:('a, 'b) fold -> [< 'a cl_element ] -> 'b ty_single
-  (** Create a new array type by providing all necessary functions. *)
+val wrap_basic_ctx : 'a ty_basic -> (context option -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_basic
+val wrap_single_ctx : 'a ty_single -> (context option -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_single
+val wrap_element_ctx : 'a ty_element -> (context option -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_element
+val wrap_sequence_ctx : 'a ty_sequence -> (context option -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_sequence
+val wrap_array_ctx : [< 'a cl_element ] ->
+  make:(('a -> element) -> 'b -> element list) ->
+  cast:(context option -> (element -> 'a) -> element list -> 'b) -> 'b ty_single
+  (** Same thing but with access to the context *)
 
 (** {6 Default type combinators} *)
 
@@ -144,12 +165,9 @@ val tpath : OBus_path.t ty_basic
 val tproxy : OBus_internals.proxy ty_basic
 
 val tlist : [< 'a cl_element ] -> 'a list ty_single
-val tset : [< 'a cl_element ] -> 'a list ty_single
-  (** [tset] is similar to [tlist] except that it does not conserve
-      element order *)
 val tdict_entry : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) ty_element
 val tassoc : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) list ty_single
-  (** [tassoc tk tv] is equivalent to [tset (tdict_entry tk tv)] *)
+  (** [tassoc tk tv] is equivalent to [tlist (tdict_entry tk tv)] *)
 val tstructure : [< 'a cl_sequence ] -> 'a ty_single
 val tvariant : single ty_single
 
@@ -281,12 +299,3 @@ val tup10 :
   [< 'a9 cl_sequence ] ->
   [< 'a10 cl_sequence ] ->
   ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10) ty_sequence
-
-(**/**)
-
-val ty_function_send : ('a, 'b, 'c) ty_function -> (OBus_internals.writer -> 'b) -> 'a
-val ty_function_recv : ('a, 'b, 'c) ty_function -> ('a -> 'b) OBus_internals.reader
-val ty_function_reply_writer : ('a, 'b, 'c) ty_function -> 'c -> OBus_internals.writer
-val ty_function_reply_reader : ('a, 'b, 'c) ty_function -> 'c OBus_internals.reader
-val ty_writer : [< 'a ty_element | 'a cl_sequence ] -> 'a -> OBus_internals.writer
-val ty_reader : [< 'a ty_element | 'a cl_sequence ] -> 'a OBus_internals.reader

@@ -48,12 +48,11 @@ let (&) a b = a b
 let (|>) a b x = b (a x)
 
 let introspect bus service path =
-  OBus_connection.send_message_with_reply bus
-    (OBus_header.method_call
-       ~destination:service
-       ~path:path
-       ~interface:"org.freedesktop.DBus.Introspectable"
-       ~member:"Introspect" ())
+  OBus_connection.method_call bus
+    ~destination:service
+    ~path:path
+    ~interface:"org.freedesktop.DBus.Introspectable"
+    ~member:"Introspect"
     (<< string >>)
 
 module Interf_map = Map.Make(struct type t = string let compare = compare end)
@@ -61,7 +60,7 @@ module Interf_map = Map.Make(struct type t = string let compare = compare end)
 let rec get (nodes, map) bus service path =
   (perform
      (interfaces, subs) <-- introspect bus service path
-     >>= (fun (header, body) -> return & parse_source raw_document (XmlParser.SString body));
+     >>= (fun str -> return & parse_source raw_document (XmlParser.SString str));
      let map = List.fold_left (fun map (name, content) -> Interf_map.add name content map) map interfaces in
      let nodes = (path, List.map fst interfaces) :: nodes in
      match !recursive with

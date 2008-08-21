@@ -1,6 +1,6 @@
 (*
- * oBus_header.mli
- * ---------------
+ * oBus_message.mli
+ * ----------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -18,6 +18,7 @@ type interface = string
 type member = string
 type error_name = string
 type reply_serial = serial
+type body = OBus_value.sequence
 
 type method_call_type =
     [ `Method_call of path * interface option * member ]
@@ -58,6 +59,7 @@ type 'typ t = {
   typ : 'typ;
   destination : string option;
   sender : string option;
+  body : body;
 }
 constraint 'typ = [< message_type ]
 
@@ -67,6 +69,7 @@ type signal = signal_type t
 type error = error_type t
 type any = message_type t
 
+val body : 'a t -> body
 val flags : 'a t -> flags
 val serial : 'a t -> serial
 val typ : 'a t -> 'a
@@ -90,7 +93,7 @@ val make :
   ?sender:string ->
   ?destination:string ->
   typ:'a ->
-  unit -> 'a t
+  body -> 'a t
 
 val method_call :
   ?flags:flags ->
@@ -100,7 +103,7 @@ val method_call :
   path:path ->
   ?interface:interface ->
   member:member ->
-  unit -> method_call
+  body -> method_call
 
 val method_return :
   ?flags:flags ->
@@ -108,7 +111,7 @@ val method_return :
   ?sender:string ->
   ?destination:string ->
   reply_serial:serial ->
-  unit -> method_return
+  body -> method_return
 
 val error :
   ?flags:flags ->
@@ -117,7 +120,7 @@ val error :
   ?destination:string ->
   reply_serial:serial ->
   error_name:error_name ->
-  unit -> error
+  body -> error
 
 val signal :
   ?flags:flags ->
@@ -127,4 +130,4 @@ val signal :
   path:path ->
   interface:interface ->
   member:member ->
-  unit -> signal
+  body -> signal

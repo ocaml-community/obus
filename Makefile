@@ -96,8 +96,10 @@ just-install:
 	$(OF) install obus _build/META `cat _build/lib-dist` \
 	 $(LIB:%=_build/%.cma) \
 	 $(LIB:%=_build/%.cmxa) \
+	 $(LIB:%=_build/%.a) \
 	 $(BINDINGS:%=_build/%.cma) \
-	 $(BINDINGS:%=_build/%.cmxa)
+	 $(BINDINGS:%=_build/%.cmxa) \
+	 $(BINDINGS:%=_build/%.a)
 	for tool in $(TOOLS); do \
 	  install -vm 0755 _build/tools/$$tool.native $(PREFIX)/bin/$$tool; \
 	done

@@ -55,7 +55,7 @@ let dget_all ~connection ?service ~path ~interface =
     ~path:path
     ~interface:"org.freedesktop.DBus.Properties"
     ~member:"GetAll"
-    (<< string -> {string, variant} set >>)
+    (<< string -> {string, variant} list >>)
     interface
 
 let dmake ~connection ?service ~path ~interface ~name ~access = {

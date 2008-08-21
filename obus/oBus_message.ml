@@ -1,6 +1,6 @@
 (*
- * oBus_header.ml
- * --------------
+ * oBus_message.ml
+ * ---------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -13,6 +13,7 @@ type interface = string
 type member = string
 type error_name = string
 type reply_serial = serial
+type body = OBus_value.sequence
 
 type flags = {
   no_reply_expected : bool;
@@ -53,9 +54,11 @@ type 'typ t = {
   typ : 'typ;
   destination : string option;
   sender : string option;
+  body : body;
 }
 constraint 'typ = [< message_type ]
 
+let body message = message.body
 let flags message = message.flags
 let serial message = message.serial
 let typ message = message.typ
@@ -82,21 +85,22 @@ type signal = signal_type t
 type error = error_type t
 type any = message_type t
 
-let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ () =
+let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ body =
   { flags = flags;
     serial = serial;
     typ = typ;
     destination = destination;
-    sender = sender }
+    sender = sender;
+    body = body }
 
-let method_call ?flags ?serial ?sender ?destination ~path ?interface ~member () =
-  make ?flags ?serial ?sender ?destination ~typ:(`Method_call(path, interface, member)) ()
+let method_call ?flags ?serial ?sender ?destination ~path ?interface ~member body =
+  make ?flags ?serial ?sender ?destination ~typ:(`Method_call(path, interface, member)) body
 
-let method_return ?flags ?serial ?sender ?destination ~reply_serial () =
-  make ?flags ?serial ?sender ?destination ~typ:(`Method_return(reply_serial)) ()
+let method_return ?flags ?serial ?sender ?destination ~reply_serial body =
+  make ?flags ?serial ?sender ?destination ~typ:(`Method_return(reply_serial)) body
 
-let error ?flags ?serial ?sender ?destination ~reply_serial ~error_name () =
-  make ?flags ?serial ?sender ?destination ~typ:(`Error(reply_serial, error_name)) ()
+let error ?flags ?serial ?sender ?destination ~reply_serial ~error_name body =
+  make ?flags ?serial ?sender ?destination ~typ:(`Error(reply_serial, error_name)) body
 
-let signal ?flags ?serial ?sender ?destination ~path ~interface ~member () =
-  make ?flags ?serial ?sender ?destination ~typ:(`Signal(path, interface, member)) ()
+let signal ?flags ?serial ?sender ?destination ~path ~interface ~member body =
+  make ?flags ?serial ?sender ?destination ~typ:(`Signal(path, interface, member)) body

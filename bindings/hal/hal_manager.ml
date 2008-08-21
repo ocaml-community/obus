@@ -20,7 +20,7 @@ include OBus_client.Make_constant
    end)
 
 let get_all_devices = call "GetAllDevices" << unit -> Hal_device.udi list >>
-let get_all_devices_with_properties = call "GetAllDevicesWithProperties" << unit -> [Hal_device.udi * {string, Hal_device.property} set] list >>
+let get_all_devices_with_properties = call "GetAllDevicesWithProperties" << unit -> [Hal_device.udi * {string, Hal_device.property} list] list >>
 let device_exists = call "DeviceExists" << object_path -> bool >>
 let find_device_string_match = call "FindDeviceStringMatch" << string -> string -> Hal_device.udi list >>
 

@@ -78,12 +78,17 @@ let desktop_entry = ref None
 
 open Lwt
 
+let call_func = function
+  | Some f -> f ()
+  | None -> ()
+
 let get_server_information = call "GetServerInformation" << unit -> server_info >>
 let get_capabilities = call "GetCapabilities" << unit -> string list >>
 let close_notification id =
   if not id.id_deleted then begin
     id.id_deleted <- true;
     ids := List.remove_assoc id.id_id !ids;
+    call_func id.id_wakeup;
     call "CloseNotification" << uint32 -> unit >> id.id_id
   end else return ()
 
@@ -92,10 +97,6 @@ let de = desktop_entry
 let assoc x l =
   try Some(List.assoc x l) with
       Not_found -> None
-
-let call_func = function
-  | Some f -> f ()
-  | None -> ()
 
 let setup_closed_handler =
   lazy(on_signal ~no_match_rule:true
@@ -169,7 +170,7 @@ let notify ?(app_name= !app_name) ?desktop_entry
     else return ();
 
     (* Create the notification *)
-    n <-- call "Notify" << string -> uint32 -> string -> string -> string -> string list -> hint set -> int -> uint32 >>
+    n <-- call "Notify" << string -> uint32 -> string -> string -> string -> string list -> hint list -> int -> uint32 >>
       app_name (match replace with
                   | Some id -> id.id_id
                   | None -> 0l)
