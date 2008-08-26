@@ -20,7 +20,7 @@ val rdwr : [ `readable | `writable ]
 
 type ('a, 'access) t
 
-val make : connection:OBus_connection.t -> ?service:string -> path:string ->
+val make : connection:OBus_connection.t -> ?destination:string -> path:string ->
   interface:string -> name:string -> access:([< access ] as 'access) ->
   [< 'a OBus_type.cl_single ] -> ('a, 'access) t
    (** Create a property *)
@@ -35,18 +35,18 @@ val get : ('a, [> `readeable]) t -> 'a Lwt.t
 
 type 'access dt
 
-val dmake : connection:OBus_connection.t -> ?service:string -> path:string ->
+val dmake : connection:OBus_connection.t -> ?destination:string -> path:string ->
   interface:string -> name:string -> access:([< access ] as 'access) -> 'access dt
 
 val dset : [> `writable ] dt -> OBus_value.single -> unit Lwt.t
 val dget : [> `readable ] dt -> OBus_value.single Lwt.t
 
-val dget_all : connection:OBus_connection.t -> ?service:string -> path:string ->
+val dget_all : connection:OBus_connection.t -> ?destination:string -> path:string ->
   interface:string -> (string * OBus_value.single) list Lwt.t
   (** Retreive all properties of an object *)
 
 (**/**)
-val lmake : connection:OBus_connection.t Lwt.t Lazy.t -> ?service:string -> path:string ->
+val lmake : connection:OBus_connection.t Lwt.t Lazy.t -> ?destination:string -> path:string ->
   interface:string -> name:string -> access:([< access ] as 'access) -> [< 'a OBus_type.cl_single ] -> ('a, 'access) t
-val ldmake : connection:OBus_connection.t Lwt.t Lazy.t -> ?service:string -> path:string ->
+val ldmake : connection:OBus_connection.t Lwt.t Lazy.t -> ?destination:string -> path:string ->
   interface:string -> name:string -> access:([< access ] as 'access) -> 'access dt

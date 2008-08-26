@@ -9,20 +9,14 @@
 
 open OBus_type
 
-module IF(Name : sig val name : string end) =
-struct
-  include OBus_client.Make(Name)
-  let on_signal member = on_signal ~no_match_rule:true member
-end
-
 module Address_resolver = struct
-  include IF(struct let name = "org.freedesktop.Avahi.AddressResolver" end)
+  include OBus_client.Make(struct let name = "org.freedesktop.Avahi.AddressResolver" end)
   let free = call "Free" << unit >>
   let on_found = on_signal "Found" << int -> int -> int -> string -> string -> uint -> unit >>
   let on_failure = on_signal "Failure" << string -> unit >>
 end
 module Domain_browser = struct
-  include IF(struct let name = "org.freedesktop.Avahi.DomainBrowser" end)
+  include OBus_client.Make(struct let name = "org.freedesktop.Avahi.DomainBrowser" end)
   let free = call "Free" << unit >>
   let on_item_new = on_signal "ItemNew" << int -> int -> string -> uint -> unit >>
   let on_item_remove = on_signal "ItemRemove" << int -> int -> string -> uint -> unit >>
@@ -31,7 +25,7 @@ module Domain_browser = struct
   let on_cache_exhausted = on_signal "CacheExhausted" << unit -> unit >>
 end
 module Entry_group = struct
-  include IF(struct let name = "org.freedesktop.Avahi.EntryGroup" end)
+  include OBus_client.Make(struct let name = "org.freedesktop.Avahi.EntryGroup" end)
   let free = call "Free" << unit >>
   let commit = call "Commit" << unit >>
   let reset = call "Reset" << unit >>
@@ -45,13 +39,13 @@ module Entry_group = struct
   let add_record = call "AddRecord" << int -> int -> uint -> string -> uint16 -> uint16 -> uint -> char list -> unit >>
 end
 module Host_name_resolver = struct
-  include IF(struct let name = "org.freedesktop.Avahi.HostNameResolver" end)
+  include OBus_client.Make(struct let name = "org.freedesktop.Avahi.HostNameResolver" end)
   let free = call "Free" << unit >>
   let on_found = on_signal "Found" << int -> int -> string -> int -> string -> uint -> unit >>
   let on_failure = on_signal "Failure" << string -> unit >>
 end
 module Record_browser = struct
-  include IF(struct let name = "org.freedesktop.Avahi.RecordBrowser" end)
+  include OBus_client.Make(struct let name = "org.freedesktop.Avahi.RecordBrowser" end)
   let free = call "Free" << unit >>
   let on_item_new = on_signal "ItemNew" << int -> int -> string -> uint16 -> uint16 -> char list -> uint -> unit >>
   let on_item_remove = on_signal "ItemRemove" << int -> int -> string -> uint16 -> uint16 -> char list -> uint -> unit >>
@@ -60,7 +54,7 @@ module Record_browser = struct
   let on_cache_exhausted = on_signal "CacheExhausted" << unit -> unit >>
 end
 module Service_browser = struct
-  include IF(struct let name = "org.freedesktop.Avahi.ServiceBrowser" end)
+  include OBus_client.Make(struct let name = "org.freedesktop.Avahi.ServiceBrowser" end)
   let free = call "Free" << unit >>
   let on_item_new = on_signal "ItemNew" << int -> int -> string -> string -> string -> uint -> unit >>
   let on_item_remove = on_signal "ItemRemove" << int -> int -> string -> string -> string -> uint -> unit >>
@@ -69,13 +63,13 @@ module Service_browser = struct
   let on_cache_exhausted = on_signal "CacheExhausted" << unit -> unit >>
 end
 module Service_resolver = struct
-  include IF(struct let name = "org.freedesktop.Avahi.ServiceResolver" end)
+  include OBus_client.Make(struct let name = "org.freedesktop.Avahi.ServiceResolver" end)
   let free = call "Free" << unit >>
   let on_found = on_signal "Found" << int -> int -> string -> string -> string -> string -> int -> string -> uint16 -> char list list -> uint -> unit >>
   let on_failure = on_signal "Failure" << string -> unit >>
 end
 module Service_type_browser = struct
-  include IF(struct let name = "org.freedesktop.Avahi.ServiceTypeBrowser" end)
+  include OBus_client.Make(struct let name = "org.freedesktop.Avahi.ServiceTypeBrowser" end)
   let free = call "Free" << unit >>
   let on_item_new = on_signal "ItemNew" << int -> int -> string -> string -> uint -> unit >>
   let on_item_remove = on_signal "ItemRemove" << int -> int -> string -> string -> uint -> unit >>

@@ -8,11 +8,6 @@
  *)
 
 type serial = int32
-type path = string
-type interface = string
-type member = string
-type error_name = string
-type reply_serial = serial
 type body = OBus_value.sequence
 
 type flags = {
@@ -34,13 +29,13 @@ let make_flags ?(no_reply_expected=false) ?(no_auto_start=false) () = {
 }
 
 type method_call_type =
-    [ `Method_call of path * interface option * member ]
+    [ `Method_call of OBus_path.t * OBus_name.Interface.t option * OBus_name.Member.t ]
 type method_return_type =
-    [ `Method_return of reply_serial ]
+    [ `Method_return of serial ]
 type error_type =
-    [ `Error of reply_serial * error_name ]
+    [ `Error of serial * OBus_name.Error.t ]
 type signal_type =
-    [ `Signal of path * interface * member ]
+    [ `Signal of OBus_path.t * OBus_name.Interface.t * OBus_name.Member.t ]
 
 type message_type =
     [ method_call_type
@@ -52,8 +47,8 @@ type 'typ t = {
   flags : flags;
   serial : serial;
   typ : 'typ;
-  destination : string option;
-  sender : string option;
+  destination : OBus_name.Connection.t option;
+  sender : OBus_name.Connection.t option;
   body : body;
 }
 constraint 'typ = [< message_type ]

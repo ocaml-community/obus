@@ -13,24 +13,21 @@ type serial = int32
 
 (** Message types with their recquired/optinnal parameters *)
 
-type path = OBus_path.t
-type interface = string
-type member = string
-type error_name = string
-type reply_serial = serial
 type body = OBus_value.sequence
+    (** The body is a sequence of dynamically typed values *)
 
 type method_call_type =
-    [ `Method_call of path * interface option * member ]
+    [ `Method_call of OBus_path.t * OBus_name.Interface.t option * OBus_name.Member.t ]
 
 type method_return_type =
-    [ `Method_return of reply_serial ]
+    [ `Method_return of serial
+        (** Contains the serial for which this message is a reply *) ]
 
 type error_type =
-    [ `Error of reply_serial * error_name ]
+    [ `Error of serial * OBus_name.Error.t ]
 
 type signal_type =
-    [ `Signal of path * interface * member ]
+    [ `Signal of OBus_path.t * OBus_name.Interface.t * OBus_name.Member.t ]
 
 type message_type =
     [ method_call_type
@@ -57,8 +54,8 @@ type 'typ t = {
   flags : flags;
   serial : serial;
   typ : 'typ;
-  destination : string option;
-  sender : string option;
+  destination : OBus_name.Connection.t option;
+  sender : OBus_name.Connection.t option;
   body : body;
 }
 constraint 'typ = [< message_type ]
@@ -73,14 +70,14 @@ val body : 'a t -> body
 val flags : 'a t -> flags
 val serial : 'a t -> serial
 val typ : 'a t -> 'a
-val destination : 'a t -> string option
-val sender : 'a t -> string option
+val destination : 'a t -> OBus_name.Connection.t option
+val sender : 'a t -> OBus_name.Connection.t option
 val path : [< method_call_type | signal_type ] t -> OBus_path.t
-val interface : [< method_call_type | signal_type ] t -> interface option
-val signal_interface : signal -> interface
-val member : [< method_call_type | signal_type ] t -> member
-val reply_serial : [< method_return_type | error_type ] t -> reply_serial
-val error_name : error -> error_name
+val interface : [< method_call_type | signal_type ] t -> OBus_name.Interface.t option
+val signal_interface : signal -> OBus_name.Interface.t
+val member : [< method_call_type | signal_type ] t -> OBus_name.Member.t
+val reply_serial : [< method_return_type | error_type ] t -> serial
+val error_name : error -> OBus_name.Error.t
 
 (** {6 Creation of header} *)
 
@@ -90,44 +87,44 @@ val error_name : error -> error_name
 val make :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:string ->
-  ?destination:string ->
+  ?sender:OBus_name.Connection.t ->
+  ?destination:OBus_name.Connection.t ->
   typ:'a ->
   body -> 'a t
 
 val method_call :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:string ->
-  ?destination:string ->
-  path:path ->
-  ?interface:interface ->
-  member:member ->
+  ?sender:OBus_name.Connection.t ->
+  ?destination:OBus_name.Connection.t ->
+  path:OBus_path.t ->
+  ?interface:OBus_name.Interface.t ->
+  member:OBus_name.Member.t ->
   body -> method_call
 
 val method_return :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:string ->
-  ?destination:string ->
+  ?sender:OBus_name.Connection.t ->
+  ?destination:OBus_name.Connection.t ->
   reply_serial:serial ->
   body -> method_return
 
 val error :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:string ->
-  ?destination:string ->
+  ?sender:OBus_name.Connection.t ->
+  ?destination:OBus_name.Connection.t ->
   reply_serial:serial ->
-  error_name:error_name ->
+  error_name:OBus_name.Error.t ->
   body -> error
 
 val signal :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:string ->
-  ?destination:string ->
-  path:path ->
-  interface:interface ->
-  member:member ->
+  ?sender:OBus_name.Connection.t ->
+  ?destination:OBus_name.Connection.t ->
+  path:OBus_path.t ->
+  interface:OBus_name.Interface.t ->
+  member:OBus_name.Member.t ->
   body -> signal

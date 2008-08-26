@@ -37,7 +37,7 @@ val register_connection : OBus_connection.t -> unit Lwt.t
 
 (** {6 Bus names acquiring} *)
 
-type name = string
+type name = OBus_name.Bus.t
     (** A bus name, for example "org.freedesktop.DBus" *)
 
 type request_name_flag =
@@ -96,11 +96,11 @@ val list_activable_names : t -> name list Lwt.t
 
 exception Name_has_no_owner of string
 
-val get_name_owner : t -> name -> OBus_connection.name Lwt.t
+val get_name_owner : t -> name -> OBus_name.Connection_unique.t Lwt.t
   (** Return the connection unique name of the given service. Raise a
       [Name_has_no_owner] if the given name does not have an owner. *)
 
-val list_queued_owners : t -> name -> OBus_connection.name list Lwt.t
+val list_queued_owners : t -> name -> OBus_name.Connection_unique.t list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
@@ -111,11 +111,11 @@ type match_rule
 
 val match_rule :
   ?typ:[ `method_call | `method_return | `error | `signal ] ->
-  ?sender:name ->
-  ?interface:string ->
-  ?member:string ->
+  ?sender:OBus_name.Connection.t ->
+  ?interface:OBus_name.Interface.t ->
+  ?member:OBus_name.Member.t ->
   ?path:OBus_path.t ->
-  ?destination:name ->
+  ?destination:OBus_name.Connection_unique.t ->
   ?args:(int * string) list ->
   unit -> match_rule
   (** Create a matching rule. Matching the argument [n] with string
@@ -147,7 +147,7 @@ val get_id : t -> string Lwt.t
 
 (** {6 Signals} *)
 
-val on_name_owner_changed : t -> (name -> OBus_connection.name -> OBus_connection.name -> unit) -> OBus_signal.receiver Lwt.t
+val on_name_owner_changed : t -> (name -> OBus_name.Connection_unique.t -> OBus_name.Connection_unique.t -> unit) -> OBus_signal.receiver Lwt.t
   (** This signal is emited each the owner of a name (unique
       connection name or service name) change.
 

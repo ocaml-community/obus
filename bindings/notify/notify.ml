@@ -98,31 +98,41 @@ let assoc x l =
   try Some(List.assoc x l) with
       Not_found -> None
 
+(* We can not add a match rule here because we will receive signals
+   destined to other connections *)
+let on_signal member typ f =
+  lazy(Lazy.force OBus_bus.session >>= fun bus ->
+         ignore (OBus_connection.add_signal_receiver bus
+                   ~sender:"org.freedesktop.Notifications"
+                   ~member
+                   ~interface:"org.freedesktop.Notifications"
+                   ~path:"/org/freedesktop/Notifications"
+                   typ f);
+         return ())
+
 let setup_closed_handler =
-  lazy(on_signal ~no_match_rule:true
-         "NotificationClosed" << uint32 -> unit >>
-        (fun n ->
-           match assoc n !ids with
-             | Some id ->
-                 id.id_deleted <- true;
-                 ids := List.remove_assoc n !ids;
-                 call_func id.id_on_close;
-                 call_func id.id_wakeup
-             | None -> ()))
+  on_signal "NotificationClosed" << uint32 -> unit >>
+    (fun n ->
+       match assoc n !ids with
+         | Some id ->
+             id.id_deleted <- true;
+             ids := List.remove_assoc n !ids;
+             call_func id.id_on_close;
+             call_func id.id_wakeup
+         | None -> ())
 
 let setup_actions_handler =
-  lazy(on_signal ~no_match_rule:true
-         "ActionInvoked" << uint32 -> string -> unit >>
-        (fun n key ->
-           match assoc n !ids with
-             | Some id ->
-                 id.id_deleted <- true;
-                 ids := List.remove_assoc n !ids;
-                 (match assoc key id.id_actions with
-                    | Some f -> f ()
-                    | None -> ());
-                 call_func id.id_wakeup
-             | None -> ()))
+  on_signal "ActionInvoked" << uint32 -> string -> unit >>
+    (fun n key ->
+       match assoc n !ids with
+         | Some id ->
+             id.id_deleted <- true;
+             ids := List.remove_assoc n !ids;
+             (match assoc key id.id_actions with
+                | Some f -> f ()
+                | None -> ());
+             call_func id.id_wakeup
+         | None -> ())
 
 let notify ?(app_name= !app_name) ?desktop_entry
     ?replace ?(icon="") ?image ~summary ?(body="") ?(actions=[])
@@ -162,11 +172,11 @@ let notify ?(app_name= !app_name) ?desktop_entry
     (* Setup signal handlers only if needed *)
 
     if wakeup <> None || on_close <> None || actions <> []
-    then Lazy.force setup_closed_handler >>= fun _ -> return ()
+    then Lazy.force setup_closed_handler
     else return ();
 
     if actions <> []
-    then Lazy.force setup_actions_handler >>= fun _ -> return ()
+    then Lazy.force setup_actions_handler
     else return ();
 
     (* Create the notification *)

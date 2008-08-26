@@ -32,11 +32,11 @@ end
 (***** Signal matching *****)
 
 type signal_match_rule = {
-  smr_sender : string option;
-  smr_destination : string option;
-  smr_path : string option;
-  smr_interface : string option;
-  smr_member : string option;
+  smr_sender : OBus_name.Connection.t option;
+  smr_destination : OBus_name.Connection_unique.t option;
+  smr_path : OBus_path.t option;
+  smr_interface : OBus_name.Interface.t option;
+  smr_member : OBus_name.Member.t option;
   smr_args : (int * string) list;
 }
 
@@ -61,17 +61,8 @@ let signal_match r { sender = sender;
     | Some r -> r = f
   in
   (match r.smr_sender, sender with
-     | None, _ -> true
-     | Some s, Some s' when s = s' -> true
-
-     (* Here is something i am not sure, sometimes signals come with
-        an sender fileds set to their connection unique name. If we
-        the filter specify instead a service name, we can not match
-        correctly this field. A solution can be to ask for the owner
-        of the service name. *)
-     | Some s, Some s' when s != "" && s.[0] <> ':' && s'.[0] = ':' -> true
-
-     | _ -> false) &&
+     | Some s, Some s' when OBus_name.is_unique_connection_name s -> s = s'
+     | _ -> true) &&
     (match r.smr_destination, dest with
        | None, _ -> true
        | Some s, Some s' -> s = s'
@@ -145,7 +136,7 @@ and connection = connection_state ref
 
 type proxy = {
   proxy_connection : connection;
-  proxy_service : string option;
+  proxy_destination : OBus_name.Connection.t option;
   proxy_path : OBus_path.t;
 }
 

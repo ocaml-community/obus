@@ -12,22 +12,30 @@
 type receiver
   (** Function which receive signals *)
 
-val add_receiver : OBus_connection.t -> ?no_match_rule:bool ->
-  ?sender:string -> ?destination:string ->
-  ?path:OBus_path.t -> ?interface:string -> ?member:string ->
+val add_receiver : OBus_connection.t ->
+  ?sender:OBus_name.Connection.t ->
+  ?destination:OBus_name.Connection_unique.t ->
+  ?path:OBus_path.t ->
+  ?interface:OBus_name.Interface.t ->
+  ?member:OBus_name.Member.t ->
+  ?args:(int * string) list ->
   ('a, unit, unit) OBus_type.ty_function -> 'a -> receiver Lwt.t
-  (** [add_receiver connection sender path interface member typ func]
+  (** [add_receiver connection sender destination path interface
+      member typ func]
 
       Add a receiver on the given connection. If it is a message bus,
-      then a matching rule is automatically added, unless
-      [no_match_rule] is [true].
+      then a matching rule is automatically added.
 
-      [sender], [path], [interface] and [member] and [typ] act as
-      filters *)
+      [sender], [destination], [path], [interface] and [member],
+      [args] and [typ] act as filters. *)
 
-val dadd_receiver : OBus_connection.t -> ?no_match_rule:bool ->
-  ?sender:string ->  ?destination:string ->
-  ?path:OBus_path.t -> ?interface:string -> ?member:string ->
+val dadd_receiver : OBus_connection.t ->
+  ?sender:OBus_name.Connection.t ->
+  ?destination:OBus_name.Connection_unique.t ->
+  ?path:OBus_path.t ->
+  ?interface:OBus_name.Interface.t ->
+  ?member:OBus_name.Member.t ->
+  ?args:(int * string) list ->
   (OBus_message.body -> unit) -> receiver Lwt.t
   (** Same thing but the callback function receive a dynamically typed
       value, and there is no constraint on the message signature *)

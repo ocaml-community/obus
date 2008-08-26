@@ -23,6 +23,7 @@ type filter_id = filter MSet.node
 type signal_receiver = (signal_match_rule * signal handler) MSet.node
 
 exception Protocol_error of string
+exception Invalid_data of string
 exception Connection_closed
 
 type t = connection
@@ -139,14 +140,18 @@ let send_message_backend with_serial connection message =
            wakeup w serial;
            return ())
         (function
+
+           (* A fatal error, make the connection to crash *)
            | OBus_transport.Error _ as exn ->
-               (* A fatal error, make the connection to crash *)
                let exn = snd (set_crash connection exn) in
                wakeup_exn w exn;
                fail exn
 
+           (* A non-fatal error, let the connection continue *)
+           | Writing_error msg ->
+               wakeup w serial;
+               fail & Invalid_data msg
            | exn ->
-               (* A non-fatal error, let the connection continue *)
                wakeup w serial;
                fail exn)
 

@@ -17,8 +17,8 @@ module type Interface = sig
   val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> t -> 'a
   val kcall : ((t -> 'b Lwt.t) -> 'c) -> string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   val dcall : string -> t -> OBus_value.sequence -> OBus_value.sequence Lwt.t
-  val on_signal : ?no_match_rule:bool -> string -> ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
-  val don_signal : ?no_match_rule:bool -> string -> t -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
+  val on_signal : string -> ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
+  val don_signal : string -> t -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
   val property : string -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> t -> ('a, 'b) OBus_property.t
   val dproperty : string -> ([< OBus_property.access ] as 'a) -> t -> 'a OBus_property.dt
@@ -48,8 +48,8 @@ struct
   let call member = OBus_proxy.method_call ~interface:Name.name ~member
   let kcall cont member = OBus_proxy.kmethod_call cont ~interface:Name.name ~member
   let dcall member = OBus_proxy.dmethod_call ~interface:Name.name ~member
-  let on_signal ?no_match_rule member = OBus_proxy.on_signal ?no_match_rule ~interface:Name.name ~member
-  let don_signal ?no_match_rule member = OBus_proxy.don_signal ?no_match_rule ~interface:Name.name ~member
+  let on_signal member = OBus_proxy.on_signal ~interface:Name.name ~member
+  let don_signal member = OBus_proxy.don_signal ~interface:Name.name ~member
   let property name access = OBus_proxy.property ~interface:Name.name ~name ~access
   let dproperty name access = OBus_proxy.dproperty ~interface:Name.name ~name ~access
   let register_exn = register_exn Name.name
@@ -65,8 +65,8 @@ struct
     OBus_proxy.kmethod_call (fun f -> cont (fun obj -> f (to_proxy obj))) ~interface:name ~member
   let dcall member obj body =
     OBus_proxy.dmethod_call ~interface:name ~member (to_proxy obj) body
-  let on_signal ?no_match_rule member typ obj f = OBus_proxy.on_signal ?no_match_rule ~interface:Params.name ~member typ (to_proxy obj) f
-  let don_signal ?no_match_rule member obj f = OBus_proxy.don_signal ?no_match_rule ~interface:Params.name ~member (to_proxy obj) f
+  let on_signal member typ obj f = OBus_proxy.on_signal ~interface:Params.name ~member typ (to_proxy obj) f
+  let don_signal member obj f = OBus_proxy.don_signal ~interface:Params.name ~member (to_proxy obj) f
   let property name access typ obj = OBus_proxy.property ~interface:Params.name ~name ~access typ (to_proxy obj)
   let dproperty name access obj = OBus_proxy.dproperty ~interface:Params.name ~name ~access (to_proxy obj)
 
@@ -102,15 +102,15 @@ struct
       ~interface:Params.name
       ~member body
 
-  let on_signal ?no_match_rule member typ connection f =
-    OBus_signal.add_receiver connection ?no_match_rule
+  let on_signal member typ connection f =
+    OBus_signal.add_receiver connection
       ?sender:Params.service
       ~path:Params.path
       ~interface:Params.name
       ~member typ f
 
-  let don_signal ?no_match_rule member connection f =
-    OBus_signal.dadd_receiver connection ?no_match_rule
+  let don_signal member connection f =
+    OBus_signal.dadd_receiver connection
       ?sender:Params.service
       ~path:Params.path
       ~interface:Params.name
@@ -119,7 +119,7 @@ struct
   let property name access typ connection =
     OBus_property.make
       ~connection
-      ?service:Params.service
+      ?destination:Params.service
       ~interface:Params.name
       ~path:Params.path
       ~name
@@ -129,7 +129,7 @@ struct
   let dproperty name access connection =
     OBus_property.dmake
       ~connection
-      ?service:Params.service
+      ?destination:Params.service
       ~interface:Params.name
       ~path:Params.path
       ~access
@@ -166,20 +166,20 @@ struct
         ~interface:Params.name
         ~member body
 
-  let on_signal ?no_match_rule member typ path f =
+  let on_signal member typ path f =
     Lazy.force Params.bus >>= fun bus ->
-      OBus_signal.add_receiver bus ?no_match_rule
+      OBus_signal.add_receiver bus
         ?sender:Params.service ~path ~interface:Params.name ~member typ f
 
-  let don_signal ?no_match_rule member path f =
+  let don_signal member path f =
     Lazy.force Params.bus >>= fun bus ->
-      OBus_signal.dadd_receiver bus ?no_match_rule
+      OBus_signal.dadd_receiver bus
         ?sender:Params.service ~path ~interface:Params.name ~member f
 
   let property name access typ path =
     OBus_property.lmake
       ~connection:Params.bus
-      ?service:Params.service
+      ?destination:Params.service
       ~interface:Params.name
       ~path
       ~name
@@ -189,7 +189,7 @@ struct
   let dproperty name access path =
     OBus_property.ldmake
       ~connection:Params.bus
-      ?service:Params.service
+      ?destination:Params.service
       ~interface:Params.name
       ~path
       ~name
@@ -203,8 +203,8 @@ module Make_constant(Params : Constant_params) = struct
   let kcall cont = kcall (fun f -> cont (f Params.path))
   let call member typ = call member typ Params.path
   let dcall member = dcall member Params.path
-  let on_signal ?no_match_rule member typ f = on_signal ?no_match_rule member typ Params.path f
-  let don_signal ?no_match_rule member = don_signal ?no_match_rule member Params.path
+  let on_signal member typ f = on_signal member typ Params.path f
+  let don_signal member = don_signal member Params.path
   let property name access typ = property name access typ Params.path
   let dproperty name access = dproperty name access Params.path
 end

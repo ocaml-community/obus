@@ -10,24 +10,9 @@
 open Wire
 open OBus_type
 open OBus_value
-open OBus_type
-open OBus_internals
+open OBus_info
 
-let typ = type_single
-  <:obus_type< [int32 * string * {string, string} list * [uint64 * byte] list] >>
-
-let (>>) m f ctx i = f ctx (m ctx i)
-
-let writer =
-  wfixed typ
-    (wstruct
-       (fun (a, b, c, d) ->
-          wint a
-          >> wstring b
-          >> wlist (Tdict_entry(Tstring, Tbasic Tstring)) (wdict_entry wstring wstring) c
-          >> wlist (Tsingle (Tstruct[Tbasic Tuint64; Tbasic Tbyte])) (wstruct (fun (x, y) -> wuint64 x >> wbyte y)) d))
-
-let reader x = ty_reader tvariant x
+let typ = <:obus_type< [int * string * {string, string} list * [uint64 * byte] list] >>
 
 let data = (1, "coucou",
             [("truc", "machin"); ("titi", "toto")],
@@ -35,12 +20,9 @@ let data = (1, "coucou",
              (-21334234565464L, 'k');
              (0xfedcba987654321L, 'e')])
 
-let buffer = String.make 160 '\x00'
+let data_val = make_single typ data
 
-let run w bo p = w { connection = Obj.magic 0;
-                     buffer= buffer;
-                     bus_name = None;
-                     byte_order = bo } p
+let buffer = String.make 160 '\x00'
 
 let read bo =
   let oc = Unix.open_process_out "xxd" in
@@ -49,17 +31,31 @@ let read bo =
   let oc = Unix.open_process_out "camlp4o -impl /dev/stdin" in
   Printf.fprintf oc "let result = %s"
     (string_of_single
-       (snd (run reader bo 0)));
+       (snd (match bo with
+               | Little_endian ->
+                   let module M = Make_unsafe_reader(Little_endian) in
+                   M.rvariant buffer 0
+               | Big_endian ->
+                   let module M = Make_unsafe_reader(Big_endian) in
+                   M.rvariant buffer 0)));
   close_out oc
 
+let runw bo x = match bo with
+  | Little_endian ->
+      let module M = Make_unsafe_writer(Little_endian) in
+      M.wvariant buffer 0 x
+  | Big_endian ->
+      let module M = Make_unsafe_writer(Big_endian) in
+      M.wvariant buffer 0 x
+
 let test bo =
-  ignore (run (writer data) bo 0);
+  ignore (runw bo data_val);
   read bo
 
-let testc comb =
-  ty_function_send comb
-    (fun w ->
-       ignore (run (wsignature [Tstruct (isignature comb)] >> w) OBus_info.Little_endian 0);
+let testc typ =
+  make_func typ
+    (fun s ->
+       ignore (runw OBus_info.Little_endian (vstruct s));
        read OBus_info.Little_endian)
 
 let _ =

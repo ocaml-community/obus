@@ -32,8 +32,10 @@ struct
       "OBus_info";
       "Types_rw";
       "OBus_path";
+      "OBus_name";
       "OBus_value";
       "Wire";
+      "Rules";
       "OBus_xml_parser";
       "OBus_introspect";
       "OBus_address";

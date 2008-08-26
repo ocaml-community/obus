@@ -77,6 +77,47 @@ struct
   let data64bit7 = 0
 end
 
+let validate_string fail s =
+  let null_byte i = raise & fail & sprintf "invalid string %S, at position %d: null byte" s i
+  and malformed_code i = raise & fail & sprintf "invalid string %S, at position %d: malformed utf8 code" s i in
+  let rec trail c i a =
+    if c = 0 then a else
+      if i >= String.length s
+      then malformed_code i
+      else
+        let n = Char.code (String.unsafe_get s i) in
+        if n = 0
+        then null_byte i
+        else
+          if n < 0x80 || n >= 0xc0
+          then malformed_code i
+          else trail (c - 1) (i + 1) (a lsl 6 lor (n - 0x80)) in
+  let rec main i =
+    if i >= String.length s then () else
+      let n = Char.code (String.unsafe_get s i) in
+      if n = 0 then null_byte i else
+        if n < 0x80 then main (i + 1) else
+          if n < 0xc2 then malformed_code i else
+            if n <= 0xdf then
+              if trail 1 (i + 1) (n - 0xc0) < 0x80 then malformed_code i else
+                main (i + 2)
+            else if n <= 0xef then
+              if trail 2 (i + 1) (n - 0xe0) < 0x800 then malformed_code i else
+                main (i + 3)
+            else if n <= 0xf7 then
+              if trail 3 (i + 1) (n - 0xf0) < 0x10000 then malformed_code i else
+                main (i + 4)
+            else if n <= 0xfb then
+              if trail 4 (i + 1) (n - 0xf8) < 0x200000 then malformed_code i else
+                main (i + 5)
+            else if n <= 0xfd then
+              let n = trail 5 (i + 1) (n - 0xfc) in
+              if n lsr 16 < 0x400 then malformed_code i else
+                main (i + 6)
+            else malformed_code i in
+  main 0
+
+
 let pad2 i = i land 1
 let pad4 i = (4 - i) land 3
 let pad8 i = (8 - i) land 7
@@ -194,14 +235,18 @@ struct
   let wuint64 = write8 unsafe_write_int64_as_uint64
   let wdouble buffer i v = wuint64 buffer i (Int64.of_float v)
   let wboolean buffer i v = wuint buffer i (match v with false -> 0 | true -> 1)
-  let wstring buffer i str =
+  let wunsafe_string buffer i str =
     let len = String.length str in
     let i = wlen buffer i len in
     if i + len + 1 > String.length buffer then raise Out_of_bounds;
     String.unsafe_blit str 0 buffer i len;
     String.unsafe_set buffer (i + len) '\000';
     i + len + 1
-  let wobject_path = wstring
+  let wobject_path buffer i path = OBus_path.validate path; wunsafe_string buffer i path
+
+  let wstring buffer i str =
+    validate_string (fun exn -> Writing_error exn) str;
+    wunsafe_string buffer i str
 
   module Types_writer = Types_rw.Make_writer(OBus_value)
 
@@ -247,8 +292,11 @@ struct
         k
     | Struct l -> wsequence buffer (wpad8 buffer i) l
     | Variant v ->
-        let i = wtype buffer i (type_of_single v) in
-        wsingle buffer i v
+        wvariant buffer i v
+
+  and wvariant buffer i v =
+    let i = wtype buffer i (type_of_single v) in
+    wsingle buffer i v
 
   and welement buffer i = function
     | Dict_entry(k, v) ->
@@ -412,7 +460,7 @@ struct
        | 0 -> false
        | 1 -> true
        | n -> raise & Reading_error ("invalid boolean value: " ^ string_of_int n))
-  let rstring buffer i =
+  let runsafe_string buffer i =
     let i, len = ruint buffer i in
     let end_ptr = i + len + 1 in
     if len < 0 || end_ptr > String.length buffer then raise Out_of_bounds;
@@ -421,7 +469,12 @@ struct
     match String.unsafe_get buffer (i + len) with
       | '\x00' -> (end_ptr, str)
       | _ -> raise & Reading_error "terminating null byte missing"
-  let robject_path = rstring
+  let robject_path = rwrap runsafe_string (fun x -> OBus_path.validate x; x)
+
+  let rstring = rwrap runsafe_string
+    (fun str ->
+       validate_string (fun exn -> Reading_error exn) str;
+       str)
 
   module Types_reader = Types_rw.Make_reader(OBus_value)
     (struct

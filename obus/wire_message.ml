@@ -24,13 +24,13 @@ let wbuffer = ref (String.create 65536)
 (* Raw description of header fields *)
 
 type raw_fields = {
-  _path : path option;
-  _member : member option;
-  _interface : interface option;
-  _error_name : error_name option;
-  _reply_serial : reply_serial option;
-  _destination : string option;
-  _sender : string option;
+  _path : OBus_path.t option;
+  _member : OBus_name.Member.t option;
+  _interface : OBus_name.Interface.t option;
+  _error_name : OBus_name.Error.t option;
+  _reply_serial : serial option;
+  _destination : OBus_name.Connection.t option;
+  _sender : OBus_name.Connection_unique.t option;
   _signature : signature;
 }
 
@@ -86,7 +86,7 @@ struct
   let read_fields limit =
     let buffer = !rbuffer in
 
-    let rfield code typ reader i acc f =
+    let rfield code typ reader i f =
       let i, t = rtype buffer i in
       match t with
         | Tbasic t' when t' = typ ->
@@ -97,20 +97,23 @@ struct
                code (string_of_signature [t]) (string_of_signature [Tbasic typ]))
     in
 
+    let rfield2 code validator i f =
+      rfield code Tstring runsafe_string i (fun x -> validator x; f x) in
+
     let rec aux (i, acc) =
       if i < limit
       then begin
         let i = rpad8 buffer i in
         let i, v = ruint8 buffer i in
         aux (match v with
-               | 1 -> rfield 1 Tobject_path robject_path i acc (fun x -> { acc with _path = Some x })
-               | 2 -> rfield 2 Tstring rstring i acc (fun x -> {  acc with _interface = Some x })
-               | 3 -> rfield 3 Tstring rstring i acc (fun x -> { acc with _member = Some x })
-               | 4 -> rfield 4 Tstring rstring i acc (fun x -> { acc with _error_name = Some x })
-               | 5 -> rfield 5 Tuint32 ruint32 i acc (fun x -> { acc with _reply_serial = Some x })
-               | 6 -> rfield 6 Tstring rstring i acc (fun x -> { acc with _destination = Some x })
-               | 7 -> rfield 7 Tstring rstring i acc (fun x -> { acc with _sender = Some x })
-               | 8 -> rfield 8 Tsignature rsignature i acc (fun x -> { acc with _signature = x })
+               | 1 -> rfield 1 Tobject_path robject_path i (fun x -> { acc with _path = Some x })
+               | 2 -> rfield2 2 OBus_name.Interface.validate i (fun x -> {  acc with _interface = Some x })
+               | 3 -> rfield2 3 OBus_name.Member.validate i (fun x -> { acc with _member = Some x })
+               | 4 -> rfield2 4 OBus_name.Error.validate i (fun x -> { acc with _error_name = Some x })
+               | 5 -> rfield 5 Tuint32 ruint32 i (fun x -> { acc with _reply_serial = Some x })
+               | 6 -> rfield2 6 OBus_name.Connection.validate i (fun x -> { acc with _destination = Some x })
+               | 7 -> rfield2 7 OBus_name.Connection.validate i (fun x -> { acc with _sender = Some x })
+               | 8 -> rfield 8 Tsignature rsignature i (fun x -> { acc with _signature = x })
                | n -> rwrap rvariant (fun _ -> acc) buffer i)
       end else
         if i > limit
@@ -118,7 +121,13 @@ struct
         else (i, acc)
 
     in
-    aux (0, empty_fields)
+    try
+      aux (0, empty_fields)
+    with
+      | OBus_name.Invalid_name(typ, name, msg) ->
+          raise & Reading_error(sprintf "invalid %s name %S: %s" typ name msg)
+      | OBus_path.Invalid_path(path, msg) ->
+          raise & Reading_error(sprintf "invalid path %S: %s" path msg)
 
   let read connection =
     let buffer = !rbuffer in
@@ -229,21 +238,25 @@ struct
     unsafe_write_int_as_byte buffer 3 OBus_info.protocol_version;
     unsafe_write_int32_as_uint32 buffer 8 msg.serial;
 
+    let _wfield code typ writer v i =
+      let i = wpad8 buffer i in
+      let i = wuint8 buffer i code in
+      let i = wtype buffer i (Tbasic typ) in
+      writer buffer i v in
     let wfield code typ writer field i = match field with
       | None -> i
-      | Some v ->
-          let i = wpad8 buffer i in
-          let i = wuint8 buffer i code in
-          let i = wtype buffer i (Tbasic typ) in
-          writer buffer i v in
+      | Some v -> _wfield code typ writer v i in
+    let wfield2  code validator field i = match field with
+      | None -> i
+      | Some v -> validator v; _wfield code Tstring wunsafe_string v i in
     let i = wfield 1 Tobject_path wobject_path fields._path 12 in
-    let i = wfield 2 Tstring wstring fields._interface i in
-    let i = wfield 3 Tstring wstring fields._member i in
-    let i = wfield 4 Tstring wstring fields._error_name i in
+    let i = wfield2 2 OBus_name.Interface.validate fields._interface i in
+    let i = wfield2 3 OBus_name.Member.validate fields._member i in
+    let i = wfield2 4 OBus_name.Error.validate fields._error_name i in
     let i = wfield 5 Tuint32 wuint32 fields._reply_serial i in
-    let i = wfield 6 Tstring wstring fields._destination i in
-    let i = wfield 7 Tstring wstring fields._sender i in
-    let i = wfield 8 Tsignature wsignature (Some fields._signature) i in
+    let i = wfield2 6 OBus_name.Connection.validate fields._destination i in
+    let i = wfield2 7 OBus_name.Connection_unique.validate fields._sender i in
+    let i = _wfield 8 Tsignature wsignature fields._signature i in
     let len = i - 16 in
     wcheck_array_len len;
     unsafe_write_int_as_uint32 buffer 12 len;

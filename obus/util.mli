@@ -41,17 +41,6 @@ val with_process_in : string -> (in_channel -> 'a) -> 'a
 val with_process_out : string -> (out_channel -> 'a) -> 'a
   (** Same thing but for processes *)
 
-val match_rule :
-  ?typ:[ `method_call | `method_return | `error | `signal ] ->
-  ?sender:string ->
-  ?interface:string ->
-  ?member:string ->
-  ?path:string ->
-  ?destination:string ->
-  ?args:(int * string) list ->
-  unit -> string
-  (** Create a string representation of a matching rule *)
-
 module type Monad = sig
   type 'a t
   val bind : 'a t -> ('a -> 'b t) -> 'b t

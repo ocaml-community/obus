@@ -81,7 +81,7 @@ let list_queued_owners = call "ListQueuedOwners" << name -> name list >>
 
 OBUS_type match_rule = string
 
-let match_rule = Util.match_rule
+let match_rule = Rules.to_string
 
 let add_match = call "AddMatch" << match_rule -> unit >>
 let remove_match = call "RemoveMatch" << match_rule -> unit >>

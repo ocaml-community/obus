@@ -289,7 +289,7 @@ let tproxy = wrap_basic_ctx tobject_path
   (fun context path -> match context with
      | Some(connection, bus_name) ->
          { proxy_connection = connection;
-           proxy_service = bus_name;
+           proxy_destination = bus_name;
            proxy_path = path }
      | _ -> raise Cast_failure)
   (fun p -> p.proxy_path)

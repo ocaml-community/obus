@@ -37,23 +37,20 @@ let make prefix t =
     ()
 
 let notify connection title msg =
-  (perform
-     (header, id) <-- OBus_connection.send_message_with_reply connection
-       (OBus_header.method_call
-          ~destination:"org.freedesktop.Notifications"
-          ~path:"/org/freedesktop/Notifications"
-          ~interface:"org.freedesktop.Notifications"
-          ~member:"Notify" ())
-       (tstring -->
-          (tuint32 -->
+  OBus_connection.method_call connection
+    ~destination:"org.freedesktop.Notifications"
+    ~path:"/org/freedesktop/Notifications"
+    ~interface:"org.freedesktop.Notifications"
+    ~member:"Notify"
+    (tstring -->
+       (tuint32 -->
+          (tstring -->
              (tstring -->
                 (tstring -->
-                   (tstring -->
-                      (tlist tstring -->
-                         (tassoc tstring tvariant -->
-                            (tint32 --> reply tuint32))))))))
-       (Filename.basename Sys.argv.(0)) 0l "info" title msg [] [] 5000l;
-     return id)
+                   (tlist tstring -->
+                      (tassoc tstring tvariant -->
+                         (tint32 --> reply tuint32))))))))
+    (Filename.basename Sys.argv.(0)) 0l "info" title msg [] [] 5000l
 
 (*let reply_header, return_id =
 
@@ -72,12 +69,11 @@ let _ =
     (perform
        transport <-- OBus_transport.of_addresses(Lazy.force OBus_address.session);
        bus <-- OBus_connection.of_transport (make "/tmp/obus-" transport);
-       (_, name) <-- OBus_connection.send_message_with_reply bus
-         (OBus_header.method_call
-            ~destination:"org.freedesktop.DBus"
-            ~member:"Hello"
-            ~path:"/org/freedesktop/DBus"
-            ~interface:"org.freedesktop.DBus" ())
+       name <-- OBus_connection.method_call bus
+         ~destination:"org.freedesktop.DBus"
+         ~member:"Hello"
+         ~path:"/org/freedesktop/DBus"
+         ~interface:"org.freedesktop.DBus"
          (reply tstring);
        return (Printf.printf "my name is: %s\n%!" name);
        notify bus "Hello, world!" "ocaml is fun!")

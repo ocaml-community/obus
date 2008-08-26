@@ -27,7 +27,7 @@ let rdwr = `readable
 
 type desc = {
   connection : connection;
-  service : string option;
+  destination : string option;
   path : string;
   interface : string;
   name:string;
@@ -38,7 +38,7 @@ type 'access dt = desc
 
 let call member typ desc =
   kmethod_call (with_connection desc.connection)
-    ?destination:desc.service
+    ?destination:desc.destination
     ~path:desc.path
     ~interface:"org.freedesktop.DBus.Properties"
     ~member
@@ -49,25 +49,25 @@ let call member typ desc =
 let dget = call "Get" << variant >>
 let dset = call "Set" << variant -> unit >>
 
-let dget_all ~connection ?service ~path ~interface =
+let dget_all ~connection ?destination ~path ~interface =
   method_call connection
-    ?destination:service
+    ?destination
     ~path:path
     ~interface:"org.freedesktop.DBus.Properties"
     ~member:"GetAll"
     (<< string -> {string, variant} list >>)
     interface
 
-let dmake ~connection ?service ~path ~interface ~name ~access = {
+let dmake ~connection ?destination ~path ~interface ~name ~access = {
   connection = Direct connection;
-  service = service;
+  destination = destination;
   path = path;
   interface = interface;
   name = name;
 }
 
-let make ~connection ?service ~path ~interface ~name ~access typ =
-  (dmake ~connection ?service ~path ~interface ~name ~access, (typ :> 'a cl_single))
+let make ~connection ?destination ~path ~interface ~name ~access typ =
+  (dmake ~connection ?destination ~path ~interface ~name ~access, (typ :> 'a cl_single))
 
 let set (desc, typ) x = dset desc (make_single typ x)
 let get (desc, typ) =
@@ -83,13 +83,13 @@ let get (desc, typ) =
                      (string_of_signature [type_single typ])
                      (string_of_signature [type_of_single v])))
 
-let ldmake ~connection ?service ~path ~interface ~name ~access = {
+let ldmake ~connection ?destination ~path ~interface ~name ~access = {
   connection = Lazy connection;
-  service = service;
+  destination = destination;
   path = path;
   interface = interface;
   name = name;
 }
 
-let lmake ~connection ?service ~path ~interface ~name ~access typ =
-  (ldmake ~connection ?service ~path ~interface ~name ~access, (typ :> 'a cl_single))
+let lmake ~connection ?destination ~path ~interface ~name ~access typ =
+  (ldmake ~connection ?destination ~path ~interface ~name ~access, (typ :> 'a cl_single))

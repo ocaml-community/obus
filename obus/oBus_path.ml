@@ -7,10 +7,55 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Printf
 open String
 
 type t = string
 type elt = string
+
+exception Invalid_path of string * string
+
+let invalid_char str i =
+  sprintf "at position %d: invalid character %C, must be one of \"[A-Z][a-z][0-9]_\"" i str.[i]
+
+let is_valid_char ch =
+  (ch >= 'A' && ch <= 'Z') ||
+    (ch >= 'a' && ch <= 'z') ||
+    (ch >= '0' && ch <= '9') ||
+    ch = '_'
+
+let test str =
+  let len = String.length str in
+  let rec aux_member_start i =
+    if i = len
+    then
+      (if str.[i-1] = '/'
+       then Some "trailing '/'"
+       else Some(sprintf "at position %d: empty member" i))
+    else
+      if is_valid_char (unsafe_get str i)
+      then aux_member (i + 1)
+      else
+        if unsafe_get str i = '/'
+        then Some(sprintf "at position %d: empty member" i)
+        else Some(invalid_char str i)
+  and aux_member i =
+    if i = len
+    then None
+    else match unsafe_get str i with
+      | '/' -> aux_member_start (i + 1)
+      | ch when is_valid_char ch -> aux_member (i + 1)
+      | ch -> Some(invalid_char str i)
+  in
+  if len = 0
+  then Some "empty path"
+  else match unsafe_get str 0 with
+    | '/' -> if len = 1 then None else aux_member_start 1
+    | _ -> Some "must start with '/'"
+
+let validate str = match test str with
+  | None -> ()
+  | Some msg -> raise (Invalid_path(str, msg))
 
 let empty = "/"
 
@@ -40,7 +85,7 @@ let make elts =
     path
 
 let split = function
-  | "" -> raise (Invalid_argument "invalid path")
+  | "" -> raise (Invalid_path("", "empty path"))
   | "/" -> []
   | str when unsafe_get str 0 = '/' ->
       let rec aux acc = function
@@ -53,4 +98,4 @@ let split = function
               aux (elt :: acc) (i - 1)
       in
         aux [] (length str - 1)
-  | _ -> raise (Invalid_argument "invalid path")
+  | s -> validate s; assert false
