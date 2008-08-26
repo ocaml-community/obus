@@ -95,3 +95,18 @@ let get_id = call "GetId" << string >>
 let on_name_owner_changed = on_signal "NameOwnerChanged" << string -> string -> string -> unit >>
 let on_name_lost = on_signal "NameLost" << string -> unit >>
 let on_name_acquired = on_signal "NameAcquired" << string -> unit >>
+
+type status = [ `up | `down ]
+
+let status = function
+  | "" -> `down
+  | _ -> `up
+
+let on_service_status_change bus service f = OBus_signal.add_receiver bus
+  ~sender:"org.freedesktop.DBus"
+  ~path:"/org/freedesktop/DBus"
+  ~interface:"org.freedesktop.DBus"
+  ~member:"NameOwnerChanged"
+  ~args:[0, service]
+  << string -> string -> string -> unit >>
+  (fun _ o n -> f (status o, status n))

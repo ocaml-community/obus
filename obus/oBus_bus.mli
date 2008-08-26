@@ -157,3 +157,13 @@ val on_name_owner_changed : t -> (name -> OBus_name.Connection_unique.t -> OBus_
 
 val on_name_lost : t -> (name -> unit) -> OBus_signal.receiver Lwt.t
 val on_name_acquired : t -> (name -> unit) -> OBus_signal.receiver Lwt.t
+
+(** {6 Service monotiring} *)
+
+type status = [ `down | `up ]
+    (** Service status *)
+
+val on_service_status_change : t -> name -> (status * status -> unit) -> OBus_signal.receiver Lwt.t
+  (** [on_service_status_change bus service f] call f each the status
+      of the service [service] change. The first argument of [f] is
+      [(old_status, new_status)]. *)

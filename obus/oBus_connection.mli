@@ -173,8 +173,8 @@ val add_signal_receiver : t ->
       matching rule. *)
 
 val dadd_signal_receiver : t ->
-  ?sender:OBus_name.Connection_unique.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.Connection.t ->
+  ?destination:OBus_name.Connection_unique.t ->
   ?path:OBus_path.t ->
   ?interface:OBus_name.Interface.t ->
   ?member:OBus_name.Member.t ->

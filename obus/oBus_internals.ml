@@ -45,7 +45,7 @@ open OBus_value
 (* Matching on signals arguments *)
 let rec tst_args args body = match args with
   | [] -> true
-  | (n, p) :: rest -> tst_one_arg n p args body
+  | (n, p) :: rest -> tst_one_arg n p rest body
 
 and tst_one_arg n p arest body = match n, body with
   | 0, Basic (String s) :: brest when s = p -> tst_args arest brest

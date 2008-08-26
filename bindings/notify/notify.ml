@@ -134,6 +134,16 @@ let setup_actions_handler =
              call_func id.id_wakeup
          | None -> ())
 
+(* Survive to replacement/crash of the notification daemon *)
+let setup_monitor_daemon =
+  lazy(perform
+         bus <-- Lazy.force OBus_bus.session;
+         OBus_bus.on_service_status_change bus "org.freedesktop.Notifications"
+           (fun _ ->
+              List.iter (fun (_, id) -> call_func id.id_wakeup) !ids;
+              ids := []);
+         return ())
+
 let notify ?(app_name= !app_name) ?desktop_entry
     ?replace ?(icon="") ?image ~summary ?(body="") ?(actions=[])
     ?urgency ?category ?sound_file ?suppress_sound ?pos ?(hints=[]) ?(timeout= -1) ?on_close ?wakeup () =
@@ -172,7 +182,10 @@ let notify ?(app_name= !app_name) ?desktop_entry
     (* Setup signal handlers only if needed *)
 
     if wakeup <> None || on_close <> None || actions <> []
-    then Lazy.force setup_closed_handler
+    then
+      (perform
+         Lazy.force setup_closed_handler;
+         Lazy.force setup_monitor_daemon)
     else return ();
 
     if actions <> []
