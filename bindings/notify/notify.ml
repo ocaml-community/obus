@@ -98,41 +98,29 @@ let assoc x l =
   try Some(List.assoc x l) with
       Not_found -> None
 
-(* We can not add a match rule here because we will receive signals
-   destined to other connections *)
-let on_signal member typ f =
-  lazy(Lazy.force OBus_bus.session >>= fun bus ->
-         ignore (OBus_connection.add_signal_receiver bus
-                   ~sender:"org.freedesktop.Notifications"
-                   ~member
-                   ~interface:"org.freedesktop.Notifications"
-                   ~path:"/org/freedesktop/Notifications"
-                   typ f);
-         return ())
-
 let setup_closed_handler =
-  on_signal "NotificationClosed" << uint32 -> unit >>
-    (fun n ->
-       match assoc n !ids with
-         | Some id ->
-             id.id_deleted <- true;
-             ids := List.remove_assoc n !ids;
-             call_func id.id_on_close;
-             call_func id.id_wakeup
-         | None -> ())
+  lazy(on_signal ~global:false "NotificationClosed" << uint32 -> unit >>
+        (fun n ->
+           match assoc n !ids with
+             | Some id ->
+                 id.id_deleted <- true;
+                 ids := List.remove_assoc n !ids;
+                 call_func id.id_on_close;
+                 call_func id.id_wakeup
+             | None -> ()) >>= fun _ -> return ())
 
 let setup_actions_handler =
-  on_signal "ActionInvoked" << uint32 -> string -> unit >>
-    (fun n key ->
-       match assoc n !ids with
-         | Some id ->
-             id.id_deleted <- true;
-             ids := List.remove_assoc n !ids;
-             (match assoc key id.id_actions with
-                | Some f -> f ()
-                | None -> ());
-             call_func id.id_wakeup
-         | None -> ())
+  lazy(on_signal ~global:false "ActionInvoked" << uint32 -> string -> unit >>
+        (fun n key ->
+           match assoc n !ids with
+             | Some id ->
+                 id.id_deleted <- true;
+                 ids := List.remove_assoc n !ids;
+                 (match assoc key id.id_actions with
+                    | Some f -> f ()
+                    | None -> ());
+                 call_func id.id_wakeup
+             | None -> ()) >>= fun _ -> return ())
 
 (* Survive to replacement/crash of the notification daemon *)
 let setup_monitor_daemon =

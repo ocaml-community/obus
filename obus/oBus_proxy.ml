@@ -52,12 +52,12 @@ let dmethod_call ?interface ~member proxy body =
     ~member
     body
 
-let on_signal ~interface ~member typ proxy f =
-  OBus_signal.add_receiver (connection proxy) ~interface ~member
+let on_signal ?global ~interface ~member typ proxy f =
+  OBus_signal.add_receiver (connection proxy) ?global ~interface ~member
     ~path:(path proxy) ?sender:(destination proxy) typ f
 
-let don_signal ~interface ~member proxy f =
-  OBus_signal.dadd_receiver (connection proxy) ~interface ~member
+let don_signal ?global ~interface ~member proxy f =
+  OBus_signal.dadd_receiver (connection proxy) ?global ~interface ~member
     ~path:(path proxy) ?sender:(destination proxy) f
 
 let property ~interface ~name ~access typ proxy =

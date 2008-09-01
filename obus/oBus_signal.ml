@@ -13,17 +13,19 @@ open OBus_type
 
 OBUS_type match_rule = string
 
-type receiver = match_rule * OBus_connection.t * signal_receiver
+type receiver = match_rule option * OBus_connection.t * signal_receiver
 
-let call member bus mr =
-  OBus_internals.lwt_with_bus bus
-    (fun _ -> method_call bus
-       ~destination:"org.freedesktop.DBus"
-       ~path:"/org/freedesktop/DBus"
-       ~interface:"org.freedesktop.DBus"
-       ~member
-       (<< match_rule -> unit >>)
-       mr)
+let call member bus = function
+  | None -> return ()
+  | Some m ->
+      OBus_internals.lwt_with_bus bus
+        (fun _ -> method_call bus
+           ~destination:"org.freedesktop.DBus"
+           ~path:"/org/freedesktop/DBus"
+           ~interface:"org.freedesktop.DBus"
+           ~member
+           (<< match_rule -> unit >>)
+           m)
 
 let add = call "AddMatch"
 let rem = call "RemoveMatch"
@@ -38,14 +40,18 @@ let disable_receiver (mr, bus, id) =
     | false -> return ()
     | true -> disable_signal_receiver id; rem bus mr
 
-let add_receiver bus ?sender ?destination ?path ?interface ?member ?args typ func =
+let add_receiver bus ?(global=true) ?sender ?destination ?path ?interface ?member ?args typ func =
   let id = add_signal_receiver bus ?sender ?destination ?path ?interface ?member ?args typ func in
-  let mr = Rules.to_string ~typ:`signal ?sender ?path ?interface ?member () in
+  let mr = match global with
+    | true -> Some(Rules.to_string ~typ:`signal ?sender ?path ?interface ?member ())
+    | false -> None in
   add bus mr >>= (fun _ -> return (mr, bus, id))
 
-let dadd_receiver bus ?sender ?destination ?path ?interface ?member ?args func =
+let dadd_receiver bus ?(global=true) ?sender ?destination ?path ?interface ?member ?args func =
   let id = dadd_signal_receiver bus ?sender ?destination ?path ?interface ?member ?args func in
-  let mr = Rules.to_string ~typ:`signal ?sender ?path ?interface ?member () in
+  let mr = match global with
+    | true -> Some(Rules.to_string ~typ:`signal ?sender ?path ?interface ?member ())
+    | false -> None in
   add bus mr >>= (fun _ -> return (mr, bus, id))
 
 let receiver_enabled (mr, bus, id) = signal_receiver_enabled id

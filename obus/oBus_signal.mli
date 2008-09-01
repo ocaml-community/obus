@@ -13,6 +13,7 @@ type receiver
   (** Function which receive signals *)
 
 val add_receiver : OBus_connection.t ->
+  ?global:bool ->
   ?sender:OBus_name.Connection.t ->
   ?destination:OBus_name.Connection_unique.t ->
   ?path:OBus_path.t ->
@@ -27,9 +28,17 @@ val add_receiver : OBus_connection.t ->
       then a matching rule is automatically added.
 
       [sender], [destination], [path], [interface] and [member],
-      [args] and [typ] act as filters. *)
+      [args] and [typ] act as filters.
+
+      [global] tell weather the signal is a ``global'' signal,
+      i.e. destined to anyone who would want to get it, or if it is
+      especially destined to us. This is basically to avoid to receive
+      signal destined to other applications. This is basically of
+      equivalent of passing our connection unqiue name as
+      [destination] filter. The default value is [true].  *)
 
 val dadd_receiver : OBus_connection.t ->
+  ?global:bool ->
   ?sender:OBus_name.Connection.t ->
   ?destination:OBus_name.Connection_unique.t ->
   ?path:OBus_path.t ->
