@@ -21,7 +21,7 @@ module Make_interf(Name : sig val name : string end) =
 include Make_interf(struct let name = "org.freedesktop.Hal.Device" end)
 
 OBUS_type udi = path
-let computer = "/org/freedesktop/devices/computer"
+let computer = "/org/freedesktop/Hal/devices/computer"
 
 type property =
   | Pstring of string
