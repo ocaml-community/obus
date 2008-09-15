@@ -32,11 +32,11 @@ end
 (***** Signal matching *****)
 
 type signal_match_rule = {
-  smr_sender : OBus_name.Connection.t option;
-  smr_destination : OBus_name.Connection_unique.t option;
+  smr_sender : OBus_name.connection option;
+  smr_destination : OBus_name.connection_unique option;
   smr_path : OBus_path.t option;
-  smr_interface : OBus_name.Interface.t option;
-  smr_member : OBus_name.Member.t option;
+  smr_interface : OBus_name.interface option;
+  smr_member : OBus_name.member option;
   smr_args : (int * string) list;
 }
 
@@ -136,7 +136,7 @@ and connection = connection_state ref
 
 type proxy = {
   proxy_connection : connection;
-  proxy_destination : OBus_name.Connection.t option;
+  proxy_destination : OBus_name.connection option;
   proxy_path : OBus_path.t;
 }
 

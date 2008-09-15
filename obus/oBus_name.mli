@@ -61,3 +61,10 @@ module Error : Name
   (** Error names
 
       example: org.freedesktop.Error.UnknownMethod *)
+
+type connection_unique = Connection_unique.t
+type bus = Bus.t
+type connection = Connection.t
+type interface = Interface.t
+type member = Member.t
+type error = Error.t

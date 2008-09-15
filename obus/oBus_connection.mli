@@ -64,7 +64,7 @@ val guid : t -> OBus_address.guid
   (** [guid connection] return the unique identifier of the server
       address *)
 
-val name : t -> OBus_name.Connection_unique.t option
+val name : t -> OBus_name.connection_unique option
   (** Unique name of the connection. This is only relevant if the
       other side of the connection is a message bus.
 
@@ -90,52 +90,52 @@ val send_message_with_reply : t -> OBus_message.method_call -> OBus_message.meth
 
 val method_call : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.connection ->
+  ?destination:OBus_name.connection ->
   path:OBus_path.t ->
-  ?interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
   ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
   (** Send a method call and wait for the reply *)
 
 val kmethod_call : ((t -> 'a Lwt.t) -> 'b) ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.connection ->
+  ?destination:OBus_name.connection ->
   path:OBus_path.t ->
-  ?interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
   ('c, 'b, 'a) OBus_type.ty_function -> 'c
   (** Same thing but take a continuation *)
 
 val dmethod_call : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.connection ->
+  ?destination:OBus_name.connection ->
   path:OBus_path.t ->
-  ?interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
   OBus_message.body -> OBus_message.body Lwt.t
   (** Dynamically-typed version, take the message body as a
       dynamically-typed value *)
 
 val emit_signal : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.connection ->
+  ?destination:OBus_name.connection ->
   path:OBus_path.t ->
-  interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  interface:OBus_name.interface ->
+  member:OBus_name.member ->
   ('a, unit Lwt.t, unit) OBus_type.ty_function -> 'a
   (** Emit a signal *)
 
 val demit_signal : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.connection ->
+  ?destination:OBus_name.connection ->
   path:OBus_path.t ->
-  interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  interface:OBus_name.interface ->
+  member:OBus_name.member ->
   OBus_message.body -> unit Lwt.t
 
 val send_error : t -> OBus_message.method_call -> OBus_error.name -> OBus_error.message -> unit Lwt.t
@@ -160,11 +160,11 @@ val call_and_cast_reply : ('a, 'b, 'c) OBus_type.ty_function ->
 type signal_receiver
 
 val add_signal_receiver : t ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection_unique.t ->
+  ?sender:OBus_name.connection ->
+  ?destination:OBus_name.connection_unique ->
   ?path:OBus_path.t ->
-  ?interface:OBus_name.Interface.t ->
-  ?member:OBus_name.Member.t ->
+  ?interface:OBus_name.interface ->
+  ?member:OBus_name.member ->
   ?args:(int * string) list ->
   ('a, unit, unit) OBus_type.ty_function -> 'a -> signal_receiver
   (** Add a signal receiver.
@@ -173,11 +173,11 @@ val add_signal_receiver : t ->
       matching rule. *)
 
 val dadd_signal_receiver : t ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection_unique.t ->
+  ?sender:OBus_name.connection ->
+  ?destination:OBus_name.connection_unique ->
   ?path:OBus_path.t ->
-  ?interface:OBus_name.Interface.t ->
-  ?member:OBus_name.Member.t ->
+  ?interface:OBus_name.interface ->
+  ?member:OBus_name.member ->
   ?args:(int * string) list ->
   (OBus_message.body -> unit) -> signal_receiver
   (** Dynamically-typed version. This one is more generic than

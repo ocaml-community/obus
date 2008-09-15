@@ -156,3 +156,10 @@ end
 
 let is_unique_connection_name s = s <> "" && unsafe_get s 0 = ':'
 let is_bus_name s = not (is_unique_connection_name s)
+
+type connection_unique = Connection_unique.t
+type bus = Bus.t
+type connection = Connection.t
+type interface = Interface.t
+type member = Member.t
+type error = Error.t

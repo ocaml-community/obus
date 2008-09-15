@@ -76,7 +76,7 @@ val make_sequence : [< 'a cl_sequence ] -> 'a -> sequence
 exception Cast_failure
   (** Exception raised when a cast fail *)
 
-type context = OBus_internals.connection * OBus_name.Connection.t option
+type context = OBus_internals.connection * OBus_name.connection option
 
 val cast_basic : [< 'a cl_basic ] -> ?context:context -> basic -> 'a
 val cast_single : [< 'a cl_single ] -> ?context:context -> single -> 'a

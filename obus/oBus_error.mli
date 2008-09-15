@@ -9,7 +9,7 @@
 
 (** DBus errors *)
 
-type name = string
+type name = OBus_name.error
     (** An error name. It can contains multiple components, for
         example: "org.foo.bar.Error.Failed" *)
 
