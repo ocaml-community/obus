@@ -94,6 +94,7 @@ install: all just-install
 
 just-install:
 	$(OF) install obus _build/META `cat _build/lib-dist` \
+	 _build/syntax/pa_obus.cmo \
 	 $(LIB:%=_build/%.cma) \
 	 $(LIB:%=_build/%.cmxa) \
 	 $(LIB:%=_build/%.a) \
