@@ -235,6 +235,7 @@ struct
   let wuint64 = write8 unsafe_write_int64_as_uint64
   let wdouble buffer i v = wuint64 buffer i (Int64.of_float v)
   let wboolean buffer i v = wuint buffer i (match v with false -> 0 | true -> 1)
+
   let wunsafe_string buffer i str =
     let len = String.length str in
     let i = wlen buffer i len in
@@ -242,28 +243,32 @@ struct
     String.unsafe_blit str 0 buffer i len;
     String.unsafe_set buffer (i + len) '\000';
     i + len + 1
-  let wobject_path buffer i path =
-    let rec aux i = function
-      | [] ->
-          if i + 1 > String.length buffer then raise Out_of_bounds;
-          String.unsafe_set buffer i '\000';
-          i
-      | element :: rest ->
-          OBus_path.validate_element element;
-          let len = String.length element in
-          if i + len > String.length buffer then raise Out_of_bounds;
-          String.unsafe_blit element 0 buffer i len;
-          aux (i + len) rest
-    in
-    let i = wpad4 buffer i in
-    let j = i + 4 in
-    let k = aux j path in
-    let _ = wlen buffer j (k - j) in
-    j + 1
 
   let wstring buffer i str =
     validate_string (fun exn -> Writing_error exn) str;
     wunsafe_string buffer i str
+
+  let wobject_path buffer i = function
+    | [] -> wstring buffer i "/"
+    | path ->
+        let rec aux i = function
+          | [] ->
+              if i + 1 > String.length buffer then raise Out_of_bounds;
+              String.unsafe_set buffer i '\000';
+              i
+          | element :: rest ->
+              OBus_path.validate_element element;
+              let len = String.length element in
+              if i + len + 1 > String.length buffer then raise Out_of_bounds;
+              String.unsafe_set buffer i '/';
+              String.unsafe_blit element 0 buffer (i + 1) len;
+              aux (i + len + 1) rest
+        in
+        let i = wpad4 buffer i in
+        let j = i + 4 in
+        let k = aux j path in
+        unsafe_write_int_as_uint32 buffer i (k - j);
+        k + 1
 
   module Types_writer = Types_rw.Make_writer(OBus_value)
 

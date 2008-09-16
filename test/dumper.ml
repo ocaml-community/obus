@@ -39,7 +39,7 @@ let make prefix t =
 let notify connection title msg =
   OBus_connection.method_call connection
     ~destination:"org.freedesktop.Notifications"
-    ~path:"/org/freedesktop/Notifications"
+    ~path:["org"; "freedesktop"; "Notifications"]
     ~interface:"org.freedesktop.Notifications"
     ~member:"Notify"
     (tstring -->
@@ -72,7 +72,7 @@ let _ =
        name <-- OBus_connection.method_call bus
          ~destination:"org.freedesktop.DBus"
          ~member:"Hello"
-         ~path:"/org/freedesktop/DBus"
+         ~path:["org"; "freedesktop"; "DBus"]
          ~interface:"org.freedesktop.DBus"
          (reply tstring);
        return (Printf.printf "my name is: %s\n%!" name);

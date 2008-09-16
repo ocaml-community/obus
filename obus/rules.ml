@@ -35,15 +35,17 @@ let to_string ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
   add_opt "member" OBus_name.Member.validate member;
   (match path with
      | None -> ()
-     | Some [] -> add "path" "/"
+     | Some [] -> coma (); add "path" "/"
      | Some p ->
+         coma ();
          Buffer.add_string buf "path='";
          List.iter
            (fun elt ->
               OBus_path.validate_element elt;
               Buffer.add_char buf '/';
               Buffer.add_string buf elt)
-           p);
+           p;
+         Buffer.add_char buf '\'');
   add_opt "destination" OBus_name.Connection_unique.validate destination;
   List.iter (fun (n, value) -> coma (); Printf.bprintf buf "arg%d='%s'" n value) args;
   Buffer.contents buf

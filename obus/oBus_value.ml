@@ -184,7 +184,7 @@ let string_of_basic = function
   | Double x -> sprintf "Double %f" x
   | String x -> sprintf "String %S" x
   | Signature x -> sprintf "Signature(%s)" (string_of_tsequence x)
-  | Object_path x -> sprintf "Object_path [%s]" (String.concat "; " x)
+  | Object_path x -> sprintf "Object_path [%s]" (String.concat "; " (List.map (sprintf "%S") x))
 
 let rec string_of_single = function
   | Basic v -> sprintf "Basic(%s)" (string_of_basic v)

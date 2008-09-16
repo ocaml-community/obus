@@ -61,5 +61,5 @@ let testc typ =
 let _ =
   test OBus_info.Little_endian;
   test OBus_info.Big_endian;
-  testc (tint --> (tstring --> (tlist tpath --> reply tuint)))  1 "coucou" ["/toto/klk"; "/sdfh/iuo"];
+  testc (tint --> (tstring --> (tlist tpath --> reply tuint)))  1 "coucou" [["toto"; "klk"]; ["sdfh"; "iuo"]];
   Unix.sleep 1

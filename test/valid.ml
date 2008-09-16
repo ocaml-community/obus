@@ -20,7 +20,7 @@ let testc b s =
   catch (fun _ -> OBus_connection.method_call b
            ~interface:"toto"
            ~member:"toto"
-           ~path:"/"
+           ~path:[]
            << string -> unit >> s)
     (fun exn -> prerr_endline (Printexc.to_string exn); return ())
 
