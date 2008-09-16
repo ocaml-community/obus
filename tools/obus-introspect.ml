@@ -65,7 +65,7 @@ let rec get (nodes, map) bus service path =
      let nodes = (path, List.map fst interfaces) :: nodes in
      match !recursive with
        | true ->
-           Lwt_util.fold_left (fun acc name -> get acc bus service & OBus_path.append path name) (nodes, map) subs
+           Lwt_util.fold_left (fun acc name -> get acc bus service & path @ [name]) (nodes, map) subs
        | false ->
            return (nodes, map))
 
@@ -96,7 +96,7 @@ let main service path =
            end
        | true ->
            List.iter begin fun (path, interfaces) ->
-             print_endline path;
+             print_endline (OBus_path.to_string path);
              List.iter (Printf.printf " + %s\n") interfaces;
              print_newline ();
            end nodes
@@ -109,7 +109,7 @@ let _ =
     usage_msg;
 
   let service, path = match !anons with
-    | [path; service] -> (service, path)
+    | [path; service] -> (service, OBus_path.of_string path)
     | _ -> Arg.usage args usage_msg; exit 1
   in
 

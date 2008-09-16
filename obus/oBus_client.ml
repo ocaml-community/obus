@@ -25,7 +25,7 @@ module type Interface = sig
 end
 module type Constant_path_params = sig
   val name : string
-  val path : string
+  val path : OBus_path.t
   val service : string option
 end
 module type Constant_bus_params = sig

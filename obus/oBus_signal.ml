@@ -21,7 +21,7 @@ let call member bus = function
       OBus_internals.lwt_with_bus bus
         (fun _ -> method_call bus
            ~destination:"org.freedesktop.DBus"
-           ~path:"/org/freedesktop/DBus"
+           ~path:["org"; "freedesktop"; "DBus"]
            ~interface:"org.freedesktop.DBus"
            ~member
            (<< match_rule -> unit >>)

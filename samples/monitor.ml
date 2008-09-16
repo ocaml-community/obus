@@ -38,7 +38,7 @@ let filter what_bus message =
            sprintf "method_call
   path = %S
   interface = %s
-  member = %S" path (opt interface) member
+  member = %S" (OBus_path.to_string path) (opt interface) member
        | `Method_return reply_serial ->
            sprintf "method_return
   reply_serial = %ld" reply_serial
@@ -50,7 +50,7 @@ let filter what_bus message =
            sprintf "signal
   path = %S
   interface = %S
-  member = %S" path interface member)
+  member = %S" (OBus_path.to_string path) interface member)
     (opt message.destination)
     (opt message.sender)
     (string_of_signature (type_of_sequence message.body))

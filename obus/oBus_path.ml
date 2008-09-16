@@ -10,10 +10,11 @@
 open Printf
 open String
 
-type t = string
-type elt = string
+type element = string
+type t = element list
 
 exception Invalid_path of string * string
+exception Invalid_element of string * string
 
 let invalid_char str i =
   sprintf "at position %d: invalid character %C, must be one of \"[A-Z][a-z][0-9]_\"" i str.[i]
@@ -25,7 +26,7 @@ let is_valid_char ch =
     ch = '_'
 
 let test str =
-  let len = String.length str in
+  let len = length str in
   let rec aux_member_start i =
     if i = len
     then
@@ -53,38 +54,41 @@ let test str =
     | '/' -> if len = 1 then None else aux_member_start 1
     | _ -> Some "must start with '/'"
 
+let test_element = function
+  | "" -> Some("empty member")
+  | str ->
+      let rec aux = function
+        | -1 -> None
+        | i ->
+            if is_valid_char (unsafe_get str i)
+            then aux (i - 1)
+            else Some(invalid_char str i)
+      in
+      aux (length str - 1)
+
 let validate str = match test str with
   | None -> ()
   | Some msg -> raise (Invalid_path(str, msg))
 
-let empty = "/"
+let validate_element str = match test_element str with
+  | None -> ()
+  | Some msg -> raise (Invalid_element(str, msg))
 
-let append path elt = match path with
-  | "/" -> "/" ^ elt
-  | _ ->
-      let path_len = length path
-      and elt_len = length elt in
-      let result = create (path_len + elt_len + 1) in
-        unsafe_blit path 0 result 0 path_len;
-        unsafe_set result path_len '/';
-        unsafe_blit elt 0 result (path_len + 1) elt_len;
-        result
+let empty = []
 
-let (/) = append
+let to_string path =
+  let str = create (List.fold_left (fun len elt -> len + length elt + 1) 0 path)  in
+  ignore
+    (List.fold_left
+       (fun pos elt ->
+          unsafe_set str pos '/';
+          let len = length elt in
+          unsafe_blit elt 0 str (pos + 1) len;
+          pos + 1 + len)
+       0 path);
+  str
 
-let make elts =
-  let path = create (List.fold_left (fun len elt -> len + length elt + 1) 0 elts)  in
-    ignore
-      (List.fold_left
-         (fun pos elt ->
-            unsafe_set path pos '/';
-            let len = length elt in
-              unsafe_blit elt 0 path (pos + 1) len;
-              pos + 1 + len)
-         0 elts);
-    path
-
-let split = function
+let of_string = function
   | "" -> raise (Invalid_path("", "empty path"))
   | "/" -> []
   | str when unsafe_get str 0 = '/' ->

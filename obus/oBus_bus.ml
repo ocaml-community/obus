@@ -14,7 +14,7 @@ open OBus_type
 include OBus_client.Make_constant_path
   (struct
      let name = "org.freedesktop.DBus"
-     let path = "/org/freedesktop/DBus"
+     let path = ["org"; "freedesktop"; "DBus"]
      let service = Some "org.freedesktop.DBus"
    end)
 
@@ -104,7 +104,7 @@ let status = function
 
 let on_service_status_change bus service f = OBus_signal.add_receiver bus
   ~sender:"org.freedesktop.DBus"
-  ~path:"/org/freedesktop/DBus"
+  ~path:["org"; "freedesktop"; "DBus"]
   ~interface:"org.freedesktop.DBus"
   ~member:"NameOwnerChanged"
   ~args:[0, service]

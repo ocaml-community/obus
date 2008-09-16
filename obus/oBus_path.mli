@@ -9,39 +9,53 @@
 
 (** Manipulation of dbus object paths *)
 
-type t = string
-    (** A complete path *)
-
-type elt = string
+type element = string
     (** A path component *)
+
+type t = element list
+   (** A complete path *)
+
+(** {6 Construction} *)
+
+val empty : t
+  (** Empty path *)
+
+val of_string : string -> t
+  (** Create an object path from a string.
+
+      @raise Invalid_path if the given string does not represent a
+      valid object path *)
+
+val to_string : t -> string
+  (** Return a string representation of an object path *)
+
+(** {6 Validation} *)
+
+val test_element : string -> string option
+  (** Test weather a string is a valid path element.
+
+      @return [None] if it the case or [Some msg] where [msg] is the
+      explanation otherwise *)
+
+val test : string -> string option
+  (** Same thing but for a string containing a whole object path *)
+
+exception Invalid_element of string * string
+  (** [Invalid_element(element, msg)] exception raised when an invalid
+      path element is used *)
+
+val validate_element : string -> unit
+  (** Validate a path element.
+
+      @raise Invalid_element if the string is not a valid path
+      element *)
 
 exception Invalid_path of string * string
   (** [Invalid_path(path, msg)] exception raised when an invalid path
       is used *)
 
-(** {6 Validation} *)
-
-val test : string -> string option
-  (** Test if a string contain a valid path. Return [None] if it is
-      the case or [Some msg] where is the explanation otherwise *)
-
 val validate : string -> unit
-  (** Validate a string. Raise an [Invalid_path] is the string does not
-      contain a valid object path *)
+  (** Validate a path.
 
-(** {6 Construction} *)
-
-val empty : t
-  (** empty path *)
-
-val append : t -> elt -> t
-val (/) : t -> elt -> t
-  (** [append path x] append [x] to [t]. [x] must not contain ['/'] *)
-
-val make : elt list -> t
-  (** make a path from a list of component *)
-
-(** {6 utils} *)
-
-val split : t -> elt list
-  (** return all components of a path *)
+      @raise Invalid_path if the string does not represent a valid
+      object path *)

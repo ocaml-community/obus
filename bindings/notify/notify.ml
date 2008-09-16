@@ -14,7 +14,7 @@ open OBus_value
 include OBus_client.Make_constant
   (struct
      let name = "org.freedesktop.Notifications"
-     let path = "/org/freedesktop/Notifications"
+     let path = ["org"; "freedesktop"; "Notifications"]
      let service = Some name
      let bus = OBus_bus.session
    end)

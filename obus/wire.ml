@@ -242,7 +242,24 @@ struct
     String.unsafe_blit str 0 buffer i len;
     String.unsafe_set buffer (i + len) '\000';
     i + len + 1
-  let wobject_path buffer i path = OBus_path.validate path; wunsafe_string buffer i path
+  let wobject_path buffer i path =
+    let rec aux i = function
+      | [] ->
+          if i + 1 > String.length buffer then raise Out_of_bounds;
+          String.unsafe_set buffer i '\000';
+          i
+      | element :: rest ->
+          OBus_path.validate_element element;
+          let len = String.length element in
+          if i + len > String.length buffer then raise Out_of_bounds;
+          String.unsafe_blit element 0 buffer i len;
+          aux (i + len) rest
+    in
+    let i = wpad4 buffer i in
+    let j = i + 4 in
+    let k = aux j path in
+    let _ = wlen buffer j (k - j) in
+    j + 1
 
   let wstring buffer i str =
     validate_string (fun exn -> Writing_error exn) str;
@@ -460,16 +477,41 @@ struct
        | 0 -> false
        | 1 -> true
        | n -> raise & Reading_error ("invalid boolean value: " ^ string_of_int n))
+
   let runsafe_string buffer i =
-    let i, len = ruint buffer i in
+    let i, len = rlen buffer i in
     let end_ptr = i + len + 1 in
     if len < 0 || end_ptr > String.length buffer then raise Out_of_bounds;
     let str = String.create len in
     String.unsafe_blit buffer i str 0 len;
     match String.unsafe_get buffer (i + len) with
       | '\x00' -> (end_ptr, str)
-      | _ -> raise & Reading_error "terminating null byte missing"
-  let robject_path = rwrap runsafe_string (fun x -> OBus_path.validate x; x)
+      | _ -> raise & Reading_error "string terminal null byte missing"
+
+  let robject_path buffer i =
+    let i, len = rlen buffer i in
+    if len < 0 || i + len + 1 > String.length buffer then raise Out_of_bounds;
+    (* Check for the initial '/' *)
+    if String.unsafe_get buffer i <> '/' then
+      raise & Reading_error "object path do not start with a '/'";
+    if String.unsafe_get buffer (i + len) <> '\x00' then
+      raise & Reading_error "object path terminal null byte missing";
+    let rec aux acc j =
+      if j < i
+      then (i + len + 1, acc)
+      else begin
+        (* rindex_from never fail here since we know there is a '/' at
+           the begining *)
+        let k = String.rindex_from buffer j '/' in
+        let len = j - k in
+        let elt = String.create len in
+        String.unsafe_blit buffer (k + 1) elt 0 len;
+        match OBus_path.test_element elt with
+          | None -> aux (elt :: acc) (k - 1)
+          | Some msg -> raise & Reading_error ("invalid object path: " ^ msg)
+      end
+    in
+    aux [] (i + len - 1)
 
   let rstring = rwrap runsafe_string
     (fun str ->

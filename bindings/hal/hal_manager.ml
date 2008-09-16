@@ -14,7 +14,7 @@ open Lwt
 include OBus_client.Make_constant
   (struct
      let name = "org.freedesktop.Hal.Manager"
-     let path = "/org/freedesktop/Hal/Manager"
+     let path = ["org"; "freedesktop"; "Hal"; "Manager"]
      let service = Some "org.freedesktop.Hal"
      let bus = OBus_bus.system
    end)
@@ -24,6 +24,8 @@ let get_all_devices_with_properties = call "GetAllDevicesWithProperties" << unit
 let device_exists = call "DeviceExists" << object_path -> bool >>
 let find_device_string_match = call "FindDeviceStringMatch" << string -> string -> Hal_device.udi list >>
 
+let tbroken_udi = wrap_basic tstring OBus_path.of_string OBus_path.to_string
+
 (* Signature from introsection seems to be wrong for this method. So
    we temporary use this ugly hack: *)
 let find_device_by_capability capability =
@@ -31,7 +33,7 @@ let find_device_by_capability capability =
     match opt_cast_sequence <:obus_type< path list >> v with
       | Some x -> return x
       | None ->
-          match opt_cast_sequence <:obus_type< string list >> v with
+          match opt_cast_sequence <:obus_type< broken_udi list >> v with
             | Some x -> return x
             | None ->
                 fail
@@ -47,8 +49,8 @@ let acquire_global_interface_lock = call "AcquireGlobalInterfaceLock" << string 
 let release_global_interface_lock = call "ReleaseGlobalInterfaceLock" << string -> unit >>
 let singleton_addon_is_ready = call "SingletonAddonIsReady" << string -> unit >>
 
-let on_device_added = on_signal "DeviceAdded" << string -> unit >>
-let on_device_removed = on_signal "DeviceRemoved" << string -> unit >>
-let on_new_capability = on_signal "NewCapability" << string -> string -> unit >>
+let on_device_added = on_signal "DeviceAdded" << broken_udi -> unit >>
+let on_device_removed = on_signal "DeviceRemoved" << broken_udi -> unit >>
+let on_new_capability = on_signal "NewCapability" << broken_udi -> string -> unit >>
 let on_global_interface_lock_acquired = on_signal "GlobalInterfaceLockAcquired" << string -> string -> int -> unit >>
 let on_global_interface_lock_released = on_signal "GlobalInterfaceLockReleased" << string -> string -> int -> unit >>

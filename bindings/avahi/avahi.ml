@@ -81,7 +81,7 @@ end
 module Server = struct
   include OBus_client.Make_constant(struct
                                       let name = "org.freedesktop.Avahi.Server"
-                                      let path = "/"
+                                      let path = OBus_path.empty
                                       let service = Some "org.freedesktop.Avahi"
                                       let bus = OBus_bus.system
                                     end)

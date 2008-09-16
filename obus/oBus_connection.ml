@@ -105,13 +105,13 @@ let string_of_message message =
     message.flags.no_reply_expected message.flags.no_auto_start message.serial
     (match message.typ with
        | `Method_call(path, interface, member) ->
-           sprintf "`Method_call(%S, %s, %S)" path (opt interface) member
+           sprintf "`Method_call(%s, %s, %S)" (OBus_path.to_string path) (opt interface) member
        | `Method_return reply_serial ->
            sprintf "`Method_return(%ldl)" reply_serial
        | `Error(reply_serial, error_name) ->
            sprintf "`Error(%ldl, %S)" reply_serial error_name
        | `Signal(path, interface, member) ->
-           sprintf "`Signal(%S, %S, %S)" path interface member)
+           sprintf "`Signal(%s, %S, %S)" (OBus_path.to_string path) interface member)
     (opt message.sender)
     (opt message.destination)
     (string_of_sequence message.body)

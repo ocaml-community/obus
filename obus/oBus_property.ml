@@ -28,9 +28,9 @@ let rdwr = `readable
 type desc = {
   connection : connection;
   destination : string option;
-  path : string;
+  path : OBus_path.t;
   interface : string;
-  name:string;
+  name : string;
 }
 
 type ('a, 'access) t = desc * 'a cl_single
