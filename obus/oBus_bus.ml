@@ -44,6 +44,7 @@ let system = lazy(of_addresses (Lazy.force OBus_address.system))
 
 OBUS_exn Name_has_no_owner = "Error.NameHasNoOwner"
 OBUS_exn Match_rule_not_found = "Error.MatchRuleNotFound"
+OBUS_exn Service_unknown = "Error.ServiceUnknown"
 
 OBUS_bitwise request_name_flag : uint =
   [ 1 -> `allow_replacement
@@ -90,7 +91,7 @@ let get_connection_unix_user = call "GetConnectionUnixUser" << string -> int >>
 let get_connection_unix_process_id = call "GetConnectionUnixProcessId" << string -> int >>
 let get_connection_selinux_security_context = call "GetConnectionSelinuxSecurityContext" << string -> byte_array >>
 let reload_config = call "ReloadConfig" << unit >>
-let get_id = call "GetId" << string >>
+let get_id = call "GetId" << uuid >>
 
 let on_name_owner_changed = on_signal "NameOwnerChanged" << string -> string -> string -> unit >>
 let on_name_lost = on_signal "NameLost" << string -> unit >>

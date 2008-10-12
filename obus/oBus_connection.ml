@@ -10,8 +10,6 @@
 open Printf
 open OBus_message
 open OBus_internals
-open Wire
-open Wire_message
 open OBus_type
 open OBus_value
 open Lwt
@@ -22,8 +20,6 @@ type name = string
 type filter_id = filter MSet.node
 type signal_receiver = (signal_match_rule * signal handler) MSet.node
 
-exception Protocol_error of string
-exception Invalid_data of string
 exception Connection_closed
 
 type t = connection
@@ -54,15 +50,6 @@ let remove_connection_of_guid_map running =
    connection has crashed) is always done by the dispatcher thread.
 *)
 
-(* Tell weather an error is a fatal error. A fatal error will always
-   make the connection to crash. *)
-let is_fatal = function
-  | Protocol_error _
-  | Out_of_bounds
-  | Reading_error _
-  | OBus_transport.Error _ -> true
-  | _ -> false
-
 (* Change the state of the connection to [Crashed] and abort the
    transport.
 
@@ -75,10 +62,7 @@ let set_crash connection exn = match !connection with
       connection := Crashed exn;
       remove_connection_of_guid_map running;
       (* Abort the transport so the dispatcher will exit *)
-      begin match OBus_transport.backend running.transport with
-        | OBus_transport.Socket fd -> Lwt_unix.abort fd exn
-        | _ -> ()
-      end;
+      running.transport#abort exn;
       (false, exn)
 
 let check_crash connection = match !connection with
@@ -93,28 +77,6 @@ let close connection = match set_crash connection Connection_closed with
 let get_error msg = match msg.body with
   | Basic String x :: _ -> x
   | _ -> ""
-
-(* Message printing (for debugging) *)
-
-let string_of_message message =
-  let opt = function
-    | Some s -> sprintf "%S" s
-    | None -> "-"
-  in
-  sprintf "(%B, %B), %ldl, %s, %s -> %s, %s"
-    message.flags.no_reply_expected message.flags.no_auto_start message.serial
-    (match message.typ with
-       | `Method_call(path, interface, member) ->
-           sprintf "`Method_call(%s, %s, %S)" (OBus_path.to_string path) (opt interface) member
-       | `Method_return reply_serial ->
-           sprintf "`Method_return(%ldl)" reply_serial
-       | `Error(reply_serial, error_name) ->
-           sprintf "`Error(%ldl, %S)" reply_serial error_name
-       | `Signal(path, interface, member) ->
-           sprintf "`Signal(%s, %S, %S)" (OBus_path.to_string path) interface member)
-    (opt message.sender)
-    (opt message.destination)
-    (string_of_sequence message.body)
 
 (***** Sending messages *****)
 
@@ -131,29 +93,28 @@ let send_message_backend with_serial connection message =
       (* Maybe register a reply handler *)
       with_serial running serial;
 
-      DEBUG("sending on %S: %s" running.guid (string_of_message message));
+      if OBus_info.dump then
+        Format.eprintf "-----@\n@[<hv 2>sending message on %s:@\n%a@]@."
+          (OBus_uuid.to_string running.guid) OBus_message.print message;
 
-      (* Write the message *)
-      try_bind (fun _ -> send_one_message connection { message with serial = serial })
-        (fun _ ->
-           (* Send the new serial/buffer *)
-           wakeup w serial;
-           return ())
-        (function
+      (* Create the message marshaler *)
+      match running.transport#put_message { message with serial = serial } with
+        | OBus_lowlevel.Marshaler_failure msg ->
+            wakeup w serial;
+            fail (Failure ("can not send message: " ^ msg))
 
-           (* A fatal error, make the connection to crash *)
-           | OBus_transport.Error _ as exn ->
-               let exn = snd (set_crash connection exn) in
-               wakeup_exn w exn;
-               fail exn
-
-           (* A non-fatal error, let the connection continue *)
-           | Writing_error msg ->
-               wakeup w serial;
-               fail & Invalid_data msg
-           | exn ->
-               wakeup w serial;
-               fail exn)
+        | OBus_lowlevel.Marshaler_success f ->
+            try_bind f
+              (fun _ ->
+                 wakeup w serial;
+                 return ())
+              (fun exn ->
+                 (* Any error is fatal here, because this is possible
+                    that a message has been partially sent on the
+                    connection, so the message stream is broken *)
+                 let exn = snd (set_crash connection exn) in
+                 wakeup_exn w exn;
+                 fail exn)
 
 let send_message connection message = send_message_backend (fun _ _ -> ()) connection message
 
@@ -284,8 +245,6 @@ let find_reply_handler running serial f g =
 let ignore_send_exn connection method_call exn = ignore_result (send_exn connection method_call exn)
 
 let dispatch_message connection running message =
-  DEBUG("received on %S: %s" running.guid (string_of_message message));
-
   (* First of all, pass the message through all filters *)
   MSet.iter (fun filter ->
                filter message;
@@ -305,10 +264,7 @@ let dispatch_message connection running message =
              try
                handler message
              with
-                 exn when not (is_fatal exn) ->
-                   (* Always notify the user of non-fatal
-                      errors *)
-                   error_handler exn)
+                 exn -> error_handler exn)
           (fun _ ->
              DEBUG("reply to message with serial %ld dropped" reply_serial))
 
@@ -380,20 +336,10 @@ let dispatch_message connection running message =
         end
 *)
 
-let traduce = function
-  | Out_of_bounds -> Protocol_error "invalid message size"
-  | Reading_error msg -> Protocol_error msg;
-  | exn -> exn
-
 let default_on_disconnect exn =
-  begin match traduce exn with
-    | Protocol_error msg ->
+  begin match exn with
+    | OBus_lowlevel.Protocol_error msg ->
         ERROR("the DBus connection has been closed due to a protocol error: %s" msg)
-    | OBus_transport.Error(msg, exn_opt) ->
-        ERROR("the DBus connection has been closed due to a transport error: %s%s" msg
-                (match exn_opt with
-                   | Some exn -> ": " ^ Printexc.to_string exn
-                   | None -> ""))
     | exn ->
         ERROR("the DBus connection has been closed due to this uncaught exception: %s" (Printexc.to_string exn))
   end;
@@ -401,8 +347,11 @@ let default_on_disconnect exn =
 
 let rec dispatch_forever connection on_disconnect = match !connection with
   | Running running ->
-      Lwt.bind (recv_one_message connection)
+      Lwt.bind (running.transport#get_message)
         (fun message ->
+           if OBus_info.dump then
+             Format.eprintf "-----@\n@[<hv 2>message received on %s:@\n%a@]@."
+               (OBus_uuid.to_string running.guid) OBus_message.print message;
            begin
              try
                dispatch_message connection running message
@@ -436,7 +385,6 @@ let of_authenticated_transport ?(shared=true) transport guid =
       outgoing = Lwt.return 0l;
       reply_handlers = Serial_map.empty;
       signal_handlers = MSet.make ();
-(*      service_handlers = Interf_map.empty;*)
       filters = MSet.make ();
       guid = guid;
       name = None;
@@ -457,12 +405,12 @@ let of_authenticated_transport ?(shared=true) transport guid =
               connection
 
 let of_transport ?(shared=true) transport =
-  OBus_auth.launch transport >>= function
+  Lazy.force (transport#authenticate) >>= function
     | None -> fail (Failure "cannot authentificate on the given transport")
     | Some guid -> return & of_authenticated_transport ~shared transport guid
 
 let of_addresses ?(shared=true) addresses = match shared with
-  | false -> OBus_transport.of_addresses addresses >>= of_transport ~shared:false
+  | false -> OBus_lowlevel.transport_of_addresses addresses >>= of_transport ~shared:false
   | true ->
       (* Try to find a guid that we already have *)
       let guids = Util.filter_map (fun ( _, g) -> g) addresses in
@@ -473,7 +421,9 @@ let of_addresses ?(shared=true) addresses = match shared with
                there is no other connection to a server with the
                same guid, because during the authentification
                another thread can add a new connection. *)
-            OBus_transport.of_addresses addresses >>= of_transport ~shared:true
+            OBus_lowlevel.transport_of_addresses addresses >>= of_transport ~shared:true
+
+let loopback = of_authenticated_transport ~shared:false OBus_lowlevel.loopback OBus_uuid.loopback
 
 let on_disconnect connection =
   with_running connection & fun running -> running.on_disconnect

@@ -10,7 +10,7 @@
 type name = string
 type key = string
 type value = string
-type guid = string
+type guid = OBus_uuid.t
 
 type family = Ipv4 | Ipv6
 
@@ -62,13 +62,7 @@ let of_string str =
            | _ -> Unknown(name, params)
          end,
          match Util.assoc "guid" params with
-           | Some(guid_hex_encoded) ->
-               let lexbuf = Lexing.from_string guid_hex_encoded in
-                 Buffer.clear buf;
-                 for i = 1 to (String.length guid_hex_encoded) / 2 do
-                   Addr_lexer.unescape_char buf lexbuf
-                 done;
-                 Some(Buffer.contents buf)
+           | Some(guid_hex_encoded) -> Some(OBus_uuid.of_string guid_hex_encoded)
            | None -> None) end addresses
   with
       Failure msg ->

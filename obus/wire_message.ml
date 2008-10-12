@@ -11,15 +11,10 @@ open Printf
 open Lwt
 open Wire
 open OBus_message
-open OBus_internals
 open OBus_value
 open OBus_info
 
-(* Serializaion buffers, since we do not use threads this is correct
-   and this avoid to have to create one buffer by connection *)
-
-let rbuffer = ref (String.create 65536)
-let wbuffer = ref (String.create 65536)
+let header_signature = [Tbyte; Tbyte; Tbyte; Tbyte; Tuint32; Tuint32; Tarray(Tstruct [Tbyte; Tvariant])]
 
 (* Raw description of header fields *)
 
@@ -79,9 +74,9 @@ let signal_of_raw fields =
             req interface fields,
             req member fields)
 
-module Reader(BO : Byte_order) =
+module Reader(Int_readers : Int_readers) =
 struct
-  include Make_unsafe_reader(BO)
+  include Make_reader(BO)
 
   let read_fields limit =
     let buffer = !rbuffer in

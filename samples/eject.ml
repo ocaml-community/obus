@@ -18,7 +18,7 @@ let main =
      let _ = printf "cdrom(s) found: %d\n" (List.length cdroms) in
      Lwt_util.iter begin function cdrom ->
        Printf.printf "eject on device %s\n" (OBus_path.to_string cdrom);
-       Hal_device.Volume.eject cdrom [] >>= fun _ -> return ();
+       Hal_device.Storage.eject cdrom [] >>= fun _ -> return ();
      end cdroms)
 
 let _ = Lwt_unix.run main

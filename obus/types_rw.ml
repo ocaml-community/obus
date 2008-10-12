@@ -33,83 +33,107 @@ module type Types = sig
     | Tsingle of tsingle
 end
 
-module type Parser_params =
+module type Reader_params =
 sig
-  (* These parameters depends on if we are reading/writing a string
-     containg only one signature or if the signature is part of a
-     message *)
-  val get : string -> int -> char
-  val terminated : string -> int -> bool
+  type 'a t
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val return : 'a -> 'a t
+  val failwith : ('b, unit, string, 'a t) format4 -> 'b
+
+  type input
+  val get : input -> char t
+    (* get must fail on end-of-input *)
+  val get_opt : input -> char option t
+    (* get_opt must not fail on end-of-input *)
 end
 
-exception Parse_failure of int(* position *) * string(* reason *)
-
-let fail i fmt = Printf.ksprintf (fun s -> raise (Parse_failure(i, s))) fmt
-
-module Make_reader(Types : Types)(Params : Parser_params) =
+module Make_reader(Types : Types)(Params : Reader_params) =
 struct
   open Types
   open Params
 
-  let basic_of_char on_fail = function
-    | 'y' -> Tbyte
-    | 'b' -> Tboolean
-    | 'n' -> Tint16
-    | 'q' -> Tuint16
-    | 'i' -> Tint32
-    | 'u' -> Tuint32
-    | 'x' -> Tint64
-    | 't' -> Tuint64
-    | 'd' -> Tdouble
-    | 's' -> Tstring
-    | 'o' -> Tobject_path
-    | 'g' -> Tsignature
-    | chr -> on_fail chr
+  let (>>=) = bind
 
-  let read_dict_key_type buffer i =
-    basic_of_char
-      (fun chr -> fail i "invalid basic type code: %c" chr)
-      (get buffer i)
+  let parse_basic msg = function
+    | 'y' -> return Tbyte
+    | 'b' -> return Tboolean
+    | 'n' -> return Tint16
+    | 'q' -> return Tuint16
+    | 'i' -> return Tint32
+    | 'u' -> return Tuint32
+    | 'x' -> return Tint64
+    | 't' -> return Tuint64
+    | 'd' -> return Tdouble
+    | 's' -> return Tstring
+    | 'o' -> return Tobject_path
+    | 'g' -> return Tsignature
+    | chr -> failwith msg chr
 
-  let rec read_single buffer i =
-    match get buffer i with
-      | 'a' ->
-          let i, t = read_element buffer (i + 1) in
-          (i, Tarray t)
-      | '(' ->
-          let i, t = read_until (fun buffer i -> get buffer i = ')') buffer (i + 1) in
-            (i, Tstruct t)
-      | 'v' -> (i + 1, Tvariant)
-      | ch ->
-          (i + 1,
-           Tbasic (basic_of_char (fun chr -> fail i "invalid type code: %c" chr) ch))
+  let rec parse_single ic = function
+    | 'a' ->
+        (perform
+           t <-- read_element ic;
+           return (Tarray t))
+    | '(' ->
+        (perform
+           t <-- read_struct ic;
+           return (Tstruct t))
+    | ')' ->
+        failwith "')' without '('"
+    | 'v' ->
+        return Tvariant
+    | ch ->
+        (perform
+           t <-- parse_basic "invalid type code: %c" ch;
+           return (Tbasic t))
 
-  and read_element buffer i =
-    if get buffer i = '{'
-    then begin
-      let tk = read_dict_key_type buffer (i + 1) in
-      let i, tv = read_single buffer (i + 2) in
-      if get buffer i <> '}'
-      then fail i "'}' missing"
-      else (i + 1, Tdict_entry(tk, tv))
-    end else
-      let i, t = read_single buffer i in
-      (i, Tsingle t)
+  and read_struct ic = get ic >>= function
+    | ')' ->
+        return []
+    | ch ->
+        (perform
+           t <-- parse_single ic ch;
+           l <-- read_struct ic;
+           return (t :: l))
 
-  and read_until f buffer i =
-    if f buffer i
-    then (i + 1, [])
-    else
-      let i, hd = read_single buffer i in
-      let i, tl = read_until f buffer i in
-        (i, hd :: tl)
+  and read_element ic = get ic >>= function
+    | '{' ->
+        (perform
+           ch <-- get ic;
+           tk <-- parse_basic "invalid basic type code: %c" ch;
+           tv <-- get ic >>= parse_single ic;
+           get ic >>= function
+             | '}' -> return (Tdict_entry(tk, tv))
+             | _ -> failwith "'}' missing")
+    | ch ->
+        (perform
+           t <-- parse_single ic ch;
+           return (Tsingle t))
 
-  let read_sequence buffer i = read_until terminated buffer i
+  and read_sequence ic = get_opt ic >>= function
+    | None ->
+        return []
+    | Some ch ->
+        (perform
+           t <-- parse_single ic ch;
+           l <-- read_sequence ic;
+           return (t :: l))
 end
 
-module Make_writer(Types : Types) =
+module type Writer_params =
+sig
+  type 'a t
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val return : 'a -> 'a t
+
+  type output
+  val put : output -> char -> unit t
+end
+
+module Make_writer(Types : Types)(Params : Writer_params) =
 struct
   open Types
+  open Params
 
   let rec single_signature_size_aux acc = function
     | Tarray t -> begin match t with
@@ -137,29 +161,36 @@ struct
     | Tobject_path -> 'o'
     | Tsignature -> 'g'
 
-  let rec write_single buffer i = function
+  let rec write_single oc = function
     | Tbasic t ->
-        String.unsafe_set buffer i (char_of_basic t);
-        i + 1
+        put oc (char_of_basic t);
     | Tarray t ->
-        String.unsafe_set buffer i 'a';
-        write_element buffer (i + 1) t
+        (perform
+           put oc 'a';
+           write_element oc t)
     | Tstruct ts ->
-        String.unsafe_set buffer i '(';
-        let i = write_sequence buffer (i + 1) ts in
-          String.unsafe_set buffer i ')';
-          i + 1
-    | Tvariant ->  String.unsafe_set buffer i 'v'; i + 1
+        (perform
+           put oc '(';
+           write_sequence oc ts;
+           put oc ')')
+    | Tvariant ->
+        put oc 'v';
 
-  and write_element buffer i = function
+  and write_element oc = function
     | Tdict_entry(tk, tv) ->
-        String.unsafe_set buffer i '{';
-        String.unsafe_set buffer (i + 1) (char_of_basic tk);
-        let i = write_single buffer (i + 2) tv in
-        String.unsafe_set buffer i '}';
-        i + 1
+        (perform
+           put oc '{';
+           put oc (char_of_basic tk);
+           write_single oc tv;
+           put oc '}')
     | Tsingle t ->
-        write_single buffer i t
+        write_single oc t
 
-  and write_sequence buffer = List.fold_left (write_single buffer)
+  and write_sequence oc = function
+    | [] ->
+        return ()
+    | x :: l ->
+        (perform
+           write_single oc x;
+           write_sequence oc l)
 end

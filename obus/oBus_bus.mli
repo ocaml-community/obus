@@ -104,6 +104,10 @@ val list_queued_owners : t -> name -> OBus_name.connection_unique list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
+exception Service_unknown of string
+  (** Raised when we try to contact a service which is not available
+      and the bus do not known how to start it *)
+
 (** {6 Messages routing} *)
 
 type match_rule
@@ -143,7 +147,7 @@ val get_connection_unix_user : t -> string -> int Lwt.t
 val get_connection_unix_process_id : t -> string -> int Lwt.t
 val get_connection_selinux_security_context : t -> string -> string Lwt.t
 val reload_config : t -> unit Lwt.t
-val get_id : t -> string Lwt.t
+val get_id : t -> OBus_uuid.t Lwt.t
 
 (** {6 Signals} *)
 

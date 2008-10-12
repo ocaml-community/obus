@@ -44,6 +44,6 @@ and guid = parse
 
 and command = parse
   | "REJECTED" { `Rejected(space_and_methods lexbuf) }
-  | "OK" { `OK(guid lexbuf) }
+  | "OK" { `OK(OBus_uuid.of_string (guid lexbuf)) }
   | "DATA" { `Data(space_and_data lexbuf) }
   | "ERROR" { `Error(space_and_string lexbuf) }

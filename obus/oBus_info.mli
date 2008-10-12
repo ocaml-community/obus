@@ -37,7 +37,14 @@ val native_byte_order : byte_order
       for sending messages. *)
 
 val verbose : bool
-  (** [true] is the environment variable OBUSLOG is set *)
+  (** [true] is the environment variable OBUSLOG is set. This will
+      make obus verbose. *)
 
 val debug : bool
-  (** [true] is the environment variable OBUSLOG is set to "debug" *)
+  (** [true] is the environment variable OBUSLOG is set to
+      "debug". This will make obus more verbose. *)
+
+val dump : bool
+  (** [true] is the environment variable OBUSLOG is set to
+      "dump". This will dump all incoming and outgoind message on
+      stderr. *)

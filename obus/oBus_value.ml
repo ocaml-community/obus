@@ -67,32 +67,66 @@ and string_of_tsequence tl = sprintf "[%s]" (String.concat "; " (List.map string
 
 open Types_rw
 
-module Parser_params =
+module Id =
 struct
-  let get str i =
-    if i > String.length str
-    then fail i "unterminated signature"
-    else String.unsafe_get str i
-
-  let terminated str i = i = String.length str
+  type 'a t = 'a
+  let bind m f = f m
+  let return x = x
 end
 
-module R = Make_reader(T)(Parser_params)
-module W = Make_writer(T)
+module Reader_params =
+struct
+  include Id
+
+  let failwith fmt = ksprintf (fun msg -> raise (Failure ("invalid signature: " ^ msg))) fmt
+
+  type input = string * int ref
+
+  let get (str, i) =
+    let p = !i in
+    if p >= String.length str then
+      failwith "unterminated signature"
+    else begin
+      i := p + 1;
+      String.unsafe_get str p
+    end
+
+  let get_opt (str, i) =
+    let p = !i in
+    if p >= String.length str then
+      None
+    else begin
+      i := p + 1;
+      Some (String.unsafe_get str p)
+    end
+end
+
+module Writer_params =
+struct
+  include Id
+  type output = string * int ref
+
+  let put (str, i) ch =
+    String.unsafe_set str !i ch;
+    incr i
+end
+
+module R = Make_reader(T)(Reader_params)
+module W = Make_writer(T)(Writer_params)
 
 let string_of_signature ts =
   let len = W.signature_size ts in
   let str = String.create len in
-    ignore (W.write_sequence str 0 ts);
-    str
+  W.write_sequence (str, ref 0) ts;
+  str
 
-let signature_of_string signature =
+let signature_of_string str =
   try
-    snd (R.read_sequence signature 0)
+    R.read_sequence (str, ref 0)
   with
-      Parse_failure(i, msg) ->
+      Failure msg ->
         raise (Invalid_argument
-                 (sprintf "signature_of_string: invalid signature %S, at position %d: %s" signature i msg))
+                 (sprintf "signature_of_string: invalid signature %S: %s" str msg))
 
 type basic =
   | Byte of char

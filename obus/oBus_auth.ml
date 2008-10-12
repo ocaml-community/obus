@@ -8,13 +8,12 @@
  *)
 
 open Lwt
+open Lwt_chan
 
 let (&) a b = a b
 let (|>) a b x = b (a x)
-let (>>) a b = a >>= (fun _ -> b)
 
 type data = string
-type guid = string
 
 type client_state =
   [ `Waiting_for_data
@@ -30,7 +29,7 @@ type client_command =
 
 type server_command =
     [ `Rejected of string list
-    | `OK of guid
+    | `OK of OBus_address.guid
     | `Data of data
     | `Error of string ]
 
@@ -70,7 +69,7 @@ let default_mechanisms = [mech_external;
 type client_machine_state = client_state * mechanism_handlers * mechanism list
 type client_machine_transition =
   | ClientTransition of (client_command * client_machine_state)
-  | ClientFinal of guid
+  | ClientFinal of OBus_address.guid
   | ClientFailure of string
 
 (* Transitions *)
@@ -119,13 +118,13 @@ let client_machine_exec recv send =
   let rec aux state =
     catch (fun  _ -> recv () >>= fun x -> return & Some x)
       (function
-         | Failure _ -> send (`Error "parsing error") >> return None
+         | Failure _ -> (perform send (`Error "parsing error"); return None)
          | exn -> fail exn) >>= function
         | None -> aux state
         | Some cmd ->
             match client_transition state cmd with
-              | ClientFinal(guid) -> send `Begin >> (return & Some guid)
-              | ClientTransition(cmd, state) -> send cmd >> aux state
+              | ClientFinal(guid) -> (perform send `Begin; return (Some guid))
+              | ClientTransition(cmd, state) -> (perform send cmd; aux state)
               | ClientFailure(_) -> return None
   in aux
 
@@ -147,43 +146,31 @@ let marshal_client_command buf = function
       Buffer.add_string buf "ERROR ";
       Buffer.add_string buf message
 
-let launch ?(mechanisms=default_mechanisms) transport =
-  let ic = Lwt_chan.make_in_channel
-    (if OBus_info.debug
-     then
-       (fun buf pos count ->
-          OBus_transport.recv transport buf pos count
-          >>= fun count ->
-            DEBUG("received: %S" (String.sub buf 0 count));
-            return count)
-     else
-       (fun buf pos count -> OBus_transport.recv transport buf pos count))
-  in
-
+let authenticate ?(mechanisms=default_mechanisms) (ic, oc) =
   let send command =
     let buf = Buffer.create 42 in
-      marshal_client_command buf command;
-      Buffer.add_string buf "\r\n";
-      let line = Buffer.contents buf in
-      let len = String.length line in
-        DEBUG("sending: %S" line);
-        OBus_transport.send_exactly transport line 0 len
+    marshal_client_command buf command;
+    Buffer.add_string buf "\r\n";
+    let line = Buffer.contents buf in
+    DEBUG("sending: %S" line);
+    (perform
+       output_string oc line;
+       flush oc)
 
   and recv () =
-    Lwt_chan.input_line ic >>=
+    input_line ic >>=
       (fun l ->
+         DEBUG("received: %S" l);
          try
            return & Auth_lexer.command (Lexing.from_string l)
          with
              exn -> Lwt.fail exn)
   in
 
-    Lwt.finalize
-      (fun _ ->match find_mechanism mechanisms with
-         | Some(cmd, state) ->
-             (perform
-                OBus_transport.send_exactly transport "\x00" 0 1;
-                send cmd;
-                client_machine_exec recv send state);
-         | None -> return None)
-      (fun _ -> Lwt_chan.close_in ic)
+  match find_mechanism mechanisms with
+    | Some(cmd, state) ->
+        (perform
+           output_char oc '\000';
+           send cmd;
+           client_machine_exec recv send state);
+    | None -> return None

@@ -21,7 +21,7 @@ let main =
      bus <-- Lazy.force OBus_bus.session;
 
      id <-- OBus_bus.get_id bus;
-     let _ = printf "the message bus id is: %S\n" id in
+     let _ = printf "the message bus id is: %S\n" (OBus_uuid.to_string id) in
 
      names <-- OBus_bus.list_names bus;
      let _ =

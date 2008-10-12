@@ -17,17 +17,17 @@ exception Out_of_memory of message
 open Printf
 
 let errors = ref
-  [ "org.freedesktop.Error.Failed",
+  [ "org.freedesktop.DBus.Error.Failed",
     ((fun msg -> Failed msg),
      (function
         | Failed msg -> Some msg
         | _ -> None));
-    "org.freedesktop.Error.UnknownMethod",
+    "org.freedesktop.DBus.Error.UnknownMethod",
     ((fun msg -> Unknown_method msg),
      (function
         | Unknown_method msg -> Some msg
         | _ -> None));
-    "org.freedesktop.Error.OOM",
+    "org.freedesktop.DBus.Error.OOM",
     ((fun msg -> Out_of_memory msg),
      (function
         | Out_of_memory msg -> Some msg

@@ -18,13 +18,14 @@ let max_array_size = 1 lsl 26
 let max_message_size = 1 lsl 27
 let protocol_version = 1
 
-let verbose, debug =
+let verbose, debug, dump =
   try
     match String.lowercase (Sys.getenv "OBUSLOG") with
-      | "debug" -> (true, true)
-      | _ -> (true, false)
+      | "dump" -> (true, true, true)
+      | "debug" -> (true, true, false)
+      | _ -> (true, false, false)
   with
-      Not_found -> (false, false)
+      Not_found -> (false, false, false)
 
 (* This location depends on where libdbus is installed *)
 let machine_uuid_file = "/var/lib/dbus/machine-id"

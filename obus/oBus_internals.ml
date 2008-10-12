@@ -16,7 +16,6 @@ open OBus_info
 let (&) a b = a b
 let (|>) a b x = b (a x)
 let (<|) a b x = a (b x)
-let (>>) a b = Lwt.bind a (fun _ -> b)
 
 module My_map(T : sig type t end) =
 struct
@@ -104,7 +103,7 @@ and service_handler = method_call -> OBus_value.signature -> method_call_handler
      call *)
 
 and running_connection = {
-  transport : OBus_transport.t;
+  transport : OBus_lowlevel.transport;
   shared : bool;
 
   (* Unique name of the connection *)
@@ -165,17 +164,3 @@ let lwt_with_bus connection f = lwt_with_running connection
   (function
      | { name = Some _ } -> f ()
      | _ -> return ())
-
-(* Do an IO operation, and verify before and after that the connection
-   is OK *)
-let wrap_io func connection buffer pos count =
-  lwt_with_running connection
-    (fun running -> func running.transport buffer pos count
-       >>= fun result -> match !connection with
-         | Crashed exn -> fail exn
-         | _ -> return result)
-
-let recv = wrap_io OBus_transport.recv
-let send = wrap_io OBus_transport.send
-let recv_exactly = wrap_io OBus_transport.recv_exactly
-let send_exactly = wrap_io OBus_transport.send_exactly

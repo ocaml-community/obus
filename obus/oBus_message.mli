@@ -29,7 +29,7 @@ type error_type =
 type signal_type =
     [ `Signal of OBus_path.t * OBus_name.Interface.t * OBus_name.Member.t ]
 
-type message_type =
+type any_type =
     [ method_call_type
     | method_return_type
     | error_type
@@ -58,13 +58,13 @@ type 'typ t = {
   sender : OBus_name.Connection.t option;
   body : body;
 }
-constraint 'typ = [< message_type ]
+constraint 'typ = [< any_type ]
 
 type method_call = method_call_type t
 type method_return = method_return_type t
 type signal = signal_type t
 type error = error_type t
-type any = message_type t
+type any = any_type t
 
 val body : 'a t -> body
 val flags : 'a t -> flags
@@ -128,3 +128,8 @@ val signal :
   interface:OBus_name.Interface.t ->
   member:OBus_name.Member.t ->
   body -> signal
+
+(** {6 Pretty-printing} *)
+
+val print : Format.formatter -> 'a t -> unit
+  (** Print a message on a formatter *)

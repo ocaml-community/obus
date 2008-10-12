@@ -163,6 +163,7 @@ val tsignature : signature ty_basic
 val tobject_path : OBus_path.t ty_basic
 val tpath : OBus_path.t ty_basic
 val tproxy : OBus_internals.proxy ty_basic
+val tuuid : OBus_uuid.t ty_basic
 
 val tlist : [< 'a cl_element ] -> 'a list ty_single
 val tdict_entry : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) ty_element
@@ -197,6 +198,7 @@ type ('a, 'b) assoc = ('a, 'b) dict_entry set
 type 'a structure = 'a
 type variant = single
 type byte_array = string
+type uuid = OBus_uuid.t
     (** Dummy type definition, they should be used in combination with
         the syntax extension, to define the dbus type and the caml
         type at the same time *)

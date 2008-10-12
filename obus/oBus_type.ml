@@ -294,6 +294,8 @@ let tproxy = wrap_basic_ctx tobject_path
      | _ -> raise Cast_failure)
   (fun p -> p.proxy_path)
 
+let tuuid = wrap_basic tstring OBus_uuid.of_string OBus_uuid.to_string
+
 let wrap_array elt ~make ~cast =
   let typ = type_element elt in
   `single
@@ -673,3 +675,4 @@ type ('a, 'b) assoc = ('a, 'b) dict_entry set
 type 'a structure = 'a
 type variant = single
 type byte_array = string
+type uuid = OBus_uuid.t

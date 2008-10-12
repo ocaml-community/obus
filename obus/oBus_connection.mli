@@ -9,13 +9,10 @@
 
 (** Inerface to DBus connection *)
 
-(** This module implement low-level manipulation of a DBus connection.
-    A DBus connection is a channel opened with another application
-    which also implement the DBus protocol. It is used to exchange
-    DBus messages.
-
-    It is low-level because functions of this module deals directly
-    with DBus messages, as header + body. *)
+(** This module implement manipulation of a DBus connection. A DBus
+    connection is a channel opened with another application which also
+    implement the DBus protocol. It is used to exchange DBus
+    messages. *)
 
 type t = OBus_internals.connection
 
@@ -29,19 +26,18 @@ type t = OBus_internals.connection
     Otherwise you should use [OBus_bus] or immediatly call
     [OBus_bus.register_connection] after the creation. *)
 
-val of_transport : ?shared:bool -> OBus_transport.t -> t Lwt.t
+val of_transport : ?shared:bool -> OBus_lowlevel.transport -> t Lwt.t
   (** [of_transport shared transport] create a dbus connection over
       the given transport. If [shared] is true and a connection to the
       same server is already open, then it is used instead of
       [transport], this is the default behaviour. *)
 
-val of_authenticated_transport : ?shared:bool -> OBus_transport.t -> OBus_address.guid -> t
-  (** Same as of_transport but assume that the authentification is
-      done. Use it only if you know what you are doing. *)
-
 val of_addresses : ?shared:bool -> OBus_address.t list -> t Lwt.t
   (** [of_addresses shared addresses] shorthand for obtaining
       transport and doing [of_transport] *)
+
+val loopback : t
+  (** Connection with loopback transport *)
 
 val close : t -> unit
   (** Close a connection.
@@ -56,7 +52,7 @@ exception Connection_closed
 
 (** {6 Informations} *)
 
-val transport : t -> OBus_transport.t
+val transport : t -> OBus_lowlevel.transport
   (** [transport connection] get the transport associated with a
       connection *)
 
@@ -210,18 +206,6 @@ val filter_enabled : filter_id -> bool
   (** Manipulation of registred filters *)
 
 (** {6 Errors handling} *)
-
-exception Protocol_error of string
-  (** This exception is raised when an invalid DBus message is
-      received. *)
-
-(** Note: protocol and transport errors are considered as fatal
-    errors. When a fatal error happen the connection is immediately
-    closed. *)
-
-exception Invalid_data of string
-  (** Raised when a message can not be send because it contains
-      invalid data *)
 
 val on_disconnect : t -> (exn -> unit) ref
   (** Function called when a fatal error happen. The default behaviour

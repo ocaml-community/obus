@@ -61,6 +61,6 @@ val default_mechanisms : mechanism list
 
 (** {6 Make authentification} *)
 
-val launch : ?mechanisms:mechanism list -> OBus_transport.t -> OBus_address.guid option Lwt.t
-  (** [launch transport] launch authentification on the given
-      transport *)
+val authenticate : ?mechanisms:mechanism list -> Lwt_chan.in_channel * Lwt_chan.out_channel -> OBus_address.guid option Lwt.t
+  (** [launch transport] launch authentification on the given input
+      and output channels *)

@@ -7,7 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Wire
+open Lwt
+open OBus_lowlevel
 open OBus_type
 open OBus_value
 open OBus_info
@@ -22,44 +23,60 @@ let data = (1, "coucou",
 
 let data_val = make_single typ data
 
-let buffer = String.make 160 '\x00'
+let make_msg x = OBus_message.method_call ~path:["plop"; "plip"] ~member:"truc" x
 
-let read bo =
-  let oc = Unix.open_process_out "xxd" in
-  output_string oc buffer;
+let buffer = String.make 300 '\x00'
+
+let pipe_to_cmd cmd f =
+  let ic, oc = Unix.open_process cmd in
+  f oc;
   close_out oc;
-  let oc = Unix.open_process_out "camlp4o -impl /dev/stdin" in
-  Printf.fprintf oc "let result = %s"
-    (string_of_single
-       (snd (match bo with
-               | Little_endian ->
-                   let module M = Make_unsafe_reader(Little_endian) in
-                   M.rvariant buffer 0
-               | Big_endian ->
-                   let module M = Make_unsafe_reader(Big_endian) in
-                   M.rvariant buffer 0)));
-  close_out oc
+  try
+    while true do
+      print_endline (input_line ic)
+    done
+  with
+      End_of_file ->
+        ignore (Unix.close_process (ic, oc))
 
-let runw bo x = match bo with
-  | Little_endian ->
-      let module M = Make_unsafe_writer(Little_endian) in
-      M.wvariant buffer 0 x
-  | Big_endian ->
-      let module M = Make_unsafe_writer(Big_endian) in
-      M.wvariant buffer 0 x
+let read () =
+  pipe_to_cmd "xxd" (fun oc -> output_string oc buffer);
+  pipe_to_cmd "camlp4o -impl /dev/stdin -printer Camlp4Printers/Camlp4OCamlPrinter.cmo"
+    (fun oc ->
+       Printf.fprintf oc "let result = %s"
+         (string_of_sequence
+            (let i = ref 0 in
+             let ic = Lwt_chan.make_in_channel
+               (fun str pos sz ->
+                  let sz = min sz (String.length buffer - !i) in
+                  String.blit buffer !i str pos sz;
+                  i := !i + sz;
+                  return sz) in
+             Lwt_unix.run (get_message ic)).OBus_message.body))
+
+let write bo x =
+  let i = ref 0 in
+  let oc = Lwt_chan.make_out_channel
+    (fun str pos sz ->
+       let sz = min sz (String.length buffer - !i) in
+       String.blit str pos buffer !i sz;
+       i := !i + sz;
+       return sz) in
+  Lwt_unix.run (match put_message ~byte_order:bo (make_msg x) with
+                  | Marshaler_success f -> (f oc >>= fun _ -> Lwt_chan.flush oc)
+                  | Marshaler_failure msg -> failwith msg)
 
 let test bo =
-  ignore (runw bo data_val);
-  read bo
+  write bo [data_val];
+  read ()
 
 let testc typ =
   make_func typ
     (fun s ->
-       ignore (runw OBus_info.Little_endian (vstruct s));
-       read OBus_info.Little_endian)
+       write OBus_info.Little_endian s;
+       read ())
 
 let _ =
   test OBus_info.Little_endian;
   test OBus_info.Big_endian;
-  testc (tint --> (tstring --> (tlist tpath --> reply tuint)))  1 "coucou" [["toto"; "klk"]; ["sdfh"; "iuo"]];
-  Unix.sleep 1
+  testc (tint --> (tstring --> (tlist tpath --> reply tuint)))  1 "coucou" [["toto"; "klk"]; ["sdfh"; "iuo"]]

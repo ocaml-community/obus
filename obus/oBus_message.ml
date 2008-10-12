@@ -37,7 +37,7 @@ type error_type =
 type signal_type =
     [ `Signal of OBus_path.t * OBus_name.Interface.t * OBus_name.Member.t ]
 
-type message_type =
+type any_type =
     [ method_call_type
     | method_return_type
     | error_type
@@ -51,7 +51,7 @@ type 'typ t = {
   sender : OBus_name.Connection.t option;
   body : body;
 }
-constraint 'typ = [< message_type ]
+constraint 'typ = [< any_type ]
 
 let body message = message.body
 let flags message = message.flags
@@ -78,7 +78,7 @@ type method_call = method_call_type t
 type method_return = method_return_type t
 type signal = signal_type t
 type error = error_type t
-type any = message_type t
+type any = any_type t
 
 let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ body =
   { flags = flags;
@@ -99,3 +99,46 @@ let error ?flags ?serial ?sender ?destination ~reply_serial ~error_name body =
 
 let signal ?flags ?serial ?sender ?destination ~path ~interface ~member body =
   make ?flags ?serial ?sender ?destination ~typ:(`Signal(path, interface, member)) body
+
+open Format
+open OBus_value
+
+let print pp message =
+  let opt pp = function
+    | Some s -> fprintf pp "Some %S" s
+    | None -> pp_print_string pp "None"
+  in
+  fprintf pp "\
+no_reply_expected = %B@
+no_auto_start = %B@
+serial = %ld@
+message_type = %a@
+destination = %a@
+sender = %a@
+signature = %S@
+body_type = %s@
+body = %s@
+" message.flags.no_reply_expected message.flags.no_auto_start message.serial
+    (fun pp -> function
+       | `Method_call(path, interface, member) ->
+           fprintf pp "method_call@
+path = %S@
+interface = %a@
+member = %S" (OBus_path.to_string path) opt interface member
+       | `Method_return reply_serial ->
+           fprintf pp "method_return@
+reply_serial = %ld" reply_serial
+       | `Error(reply_serial, error_name) ->
+           fprintf pp "error@
+reply_serial = %ld@
+error_name = %S" reply_serial error_name
+       | `Signal(path, interface, member) ->
+           fprintf pp "signal@
+path = %S@
+interface = %S@
+member = %S" (OBus_path.to_string path) interface member) message.typ
+    opt message.destination
+    opt message.sender
+    (string_of_signature (type_of_sequence message.body))
+    (string_of_tsequence  (type_of_sequence message.body))
+    (string_of_sequence message.body)

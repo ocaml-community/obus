@@ -12,7 +12,10 @@
 type name = string
 type key = string
 type value = string
-type guid = string
+
+type guid = OBus_uuid.t
+    (** Unique address identifier. It is unique for a server listening
+        address.  *)
 
 type family = Ipv4 | Ipv6
 
