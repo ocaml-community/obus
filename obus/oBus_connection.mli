@@ -134,6 +134,12 @@ val demit_signal : t ->
   member:OBus_name.member ->
   OBus_message.body -> unit Lwt.t
 
+val send_reply : t -> OBus_message.method_call -> [< 'a OBus_type.cl_sequence ] -> 'a -> unit Lwt.t
+  (** [send_reply connection method_call reply] Send a reply to a
+      method call *)
+
+val dsend_reply : t -> OBus_message.method_call -> OBus_value.sequence -> unit Lwt.t
+
 val send_error : t -> OBus_message.method_call -> OBus_error.name -> OBus_error.message -> unit Lwt.t
   (** Send an error message in reply to a method call *)
 

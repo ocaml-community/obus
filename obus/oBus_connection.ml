@@ -180,8 +180,19 @@ let emit_signal connection ?flags ?sender ?destination ~path ~interface ~member 
 let demit_signal connection ?flags ?sender ?destination ~path ~interface ~member body =
   send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member body)
 
-let send_error connection { destination = destination; serial = serial } name msg =
-  send_message connection { destination = destination;
+let dsend_reply connection { sender = sender; serial = serial } body =
+  send_message connection { destination = sender;
+                            sender = None;
+                            flags = { no_reply_expected = true; no_auto_start = true };
+                            serial = 0l;
+                            typ = `Method_return(serial);
+                            body = body }
+
+let send_reply connection mc typ v =
+  dsend_reply connection mc (make_sequence typ v)
+
+let send_error connection { sender = sender; serial = serial } name msg =
+  send_message connection { destination = sender;
                             sender = None;
                             flags = { no_reply_expected = true; no_auto_start = true };
                             serial = 0l;
@@ -244,6 +255,18 @@ let find_reply_handler running serial f g =
 
 let ignore_send_exn connection method_call exn = ignore_result (send_exn connection method_call exn)
 
+let unknown_method connection message =
+  let `Method_call(path, interface_opt, member) = message.typ in
+  match interface_opt with
+    | Some interface ->
+        ignore_send_exn connection message & OBus_error.Unknown_method
+          (sprintf "Method %S with signature %S on interface %S doesn't exist"
+             member (string_of_signature (type_of_sequence message.body)) interface)
+    | None ->
+        ignore_send_exn connection message & OBus_error.Unknown_method
+          (sprintf "Method %S with signature %S doesn't exist"
+             member (string_of_signature (type_of_sequence message.body)))
+
 let dispatch_message connection running message =
   (* First of all, pass the message through all filters *)
   MSet.iter (fun filter ->
@@ -274,7 +297,7 @@ let dispatch_message connection running message =
           (fun  (handler, error_handler) -> error_handler & OBus_error.make error_name msg)
           (fun _ ->
              DEBUG("error reply to message with serial %ld dropped because no reply was expected, \
-                          the error is: %S: %S" reply_serial error_name msg))
+                    the error is: %S: %S" reply_serial error_name msg))
 
     | { typ = `Signal _ } as message ->
         MSet.iter
@@ -286,10 +309,43 @@ let dispatch_message connection running message =
              end)
           running.signal_handlers
 
-    | _ -> ()
+    (* Hacks for the special "org.freedesktop.DBus.Peer" interface *)
+    | { typ = `Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } as message -> begin
+        match member, body with
+          | "Ping", [] ->
+              (* Just pong *)
+              ignore_result & dsend_reply connection message []
+          | "GetMachineId", [] ->
+              let machine_uuid = Lazy.force OBus_info.machine_uuid in
+              ignore_result & dsend_reply connection message [vbasic(String machine_uuid)]
+          | _ ->
+              unknown_method connection message
+      end
 
-(*  TODO: implement service proposal
+    | { typ = `Method_call(path, interface_opt, member) } as message ->
+        match Object_map.lookup path running.exported_objects with
+          | None ->
+              ignore_send_exn connection message & OBus_error.Failed (sprintf "No such object: %S" (OBus_path.to_string path))
+          | Some obj -> match obj#handle_call connection message with
+              | false -> ()
+              | true -> ()
 
+(*
+    (* Method calls with interface fields, the easy case, we just
+       ensure that the sender always get a reply. *)
+    | { typ = `Method_call(path, Some(interface), member) } as header ->
+        begin match Interf_map.lookup interface running.service_handlers with
+          | None ->
+              ignore_send_exn connection header & OBus_error.Unknown_method (sprintf "No such interface: %S" interface)
+          | Some handler -> match handler header signature with
+              | Mchr_no_such_method ->
+                  ignore_send_exn connection header & OBus_error.Unknown_method
+                    (sprintf "Method %S with signature %S on interface %S doesn't exist"
+                       member (string_of_signature signature) interface)
+              | Mchr_no_such_object ->
+                  ignore_send_exn connection header & OBus_error.Failed (sprintf "No such object: %S" path)
+              | Mchr_ok f -> f context body_ptr
+        end
     (* Method calls with interface fields, the easy case, we just
        ensure that the sender always get a reply. *)
     | { typ = `Method_call(path, Some(interface), member) } as header ->
@@ -385,6 +441,7 @@ let of_authenticated_transport ?(shared=true) transport guid =
       outgoing = Lwt.return 0l;
       reply_handlers = Serial_map.empty;
       signal_handlers = MSet.make ();
+      exported_objects = Object_map.empty;
       filters = MSet.make ();
       guid = guid;
       name = None;

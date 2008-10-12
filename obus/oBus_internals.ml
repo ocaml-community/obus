@@ -75,6 +75,7 @@ let signal_match r { sender = sender;
 
 module Serial_map = My_map(struct type t = serial end)
 module Interf_map = My_map(struct type t = string end)
+module Object_map = My_map(struct type t = OBus_path.t end)
 
 type body = OBus_value.sequence
 type filter = OBus_message.any -> unit
@@ -85,22 +86,10 @@ type ptr = int
 type 'a handler = 'a -> unit
   (* Type of a message handler. *)
 
-(*and method_call_handler_result =
-    (* Result of a method call handling *)
-  | Mchr_no_such_method
-      (* The method do not exists *)
-  | Mchr_no_such_object
-      (* The object do not exists *)
-  | Mchr_ok of (context -> int -> unit)
-      (* It know how to handle the method call, it must return a
-         closure which when exectuted will unmarshal the message and
-         launch a thread executing the function handling the call and
-         sending the reply *)
-
-and service_handler = method_call -> OBus_value.signature -> method_call_handler_result*)
-  (* A service handler take the header of the call, the signature of
-     the message and must lookup for if it know how to handle the
-     call *)
+type dbus_object = <
+  path : OBus_path.t;
+  handle_call : connection -> method_call -> bool;
+>
 
 and running_connection = {
   transport : OBus_lowlevel.transport;
@@ -120,7 +109,8 @@ and running_connection = {
   signal_handlers : (signal_match_rule * signal handler) MSet.t;
 
   mutable reply_handlers : (method_return handler * (exn -> unit)) Serial_map.t;
-(*  mutable service_handlers : service_handler Interf_map.t;*)
+
+  mutable exported_objects : dbus_object Object_map.t;
 
   (* Handling of fatal errors *)
   on_disconnect : (exn -> unit) ref;

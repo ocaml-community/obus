@@ -9,6 +9,8 @@
 
 (** Handling of signals *)
 
+(** {6 Catching signals from remote objects} *)
+
 type receiver
   (** Function which receive signals *)
 
@@ -58,3 +60,11 @@ val enable_receiver : receiver -> unit Lwt.t
       enabled *)
 
 val receiver_enabled : receiver -> bool
+
+(** {6 Emitting signals from local objects} *)
+
+(*type 'a t
+
+val emit : OBus_connection.t -> ?destination:OBus_name.connection -> 'a t -> 'a
+  (** [emit connection ?destination signal ...] emit a signal on the given
+      connection *)*)

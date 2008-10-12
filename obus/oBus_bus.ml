@@ -42,6 +42,7 @@ let of_addresses addresses =
 let session = lazy(of_addresses (Lazy.force OBus_address.session))
 let system = lazy(of_addresses (Lazy.force OBus_address.system))
 
+OBUS_exn Service_unknown = "Error.ServiceUnknown"
 OBUS_exn Name_has_no_owner = "Error.NameHasNoOwner"
 OBUS_exn Match_rule_not_found = "Error.MatchRuleNotFound"
 OBUS_exn Service_unknown = "Error.ServiceUnknown"

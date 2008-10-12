@@ -36,8 +36,8 @@ struct
       "OBus_name";
       "OBus_value";
       "Rules";
-      "OBus_xml_parser";
-      "OBus_introspect";
+      "Xparser";
+      "OBus_interface";
       "OBus_address";
       "OBus_lowlevel";
       "OBus_auth";
@@ -46,6 +46,8 @@ struct
       "OBus_error";
       "OBus_connection";
       "OBus_type";
+      "OBus_introspect";
+      "OBus_object";
       "OBus_signal";
       "OBus_property";
       "OBus_proxy";
@@ -77,7 +79,7 @@ struct
 description = \"Pure OCaml implementation of DBus\"
 version = \"%s\"
 browse_interfaces = \"%s\"
-requires = \"lwt\"
+requires = \"lwt xml-light\"
 archive(byte) = \"obus.cma\"
 archive(native) = \"obus.cmxa\"
 package \"syntax\" (

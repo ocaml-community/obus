@@ -7,31 +7,32 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** Introspection document *)
+(** Introspection *)
 
-(** {6 Structure of an introspection document} *)
+type node = string
+type document = OBus_interface.t list * node list
+val tdocument : document OBus_type.ty_basic
 
-type name = string
+(** {6 Xml conversion} *)
 
-type annotation = name * string
-type argument = name option * OBus_value.tsingle
+type parsing_error
 
-type access = Read | Write | Read_write
-    (** Access mode of properties *)
+exception Parse_failure of parsing_error
 
-type declaration =
-  | Method of name * argument list * argument list * annotation list
-  | Signal of name * argument list * annotation list
-  | Property of name * OBus_value.tsingle * access * annotation list
+val print_error : Format.formatter -> parsing_error -> unit
+  (** Print a parsing error with the given formatter. It can take
+      multiple lines. *)
 
-type interface = name * declaration list * annotation list
-type node = name
-type document = interface list * node list
+val of_xml : Xml.xml -> document
+  (** Try to read an xml document as an introspection document.
 
-(** {6 Parsers} *)
+      @raise Parse_failure if the parsing fail. *)
 
-module Make_parser(Xml_parser : OBus_xml_parser.S) : sig
-  val interface : interface Xml_parser.node
-  val node : node Xml_parser.node
-  val document : document Xml_parser.node
-end
+val to_xml : document -> Xml.xml
+  (** Create an xml from an introspection document*)
+
+(** {6 Service introspection} *)
+
+val introspect : OBus_connection.t -> ?service:OBus_name.connection -> OBus_path.t -> document Lwt.t
+  (** [introspect connection ?service path] introspect the object with
+      path [path] on the given service *)

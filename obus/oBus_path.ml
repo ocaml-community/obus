@@ -76,17 +76,19 @@ let validate_element str = match test_element str with
 
 let empty = []
 
-let to_string path =
-  let str = create (List.fold_left (fun len elt -> len + length elt + 1) 0 path)  in
-  ignore
-    (List.fold_left
-       (fun pos elt ->
-          unsafe_set str pos '/';
-          let len = length elt in
-          unsafe_blit elt 0 str (pos + 1) len;
-          pos + 1 + len)
-       0 path);
-  str
+let to_string = function
+  | [] -> "/"
+  | path ->
+      let str = create (List.fold_left (fun len elt -> len + length elt + 1) 0 path) in
+      ignore
+        (List.fold_left
+           (fun pos elt ->
+              unsafe_set str pos '/';
+              let len = length elt in
+              unsafe_blit elt 0 str (pos + 1) len;
+              pos + 1 + len)
+           0 path);
+      str
 
 let of_string = function
   | "" -> raise (Invalid_path("", "empty path"))
@@ -103,3 +105,23 @@ let of_string = function
       in
         aux [] (length str - 1)
   | s -> validate s; assert false
+
+let escape s =
+  let len = length s in
+  let r = create (len * 2) in
+  for i = 0 to len - 1 do
+    let j = i * 2 in
+    r.[j] <- char_of_int (int_of_char s.[i] land 15 + int_of_char 'a');
+    r.[j] <- char_of_int (int_of_char s.[i + 1] lsr 4 + int_of_char 'a')
+  done;
+  r
+
+let unescape s =
+  let len = length s / 2 in
+  let r = create len in
+  for i = 0 to len - 1 do
+    let j = i * 2 in
+    r.[i] <- char_of_int ((int_of_char s.[j] - int_of_char 'a') lor
+                            ((int_of_char s.[j + 1] - int_of_char 'a') lsl 4))
+  done;
+  r

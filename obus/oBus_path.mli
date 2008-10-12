@@ -29,6 +29,11 @@ val of_string : string -> t
 val to_string : t -> string
   (** Return a string representation of an object path *)
 
+val escape : string -> element
+  (** Escape an arbitrary string into a valid element *)
+
+val unescape : element -> string
+
 (** {6 Validation} *)
 
 val test_element : string -> string option

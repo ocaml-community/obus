@@ -24,7 +24,7 @@ type desc =
 
 type t = desc * guid option
 
-exception Parse_error of string
+exception Parse_failure of string
 
 let assoc key default list = match Util.assoc key list with
   | Some v -> v
@@ -67,7 +67,7 @@ let of_string str =
   with
       Failure msg ->
         DEBUG("failed to parse address %S: %s" str msg);
-        raise (Parse_error msg)
+        raise (Parse_failure msg)
 
 let system_bus_variable = "DBUS_SYSTEM_BUS_ADDRESS"
 let session_bus_variable = "DBUS_SESSION_BUS_ADDRESS"

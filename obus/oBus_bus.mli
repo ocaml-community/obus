@@ -72,6 +72,10 @@ val release_name : t -> name -> release_name_result Lwt.t
 
 (** {6 Service starting/discovering} *)
 
+exception Service_unknown of string
+  (** Exception raised when a service is not present on a message bus
+      and can not be started automatically *)
+
 type start_service_flag
   (** These flags are currently unused. *)
 

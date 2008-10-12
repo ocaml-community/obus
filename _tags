@@ -3,10 +3,10 @@
 <syntax/*>: camlp4of, pkg_camlp4
 # Most of the file use pa_monad
 <{obus,tools,test,samples}/*.ml>: syntax_camlp4o, pkg_monad
-<{obus,tools,test,samples}/*.*>: pkg_lwt
+<{obus,tools,test,samples}/*.*>: pkg_lwt, pkg_xml-light
 # Library
 <obus/oBus_{auth,address,lowlevel,connection,error,info,uuid}.ml>: pa_log
-<obus/oBus_{bus,connection,signal,proxy,property}.ml>: pa_obus
+<obus/oBus_{bus,connection,signal,proxy,property,introspect}.ml>: pa_obus
 <obus/oBus_info.ml>: pkg_camlp4.macro
 # Samples
 <samples/*.*>: use_obus

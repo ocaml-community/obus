@@ -32,7 +32,7 @@ type desc =
 
 type t = desc * guid option
 
-exception Parse_error of string
+exception Parse_failure of string
 
 val of_string : string -> t list
   (** [of_string str] parse [str] and return the list of addresses

@@ -9,6 +9,7 @@
 
 open Common
 open OBus_type
+open OBus_interface
 
 let recursive = ref false
 let mli = ref false
@@ -29,40 +30,17 @@ let usage_msg = Printf.sprintf "Usage: %s <option> <destination> <path>
 Introspect a DBus service (print only interfaces).
 options are:" (Filename.basename (Sys.argv.(0)))
 
-open XParser
-
-let raw_document =
-  elt "node"
-    (perform
-       interfaces <-- any (elt "interface"
-                             (perform
-                                name <-- ar "name";
-                                content <-- any raw;
-                                return (name, content)));
-       subs <-- any (elt "node" (ar "name"));
-       return (interfaces, subs))
-
 open Lwt
 
 let (&) a b = a b
-let (|>) a b x = b (a x)
-
-let introspect bus service path =
-  OBus_connection.method_call bus
-    ~destination:service
-    ~path:path
-    ~interface:"org.freedesktop.DBus.Introspectable"
-    ~member:"Introspect"
-    (<< string >>)
 
 module Interf_map = Map.Make(struct type t = string let compare = compare end)
 
 let rec get (nodes, map) bus service path =
   (perform
-     (interfaces, subs) <-- introspect bus service path
-     >>= (fun str -> return & parse_source raw_document (XmlParser.SString str));
-     let map = List.fold_left (fun map (name, content) -> Interf_map.add name content map) map interfaces in
-     let nodes = (path, List.map fst interfaces) :: nodes in
+     (interfaces, subs) <-- OBus_introspect.introspect bus ~service path;
+     let map = List.fold_left (fun map (name, content, annots) -> Interf_map.add name (content, annots) map) map interfaces in
+     let nodes = (path, List.map (fun (name, _, _) -> name) interfaces) :: nodes in
      match !recursive with
        | true ->
            Lwt_util.fold_left (fun acc name -> get acc bus service & path @ [name]) (nodes, map) subs
@@ -83,16 +61,15 @@ let main service path =
      (nodes, map) <-- get ([], Interf_map.empty) bus service path;
      let _ = match !obj_mode with
        | false ->
-           let xml = Xml.Element("node", [],
-                                 Interf_map.fold (fun name content acc ->
-                                                    Xml.Element("interface", [("name", name)], content) :: acc)
-                                   map []) in
            begin match !mli with
              | false ->
-                 print_endline & Xml.to_string_fmt xml
+                 print_endline & Xml.to_string_fmt
+                   (OBus_introspect.to_xml
+                      (Interf_map.fold (fun name (content, annots) acc -> (name, content, annots) :: acc) map [], []))
              | true ->
-                 let interfaces, _ = parse_xml IParser.document xml in
-                 List.iter (print_interf Format.std_formatter) interfaces
+                 Interf_map.iter (fun name (content, annots) ->
+                                    print_proxy_interf Format.std_formatter (name, content, annots))
+                   map
            end
        | true ->
            List.iter begin fun (path, interfaces) ->
@@ -112,5 +89,10 @@ let _ =
     | [path; service] -> (service, OBus_path.of_string path)
     | _ -> Arg.usage args usage_msg; exit 1
   in
-
+  try
     Lwt_unix.run & main service path
+  with
+    | Xml.Error _
+    | OBus_introspect.Parse_failure _ ->
+        prerr_endline "invalid introspection document returned by the service!";
+        exit 1
