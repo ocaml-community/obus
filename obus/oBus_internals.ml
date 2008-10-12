@@ -123,12 +123,6 @@ and connection_state =
 
 and connection = connection_state ref
 
-type proxy = {
-  proxy_connection : connection;
-  proxy_destination : OBus_name.connection option;
-  proxy_path : OBus_path.t;
-}
-
 open Lwt
 
 (***** Utils ****)

@@ -7,34 +7,48 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open OBus_internals
 open OBus_type
 open OBus_connection
 open Lwt
 
-type t = proxy
-
-let make ~connection ?destination ~path = {
-  proxy_connection = connection;
-  proxy_destination = destination;
-  proxy_path = path;
+type t = {
+  connection : OBus_connection.t;
+  destination : OBus_name.connection option;
+  path : OBus_path.t;
 }
 
-let connection p = p.proxy_connection
-let path p = p.proxy_path
-let destination p = p.proxy_destination
+let make ~connection ?destination ~path = {
+  connection = connection;
+  destination = destination;
+  path = path;
+}
+
+let connection p = p.connection
+let path p = p.path
+let destination p = p.destination
+
+let tt = OBus_type.wrap_basic_ctx OBus_type.tobject_path
+  (fun context path -> match context with
+     | Context(connection, msg) ->
+         { connection = connection;
+           destination = OBus_message.sender msg;
+           path = path }
+     | _ -> raise Cast_failure)
+  path
 
 let compare a b = Pervasives.compare (destination a, path a) (destination b, path b)
 
 let kmethod_call cont ?interface ~member typ =
-  call_and_cast_reply typ & fun body f ->
-    cont & fun proxy ->
+  call_and_cast_reply typ begin fun body f ->
+    cont begin fun proxy ->
       f (connection proxy)
         (OBus_message.method_call
            ?destination:(destination proxy)
            ~path:(path proxy)
            ?interface
            ~member body)
+    end
+  end
 
 let method_call ?interface ~member typ proxy =
   method_call (connection proxy)

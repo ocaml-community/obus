@@ -12,7 +12,10 @@
 (** A proxy is an object on which live on a different processus, but
     behave as a native ocaml value. *)
 
-type t = OBus_internals.proxy
+type t
+
+val tt : t OBus_type.ty_basic
+  (** Type combinator *)
 
 val compare : t -> t -> int
   (** Proxy comparaison function *)

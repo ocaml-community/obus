@@ -44,7 +44,7 @@ let implem_term_of_basic = function
   | Tdouble -> term "float" []
   | Tstring -> term "string" []
   | Tsignature -> term "signature" []
-  | Tobject_path -> term "proxy" []
+  | Tobject_path -> term "OBus_proxy.t" []
 
 let rec implem_term_of_single = function
   | Tbasic t -> implem_term_of_basic t

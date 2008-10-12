@@ -7,7 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open OBus_internals
 open OBus_value
 
 (***** Sequence type as tree *****)
@@ -34,7 +33,7 @@ let tree_get_boundary t =
 
 (***** Type combinators *****)
 
-type context = connection * string option
+type context = exn
 
 type ('a, 'typ, 'make, 'cast) ty_desc = {
   (* The dbus type *)
@@ -42,7 +41,7 @@ type ('a, 'typ, 'make, 'cast) ty_desc = {
 
   (* Value functions *)
   make : 'make;
-  cast : context option -> 'cast;
+  cast : context -> 'cast;
 }
 
 type 'a ty_desc_basic = ('a, tbasic, 'a -> basic, basic -> 'a) ty_desc
@@ -63,7 +62,7 @@ type 'a cl_sequence = [ 'a cl_single | 'a ty_sequence ]
 type ('a, 'b, 'c) ty_function = {
   ftype : tsingle tree;
   fmake : single tree -> (sequence -> 'b) -> 'a;
-  fcast : context option -> sequence -> 'a -> 'b;
+  fcast : context -> sequence -> 'a -> 'b;
   freply : 'c cl_sequence;
 }
 
@@ -129,20 +128,22 @@ let _cast_sequence = function
          | v, [] -> v
          | _ -> raise Cast_failure)
 
-let cast_basic ty ?context x = _cast_basic ty context x
-let cast_single ty ?context x = _cast_single ty context x
-let cast_element ty ?context x = _cast_element ty context x
-let cast_sequence ty ?context x = _cast_sequence ty context x
+exception No_context
 
-let opt_cast f ?context x = try Some(f context x) with Cast_failure -> None
+let cast_basic ty ?(context=No_context) x = _cast_basic ty context x
+let cast_single ty ?(context=No_context) x = _cast_single ty context x
+let cast_element ty ?(context=No_context) x = _cast_element ty context x
+let cast_sequence ty ?(context=No_context) x = _cast_sequence ty context x
+
+let opt_cast f ?(context=No_context) x = try Some(f context x) with Cast_failure -> None
 let opt_cast_basic t = opt_cast (_cast_basic t)
 let opt_cast_single t = opt_cast (_cast_single t)
 let opt_cast_element t = opt_cast (_cast_element t)
 let opt_cast_sequence t = opt_cast (_cast_sequence t)
 
 let make_func { fmake = f } cont = f Tnil cont
-let cast_func { fcast = f } ?context x g = f context x g
-let opt_cast_func { fcast = f } ?context x g =
+let cast_func { fcast = f } ?(context=No_context) x g = f context x g
+let opt_cast_func { fcast = f } ?(context=No_context) x g =
   try
     Some(f context x g)
   with
@@ -192,11 +193,11 @@ let tchar = tbyte
 let tint8 = wrap_basic tbyte
   (fun x -> let x = int_of_char x in
    if x >= 128 then x - 256 else x)
-  (fun x -> Char.unsafe_chr & x land 0xff)
+  (fun x -> Char.unsafe_chr (x land 0xff))
 
 let tuint8 = wrap_basic tbyte
   int_of_char
-  (fun x -> Char.unsafe_chr & x land 0xff)
+  (fun x -> Char.unsafe_chr (x land 0xff))
 
 let tboolean = `basic
   { dtype = Tboolean;
@@ -285,17 +286,6 @@ let tobject_path = `basic
 
 let tpath = tobject_path
 
-let tproxy = wrap_basic_ctx tobject_path
-  (fun context path -> match context with
-     | Some(connection, bus_name) ->
-         { proxy_connection = connection;
-           proxy_destination = bus_name;
-           proxy_path = path }
-     | _ -> raise Cast_failure)
-  (fun p -> p.proxy_path)
-
-let tuuid = wrap_basic tstring OBus_uuid.of_string OBus_uuid.to_string
-
 let wrap_array elt ~make ~cast =
   let typ = type_element elt in
   `single
@@ -331,8 +321,7 @@ let tbyte_array = wrap_array tbyte
   (fun f l ->
      let len = List.length l in
      let str = String.create len in
-     ignore &
-       List.fold_left (fun i x -> String.unsafe_set str i (f x); i + 1) 0 l;
+     ignore (List.fold_left (fun i x -> String.unsafe_set str i (f x); i + 1) 0 l);
      str)
 
 let tdict_entry tyk tyv =
@@ -668,11 +657,9 @@ type double = float
 type signature = OBus_value.signature
 type object_path = OBus_path.t
 type path = OBus_path.t
-type proxy = OBus_internals.proxy
 type 'a set = 'a list
 type ('a, 'b) dict_entry = 'a * 'b
 type ('a, 'b) assoc = ('a, 'b) dict_entry set
 type 'a structure = 'a
 type variant = single
 type byte_array = string
-type uuid = OBus_uuid.t

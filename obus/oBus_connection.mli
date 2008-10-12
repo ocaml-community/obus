@@ -74,7 +74,7 @@ val name : t -> OBus_name.connection_unique option
 (** These functions are the low-level functions for sending
     messages. They take and return a complete message description *)
 
-val send_message : t -> 'a OBus_message.t -> unit Lwt.t
+val send_message : t -> [< OBus_message.any_type ] OBus_message.t -> unit Lwt.t
   (** [send_message connection message] send a message without
       expecting a reply *)
 
@@ -83,6 +83,10 @@ val send_message_with_reply : t -> OBus_message.method_call -> OBus_message.meth
       return a thread which wait for the reply *)
 
 (** {6 Helpers} *)
+
+exception Context of t * OBus_message.any
+  (** Context used to cast message body, see {!OBus_type.context} for
+      a description *)
 
 val method_call : t ->
   ?flags:OBus_message.flags ->

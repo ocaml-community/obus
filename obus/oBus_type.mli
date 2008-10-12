@@ -76,7 +76,16 @@ val make_sequence : [< 'a cl_sequence ] -> 'a -> sequence
 exception Cast_failure
   (** Exception raised when a cast fail *)
 
-type context = OBus_internals.connection * OBus_name.connection option
+type context = exn
+    (** The context is used to pass extra data to combinator so they
+        can peek extra informations from it. For example to create a
+        proxy object we need information from a message header.
+
+        The context used by obus when a message is received on a
+        connection is {!OBus_connection.Context}. *)
+
+exception No_context
+  (** Context used when no one is specified *)
 
 val cast_basic : [< 'a cl_basic ] -> ?context:context -> basic -> 'a
 val cast_single : [< 'a cl_single ] -> ?context:context -> single -> 'a
@@ -131,13 +140,13 @@ val wrap_array : [< 'a cl_element ] ->
       than a [wrap_single (tlist t) ...] since it does not create an
       intermediate list. *)
 
-val wrap_basic_ctx : 'a ty_basic -> (context option -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_basic
-val wrap_single_ctx : 'a ty_single -> (context option -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_single
-val wrap_element_ctx : 'a ty_element -> (context option -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_element
-val wrap_sequence_ctx : 'a ty_sequence -> (context option -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_sequence
+val wrap_basic_ctx : 'a ty_basic -> (context -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_basic
+val wrap_single_ctx : 'a ty_single -> (context -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_single
+val wrap_element_ctx : 'a ty_element -> (context -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_element
+val wrap_sequence_ctx : 'a ty_sequence -> (context -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_sequence
 val wrap_array_ctx : [< 'a cl_element ] ->
   make:(('a -> element) -> 'b -> element list) ->
-  cast:(context option -> (element -> 'a) -> element list -> 'b) -> 'b ty_single
+  cast:(context -> (element -> 'a) -> element list -> 'b) -> 'b ty_single
   (** Same thing but with access to the context *)
 
 (** {6 Default type combinators} *)
@@ -162,8 +171,6 @@ val tstring : string ty_basic
 val tsignature : signature ty_basic
 val tobject_path : OBus_path.t ty_basic
 val tpath : OBus_path.t ty_basic
-val tproxy : OBus_internals.proxy ty_basic
-val tuuid : OBus_uuid.t ty_basic
 
 val tlist : [< 'a cl_element ] -> 'a list ty_single
 val tdict_entry : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) ty_element
@@ -191,14 +198,11 @@ type double = float
 type signature = OBus_value.signature
 type object_path = OBus_path.t
 type path = OBus_path.t
-type proxy = OBus_internals.proxy
-type 'a set = 'a list
 type ('a, 'b) dict_entry = 'a * 'b
-type ('a, 'b) assoc = ('a, 'b) dict_entry set
+type ('a, 'b) assoc = ('a, 'b) dict_entry list
 type 'a structure = 'a
 type variant = single
 type byte_array = string
-type uuid = OBus_uuid.t
     (** Dummy type definition, they should be used in combination with
         the syntax extension, to define the dbus type and the caml
         type at the same time *)

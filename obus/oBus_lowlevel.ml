@@ -597,7 +597,7 @@ end
 module LEWriter = Make_writer(Little_endian_writers)
 module BEWriter = Make_writer(Big_endian_writers)
 
-let put_message ?(byte_order=native_byte_order) msg =
+let put_message ?(byte_order=native_byte_order) (msg : OBus_message.any) =
   try
     let bo_char, writer = match byte_order with
       | Little_endian ->
@@ -938,7 +938,7 @@ end
 module LEReader = Make_reader(Little_endian_readers)
 module BEReader = Make_reader(Big_endian_readers)
 
-let get_message ic =
+let get_message ic : OBus_message.any Lwt.t =
   input_char ic >>= function
     | 'l' -> LEReader.rmessage ic
     | 'B' -> BEReader.rmessage ic
@@ -950,7 +950,7 @@ let failwith fmt = ksprintf (fun msg -> fail (Failure msg)) fmt
 
 class type transport = object
   method get_message : OBus_message.any Lwt.t
-  method put_message : 'a. 'a OBus_message.t -> unit message_marshaler
+  method put_message : OBus_message.any -> unit message_marshaler
   method shutdown : unit
   method abort : exn -> unit
   method authenticate : OBus_address.guid option Lwt.t Lazy.t
@@ -961,8 +961,7 @@ class socket_transport fd =
   and oc = Lwt_chan.out_channel_of_descr fd in
 object
   method get_message = get_message ic
-  method put_message : 'a. 'a OBus_message.t -> unit message_marshaler =
-    fun msg -> match put_message msg with
+  method put_message msg = match put_message msg with
       | Marshaler_success f -> Marshaler_success(fun () -> f oc)
       | Marshaler_failure msg -> Marshaler_failure msg
   method shutdown =
@@ -988,19 +987,15 @@ let loopback = object(self)
         | false ->
             return (Queue.pop queue)
 
-  method put_message : 'a. 'a OBus_message.t -> unit message_marshaler =
-    fun msg ->
-      (* TODO: figure out why the typer refuse the following
-         cohercion (without Obj.magic): *)
-      let msg = (Obj.magic (msg : [< OBus_message.any_type ] OBus_message.t) : OBus_message.any) in
-      Marshaler_success(fun () -> match aborted with
-                          | Some exn -> fail exn
-                          | None ->
-                              begin match Queue.is_empty waiters with
-                                | true -> Queue.push msg queue
-                                | false -> Lwt.wakeup (Queue.pop waiters) msg
-                              end;
-                              return ())
+  method put_message msg =
+    Marshaler_success(fun () -> match aborted with
+                        | Some exn -> fail exn
+                        | None ->
+                            begin match Queue.is_empty waiters with
+                              | true -> Queue.push msg queue
+                              | false -> Lwt.wakeup (Queue.pop waiters) msg
+                            end;
+                            return ())
 
   method shutdown = self#abort (Failure "transport closed")
 

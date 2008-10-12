@@ -16,6 +16,9 @@
 
 type t
 
+val tt : t OBus_type.ty_basic
+  (** Type combinator *)
+
 val generate : unit -> t
   (** Generate a new uuid *)
 

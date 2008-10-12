@@ -92,7 +92,7 @@ let get_connection_unix_user = call "GetConnectionUnixUser" << string -> int >>
 let get_connection_unix_process_id = call "GetConnectionUnixProcessId" << string -> int >>
 let get_connection_selinux_security_context = call "GetConnectionSelinuxSecurityContext" << string -> byte_array >>
 let reload_config = call "ReloadConfig" << unit >>
-let get_id = call "GetId" << uuid >>
+let get_id = call "GetId" << OBus_uuid.t >>
 
 let on_name_owner_changed = on_signal "NameOwnerChanged" << string -> string -> string -> unit >>
 let on_name_lost = on_signal "NameLost" << string -> unit >>

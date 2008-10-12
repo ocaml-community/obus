@@ -30,11 +30,12 @@ struct
       "Util";
       "MSet";
       "OBus_info";
-      "OBus_uuid";
       "Types_rw";
       "OBus_path";
       "OBus_name";
       "OBus_value";
+      "OBus_type";
+      "OBus_uuid";
       "Rules";
       "Xparser";
       "OBus_interface";
@@ -45,7 +46,6 @@ struct
       "OBus_internals";
       "OBus_error";
       "OBus_connection";
-      "OBus_type";
       "OBus_introspect";
       "OBus_object";
       "OBus_signal";

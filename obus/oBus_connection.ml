@@ -98,7 +98,7 @@ let send_message_backend with_serial connection message =
           (OBus_uuid.to_string running.guid) OBus_message.print message;
 
       (* Create the message marshaler *)
-      match running.transport#put_message { message with serial = serial } with
+      match running.transport#put_message ({ message with serial = serial } :> OBus_message.any) with
         | OBus_lowlevel.Marshaler_failure msg ->
             wakeup w serial;
             fail (Failure ("can not send message: " ^ msg))
@@ -129,12 +129,15 @@ let send_message_with_reply connection message =
 
 (***** Helpers *****)
 
+exception Context of connection * OBus_message.any
+let mk_context connection msg = Context(connection, (msg :> OBus_message.any))
+
 let call_and_cast_reply ty cont =
   make_func ty & fun body ->
     cont body
       (fun connection message ->
          send_message_with_reply connection message >>= fun msg ->
-           match opt_cast_sequence ~context:(connection, msg.sender) (func_reply ty) msg.body with
+           match opt_cast_sequence ~context:(mk_context connection msg) (func_reply ty) msg.body with
 
              (* If the cast success, just return the result *)
              | Some x -> return x
@@ -218,7 +221,7 @@ let add_signal_receiver connection ?sender ?destination ?path ?interface ?member
          smr_interface = interface;
          smr_member = member;
          smr_args = args },
-       fun msg -> ignore(opt_cast_func typ msg.body func))
+       fun msg -> ignore(opt_cast_func typ ~context:(mk_context connection msg) msg.body func))
 
 let dadd_signal_receiver connection ?sender ?destination ?path ?interface ?member ?(args=[]) func =
   with_running connection & fun running ->

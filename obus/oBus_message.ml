@@ -51,7 +51,6 @@ type 'typ t = {
   sender : OBus_name.Connection.t option;
   body : body;
 }
-constraint 'typ = [< any_type ]
 
 let body message = message.body
 let flags message = message.flags

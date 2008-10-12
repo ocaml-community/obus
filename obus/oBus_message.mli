@@ -58,7 +58,6 @@ type 'typ t = {
   sender : OBus_name.Connection.t option;
   body : body;
 }
-constraint 'typ = [< any_type ]
 
 type method_call = method_call_type t
 type method_return = method_return_type t
@@ -131,5 +130,5 @@ val signal :
 
 (** {6 Pretty-printing} *)
 
-val print : Format.formatter -> 'a t -> unit
+val print : Format.formatter -> [< any_type ] t -> unit
   (** Print a message on a formatter *)

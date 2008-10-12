@@ -36,7 +36,7 @@ type 'output message_marshaler =
   | Marshaler_failure of string
   | Marshaler_success of ('output -> unit Lwt.t)
 
-val put_message : ?byte_order:OBus_info.byte_order -> 'a OBus_message.t -> Lwt_chan.out_channel message_marshaler
+val put_message : ?byte_order:OBus_info.byte_order -> OBus_message.any -> Lwt_chan.out_channel message_marshaler
   (** Send one message. The produced marshaler will flush the channel
       after the serialization of the message. *)
 
@@ -48,7 +48,7 @@ class type transport = object
   method get_message : OBus_message.any Lwt.t
     (** Receive one message from the transport *)
 
-  method put_message : 'a. 'a OBus_message.t -> unit message_marshaler
+  method put_message : OBus_message.any -> unit message_marshaler
     (** Send one message. The sending must not be delayed, i.e. if the
         transport is buffurized, then it shoud be flushed. *)
 
