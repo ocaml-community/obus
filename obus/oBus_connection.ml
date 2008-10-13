@@ -465,9 +465,9 @@ let of_authenticated_transport ?(shared=true) transport guid =
               connection
 
 let of_transport ?(shared=true) transport =
-  Lazy.force (transport#authenticate) >>= function
-    | None -> fail (Failure "cannot authentificate on the given transport")
-    | Some guid -> return & of_authenticated_transport ~shared transport guid
+  (perform
+     guid <-- Lazy.force (transport#authenticate);
+     return (of_authenticated_transport ~shared transport guid))
 
 let of_addresses ?(shared=true) addresses = match shared with
   | false -> OBus_lowlevel.transport_of_addresses addresses >>= of_transport ~shared:false

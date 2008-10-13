@@ -953,7 +953,7 @@ class type transport = object
   method put_message : OBus_message.any -> unit message_marshaler
   method shutdown : unit
   method abort : exn -> unit
-  method authenticate : OBus_address.guid option Lwt.t Lazy.t
+  method authenticate : OBus_address.guid Lwt.t Lazy.t
 end
 
 class socket_transport fd =
@@ -969,7 +969,7 @@ object
     Lwt_unix.close fd
   method abort exn =
     Lwt_unix.abort fd exn
-  method authenticate = lazy(OBus_auth.authenticate (ic, oc))
+  method authenticate = lazy(OBus_auth.client_authenticate (ic, oc))
 end
 
 let loopback = object(self)
@@ -1005,7 +1005,7 @@ let loopback = object(self)
     Queue.clear waiters;
     Queue.clear queue
 
-  method authenticate = lazy(return (Some OBus_uuid.loopback))
+  method authenticate = lazy(return OBus_uuid.loopback)
 end
 
 let make_socket domain typ addr =

@@ -26,6 +26,7 @@ struct
   (* All the modules of the obus library *)
   let all_modules =
     [ "Addr_lexer";
+      "Auth_command";
       "Auth_lexer";
       "Util";
       "MSet";

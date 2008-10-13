@@ -58,10 +58,9 @@ class type transport = object
   method abort : exn -> unit
     (** [abort exn] should behave like [Lwt_unix.abort] *)
 
-  method authenticate : OBus_address.guid option Lwt.t Lazy.t
+  method authenticate : OBus_address.guid Lwt.t Lazy.t
     (** When forced, [auithenticate] should launch authentification on
-        the transport and return the [Some guid] if it succeed and
-        [None] otherwise *)
+        the transport and return the guid of the server address. *)
 end
 
 (** Create a transport from a connected socket *)

@@ -12,55 +12,77 @@
 type data = string
     (** Data for an auth mechanism *)
 
-type mechanism_return =
-    (** Value returned by an auth mechanism *)
-  | Continue of data
+(** {6 Client-side authentification mechanisms} *)
+
+type client_mechanism_return =
+    (** Value returned by the client-side of an auth mechanism *)
+  | Client_mech_continue of data
       (** Continue the authentification with this data *)
-  | OK of data
+  | Client_mech_ok of data
       (** Authentification done *)
-  | Error of string
+  | Client_mech_error of string
       (** Authentification failed *)
 
-(** Handlers for an authentification mechanism *)
-type mechanism_handlers = {
-  mech_init : mechanism_return;
-  (** must be the initial return value of the mechanism. *)
+class virtual client_mechanism_handler : object
+  method virtual init : client_mechanism_return
+    (** Initial return value of the mechanism *)
 
-  mech_data : data -> mechanism_return;
-  (** [mech_data] must continue the mechanism process with the given
-      data. *)
+  method data : data -> client_mechanism_return
+    (** [mech_data] must continue the mechanism process with the given
+        data. Default implementation fail with an error message. *)
 
-  mech_shutdown : unit -> unit;
-  (** shutdown the mechanism *)
-}
+  method abort : unit
+    (** Must abort the mechanism. *)
+end
 
-val make :
-  init:mechanism_return ->
-  ?data:(data -> mechanism_return) ->
-  ?shutdown:(unit -> unit) -> unit -> mechanism_handlers
-  (** Create handers for an authentification mechanism.
-
-      The default for [data] is to return an error telling that no
-      data are expected.
-
-      The default for [shutdown] is to do nothing. *)
-
-type mechanism = string * (unit -> mechanism_handlers)
+type client_mechanism = string * (unit -> client_mechanism_handler)
     (** A mechiansm consist on a mechanism name and a function to
         create the handlers *)
 
-(** {6 Predefined mechanisms} *)
+val client_mech_external : client_mechanism
+val client_mech_anonymous : client_mechanism
+val default_client_mechanisms : client_mechanism list
 
-val mech_external : mechanism
-val mech_anonymous : mechanism
+(** {6 Server-side authentification mechanims} *)
 
-(** {6 Registration} *)
+type server_mechanism_return =
+    (** Value returned by the server-side of an auth mechanism *)
+  | Server_mech_continue of data
+      (** Continue the authentification with this data *)
+  | Server_mech_ok
+      (** The client is authentified *)
+  | Server_mech_reject
+      (** The client is rejected by the mechanism *)
 
-val default_mechanisms : mechanism list
-  (** All the default mechanisms. *)
+class virtual server_mechanism_handler : object
+  method virtual init : data option -> server_mechanism_return
+    (** Initialiaze the mechanism *)
 
-(** {6 Make authentification} *)
+  method data : data -> server_mechanism_return
+    (** [mech_data] must continue the mechanism process with the given
+        data. *)
 
-val authenticate : ?mechanisms:mechanism list -> Lwt_chan.in_channel * Lwt_chan.out_channel -> OBus_address.guid option Lwt.t
-  (** [launch transport] launch authentification on the given input
-      and output channels *)
+  method abort : unit
+    (** Must abort the mechanism *)
+end
+
+type server_mechanism = string * (unit -> server_mechanism_handler)
+
+val server_mech_external : server_mechanism
+val server_mech_anonymous : server_mechanism
+val default_server_mechanisms : server_mechanism list
+
+(** {6 Authentification} *)
+
+val client_authenticate : ?mechanisms:client_mechanism list ->
+  Lwt_chan.in_channel * Lwt_chan.out_channel -> OBus_address.guid Lwt.t
+  (** Launch client-side authentification on the given input and
+      output channels.
+
+      If it succeed return the unique identifiant of the server
+      address. *)
+
+val server_authenticate : ?mechanisms:server_mechanism list -> OBus_address.guid ->
+  Lwt_chan.in_channel * Lwt_chan.out_channel -> unit Lwt.t
+  (** Launch server-side authentification on the given input and
+      output channels. *)
