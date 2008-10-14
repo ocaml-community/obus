@@ -32,6 +32,12 @@ type ('a, 'b) either =
 val split : ('a -> ('b, 'c) either) -> 'a list -> 'b list * 'c list
   (** Split a list *)
 
+val hex_encode : string -> string
+val hex_decode : string -> string
+  (** A hex-encoded string is a string where each character is
+      replaced by two hexadecimal characters which represent his ascii
+      code *)
+
 val with_open_in : string -> (in_channel -> 'a) -> 'a
 val with_open_out : string -> (out_channel -> 'a) -> 'a
   (** [with_open_* fname f] open [fname], apply [f] on the channel and

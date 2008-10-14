@@ -12,12 +12,15 @@
 type data = string
     (** Data for an auth mechanism *)
 
+exception Auth_failure of string
+  (** Exception raise when authentication fail *)
+
 (** {6 Client-side authentification mechanisms} *)
 
 type client_mechanism_return =
     (** Value returned by the client-side of an auth mechanism *)
   | Client_mech_continue of data
-      (** Continue the authentification with this data *)
+      (** Continue the authentification with this response *)
   | Client_mech_ok of data
       (** Authentification done *)
   | Client_mech_error of string
@@ -48,19 +51,19 @@ val default_client_mechanisms : client_mechanism list
 type server_mechanism_return =
     (** Value returned by the server-side of an auth mechanism *)
   | Server_mech_continue of data
-      (** Continue the authentification with this data *)
+      (** Continue the authentification with this challenge *)
   | Server_mech_ok
       (** The client is authentified *)
   | Server_mech_reject
       (** The client is rejected by the mechanism *)
 
 class virtual server_mechanism_handler : object
-  method virtual init : data option -> server_mechanism_return
-    (** Initialiaze the mechanism *)
+  method init : data option
+    (** Initial challenge *)
 
-  method data : data -> server_mechanism_return
+  method virtual data : data -> server_mechanism_return
     (** [mech_data] must continue the mechanism process with the given
-        data. *)
+        response. *)
 
   method abort : unit
     (** Must abort the mechanism *)
@@ -76,7 +79,7 @@ val default_server_mechanisms : server_mechanism list
 
 val client_authenticate : ?mechanisms:client_mechanism list ->
   Lwt_chan.in_channel * Lwt_chan.out_channel -> OBus_address.guid Lwt.t
-  (** Launch client-side authentification on the given input and
+  (** Launch client-side authentication on the given input and
       output channels.
 
       If it succeed return the unique identifiant of the server
@@ -84,5 +87,5 @@ val client_authenticate : ?mechanisms:client_mechanism list ->
 
 val server_authenticate : ?mechanisms:server_mechanism list -> OBus_address.guid ->
   Lwt_chan.in_channel * Lwt_chan.out_channel -> unit Lwt.t
-  (** Launch server-side authentification on the given input and
+  (** Launch server-side authentication on the given input and
       output channels. *)

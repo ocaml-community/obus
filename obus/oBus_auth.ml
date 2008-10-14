@@ -7,11 +7,20 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Printf
 open Lwt
 open Lwt_chan
-open Auth_command
 
-let failwith fmt = Printf.ksprintf (fun msg -> raise (Failure msg)) fmt
+exception Auth_failure of string
+let auth_failure fmt = ksprintf (fun msg -> fail (Auth_failure msg)) fmt
+
+(* Maximum line length, if line greated are received, authentication
+   will fail *)
+let max_line_length = 42 * 1024
+
+(* Maximum number of reject, if a client is rejected more than that,
+   authentication will fail *)
+let max_reject = 42
 
 type data = string
 
@@ -25,6 +34,19 @@ type server_mechanism_return =
   | Server_mech_ok
   | Server_mech_reject
 
+type client_command =
+  | Client_auth of (string * data option) option
+  | Client_cancel
+  | Client_begin
+  | Client_data of data
+  | Client_error of string
+
+type server_command =
+  | Server_rejected of string list
+  | Server_ok of OBus_address.guid
+  | Server_data of data
+  | Server_error of string
+
 class virtual client_mechanism_handler = object
   method virtual init : client_mechanism_return
   method data (chall : data) = Client_mech_error("no data expected for this mechanism")
@@ -32,8 +54,8 @@ class virtual client_mechanism_handler = object
 end
 
 class virtual server_mechanism_handler = object
-  method virtual init : data option -> server_mechanism_return
-  method data (resp : data) = Server_mech_reject
+  method init : data option = None
+  method virtual data : data -> server_mechanism_return
   method abort = ()
 end
 
@@ -62,14 +84,12 @@ let default_client_mechanisms = [client_mech_external;
 
 class server_mech_external_handler = object
   inherit server_mechanism_handler
-  method init = function
-    | None -> Server_mech_reject
-    | Some id -> Server_mech_ok
+  method data _ = Server_mech_ok
 end
 
 class server_mech_anonymous_handler = object
   inherit server_mechanism_handler
-  method init _ = Server_mech_ok
+  method data _ = Server_mech_ok
 end
 
 let server_mech_external = ("EXTERNAL", fun _ -> new server_mech_external_handler)
@@ -79,27 +99,133 @@ let default_server_mechanisms = [server_mech_external]
 
 (***** Transport *****)
 
-let hexstring_of_data buf str =
-  String.iter (fun c -> Printf.bprintf buf "%02x" (int_of_char c)) str
-
-let send mode marshaler oc command =
-  let buf = Buffer.create 42 in
-  marshaler buf command;
-  Buffer.add_string buf "\r\n";
-  let line = Buffer.contents buf in
-  DEBUG("%s/sending: %S" mode line);
+let send_line mode oc line =
+  DEBUG("%s: sending: %S" mode line);
   (perform
      output_string oc line;
+     output_string oc "\r\n";
      flush oc)
 
-let rec recv mode lexer ic =
+let rec recv_line buffer ic eol_state =
+  (* We need a limit to avoid consuming all the ram... *)
+  if Buffer.length buffer > max_line_length then
+    auth_failure "line too long received (>%d)" max_line_length
+  else
+    (perform
+       ch <-- input_char ic;
+       let _ = Buffer.add_char buffer ch in
+       match eol_state, ch with
+         | 0, '\r' -> recv_line buffer ic 1
+         | 1, '\n' -> return (Buffer.sub buffer 0 (Buffer.length buffer - 2))
+         | _ -> recv_line buffer ic 0)
+
+let rec first f str pos =
+  if pos = String.length str then
+    pos
+  else match f str.[pos] with
+    | true -> pos
+    | false -> first f str (pos + 1)
+
+let rec last f str pos =
+  if pos = 0 then
+    pos
+  else match f str.[pos - 1] with
+    | true -> pos
+    | false -> first f str (pos - 1)
+
+let blank ch = ch = ' ' || ch = '\t'
+let not_blank ch = not (blank ch)
+
+let sub_strip str i j =
+  let i = first not_blank str i in
+  let j = last not_blank str j in
+  if i < j then String.sub str i (j - i) else ""
+
+let split str =
+  let rec aux i =
+    let i = first not_blank str i in
+    if i = String.length str then
+      []
+    else
+      let j = first blank str i in
+      String.sub str i (j - i) :: aux j
+  in
+  aux 0
+
+let preprocess_line line =
+  (* Check for ascii-only *)
+  String.iter (function
+                 | '\x01'..'\x7f' -> ()
+                 | _ -> failwith "non-ascii characters in command") line;
+  (* Extract the command *)
+  let i = first blank line 0 in
+  if i = 0 then failwith "empty command";
+  (String.sub line 0 i, sub_strip line i (String.length line))
+
+let rec recv mode command_parser (ic, oc) =
   (perform
-     l <-- input_line ic;
-     let _ = DEBUG("%s/received: %S" mode l) in
-     try
-       return (lexer (Lexing.from_string l))
+     line <-- recv_line (Buffer.create 42) ic 0;
+     let _ = DEBUG("%s: received: %S" mode line) in
+
+     (* If a parse failure occur, return an error and try again *)
+     match
+       try
+         let command, args = preprocess_line line in
+         `Success(command_parser command args)
+       with
+           exn -> `Failure(exn)
      with
-         _ -> failwith "parse failure")
+       | `Success x -> return x
+       | `Failure(Failure msg) ->
+           (perform
+              send_line mode oc ("ERROR \"" ^ msg ^ "\"");
+              recv mode command_parser (ic, oc))
+       | `Failure exn -> fail exn)
+
+let hex_encode = Util.hex_encode
+let hex_decode str =
+  try
+    Util.hex_decode str
+  with
+    | Invalid_argument _ -> failwith "invalid hex-encoded data"
+
+let client_recv = recv "client"
+  (fun command args -> match command with
+     | "REJECTED" -> Server_rejected (split args)
+     | "OK" -> Server_ok(try OBus_uuid.of_string args with _ -> failwith "invalid hex-encoded guid")
+     | "DATA" -> Server_data(hex_decode args)
+     | "ERROR" -> Server_error args
+     | _ -> failwith "invalid command")
+
+let server_recv = recv "server"
+  (fun command args -> match command with
+     | "AUTH" -> Client_auth(match split args with
+                               | [] -> None
+                               | [mech] -> Some(mech, None)
+                               | [mech; data] -> Some(mech, Some(hex_decode data))
+                               | _ -> failwith "too many arguments")
+     | "CANCEL" -> Client_cancel
+     | "BEGIN" -> Client_begin
+     | "DATA" -> Client_data(hex_decode args)
+     | "ERROR" -> Client_error args
+     | _ -> failwith "invalid command")
+
+let client_send chans cmd = send_line "client" chans
+  (match cmd with
+     | Client_auth None -> "AUTH"
+     | Client_auth(Some(mechanism, None)) -> sprintf "AUTH %s" mechanism
+     | Client_auth(Some(mechanism, Some data)) -> sprintf "AUTH %s %s" mechanism (hex_encode data)
+     | Client_cancel -> "CANCEL"
+     | Client_begin -> "BEGIN"
+     | Client_data data -> sprintf "DATA %s" (hex_encode data)
+     | Client_error msg -> sprintf "ERROR \"%s\"" msg)
+
+let server_send chans cmd = send_line "server" chans
+  (match cmd with
+     | Server_rejected mechs -> String.concat " " ("REJECTED" :: mechs)
+     | Server_ok guid -> sprintf "OK %s" (OBus_uuid.to_string guid)
+     | Server_data data -> sprintf "DATA %s" (hex_encode data)
+     | Server_error msg -> sprintf "ERROR \"%s\"" msg)
 
 (***** Client-side protocol ******)
 
@@ -164,7 +290,7 @@ struct
         | Server_rejected am ->
             mech#abort;
             next mechs am
-        | Server_error ->
+        | Server_error _ ->
             mech#abort;
             Transition(Client_cancel,
                        Waiting_for_reject,
@@ -172,23 +298,23 @@ struct
         | Server_ok guid ->
             mech#abort;
             Success guid
-        | _ ->
+(*        | _ ->
             Transition(Client_error "unexpected command",
                        Waiting_for_data mech,
-                       mechs)
+                       mechs)*)
       end
 
     | Waiting_for_ok -> begin match cmd with
         | Server_ok guid -> Success guid
         | Server_rejected am -> next mechs am
         | Server_data _
-        | Server_error -> Transition(Client_cancel,
-                                     Waiting_for_reject,
-                                     mechs)
-        | _ ->
+        | Server_error _ -> Transition(Client_cancel,
+                                       Waiting_for_reject,
+                                       mechs)
+(*        | _ ->
             Transition(Client_error "unexpected command",
                        Waiting_for_ok,
-                       mechs)
+                       mechs)*)
       end
 
     | Waiting_for_reject -> begin match cmd with
@@ -196,44 +322,19 @@ struct
         | _ -> Failure
       end
 
-  let marshaler buf = function
-    | Client_auth None ->
-        Buffer.add_string buf "AUTH"
-    | Client_auth(Some(mechanism, data)) ->
-        Buffer.add_string buf "AUTH ";
-        Buffer.add_string buf mechanism;
-        begin match data with
-          | Some data ->
-              Buffer.add_char buf ' ';
-              hexstring_of_data buf data
-          | None ->
-              ()
-        end
-    | Client_cancel -> Buffer.add_string buf "CANCEL"
-    | Client_begin -> Buffer.add_string buf "BEGIN"
-    | Client_data(data) ->
-        Buffer.add_string buf "DATA ";
-        hexstring_of_data buf data
-    | Client_error(message) ->
-        Buffer.add_string buf "ERROR ";
-        Buffer.add_string buf message
-
-  let recv = recv "client" Auth_lexer.server_command
-  let send = send "client" marshaler
-
   let exec mechs (ic, oc) =
     let rec loop = function
       | Transition(cmd, state, mechs) ->
           (perform
-             send oc cmd;
-             cmd <-- recv ic;
+             client_send oc cmd;
+             cmd <-- client_recv (ic, oc);
              loop (transition mechs state cmd))
       | Success guid ->
           (perform
-             send oc Client_begin;
+             client_send oc Client_begin;
              return guid)
       | Failure ->
-          failwith "authentification failure"
+          auth_failure "authentification failure"
     in
     (perform
        output_char oc '\000';
@@ -259,8 +360,8 @@ struct
     Transition(Server_rejected (List.map fst mechs),
                Waiting_for_auth)
 
-  let error =
-    Transition(Server_error,
+  let error msg =
+    Transition(Server_error msg,
                Waiting_for_auth)
 
   let transition guid mechs state cmd = match state with
@@ -272,22 +373,34 @@ struct
               | None -> reject mechs
               | Some f ->
                   let mech = f () in
-                  match mech#init resp with
-                    | Server_mech_continue chall ->
+                  match mech#init, resp with
+                    | None, None ->
+                        Transition(Server_data "",
+                                   Waiting_for_data mech)
+                    | Some chall, None ->
                         Transition(Server_data chall,
                                    Waiting_for_data mech)
-                    | Server_mech_ok ->
-                        Transition(Server_ok guid,
-                                   Waiting_for_begin)
-                    | Server_mech_reject ->
+                    | Some chall, Some rest ->
                         reject mechs
+                    | None, Some resp -> match mech#data resp with
+                        | Server_mech_continue chall ->
+                            Transition(Server_data chall,
+                                       Waiting_for_data mech)
+                        | Server_mech_ok ->
+                            Transition(Server_ok guid,
+                                       Waiting_for_begin)
+                        | Server_mech_reject ->
+                            reject mechs
             end
         | Client_begin -> Failure
         | Client_error msg -> reject mechs
-        | _ -> error
+        | _ -> error "AUTH command expected"
       end
 
     | Waiting_for_data mech -> begin match cmd with
+        | Client_data "" ->
+            Transition(Server_data "",
+                       Waiting_for_data mech)
         | Client_data resp ->
             begin match mech#data resp with
               | Server_mech_continue chall ->
@@ -302,39 +415,20 @@ struct
         | Client_begin -> mech#abort; Failure
         | Client_cancel -> mech#abort; reject mechs
         | Client_error _ -> mech#abort; reject mechs
-        | _ -> mech#abort; error
+        | _ -> mech#abort; error "DATA command expected"
       end
 
     | Waiting_for_begin -> begin match cmd with
         | Client_begin -> Accept
         | Client_cancel -> reject mechs
         | Client_error _ -> reject mechs
-        | _ -> error
+        | _ -> error "BEGIN command expected"
       end
-
-  let marshaler buf = function
-    | Server_rejected mechs ->
-        Buffer.add_string buf "REJECTED";
-        List.iter (fun name ->
-                     Buffer.add_char buf ' ';
-                     Buffer.add_string buf name)
-          mechs
-    | Server_ok guid ->
-        Buffer.add_string buf "OK ";
-        Buffer.add_string buf (OBus_uuid.to_string guid)
-    | Server_data data ->
-        Buffer.add_string buf "DATA ";
-        hexstring_of_data buf data
-    | Server_error ->
-        Buffer.add_string buf "ERROR"
-
-  let recv = recv "server" Auth_lexer.client_command
-  let send = send "server" marshaler
 
   let exec mechs guid (ic, oc) =
     let rec loop state count =
       (perform
-         cmd <-- recv ic;
+         cmd <-- server_recv (ic, oc);
          match transition guid mechs state cmd with
            | Transition(cmd, state) ->
                let count = match cmd with
@@ -342,23 +436,23 @@ struct
                  | _ -> count in
                (* Specification do not specify a limit for rejected,
                   so we choose one arbitrary *)
-               if count >= 42 then
-                 failwith "too many reject"
+               if count >= max_reject then
+                 auth_failure "too many reject"
                else
                  (perform
-                    send oc cmd;
+                    server_send oc cmd;
                     loop state count)
            | Accept ->
                return ()
            | Failure ->
-               failwith "authentification failure")
+               auth_failure "authentification failure")
     in
     (perform
        ch <-- input_char ic;
        if ch = '\000' then
          loop Waiting_for_auth 0
        else
-         failwith "initial null byte missing")
+         auth_failure "initial null byte missing")
 end
 
 let client_authenticate ?(mechanisms=default_client_mechanisms) = Client.exec mechanisms

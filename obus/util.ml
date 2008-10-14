@@ -49,6 +49,42 @@ let rec split f l =
                      | Left x -> (x :: a, b)
                      | Right x -> (a, x :: b)) l ([], [])
 
+let encode_char n =
+  if n < 10 then
+    char_of_int (n + Char.code '0')
+  else if n < 16 then
+    char_of_int (n + Char.code 'a')
+  else
+    assert false
+
+let hex_encode str =
+  let len = String.length str in
+  let hex = String.create (len * 2) in
+  for i = 0 to len - 1 do
+    let n = Char.code (String.unsafe_get str i) in
+    String.unsafe_set hex (i * 2) (encode_char (n lsr 4));
+    String.unsafe_set hex (i * 2 + 1) (encode_char (n land 15))
+  done;
+  hex
+
+let decode_char ch = match ch with
+  | '0'..'9' -> Char.code ch - Char.code '0'
+  | 'a'..'f' -> Char.code ch - Char.code 'a' + 10
+  | 'A'..'F' -> Char.code ch - Char.code 'A' + 10
+  | _ -> raise (Invalid_argument "Util.decode_char")
+
+let hex_decode hex =
+  if String.length hex mod 2 <> 0 then raise (Invalid_argument "Util.hex_decode");
+  let len = String.length hex / 2 in
+  let str = String.create len in
+  for i = 0 to len - 1 do
+    String.unsafe_set str i
+      (char_of_int
+         ((decode_char (String.unsafe_get hex (i * 2)) lsl 4) lor
+            (decode_char (String.unsafe_get hex (i * 2 + 1)))))
+  done;
+  str
+
 let with_open_in fname f =
   try_finally f close_in (open_in fname)
 
