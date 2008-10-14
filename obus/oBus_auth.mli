@@ -44,6 +44,7 @@ type client_mechanism = string * (unit -> client_mechanism_handler)
 
 val client_mech_external : client_mechanism
 val client_mech_anonymous : client_mechanism
+val client_mech_dbus_cookie_sha1 : client_mechanism
 val default_client_mechanisms : client_mechanism list
 
 (** {6 Server-side authentification mechanims} *)
@@ -73,6 +74,7 @@ type server_mechanism = string * (unit -> server_mechanism_handler)
 
 val server_mech_external : server_mechanism
 val server_mech_anonymous : server_mechanism
+val server_mech_dbus_cookie_sha1 : server_mechanism
 val default_server_mechanisms : server_mechanism list
 
 (** {6 Authentification} *)

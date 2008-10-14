@@ -32,6 +32,9 @@ type ('a, 'b) either =
 val split : ('a -> ('b, 'c) either) -> 'a list -> 'b list * 'c list
   (** Split a list *)
 
+val sha_1 : string -> string
+  (** Compute the sha1 of a string *)
+
 val hex_encode : string -> string
 val hex_decode : string -> string
   (** A hex-encoded string is a string where each character is
@@ -46,6 +49,16 @@ val with_open_out : string -> (out_channel -> 'a) -> 'a
 val with_process_in : string -> (in_channel -> 'a) -> 'a
 val with_process_out : string -> (out_channel -> 'a) -> 'a
   (** Same thing but for processes *)
+
+val homedir : string Lazy.t
+  (** Return the home directory *)
+
+val fill_random : string -> int -> int -> unit
+  (** Try to generate the given amount of random bytes with
+      /dev/urandom, and fallback to pseudo-random if it can not *)
+
+val gen_random : int -> string
+  (** Create a string and fill it with random data *)
 
 module type Monad = sig
   type 'a t

@@ -62,6 +62,13 @@ end
 type client_mechanism = string * (unit -> client_mechanism_handler)
 type server_mechanism = string * (unit -> server_mechanism_handler)
 
+let hex_encode = Util.hex_encode
+let hex_decode str =
+  try
+    Util.hex_decode str
+  with
+    | Invalid_argument _ -> failwith "invalid hex-encoded data"
+
 (***** Predefined client mechanisms *****)
 
 class client_mech_external_handler = object
@@ -74,11 +81,54 @@ class client_mech_anonymous_handler = object
   method init = Client_mech_ok("obus " ^ OBus_info.version)
 end
 
+let keyring_file_name context = sprintf "%s/.dbus-keyrings/%s" (Lazy.force Util.homedir) context
+
+let rec find_cookie id scanbuf =
+  match
+    try
+      Scanf.bscanf scanbuf "%ld %Ld %s\n"
+        (fun id' time cookie ->
+           if id = id' then
+             `Found cookie
+           else
+             `Not_found)
+    with
+        exn -> `Error exn
+  with
+    | `Found cookie -> cookie
+    | `Not_found -> find_cookie id scanbuf
+    | `Error End_of_file -> failwith "cookie id not found"
+    | `Error exn -> failwith "invalid cookie file contents"
+
+class client_mech_dbus_cookie_sha1_handler = object
+  method init = Client_mech_continue(string_of_int (Unix.getuid ()))
+  method data chal =
+    try
+      DEBUG("client: dbus_cookie_sha1: chal: %s" chal);
+      Scanf.sscanf chal "%[^/\\ \n\r.] %ld %[a-fA-F0-9]%!"
+        (fun context id chal ->
+           let cookie = Util.with_open_in
+             (keyring_file_name context)
+             (fun ic -> find_cookie id (Scanf.Scanning.from_channel ic)) in
+           let my_chal = hex_encode (Util.gen_random 16) in
+           let resp = sprintf "%s %s"
+             my_chal
+             (hex_encode (Util.sha_1 (sprintf "%s:%s:%s" chal my_chal cookie))) in
+           DEBUG("client: dbus_cookie_sha1: resp: %s" resp);
+           Client_mech_ok resp)
+    with
+      | Failure msg -> Client_mech_error msg
+      | exn -> Client_mech_error (Printexc.to_string exn)
+  method abort = ()
+end
+
 let client_mech_external = ("EXTERNAL", fun _ -> new client_mech_external_handler)
 let client_mech_anonymous = ("ANONYMOUS", fun _ -> new client_mech_anonymous_handler)
+let client_mech_dbus_cookie_sha1 = ("DBUS_COOKIE_SHA1", fun _ -> new client_mech_dbus_cookie_sha1_handler)
 
 let default_client_mechanisms = [client_mech_external;
-                                 client_mech_anonymous]
+                                 client_mech_anonymous;
+                                 client_mech_dbus_cookie_sha1]
 
 (***** Predefined server mechanisms *****)
 
@@ -92,10 +142,153 @@ class server_mech_anonymous_handler = object
   method data _ = Server_mech_ok
 end
 
+let rec find_cookie id scanbuf =
+  match
+    try
+      Scanf.bscanf scanbuf "%ld %Ld %s\n"
+        (fun id' time cookie ->
+           if id = id' then Some cookie else None)
+    with
+      | End_of_file -> failwith "cookie id not found"
+      | _ -> failwith "invalid cookie file contents"
+  with
+    | Some cookie -> cookie
+    | None -> find_cookie id scanbuf
+
+let lock_file fname =
+  let really_lock fname =
+    Unix.close(Unix.openfile fname
+                 [Unix.O_WRONLY;
+                  Unix.O_EXCL;
+                  Unix.O_CREAT] 0o600) in
+  let rec aux = function
+    | 0 ->
+        LOG("removing stale lock file %s" fname);
+        Unix.unlink fname;
+        really_lock fname;
+        return ()
+    | n ->
+        try
+          really_lock fname;
+          return ()
+        with
+            exn ->
+              DEBUG("waiting for lock file %s" fname);
+              Lwt_unix.sleep 0.250 >>= fun _ -> aux (n - 1)
+  in
+  aux 32
+
+let unlock_file fname =
+  Unix.unlink fname
+
+let save_keyring context content =
+  let fname = keyring_file_name context in
+  let tmp_fname = fname ^ "." ^ hex_encode (Util.gen_random 8) in
+  let lock_fname = fname ^ ".lock" in
+  let dir = sprintf "%s/.dbus-keyrings" (Lazy.force Util.homedir) in
+  begin try
+    Unix.access dir [Unix.F_OK];
+  with
+      _ -> Unix.mkdir dir 0o600
+  end;
+  lock_file lock_fname >>= fun _ ->
+    try
+      Util.with_open_out tmp_fname
+        (fun oc ->
+           List.iter (fun (id, time, cookie) ->
+                        fprintf oc "%ld %Ld %s\n" id time cookie) content);
+      Unix.rename tmp_fname fname;
+      unlock_file lock_fname;
+      return ()
+    with
+        exn ->
+          unlock_file lock_fname;
+          fail exn
+
+let load_keyring context =
+  let rec aux acc scanbuf =
+    match
+      try
+        Scanf.bscanf scanbuf "%ld %Ld %[a-fA-F0-9]\n"
+          (fun id time cookie -> `Entry(id, time, cookie))
+      with
+        | End_of_file -> `End_of_file
+        | exn -> `Failure
+    with
+      | `Entry x -> aux (x :: acc) scanbuf
+      | `End_of_file -> acc
+      | `Failure -> []
+  in
+  try
+    Util.with_open_in (keyring_file_name context)
+      (fun ic -> aux [] (Scanf.Scanning.from_channel ic))
+  with
+      _ -> []
+
+class server_mech_dbus_cookie_sha1_handler = object
+  inherit server_mechanism_handler
+
+  val context = "org_freedesktop_general"
+  val mutable state = `State1
+
+  method data resp =
+    try
+      DEBUG("server: dbus_cookie_sha1: resp: %s" resp);
+      match state with
+        | `State1 ->
+            let keyring = load_keyring context in
+            let cur_time = Int64.of_float (Unix.time ()) in
+            (* Filter old and future keys *)
+            let keyring = List.filter
+              (fun (id, time, cookie) -> Int64.abs (Int64.sub time cur_time) <= 300L) keyring in
+
+            (* Find a working cookie *)
+            let id, cookie = match keyring with
+
+              (* There is still valid cookies, just choose one *)
+              | (id, time, cookie) :: _ -> (id, cookie)
+
+              (* No one left, generate a new one *)
+              | [] ->
+                  let r = Util.gen_random 4 in
+                  let id = Int32.abs
+                    (Int32.logor
+                       (Int32.logor
+                          (Int32.of_int (Char.code r.[0]))
+                          (Int32.shift_left (Int32.of_int (Char.code r.[1])) 8))
+                       (Int32.logor
+                          (Int32.shift_left (Int32.of_int (Char.code r.[2])) 16)
+                          (Int32.shift_left (Int32.of_int (Char.code r.[3])) 24))) in
+                  let cookie = hex_encode (Util.gen_random 24) in
+                  (* TODO: it is possible that the client receive the
+                     cookie id before it is saved to the cookie file *)
+                  ignore_result (save_keyring context [(id, cur_time, cookie)]);
+                  (id, cookie)
+            in
+            let rand = hex_encode (Util.gen_random 16) in
+            let chal = sprintf "%s %ld %s" context id rand in
+            DEBUG("server: dbus_cookie_sha1: chal: %s" chal);
+            state <- `State2(cookie, rand);
+            Server_mech_continue chal
+
+        | `State2(cookie, my_rand) ->
+            Scanf.sscanf resp "%s %s"
+              (fun its_rand comp_sha1 ->
+                 if Util.sha_1 (sprintf "%s:%s:%s" my_rand its_rand cookie) = hex_decode comp_sha1 then
+                   Server_mech_ok
+                 else
+                   Server_mech_reject)
+
+    with _ -> Server_mech_reject
+
+  method abort = ()
+end
+
 let server_mech_external = ("EXTERNAL", fun _ -> new server_mech_external_handler)
 let server_mech_anonymous = ("ANONYMOUS", fun _ -> new server_mech_anonymous_handler)
+let server_mech_dbus_cookie_sha1 = ("DBUS_COOKIE_SHA1", fun _ -> new server_mech_dbus_cookie_sha1_handler)
 
-let default_server_mechanisms = [server_mech_external]
+let default_server_mechanisms = [server_mech_dbus_cookie_sha1]
 
 (***** Transport *****)
 
@@ -182,13 +375,6 @@ let rec recv mode command_parser (ic, oc) =
               recv mode command_parser (ic, oc))
        | `Failure exn -> fail exn)
 
-let hex_encode = Util.hex_encode
-let hex_decode str =
-  try
-    Util.hex_decode str
-  with
-    | Invalid_argument _ -> failwith "invalid hex-encoded data"
-
 let client_recv = recv "client"
   (fun command args -> match command with
      | "REJECTED" -> Server_rejected (split args)
@@ -272,8 +458,8 @@ struct
 
   let transition mechs state cmd = match state with
     | Waiting_for_data mech -> begin match cmd with
-        | Server_data chall ->
-            begin match mech#data chall with
+        | Server_data chal ->
+            begin match mech#data chal with
               | Client_mech_continue resp ->
                   Transition(Client_data resp,
                              Waiting_for_data mech,
@@ -377,14 +563,14 @@ struct
                     | None, None ->
                         Transition(Server_data "",
                                    Waiting_for_data mech)
-                    | Some chall, None ->
-                        Transition(Server_data chall,
+                    | Some chal, None ->
+                        Transition(Server_data chal,
                                    Waiting_for_data mech)
-                    | Some chall, Some rest ->
+                    | Some chal, Some rest ->
                         reject mechs
                     | None, Some resp -> match mech#data resp with
-                        | Server_mech_continue chall ->
-                            Transition(Server_data chall,
+                        | Server_mech_continue chal ->
+                            Transition(Server_data chal,
                                        Waiting_for_data mech)
                         | Server_mech_ok ->
                             Transition(Server_ok guid,
@@ -403,12 +589,12 @@ struct
                        Waiting_for_data mech)
         | Client_data resp ->
             begin match mech#data resp with
-              | Server_mech_continue chall ->
-                  Transition(Server_data chall,
+              | Server_mech_continue chal ->
+                  Transition(Server_data chal,
                              Waiting_for_data mech)
               | Server_mech_ok ->
                   Transition(Server_ok guid,
-                             Waiting_for_data mech)
+                             Waiting_for_begin)
               | Server_mech_reject ->
                   reject mechs
             end

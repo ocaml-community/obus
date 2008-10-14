@@ -17,27 +17,14 @@ let of_string str =
 
 let to_string = Util.hex_encode
 
-let init_pseudo = Lazy.lazy_from_fun Random.self_init
-
-let generate_pseudo uuid n =
-  LOG("using pseudo random generator");
-  Lazy.force init_pseudo;
-  for i = n to 15 do
-    String.unsafe_set uuid i (char_of_int (Random.int 256))
-  done
-
 let generate () =
   let uuid = String.create 16 in
-  begin try
-    Util.with_open_in"/dev/urandom"
-      (fun ic ->
-         let n = input ic uuid 0 16 in
-         if n < 16 then generate_pseudo uuid n)
-  with
-      exn ->
-        DEBUG("failed to use the random generator (%S)" (Printexc.to_string exn));
-        generate_pseudo uuid 16
-  end;
+  Util.fill_random uuid 0 12;
+  let v = Int32.of_float (Unix.time ()) in
+  uuid.[12] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24)));
+  uuid.[13] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
+  uuid.[14] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
+  uuid.[15] <- (Char.unsafe_chr (Int32.to_int v));
   uuid
 
 let loopback = String.make 16 '\000'
