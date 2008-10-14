@@ -32,11 +32,18 @@ type desc =
 
 type t = desc * guid option
 
+val tt : t list OBus_type.ty_basic
+  (** Type combinator *)
+
 exception Parse_failure of string
 
 val of_string : string -> t list
   (** [of_string str] parse [str] and return the list of addresses
       defined in it. It can raise a [Parse_error]. *)
+
+val to_string : t list -> string
+  (** [to_string addresses] return a string representation of a list
+      of addresses *)
 
 val system : t list Lazy.t
   (** [system] list of addresses for system bus *)

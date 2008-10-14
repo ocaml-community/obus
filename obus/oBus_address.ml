@@ -69,6 +69,55 @@ let of_string str =
         DEBUG("failed to parse address %S: %s" str msg);
         raise (Parse_failure msg)
 
+
+
+let to_string l =
+  let buf = Buffer.create 42 in
+  let escape = String.iter begin fun ch -> match ch with
+    | '0'..'9' | 'A'..'Z' | 'a'..'z'
+    | '_' | '-' | '/' | '.' | '\\' ->
+        Buffer.add_char buf ch
+    | _ ->
+        Printf.bprintf buf "%%%02x" (Char.code ch)
+  end in
+  let concat ch f = function
+    | [] -> ()
+    | x :: l -> f x; List.iter (fun x -> Buffer.add_char buf ch; f x) l
+  in
+  concat ':' begin fun (desc, guid) ->
+    let name, params = match desc with
+      | Unix_path path ->
+          "unix", [("path", path)]
+      | Unix_abstract path ->
+          "unix", [("abstract", path)]
+      | Unix_tmpdir path ->
+          "unix", [("tmpdir", path)]
+      | Tcp(host, port, family) ->
+          "tcp", (Util.filter_map (fun x -> x)
+                    [(if host = "" then Some("host", host) else None);
+                     (if port = "0" then Some("port", port) else None);
+                     (Util.Maybe.bind family
+                        (fun f -> Some("family", match f with
+                                         | Ipv4 -> "ipv4"
+                                         | Ipv6 -> "ipv6")))])
+      | Autolaunch ->
+          "autolaunch", []
+      | Unknown(name, params) ->
+          name, params
+    in
+    Buffer.add_string buf name;
+    Buffer.add_char buf ':';
+    concat ',' (fun (k, v) ->
+                  Buffer.add_string buf k;
+                  Buffer.add_char buf '=';
+                  escape v) (match guid with
+                               | Some g -> params @ [("guid", OBus_uuid.to_string g)]
+                               | None -> params)
+  end l;
+  Buffer.contents buf
+
+let tt = OBus_type.wrap_basic OBus_type.tstring of_string to_string
+
 let system_bus_variable = "DBUS_SYSTEM_BUS_ADDRESS"
 let session_bus_variable = "DBUS_SESSION_BUS_ADDRESS"
 let session_bus_property = "_DBUS_SESSION_BUS_ADDRESS"
