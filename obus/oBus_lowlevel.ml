@@ -446,7 +446,7 @@ struct
     | Uint16 x -> write 2 i output_uint16 x
     | Uint32 x -> write 4 i output_uint32 x
     | Uint64 x -> write 8 i output_uint64 x
-    | Double x -> write 8 i output_uint64 (Int64.of_float x)
+    | Double x -> write 8 i output_uint64 (Int64.bits_of_float x)
     | String x -> validate_string x; wstring i x
     | Signature x -> wsignature i x
     | Object_path x -> wobject_path i x
@@ -741,7 +741,7 @@ struct
     | Tuint16 -> read 2 input_uint16 vuint16
     | Tuint32 -> read 4 input_uint32 vuint32
     | Tuint64 -> read 8 input_uint64 vuint64
-    | Tdouble -> read 8 input_uint64 (fun x -> Double(Int64.to_float x))
+    | Tdouble -> read 8 input_uint64 (fun x -> Double(Int64.float_of_bits x))
     | Tstring ->
         (fun ic i size ->
            rstring ic i size >>= fun (i, str) ->
