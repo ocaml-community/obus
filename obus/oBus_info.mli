@@ -41,10 +41,10 @@ val verbose : bool
       make obus verbose. *)
 
 val debug : bool
-  (** [true] is the environment variable OBUSLOG is set to
+  (** [true] is the environment variable OBUS_LOG is set to
       "debug". This will make obus more verbose. *)
 
 val dump : bool
-  (** [true] is the environment variable OBUSLOG is set to
+  (** [true] is the environment variable OBUS_LOG is set to
       "dump". This will dump all incoming and outgoind message on
       stderr. *)

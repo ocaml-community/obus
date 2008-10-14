@@ -10,40 +10,43 @@
 open Camlp4.PreCast
 
 let section file_name =
-  match Filename.chop_extension (Filename.basename file_name) with
-    | "auth" -> "authentification"
-    | s -> s
+  let s = Filename.chop_extension (Filename.basename file_name) in
+  let len = String.length s in
+  if len >= 5 && String.sub s 0 5 = "oBus_" then
+    String.sub s 5 (len - 5)
+  else
+    s
 
-let make_format loc section prefix fmt =
-  let i = try String.index section '_' + 1 with _ -> 0 in
-    Ast.ExStr(loc, "obus(" ^ String.sub section i (String.length section - i) ^ "):" ^ prefix ^ " " ^ fmt ^ "\\n%!")
-
-let rec insert section prefix =
+let rec insert section op =
   let rec aux = function
     | <:expr@_loc< $x$ $y$ >> -> <:expr< $aux x$ $y$ >>
-    | <:expr@_loc< $str:x$ >> -> <:expr< Printf.eprintf $make_format _loc section prefix x$ >>
-    | _ -> assert false
+    | x ->
+        let _loc = Ast.loc_of_expr x in
+        begin match section with
+          | "util" -> <:expr< $lid:op$ None $x$ >>
+          | _ -> <:expr< Util.$lid:op$ (Some $str:section$) $x$ >>
+        end
   in
     aux
 
 let var _loc v = function
-  | "oBus_info" -> <:expr< $lid:v$ >>
-  | _ -> <:expr< OBus_info.$lid:v$ >>
+  | "util" -> <:expr< $lid:v$ >>
+  | _ -> <:expr< Util.$lid:v$ >>
 
 let map_expr = function
   | <:expr@_loc< LOG($x$) >> ->
-    let section = section (Loc.file_name _loc) in
+      let section = section (Loc.file_name _loc) in
       <:expr< if $var _loc "verbose" section$
-      then $insert section "" x$
-      else () >>
+                then $insert section "log" x$
+                else () >>
   | <:expr@_loc< DEBUG($x$) >> ->
-    let section = section (Loc.file_name _loc) in
+      let section = section (Loc.file_name _loc) in
       <:expr< if $var _loc "debug" section$
-      then $insert section "" x$
-      else () >>
+                then $insert section "log" x$
+                else () >>
   | <:expr@_loc< ERROR($x$) >> ->
-    let section = section (Loc.file_name _loc) in
-      <:expr< $insert section " error:" x$ >>
+      let section = section (Loc.file_name _loc) in
+      <:expr< $insert section "error" x$ >>
   | x -> x
 
 let _ =

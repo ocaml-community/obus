@@ -7,6 +7,39 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Printf
+
+let verbose, debug, dump =
+  try
+    match String.lowercase (Sys.getenv "OBUS_LOG") with
+      | "dump" -> (true, true, true)
+      | "debug" -> (true, true, false)
+      | _ -> (true, false, false)
+  with
+      Not_found -> (false, false, false)
+
+let program_name = Filename.basename Sys.argv.(0)
+
+let section_opt = function
+  | Some s -> "(" ^ s ^ ")"
+  | None -> ""
+
+let log section fmt = ksprintf
+  (fun msg -> eprintf "%s: obus%s: %s\n%!" program_name (section_opt section) msg) fmt
+
+let error section fmt = ksprintf
+  (fun msg ->
+     if Unix.isatty Unix.stdout then
+       eprintf "\027[1;31m%s: obus%s: %s\n%!\027[0m" program_name (section_opt section) msg
+     else
+       eprintf "%s: obus%s: error: %s\n%!" program_name (section_opt section) msg) fmt
+
+let string_of_exn = function
+  | Unix.Unix_error(error, _, _) -> Unix.error_message error
+  | Sys_error msg -> msg
+  | Failure msg -> msg
+  | exn -> Printexc.to_string exn
+
 let rec assoc x = function
   | [] -> None
   | (k, v) :: _ when k = x -> Some(v)
@@ -103,9 +136,9 @@ let with_process openp closep cmd f =
   in
   match closep c with
     | Unix.WEXITED 0 -> result
-    | Unix.WEXITED n -> failwith (Printf.sprintf "command %S exited with status %d" cmd n)
-    | Unix.WSIGNALED n -> failwith (Printf.sprintf "command %S killed by signal %d" cmd n)
-    | Unix.WSTOPPED n -> failwith (Printf.sprintf "command %S stopped by signal %d" cmd n)
+    | Unix.WEXITED n -> failwith (sprintf "command %S exited with status %d" cmd n)
+    | Unix.WSIGNALED n -> failwith (sprintf "command %S killed by signal %d" cmd n)
+    | Unix.WSTOPPED n -> failwith (sprintf "command %S stopped by signal %d" cmd n)
 
 let with_process_in cmd = with_process Unix.open_process_in Unix.close_process_in cmd
 let with_process_out cmd = with_process Unix.open_process_out Unix.close_process_out cmd
@@ -156,6 +189,7 @@ let homedir = lazy((Unix.getpwuid (Unix.getuid ())).Unix.pw_dir)
 let init_pseudo = Lazy.lazy_from_fun Random.self_init
 
 let fill_pseudo buffer pos len =
+  DEBUG("using pseudo-random generator");
   Lazy.force init_pseudo;
   for i = pos to pos + len - 1 do
     String.unsafe_set buffer i (char_of_int (Random.int 256))
@@ -168,12 +202,31 @@ let fill_random buffer pos len =
          let n = input ic buffer pos len in
          if n < len then fill_pseudo buffer (pos + n) (len - n))
   with
-      exn -> fill_pseudo buffer pos len
+      exn ->
+        DEBUG("failed to get random data from /dev/urandom: %s" (Printexc.to_string exn));
+        fill_pseudo buffer pos len
 
-let gen_random n =
+let random_string n =
   let str = String.create n in
   fill_random str 0 n;
   str
+
+let random_int32 () =
+  let r = random_string 4 in
+  Int32.logor
+    (Int32.logor
+       (Int32.of_int (Char.code r.[0]))
+       (Int32.shift_left (Int32.of_int (Char.code r.[1])) 8))
+    (Int32.logor
+       (Int32.shift_left (Int32.of_int (Char.code r.[2])) 16)
+       (Int32.shift_left (Int32.of_int (Char.code r.[3])) 24))
+
+let random_int () = Int32.to_int (random_int32 ())
+
+let random_int64 () =
+  Int64.logor
+    (Int64.of_int32 (random_int32 ()))
+    (Int64.shift_left (Int64.of_int32 (random_int32 ())) 32)
 
 (* Compute the sha1 of a string.
 

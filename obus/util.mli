@@ -53,12 +53,37 @@ val with_process_out : string -> (out_channel -> 'a) -> 'a
 val homedir : string Lazy.t
   (** Return the home directory *)
 
-val fill_random : string -> int -> int -> unit
-  (** Try to generate the given amount of random bytes with
-      /dev/urandom, and fallback to pseudo-random if it can not *)
+(** {6 Logging} *)
 
-val gen_random : int -> string
-  (** Create a string and fill it with random data *)
+val log : string option -> ('a, unit, string, unit) format4 -> 'a
+  (** [log section fmt] print a log message on stderr *)
+
+val error : string option -> ('a, unit, string, unit) format4 -> 'a
+  (** Print an error message on stderr *)
+
+val string_of_exn : exn -> string
+  (** Try to return something better that [Printexc.to_string] *)
+
+val verbose : bool
+val debug : bool
+val dump : bool
+  (** Set from the environment variable OBUS_LOG *)
+
+(** {6 Random number generation} *)
+
+(** All the following functions try to generate random numbers using
+    /dev/urandom and can fallback to pseudo-random generator *)
+
+val fill_random : string -> int -> int -> unit
+  (** [fill_random str ofs len] Fill the given string from [ofs] to
+      [ofs+len-1] with random bytes.  *)
+
+val random_string : int -> string
+val random_int : unit -> int
+val random_int32 : unit -> int32
+val random_int64 : unit -> int64
+
+(** {6 Monads} *)
 
 module type Monad = sig
   type 'a t

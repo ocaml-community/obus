@@ -7,6 +7,7 @@
 # Library
 <obus/oBus_{auth,address,lowlevel,connection,error,info,uuid}.ml>: pa_log
 <obus/oBus_{bus,connection,signal,proxy,property,introspect}.ml>: pa_obus
+<obus/util.ml>: pa_log
 <obus/oBus_info.ml>: pkg_camlp4.macro
 # Samples
 <samples/*.*>: use_obus
