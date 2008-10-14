@@ -48,14 +48,14 @@ type server_command =
   | Server_error of string
 
 class virtual client_mechanism_handler = object
-  method virtual init : client_mechanism_return
-  method data (chall : data) = Client_mech_error("no data expected for this mechanism")
+  method virtual init : client_mechanism_return Lwt.t
+  method data (chall : data) = return (Client_mech_error("no data expected for this mechanism"))
   method abort = ()
 end
 
 class virtual server_mechanism_handler = object
-  method init : data option = None
-  method virtual data : data -> server_mechanism_return
+  method init = return (None : data option)
+  method virtual data : data -> server_mechanism_return Lwt.t
   method abort = ()
 end
 
@@ -73,52 +73,54 @@ let hex_decode str =
 
 class client_mech_external_handler = object
   inherit client_mechanism_handler
-  method init = Client_mech_ok(string_of_int (Unix.getuid ()))
+  method init = return (Client_mech_ok(string_of_int (Unix.getuid ())))
 end
 
 class client_mech_anonymous_handler = object
   inherit client_mechanism_handler
-  method init = Client_mech_ok("obus " ^ OBus_info.version)
+  method init = return (Client_mech_ok("obus " ^ OBus_info.version))
 end
 
 let keyring_file_name context = sprintf "%s/.dbus-keyrings/%s" (Lazy.force Util.homedir) context
 
-let rec find_cookie id scanbuf =
-  match
-    try
-      Scanf.bscanf scanbuf "%ld %Ld %s\n"
-        (fun id' time cookie ->
-           if id = id' then
-             `Found cookie
-           else
-             `Not_found)
+let load_cookie context id =
+  let rec aux scanbuf =
+    match
+      try
+        Scanf.bscanf scanbuf "%ld %Ld %s\n"
+          (fun id' time cookie ->
+             if id = id' then
+               `Found cookie
+             else
+               `Not_found)
+      with
+          exn -> `Error exn
     with
-        exn -> `Error exn
+      | `Found cookie -> cookie
+      | `Not_found -> aux scanbuf
+      | `Error End_of_file -> failwith "cookie id not found"
+      | `Error exn -> failwith "invalid cookie file contents"
+  in
+  try
+    Util.with_open_in (keyring_file_name context)
+      (fun ic -> aux (Scanf.Scanning.from_channel ic))
   with
-    | `Found cookie -> cookie
-    | `Not_found -> find_cookie id scanbuf
-    | `Error End_of_file -> failwith "cookie id not found"
-    | `Error exn -> failwith "invalid cookie file contents"
+      exn ->
+        ERROR("failed to load cookie %ld from %s: %s" id (keyring_file_name context) (Util.string_of_exn exn));
+        raise exn
 
 class client_mech_dbus_cookie_sha1_handler = object
-  method init = Client_mech_continue(string_of_int (Unix.getuid ()))
+  method init = return (Client_mech_continue(string_of_int (Unix.getuid ())))
   method data chal =
-    try
-      DEBUG("client: dbus_cookie_sha1: chal: %s" chal);
-      Scanf.sscanf chal "%[^/\\ \n\r.] %ld %[a-fA-F0-9]%!"
-        (fun context id chal ->
-           let cookie = Util.with_open_in
-             (keyring_file_name context)
-             (fun ic -> find_cookie id (Scanf.Scanning.from_channel ic)) in
-           let my_chal = hex_encode (Util.gen_random 16) in
-           let resp = sprintf "%s %s"
-             my_chal
-             (hex_encode (Util.sha_1 (sprintf "%s:%s:%s" chal my_chal cookie))) in
-           DEBUG("client: dbus_cookie_sha1: resp: %s" resp);
-           Client_mech_ok resp)
-    with
-      | Failure msg -> Client_mech_error msg
-      | exn -> Client_mech_error (Printexc.to_string exn)
+    DEBUG("client: dbus_cookie_sha1: chal: %s" chal);
+    Scanf.sscanf chal "%[^/\\ \n\r.] %ld %[a-fA-F0-9]%!" begin fun context id chal ->
+      let cookie = load_cookie context id in
+      let rand = hex_encode (Util.random_string 16) in
+      let resp = sprintf "%s %s" rand
+        (hex_encode (Util.sha_1 (sprintf "%s:%s:%s" chal rand cookie))) in
+      DEBUG("client: dbus_cookie_sha1: resp: %s" resp);
+      return (Client_mech_ok resp)
+    end
   method abort = ()
 end
 
@@ -134,42 +136,42 @@ let default_client_mechanisms = [client_mech_external;
 
 class server_mech_external_handler = object
   inherit server_mechanism_handler
-  method data _ = Server_mech_ok
+  method data _ = return Server_mech_ok
 end
 
 class server_mech_anonymous_handler = object
   inherit server_mechanism_handler
-  method data _ = Server_mech_ok
+  method data _ = return Server_mech_ok
 end
 
-let rec find_cookie id scanbuf =
-  match
-    try
-      Scanf.bscanf scanbuf "%ld %Ld %s\n"
-        (fun id' time cookie ->
-           if id = id' then Some cookie else None)
-    with
-      | End_of_file -> failwith "cookie id not found"
-      | _ -> failwith "invalid cookie file contents"
-  with
-    | Some cookie -> cookie
-    | None -> find_cookie id scanbuf
+let call f on_error =
+  try
+    f ();
+    return ()
+  with exn ->
+    on_error (Util.string_of_exn exn);
+    fail exn
 
 let lock_file fname =
-  let really_lock fname =
+  let really_lock () =
     Unix.close(Unix.openfile fname
                  [Unix.O_WRONLY;
                   Unix.O_EXCL;
-                  Unix.O_CREAT] 0o600) in
+                  Unix.O_CREAT] 0o600)
+  and remove_stale_lock () =
+    Unix.unlink fname;
+    LOG("stale lock file %s removed" fname)
+  in
   let rec aux = function
     | 0 ->
-        LOG("removing stale lock file %s" fname);
-        Unix.unlink fname;
-        really_lock fname;
-        return ()
+        (perform
+           call remove_stale_lock
+             (fun m -> ERROR("failed to remove stale lock file %s: %s" fname m));
+           call really_lock
+             (fun m -> ERROR("failed to lock file %s after removing it: %s" fname m)))
     | n ->
         try
-          really_lock fname;
+          really_lock ();
           return ()
         with
             exn ->
@@ -179,31 +181,34 @@ let lock_file fname =
   aux 32
 
 let unlock_file fname =
-  Unix.unlink fname
+  call
+    (fun _ -> Unix.unlink fname)
+    (fun m -> ERROR("failed to unlink file %s: %s" fname m))
 
 let save_keyring context content =
   let fname = keyring_file_name context in
-  let tmp_fname = fname ^ "." ^ hex_encode (Util.gen_random 8) in
+  let tmp_fname = fname ^ "." ^ hex_encode (Util.random_string 8) in
   let lock_fname = fname ^ ".lock" in
   let dir = sprintf "%s/.dbus-keyrings" (Lazy.force Util.homedir) in
-  begin try
-    Unix.access dir [Unix.F_OK];
-  with
-      _ -> Unix.mkdir dir 0o600
-  end;
-  lock_file lock_fname >>= fun _ ->
-    try
-      Util.with_open_out tmp_fname
-        (fun oc ->
-           List.iter (fun (id, time, cookie) ->
-                        fprintf oc "%ld %Ld %s\n" id time cookie) content);
-      Unix.rename tmp_fname fname;
-      unlock_file lock_fname;
-      return ()
-    with
-        exn ->
-          unlock_file lock_fname;
-          fail exn
+  finalize
+    (fun _ -> perform
+       (try
+          Unix.access dir [Unix.F_OK];
+          return ()
+        with _ -> call
+          (fun _ -> Unix.mkdir dir 0o600)
+          (fun m -> ERROR("failed to create directory %s with permissions 0600%s" dir m)));
+       lock_file lock_fname;
+       call
+         (fun _ -> Util.with_open_out tmp_fname
+            (fun oc ->
+               List.iter (fun (id, time, cookie) ->
+                            fprintf oc "%ld %Ld %s\n" id time cookie) content))
+         (fun m -> ERROR("unable to write temporary keyring file %s: %s" tmp_fname m));
+       call
+         (fun _ -> Unix.rename tmp_fname fname)
+         (fun m -> ERROR("unable to rename file %s to %s: %s" tmp_fname fname m)))
+    (fun _ -> unlock_file lock_fname)
 
 let load_keyring context =
   let rec aux acc scanbuf =
@@ -222,8 +227,7 @@ let load_keyring context =
   try
     Util.with_open_in (keyring_file_name context)
       (fun ic -> aux [] (Scanf.Scanning.from_channel ic))
-  with
-      _ -> []
+  with _ -> []
 
 class server_mech_dbus_cookie_sha1_handler = object
   inherit server_mechanism_handler
@@ -243,43 +247,37 @@ class server_mech_dbus_cookie_sha1_handler = object
               (fun (id, time, cookie) -> Int64.abs (Int64.sub time cur_time) <= 300L) keyring in
 
             (* Find a working cookie *)
-            let id, cookie = match keyring with
+            (perform
+               (id, cookie) <-- begin match keyring with
 
-              (* There is still valid cookies, just choose one *)
-              | (id, time, cookie) :: _ -> (id, cookie)
+                 (* There is still valid cookies, just choose one *)
+                 | (id, time, cookie) :: _ -> return (id, cookie)
 
-              (* No one left, generate a new one *)
-              | [] ->
-                  let r = Util.gen_random 4 in
-                  let id = Int32.abs
-                    (Int32.logor
-                       (Int32.logor
-                          (Int32.of_int (Char.code r.[0]))
-                          (Int32.shift_left (Int32.of_int (Char.code r.[1])) 8))
-                       (Int32.logor
-                          (Int32.shift_left (Int32.of_int (Char.code r.[2])) 16)
-                          (Int32.shift_left (Int32.of_int (Char.code r.[3])) 24))) in
-                  let cookie = hex_encode (Util.gen_random 24) in
-                  (* TODO: it is possible that the client receive the
-                     cookie id before it is saved to the cookie file *)
-                  ignore_result (save_keyring context [(id, cur_time, cookie)]);
-                  (id, cookie)
-            in
-            let rand = hex_encode (Util.gen_random 16) in
-            let chal = sprintf "%s %ld %s" context id rand in
-            DEBUG("server: dbus_cookie_sha1: chal: %s" chal);
-            state <- `State2(cookie, rand);
-            Server_mech_continue chal
+                 (* No one left, generate a new one *)
+                 | [] ->
+                     let id = Util.random_int32 () in
+                     let cookie = hex_encode (Util.random_string 24) in
+                     (perform
+                        save_keyring context [(id, cur_time, cookie)];
+                        return (id, cookie))
+               end;
+               let rand = hex_encode (Util.random_string 16) in
+               let chal = sprintf "%s %ld %s" context id rand in
+               let _ =
+                 DEBUG("server: dbus_cookie_sha1: chal: %s" chal);
+                 state <- `State2(cookie, rand)
+               in
+               return (Server_mech_continue chal))
 
         | `State2(cookie, my_rand) ->
             Scanf.sscanf resp "%s %s"
               (fun its_rand comp_sha1 ->
                  if Util.sha_1 (sprintf "%s:%s:%s" my_rand its_rand cookie) = hex_decode comp_sha1 then
-                   Server_mech_ok
+                   return Server_mech_ok
                  else
-                   Server_mech_reject)
+                   return Server_mech_reject)
 
-    with _ -> Server_mech_reject
+    with _ -> return Server_mech_reject
 
   method abort = ()
 end
@@ -431,25 +429,26 @@ struct
   let find_working_mech implemented_mechanisms available_mechs =
     let rec aux = function
       | [] ->
-          Failure
+          return Failure
       | (name, f) :: mechs ->
           match available_mechs with
             | Some l when not (List.mem name l) ->
                 aux mechs
             | _ ->
                 let mech = f () in
-                begin match mech#init with
-                  | Client_mech_continue resp ->
-                      Transition(Client_auth(Some (name, Some resp)),
-                                 Waiting_for_data mech,
-                                 mechs)
-                  | Client_mech_ok resp ->
-                      Transition(Client_auth(Some (name, Some resp)),
-                                 Waiting_for_ok,
-                                 mechs)
-                  | Client_mech_error msg ->
-                      aux mechs
-                end
+                catch
+                  (fun _ -> mech#init >>= function
+                     | Client_mech_continue resp ->
+                         return (Transition(Client_auth(Some (name, Some resp)),
+                                            Waiting_for_data mech,
+                                            mechs))
+                     | Client_mech_ok resp ->
+                         return (Transition(Client_auth(Some (name, Some resp)),
+                                            Waiting_for_ok,
+                                            mechs))
+                     | Client_mech_error msg ->
+                         aux mechs)
+                  (fun _ -> aux mechs)
     in
     aux implemented_mechanisms
 
@@ -459,53 +458,56 @@ struct
   let transition mechs state cmd = match state with
     | Waiting_for_data mech -> begin match cmd with
         | Server_data chal ->
-            begin match mech#data chal with
-              | Client_mech_continue resp ->
-                  Transition(Client_data resp,
-                             Waiting_for_data mech,
-                             mechs)
-              | Client_mech_ok resp ->
-                  Transition(Client_data resp,
-                             Waiting_for_ok,
-                             mechs)
-              | Client_mech_error msg ->
-                  Transition(Client_error msg,
-                             Waiting_for_data mech,
-                             mechs)
-            end
+            catch
+              (fun _ -> mech#data chal >>= function
+                 | Client_mech_continue resp ->
+                     return (Transition(Client_data resp,
+                                        Waiting_for_data mech,
+                                        mechs))
+                 | Client_mech_ok resp ->
+                     return (Transition(Client_data resp,
+                                        Waiting_for_ok,
+                                        mechs))
+                 | Client_mech_error msg ->
+                     return (Transition(Client_error msg,
+                                        Waiting_for_data mech,
+                                        mechs)))
+              (fun exn -> return (Transition(Client_error(Util.string_of_exn exn),
+                                             Waiting_for_data mech,
+                                             mechs)))
         | Server_rejected am ->
             mech#abort;
             next mechs am
         | Server_error _ ->
             mech#abort;
-            Transition(Client_cancel,
-                       Waiting_for_reject,
-                       mechs)
+            return (Transition(Client_cancel,
+                               Waiting_for_reject,
+                               mechs))
         | Server_ok guid ->
             mech#abort;
-            Success guid
-(*        | _ ->
-            Transition(Client_error "unexpected command",
-                       Waiting_for_data mech,
-                       mechs)*)
+            return (Success guid)
+              (*        | _ ->
+                        Transition(Client_error "unexpected command",
+                        Waiting_for_data mech,
+                        mechs)*)
       end
 
     | Waiting_for_ok -> begin match cmd with
-        | Server_ok guid -> Success guid
+        | Server_ok guid -> return (Success guid)
         | Server_rejected am -> next mechs am
         | Server_data _
-        | Server_error _ -> Transition(Client_cancel,
-                                       Waiting_for_reject,
-                                       mechs)
-(*        | _ ->
-            Transition(Client_error "unexpected command",
-                       Waiting_for_ok,
-                       mechs)*)
+        | Server_error _ -> return (Transition(Client_cancel,
+                                               Waiting_for_reject,
+                                               mechs))
+            (*        | _ ->
+                      Transition(Client_error "unexpected command",
+                      Waiting_for_ok,
+                      mechs)*)
       end
 
     | Waiting_for_reject -> begin match cmd with
         | Server_rejected am -> next mechs am
-        | _ -> Failure
+        | _ -> return Failure
       end
 
   let exec mechs (ic, oc) =
@@ -514,7 +516,7 @@ struct
           (perform
              client_send oc cmd;
              cmd <-- client_recv (ic, oc);
-             loop (transition mechs state cmd))
+             transition mechs state cmd >>= loop)
       | Success guid ->
           (perform
              client_send oc Client_begin;
@@ -524,7 +526,7 @@ struct
     in
     (perform
        output_char oc '\000';
-       loop (initial mechs))
+       initial mechs >>= loop)
 end
 
 (***** Server-side protocol ******)
@@ -543,12 +545,12 @@ struct
     | Failure
 
   let reject mechs =
-    Transition(Server_rejected (List.map fst mechs),
-               Waiting_for_auth)
+    return (Transition(Server_rejected (List.map fst mechs),
+                       Waiting_for_auth))
 
   let error msg =
-    Transition(Server_error msg,
-               Waiting_for_auth)
+    return (Transition(Server_error msg,
+                       Waiting_for_auth))
 
   let transition guid mechs state cmd = match state with
     | Waiting_for_auth -> begin match cmd with
@@ -559,53 +561,58 @@ struct
               | None -> reject mechs
               | Some f ->
                   let mech = f () in
-                  match mech#init, resp with
-                    | None, None ->
-                        Transition(Server_data "",
-                                   Waiting_for_data mech)
-                    | Some chal, None ->
-                        Transition(Server_data chal,
-                                   Waiting_for_data mech)
-                    | Some chal, Some rest ->
-                        reject mechs
-                    | None, Some resp -> match mech#data resp with
-                        | Server_mech_continue chal ->
-                            Transition(Server_data chal,
-                                       Waiting_for_data mech)
-                        | Server_mech_ok ->
-                            Transition(Server_ok guid,
-                                       Waiting_for_begin)
-                        | Server_mech_reject ->
-                            reject mechs
+                  catch
+                    (fun _ -> perform
+                       init <-- mech#init;
+                       match init, resp with
+                         | None, None ->
+                             return (Transition(Server_data "",
+                                                Waiting_for_data mech))
+                         | Some chal, None ->
+                             return (Transition(Server_data chal,
+                                                Waiting_for_data mech))
+                         | Some chal, Some rest ->
+                             reject mechs
+                         | None, Some resp -> mech#data resp >>= function
+                             | Server_mech_continue chal ->
+                                 return (Transition(Server_data chal,
+                                                    Waiting_for_data mech))
+                             | Server_mech_ok ->
+                                 return (Transition(Server_ok guid,
+                                                    Waiting_for_begin))
+                             | Server_mech_reject ->
+                                 reject mechs)
+                    (fun _ -> reject mechs)
             end
-        | Client_begin -> Failure
+        | Client_begin -> return Failure
         | Client_error msg -> reject mechs
         | _ -> error "AUTH command expected"
       end
 
     | Waiting_for_data mech -> begin match cmd with
         | Client_data "" ->
-            Transition(Server_data "",
-                       Waiting_for_data mech)
+            return (Transition(Server_data "",
+                               Waiting_for_data mech))
         | Client_data resp ->
-            begin match mech#data resp with
-              | Server_mech_continue chal ->
-                  Transition(Server_data chal,
-                             Waiting_for_data mech)
-              | Server_mech_ok ->
-                  Transition(Server_ok guid,
-                             Waiting_for_begin)
-              | Server_mech_reject ->
-                  reject mechs
-            end
-        | Client_begin -> mech#abort; Failure
+            catch
+              (fun _ -> mech#data resp >>= function
+                 | Server_mech_continue chal ->
+                     return (Transition(Server_data chal,
+                                        Waiting_for_data mech))
+                 | Server_mech_ok ->
+                     return (Transition(Server_ok guid,
+                                        Waiting_for_begin))
+                 | Server_mech_reject ->
+                     reject mechs)
+              (fun _ -> reject mechs)
+        | Client_begin -> mech#abort; return Failure
         | Client_cancel -> mech#abort; reject mechs
         | Client_error _ -> mech#abort; reject mechs
         | _ -> mech#abort; error "DATA command expected"
       end
 
     | Waiting_for_begin -> begin match cmd with
-        | Client_begin -> Accept
+        | Client_begin -> return Accept
         | Client_cancel -> reject mechs
         | Client_error _ -> reject mechs
         | _ -> error "BEGIN command expected"
@@ -615,7 +622,7 @@ struct
     let rec loop state count =
       (perform
          cmd <-- server_recv (ic, oc);
-         match transition guid mechs state cmd with
+         transition guid mechs state cmd >>= function
            | Transition(cmd, state) ->
                let count = match cmd with
                  | Server_rejected _ -> count + 1

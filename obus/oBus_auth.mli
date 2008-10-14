@@ -27,10 +27,10 @@ type client_mechanism_return =
       (** Authentification failed *)
 
 class virtual client_mechanism_handler : object
-  method virtual init : client_mechanism_return
+  method virtual init : client_mechanism_return Lwt.t
     (** Initial return value of the mechanism *)
 
-  method data : data -> client_mechanism_return
+  method data : data -> client_mechanism_return Lwt.t
     (** [mech_data] must continue the mechanism process with the given
         data. Default implementation fail with an error message. *)
 
@@ -59,10 +59,10 @@ type server_mechanism_return =
       (** The client is rejected by the mechanism *)
 
 class virtual server_mechanism_handler : object
-  method init : data option
+  method init : data option Lwt.t
     (** Initial challenge *)
 
-  method virtual data : data -> server_mechanism_return
+  method virtual data : data -> server_mechanism_return Lwt.t
     (** [mech_data] must continue the mechanism process with the given
         response. *)
 

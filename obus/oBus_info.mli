@@ -37,7 +37,7 @@ val native_byte_order : byte_order
       for sending messages. *)
 
 val verbose : bool
-  (** [true] is the environment variable OBUSLOG is set. This will
+  (** [true] is the environment variable OBUS_LOG is set. This will
       make obus verbose. *)
 
 val debug : bool

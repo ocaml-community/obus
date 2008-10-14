@@ -17,15 +17,25 @@ let chans () =
   (in_channel_of_descr fdr,
    out_channel_of_descr fdw)
 
-let _ =
-  let server_ic, client_oc = chans ()
-  and client_ic, server_oc = chans () in
-  run (Lwt_util.join [(perform
+let server_ic, client_oc = chans ()
+let client_ic, server_oc = chans ()
+
+let test mech =
+  catch
+    (fun _ -> perform
+       Lwt_util.join [(perform
                          guid <-- client_authenticate (client_ic, client_oc);
-                         let _ = Printf.printf "client: authenticated, guid=%s\n%!" (OBus_uuid.to_string guid) in
                          return ());
-                      (perform
-                         server_authenticate ~mechanisms:[server_mech_dbus_cookie_sha1]
-                           (OBus_uuid.generate ()) (server_ic, server_oc);
-                         let _ = print_endline "server: client authenticated" in
-                         return ())])
+                      server_authenticate ~mechanisms:[mech]
+                        OBus_uuid.loopback (server_ic, server_oc)];
+       let _ = Printf.eprintf "authentication %s works!\n%!" (fst mech) in
+       return ())
+    (fun _ ->
+       Printf.eprintf "authentication %s do not works :(\n%!" (fst mech);
+       return ())
+
+let _ =
+  run (perform
+         test server_mech_anonymous;
+         test server_mech_external;
+         test server_mech_dbus_cookie_sha1)
