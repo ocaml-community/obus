@@ -30,8 +30,9 @@ type t = connection
 module Guid_map = My_map(struct type t = guid end)
 let guid_connection_map = ref Guid_map.empty
 
-let remove_connection_of_guid_map running =
-  if running.shared then guid_connection_map := Guid_map.remove running.guid !guid_connection_map
+let remove_connection_of_guid_map = function
+  | { guid = Some guid } -> guid_connection_map := Guid_map.remove guid !guid_connection_map
+  | { guid = None } -> ()
 
 (***** Error handling *****)
 
@@ -96,8 +97,8 @@ let send_message_backend with_serial connection message =
       with_serial running serial;
 
       if OBus_info.dump then
-        Format.eprintf "-----@\n@[<hv 2>sending message on %s:@\n%a@]@."
-          (OBus_uuid.to_string running.guid) OBus_message.print message;
+        Format.eprintf "-----@\n@[<hv 2>sending message:@\n%a@]@."
+          OBus_message.print message;
 
       (* Create the message marshaler *)
       match running.transport#put_message ({ message with serial = serial } :> OBus_message.any) with
@@ -411,8 +412,8 @@ let rec dispatch_forever connection on_disconnect = match !connection with
       Lwt.bind (running.transport#get_message)
         (fun message ->
            if OBus_info.dump then
-             Format.eprintf "-----@\n@[<hv 2>message received on %s:@\n%a@]@."
-               (OBus_uuid.to_string running.guid) OBus_message.print message;
+             Format.eprintf "-----@\n@[<hv 2>message received:@\n%a@]@."
+               OBus_message.print message;
            begin
              try
                dispatch_message connection running message
@@ -438,27 +439,26 @@ let rec dispatch_forever connection on_disconnect = match !connection with
                     ERROR("uncaught exception on the OBus dispatcher thread: %s" (Printexc.to_string exn));
                     dispatch_forever connection on_disconnect buffer*)
 
-let of_authenticated_transport ?(shared=true) transport guid =
+let of_transport ?guid transport =
   let make () =
     let on_disconnect = ref default_on_disconnect in
     let connection = ref & Running {
-      transport = transport;
+      transport = (transport :> OBus_lowlevel.transport);
       outgoing = Lwt.return 0l;
       reply_handlers = Serial_map.empty;
       signal_handlers = MSet.make ();
       exported_objects = Object_map.empty;
       filters = MSet.make ();
-      guid = guid;
       name = None;
-      shared = shared;
+      guid = guid;
       on_disconnect = on_disconnect;
     } in
-    Lwt.ignore_result & dispatch_forever connection on_disconnect;
+    ignore (dispatch_forever connection on_disconnect);
     connection
   in
-  match shared with
-    | false -> make ()
-    | true ->
+  match guid with
+    | None -> make ()
+    | Some guid ->
         match Guid_map.lookup guid !guid_connection_map with
           | Some connection -> connection
           | None ->
@@ -466,13 +466,18 @@ let of_authenticated_transport ?(shared=true) transport guid =
               guid_connection_map := Guid_map.add guid connection !guid_connection_map;
               connection
 
-let of_transport ?(shared=true) transport =
+let of_client_transport ?(shared=true) transport =
   (perform
-     guid <-- Lazy.force (transport#authenticate);
-     return (of_authenticated_transport ~shared transport guid))
+     guid <-- Lazy.force (transport#client_authenticate);
+     return (of_transport ~guid transport))
+
+let of_server_transport transport =
+  (perform
+     Lazy.force (transport#server_authenticate);
+     return (of_transport transport))
 
 let of_addresses ?(shared=true) addresses = match shared with
-  | false -> OBus_lowlevel.transport_of_addresses addresses >>= of_transport ~shared:false
+  | false -> OBus_lowlevel.client_transport_of_addresses addresses >>= of_client_transport ~shared:false
   | true ->
       (* Try to find a guid that we already have *)
       let guids = Util.filter_map (fun ( _, g) -> g) addresses in
@@ -480,18 +485,16 @@ let of_addresses ?(shared=true) addresses = match shared with
         | Some connection -> return connection
         | None ->
             (* We ask again a shared connection even if we know that
-               there is no other connection to a server with the
-               same guid, because during the authentification
-               another thread can add a new connection. *)
-            OBus_lowlevel.transport_of_addresses addresses >>= of_transport ~shared:true
+               there is no other connection to a server with the same
+               guid, because during the authentification another
+               thread can add a new connection. *)
+            OBus_lowlevel.client_transport_of_addresses addresses >>= of_client_transport ~shared:true
 
-let loopback = of_authenticated_transport ~shared:false OBus_lowlevel.loopback OBus_uuid.loopback
+let loopback = of_transport OBus_lowlevel.loopback
 
 let on_disconnect connection =
   with_running connection & fun running -> running.on_disconnect
 let transport connection =
   with_running connection & fun running -> running.transport
-let guid connection =
-  with_running connection & fun running -> running.guid
 let name connection =
   with_running connection & fun running -> running.name

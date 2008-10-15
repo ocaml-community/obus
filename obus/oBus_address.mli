@@ -17,22 +17,33 @@ type guid = OBus_uuid.t
     (** Unique address identifier. It is unique for a server listening
         address.  *)
 
-type family = Ipv4 | Ipv6
+type tcp_params = {
+  tcp_host : string;
+  (** For connecting, this is is the host to contact *)
+
+  tcp_bind : string;
+  (** For listening, this is the address to bind to *)
+
+  tcp_port : string;
+  (** Port number or tcp service name *)
+
+  tcp_family : [ `Ipv4 | `Ipv6 ] option;
+  (** Restrict to ipv4 or ipv6 *)
+}
 
 type desc =
   | Unix_path of string
   | Unix_abstract of string
   | Unix_tmpdir of string
       (** A unix socket *)
-  | Tcp of string * string * family option
-      (** [Tcp(host, service, family)] *)
+  | Tcp of tcp_params
   | Autolaunch
   | Unknown of name * (key * value) list
       (** An address which is not known by obus *)
 
 type t = desc * guid option
 
-val tt : t list OBus_type.ty_basic
+val tlist : t list OBus_type.ty_basic
   (** Type combinator *)
 
 exception Parse_failure of string

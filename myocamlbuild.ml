@@ -52,7 +52,8 @@ struct
       "OBus_property";
       "OBus_proxy";
       "OBus_client";
-      "OBus_bus" ]
+      "OBus_bus";
+      "OBus_server"]
 
   (* Modules of the API *)
   let modules = List.filter (fun s -> s <> "OBus_internals" &&

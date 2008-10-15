@@ -955,13 +955,21 @@ class type transport = object
   method put_message : OBus_message.any -> unit message_marshaler
   method shutdown : unit
   method abort : exn -> unit
-  method authenticate : OBus_address.guid Lwt.t Lazy.t
 end
 
-class socket fd =
-  let ic = Lwt_chan.in_channel_of_descr fd
-  and oc = Lwt_chan.out_channel_of_descr fd in
-object
+class type client_transport = object
+  inherit transport
+  method client_authenticate : OBus_address.guid Lwt.t Lazy.t
+end
+
+class type server_transport = object
+  inherit transport
+  method server_authenticate : unit Lwt.t Lazy.t
+end
+
+class socket fd = object
+  val ic = Lwt_chan.in_channel_of_descr fd
+  val oc = Lwt_chan.out_channel_of_descr fd
   method get_message = get_message ic
   method put_message msg = match put_message msg with
       | Marshaler_success f -> Marshaler_success(fun () -> f oc)
@@ -971,7 +979,16 @@ object
     Lwt_unix.close fd
   method abort exn =
     Lwt_unix.abort fd exn
-  method authenticate = lazy(OBus_auth.client_authenticate (ic, oc))
+end
+
+class client_socket fd = object
+  inherit socket fd
+  method client_authenticate = lazy(OBus_auth.client_authenticate (ic, oc))
+end
+
+class server_socket ?mechanisms guid fd = object
+  inherit socket fd
+  method server_authenticate = lazy(OBus_auth.server_authenticate ?mechanisms guid (ic, oc))
 end
 
 let loopback = object(self)
@@ -1006,52 +1023,50 @@ let loopback = object(self)
     Queue.iter (fun w -> Lwt.wakeup_exn w exn) waiters;
     Queue.clear waiters;
     Queue.clear queue
-
-  method authenticate = lazy(return OBus_uuid.loopback)
 end
 
 let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in
   try_bind
     (fun _ -> Lwt_unix.connect fd addr)
-    (fun _ -> return (new socket fd))
+    (fun _ -> return (new client_socket fd))
     (fun exn -> Lwt_unix.close fd; fail exn)
 
 let rec try_one t fallback x =
   catch (fun _ -> t)
     (fun exn -> fallback x)
 
-let rec transport_of_addresses = function
+let rec client_transport_of_addresses = function
   | [] -> failwith "no working DBus address found"
   | (desc, _) :: rest -> match desc with
       | Unix_path path ->
           try_one (make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX(path)))
-            transport_of_addresses rest
+            client_transport_of_addresses rest
 
       | Unix_abstract path ->
           try_one (make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ path)))
-            transport_of_addresses rest
+            client_transport_of_addresses rest
 
       | Unix_tmpdir _ ->
           Log.error "unix tmpdir can only be used as a listening address";
-          transport_of_addresses rest
+          client_transport_of_addresses rest
 
-      | Tcp(host, service, family) ->
+      | Tcp { tcp_host = host; tcp_port = port; tcp_family = family } ->
           let opts = [AI_SOCKTYPE SOCK_STREAM] in
           let opts = match family with
-            | Some Ipv4 -> AI_FAMILY PF_INET :: opts
-            | Some Ipv6 -> AI_FAMILY PF_INET6 :: opts
+            | Some `Ipv4 -> AI_FAMILY PF_INET :: opts
+            | Some `Ipv6 -> AI_FAMILY PF_INET6 :: opts
             | None -> opts in
           let rec try_all = function
-            | [] -> transport_of_addresses rest
+            | [] -> client_transport_of_addresses rest
             | ai :: ais ->
                 try_one (make_socket ai.ai_family ai.ai_socktype ai.ai_addr)
                   try_all ais
           in
-          try_all (getaddrinfo host service opts)
+          try_all (getaddrinfo host port opts)
 
       | Autolaunch ->
-          transport_of_addresses
+          client_transport_of_addresses
             ((try
                 let line = Util.with_process_in (sprintf "dbus-launch --autolaunch %s --binary-syntax"
                                                    (Lazy.force OBus_info.machine_uuid)) Pervasives.input_line in
@@ -1066,4 +1081,4 @@ let rec transport_of_addresses = function
                     Log.log "autolaunch failed: %s" (Util.string_of_exn exn);
                     []) @ rest)
 
-      | _ -> transport_of_addresses rest
+      | _ -> client_transport_of_addresses rest

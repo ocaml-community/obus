@@ -26,15 +26,14 @@ type t = OBus_internals.connection
     Otherwise you should use [OBus_bus] or immediatly call
     [OBus_bus.register_connection] after the creation. *)
 
-val of_transport : ?shared:bool -> OBus_lowlevel.transport -> t Lwt.t
-  (** [of_transport shared transport] create a dbus connection over
-      the given transport. If [shared] is true and a connection to the
-      same server is already open, then it is used instead of
-      [transport], this is the default behaviour. *)
-
 val of_addresses : ?shared:bool -> OBus_address.t list -> t Lwt.t
-  (** [of_addresses shared addresses] shorthand for obtaining
-      transport and doing [of_transport] *)
+  (** [of_addresses shared addresses] try to get a working DBus
+      connection from a list of addresses. The server must be
+      accessible from at least one of these addresses.
+
+      If [shared] is true and a connection to the same server is
+      already open, then it is used instead of [transport]. This is
+      the default behaviour. *)
 
 val loopback : t
   (** Connection with loopback transport *)
@@ -55,10 +54,6 @@ exception Connection_closed
 val transport : t -> OBus_lowlevel.transport
   (** [transport connection] get the transport associated with a
       connection *)
-
-val guid : t -> OBus_address.guid
-  (** [guid connection] return the unique identifier of the server
-      address *)
 
 val name : t -> OBus_name.connection_unique option
   (** Unique name of the connection. This is only relevant if the
@@ -191,6 +186,7 @@ val dadd_signal_receiver : t ->
       signal signature. *)
 
 val enable_signal_receiver : signal_receiver -> unit
+
 val disable_signal_receiver : signal_receiver -> unit
 val signal_receiver_enabled : signal_receiver -> bool
   (** Manipulation of registred receiver *)
@@ -220,3 +216,9 @@ val filter_enabled : filter_id -> bool
 val on_disconnect : t -> (exn -> unit) ref
   (** Function called when a fatal error happen. The default behaviour
       is to print an error message and to exit the program. *)
+
+(** {6 Creation of connection from transport} *)
+
+val of_client_transport : ?shared:bool -> OBus_lowlevel.client_transport -> t Lwt.t
+val of_server_transport : OBus_lowlevel.server_transport -> t Lwt.t
+  (** Create a DBus connection on the given transport *)

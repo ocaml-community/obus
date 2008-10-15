@@ -14,13 +14,18 @@ type key = string
 type value = string
 type guid = OBus_uuid.t
 
-type family = Ipv4 | Ipv6
+type tcp_params = {
+  tcp_host : string;
+  tcp_bind : string;
+  tcp_port : string;
+  tcp_family : [ `Ipv4 | `Ipv6 ] option;
+}
 
 type desc =
   | Unix_path of string
   | Unix_abstract of string
   | Unix_tmpdir of string
-  | Tcp of string * string * family option
+  | Tcp of tcp_params
   | Autolaunch
   | Unknown of name * (key * value) list
 
@@ -50,16 +55,16 @@ let of_string str =
                      Unknown(name, params)
              end
            | "tcp" ->
-               let host = assoc "host" "" params
-               and port = assoc "port" "0" params in
-               begin match Util.assoc "family" params with
-                 | Some "ipv4" -> Tcp(host, port, Some Ipv4)
-                 | Some "ipv6" -> Tcp(host, port, Some Ipv6)
-                 | Some f ->
-                     Log.error "unknown address family: %S" f;
-                     Unknown(name, params)
-                 | None -> Tcp(host, port, None)
-               end
+               Tcp { tcp_host = assoc "host" "" params;
+                     tcp_port = assoc "port" "0" params;
+                     tcp_bind = assoc "bind" "*" params;
+                     tcp_family = match Util.assoc "family" params with
+                       | Some "ipv4" -> Some `Ipv4
+                       | Some "ipv6" -> Some `Ipv4
+                       | Some f ->
+                           Log.error "unknown address family: %S" f;
+                           None
+                       | None -> None }
            | "autolaunch" -> Autolaunch
            | _ -> Unknown(name, params)
          end,
@@ -94,14 +99,18 @@ let to_string l =
           "unix", [("abstract", path)]
       | Unix_tmpdir path ->
           "unix", [("tmpdir", path)]
-      | Tcp(host, port, family) ->
+      | Tcp { tcp_host = host;
+              tcp_port = port;
+              tcp_bind = bind;
+              tcp_family = family } ->
           "tcp", (Util.filter_map (fun x -> x)
-                    [(if host = "" then Some("host", host) else None);
-                     (if port = "0" then Some("port", port) else None);
+                    [(if host <> "" then Some("host", host) else None);
+                     (if bind <> "" && bind <> "*" then Some("bind", bind) else None);
+                     (if port <> "0" then Some("port", port) else None);
                      (Util.Maybe.bind family
                         (fun f -> Some("family", match f with
-                                         | Ipv4 -> "ipv4"
-                                         | Ipv6 -> "ipv6")))])
+                                         | `Ipv4 -> "ipv4"
+                                         | `Ipv6 -> "ipv6")))])
       | Autolaunch ->
           "autolaunch", []
       | Unknown(name, params) ->
@@ -118,7 +127,7 @@ let to_string l =
   end l;
   Buffer.contents buf
 
-let tt = OBus_type.wrap_basic OBus_type.tstring of_string to_string
+let tlist = OBus_type.wrap_basic OBus_type.tstring of_string to_string
 
 let system_bus_variable = "DBUS_SYSTEM_BUS_ADDRESS"
 let session_bus_variable = "DBUS_SESSION_BUS_ADDRESS"

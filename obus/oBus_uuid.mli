@@ -32,6 +32,3 @@ val of_string : string -> t
 
 val to_string : t -> string
   (** Return a hex-encoded string representation of an uuid. *)
-
-val loopback : t
-  (** Guid used for the loopback connection *)

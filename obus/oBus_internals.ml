@@ -93,13 +93,13 @@ type dbus_object = <
 
 and running_connection = {
   transport : OBus_lowlevel.transport;
-  shared : bool;
+
+  (* For client-side connection, if specified this means that the
+     connection is shared and it is the guid of the server. *)
+  guid : OBus_address.guid option;
 
   (* Unique name of the connection *)
   mutable name : string option;
-
-  (* The server guid *)
-  guid : OBus_address.guid;
 
   (* The ougoing thread. To send a message we just have bind the
      result of this thread to the action of sending a message. *)
@@ -125,7 +125,7 @@ and connection = connection_state ref
 
 open Lwt
 
-(***** Utils ****)
+(***** Utils *****)
 
 let is_bus = function
   | { name = Some _ } -> true

@@ -27,5 +27,4 @@ let generate () =
   uuid.[15] <- (Char.unsafe_chr (Int32.to_int v));
   uuid
 
-let loopback = String.make 16 '\000'
 let tt = OBus_type.wrap_basic OBus_type.tstring of_string to_string

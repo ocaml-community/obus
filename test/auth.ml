@@ -20,14 +20,15 @@ let chans () =
 let server_ic, client_oc = chans ()
 let client_ic, server_oc = chans ()
 
+let guid = OBus_uuid.generate ()
+
 let test mech =
   catch
     (fun _ -> perform
        Lwt_util.join [(perform
                          guid <-- client_authenticate (client_ic, client_oc);
                          return ());
-                      server_authenticate ~mechanisms:[mech]
-                        OBus_uuid.loopback (server_ic, server_oc)];
+                      server_authenticate ~mechanisms:[mech] guid (server_ic, server_oc)];
        let _ = Printf.eprintf "authentication %s works!\n%!" (fst mech) in
        return ())
     (fun _ ->

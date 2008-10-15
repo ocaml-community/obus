@@ -57,19 +57,52 @@ class type transport = object
 
   method abort : exn -> unit
     (** [abort exn] should behave like [Lwt_unix.abort] *)
-
-  method authenticate : OBus_address.guid Lwt.t Lazy.t
-    (** When forced, [auithenticate] should launch authentification on
-        the transport and return the guid of the server address. *)
 end
 
-(** Create a transport from a connected socket *)
-class socket : Lwt_unix.file_descr -> transport
+(** A transport from the client point of view. In addition it must
+    know how to handle authentication with the server. *)
+class type client_transport = object
+  inherit transport
+
+  method client_authenticate : OBus_address.guid Lwt.t Lazy.t
+    (** When forced, it should launch authentification on the
+        transport and return the guid of the server address. *)
+end
+
+(** A transport from the server point of view, it must know how to
+    authenticate the client. *)
+class type server_transport = object
+  inherit transport
+
+  method server_authenticate : unit Lwt.t Lazy.t
+    (** When forced, it should authenticate the client *)
+end
+
+(** Transport from a connected socket *)
+class socket : Lwt_unix.file_descr -> object
+  inherit transport
+  val ic : Lwt_chan.in_channel
+  val oc : Lwt_chan.out_channel
+end
+
+class client_socket : Lwt_unix.file_descr -> object
+  inherit socket
+  inherit client_transport
+end
+
+class server_socket :
+  ?mechanisms:OBus_auth.server_mechanism list ->
+  OBus_address.guid ->
+  Lwt_unix.file_descr -> object
+  inherit socket
+  inherit server_transport
+end
 
 val loopback : transport
   (** Loopback transport, each message sent is received on the same
       transport *)
 
-val transport_of_addresses : OBus_address.t list -> transport Lwt.t
-  (** Try to make a working transport from a list of addresses. This
-      only works for transport which OBus internally handles *)
+val client_transport_of_addresses : OBus_address.t list -> client_transport Lwt.t
+  (** Try to make a working client transport from a list of
+      addresses. This only works for transport which OBus internally
+      handles *)
