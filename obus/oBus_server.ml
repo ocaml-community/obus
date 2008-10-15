@@ -30,7 +30,10 @@ let rec loop server (listen_fd, guid) =
        catch
          (fun _ -> perform
             connection <-- OBus_connection.of_server_transport transport;
-            let _ = !(server.on_connection) connection in
+            let _ =
+              !(server.on_connection) connection;
+              OBus_connection.set_up connection
+            in
             return ())
          (fun exn ->
             Log.log "authentication failure from %a"

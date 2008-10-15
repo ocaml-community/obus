@@ -20,7 +20,6 @@ let _ =
        let addresses = OBus_server.addresses server in
        let _ = Printf.eprintf "server addresses: %S\n%!" (OBus_address.to_string addresses) in
        connection <-- OBus_connection.of_addresses addresses;
-       Lwt_unix.sleep 2.0;
        OBus_connection.emit_signal connection
          ~path:["plop"]
          ~interface:"truc.bidule"

@@ -25,6 +25,9 @@ val make : ?mechanisms:OBus_auth.server_mechanism list -> ?addresses:OBus_addres
       connection is created, i.e. a client connect to the server and
       successfully authenticate itself.
 
+      Note that the connection passed to [on_connection] is down to
+      avoid race condition. It is set up just after.
+
       @raise Invalid_argument if [addresses] is empty *)
 
 val on_connection : t -> (OBus_connection.t -> unit) ref

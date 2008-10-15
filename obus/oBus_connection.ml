@@ -23,6 +23,7 @@ type filter_id = filter MSet.node
 type signal_receiver = (signal_match_rule * signal handler) MSet.node
 
 exception Connection_closed
+exception Transport_error of exn
 
 type t = connection
 
@@ -64,8 +65,12 @@ let set_crash connection exn = match !connection with
   | Running running ->
       connection := Crashed exn;
       remove_connection_of_guid_map running;
-      (* Abort the transport so the dispatcher will exit *)
+      (* Abort the transport so the reader will exit *)
       running.transport#abort exn;
+      (* Abort the message queue so the dispatcher will exit *)
+      MQueue.abort running.queue exn;
+      (* Wakeup all reply handlers so they will not wait forever *)
+      Serial_map.iter (fun _ (_, f) -> f exn) running.reply_handlers;
       (false, exn)
 
 let check_crash connection = match !connection with
@@ -409,7 +414,7 @@ let default_on_disconnect exn =
 
 let rec dispatch_forever connection on_disconnect = match !connection with
   | Running running ->
-      Lwt.bind (running.transport#get_message)
+      Lwt.bind (MQueue.get running.queue)
         (fun message ->
            if OBus_info.dump then
              Format.eprintf "-----@\n@[<hv 2>message received:@\n%a@]@."
@@ -439,9 +444,32 @@ let rec dispatch_forever connection on_disconnect = match !connection with
                     ERROR("uncaught exception on the OBus dispatcher thread: %s" (Printexc.to_string exn));
                     dispatch_forever connection on_disconnect buffer*)
 
+(* Read message forever from a transport *)
+let rec reader connection = match !connection with
+  | Running running ->
+      catch
+        (fun _ -> perform
+           message <-- running.transport#get_message;
+           let _ =
+             if OBus_info.dump then
+               Format.eprintf "-----@\n@[<hv 2>message received:@\n%a@]@."
+                 OBus_message.print message;
+             MQueue.put message running.queue
+           in
+           return true)
+        (fun exn ->
+           ignore (set_crash connection (Transport_error exn));
+           return false)
+      >>= (function
+             | true -> reader connection
+             | false -> return ())
+  | Crashed exn -> return ()
+
 let of_transport ?guid transport =
   let make () =
-    let on_disconnect = ref default_on_disconnect in
+    let on_disconnect = ref default_on_disconnect
+    and queue = MQueue.create () in
+    MQueue.set_down queue;
     let connection = ref & Running {
       transport = (transport :> OBus_lowlevel.transport);
       outgoing = Lwt.return 0l;
@@ -452,7 +480,9 @@ let of_transport ?guid transport =
       name = None;
       guid = guid;
       on_disconnect = on_disconnect;
+      queue = queue;
     } in
+    ignore (reader connection);
     ignore (dispatch_forever connection on_disconnect);
     connection
   in
@@ -476,6 +506,13 @@ let of_server_transport transport =
      Lazy.force (transport#server_authenticate);
      return (of_transport transport))
 
+let is_up connection =
+  with_running connection & fun running -> MQueue.is_up running.queue
+let set_up connection =
+  with_running connection & fun running -> MQueue.set_up running.queue
+let set_down connection =
+  with_running connection & fun running -> MQueue.set_down running.queue
+
 let of_addresses ?(shared=true) addresses = match shared with
   | false -> OBus_lowlevel.client_transport_of_addresses addresses >>= of_client_transport ~shared:false
   | true ->
@@ -488,7 +525,11 @@ let of_addresses ?(shared=true) addresses = match shared with
                there is no other connection to a server with the same
                guid, because during the authentification another
                thread can add a new connection. *)
-            OBus_lowlevel.client_transport_of_addresses addresses >>= of_client_transport ~shared:true
+            (perform
+               transport <-- OBus_lowlevel.client_transport_of_addresses addresses;
+               connection <-- of_client_transport ~shared:true transport;
+               let _ = set_up connection in
+               return connection)
 
 let loopback = of_transport OBus_lowlevel.loopback
 

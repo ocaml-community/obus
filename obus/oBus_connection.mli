@@ -213,12 +213,25 @@ val filter_enabled : filter_id -> bool
 
 (** {6 Errors handling} *)
 
+exception Transport_error of exn
+  (** Exception raised when an error happen on the transport *)
+
 val on_disconnect : t -> (exn -> unit) ref
   (** Function called when a fatal error happen. The default behaviour
       is to print an error message and to exit the program. *)
 
-(** {6 Creation of connection from transport} *)
+(** {6 Low-level} *)
 
 val of_client_transport : ?shared:bool -> OBus_lowlevel.client_transport -> t Lwt.t
 val of_server_transport : OBus_lowlevel.server_transport -> t Lwt.t
   (** Create a DBus connection on the given transport *)
+
+(** A connection can be up or down, expect for connection created with
+    [of_client_transport] and [of_server_transport], newly created
+    connection are always up.
+
+    When a connection is down, messages will not be dispatched *)
+
+val is_up : t -> bool
+val set_up : t -> unit
+val set_down : t -> unit
