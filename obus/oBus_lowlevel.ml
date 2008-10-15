@@ -992,37 +992,11 @@ class server_socket ?mechanisms guid fd = object
 end
 
 let loopback = object(self)
-  val mutable queue = Queue.create ()
-  val mutable waiters = Queue.create ()
-  val mutable aborted = None
-
-  method get_message = match aborted with
-    | Some exn -> fail exn
-    | None -> match Queue.is_empty queue with
-        | true ->
-            let w = Lwt.wait () in
-            Queue.push w waiters;
-            w
-        | false ->
-            return (Queue.pop queue)
-
-  method put_message msg =
-    Marshaler_success(fun () -> match aborted with
-                        | Some exn -> fail exn
-                        | None ->
-                            begin match Queue.is_empty waiters with
-                              | true -> Queue.push msg queue
-                              | false -> Lwt.wakeup (Queue.pop waiters) msg
-                            end;
-                            return ())
-
+  val mutable queue = MQueue.create ()
+  method get_message = MQueue.get queue
+  method put_message msg = Marshaler_success(fun () -> MQueue.put msg queue; return ())
   method shutdown = self#abort (Failure "transport closed")
-
-  method abort exn =
-    aborted <- Some exn;
-    Queue.iter (fun w -> Lwt.wakeup_exn w exn) waiters;
-    Queue.clear waiters;
-    Queue.clear queue
+  method abort exn = MQueue.abort queue exn
 end
 
 let make_socket domain typ addr =
