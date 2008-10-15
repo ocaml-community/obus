@@ -111,7 +111,6 @@ let print_proxy_implem sugar pp (name, content, annots) =
   p "end\n"
 
 (***** Printing of service code *****)
-    obj#emit (obj#plop) system_bus ~destination:"toto" "toto" 1
 let print_service_implem_no_sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "class virtual %a = object\n" puid name;
@@ -126,12 +125,8 @@ let print_service_implem_no_sugar pp (name, content, annots) =
           | [] -> [unit]
           | _ -> im_term_of_args args
         in
-        if sugar then
-          p "  method %a = signal %S << %a >>\n" plid name name
-            (print_func unit) args
-        else
-          p "  method %a = signal %S %a\n" plid name name
-            (print_func_no_sugar unit) args
+        p "  method %a = signal %S %a\n" plid name name
+          (print_func_no_sugar unit) args
     | Property(name, typ, access, annots) -> ()
   end content;
   p "end\n"
@@ -150,12 +145,8 @@ let print_service_implem_sugar pp (name, content, annots) =
           | [] -> [unit]
           | _ -> im_term_of_args args
         in
-        if sugar then
-          p "  method %a = signal %S << %a >>\n" plid name name
-            (print_func unit) args
-        else
-          p "  method %a = signal %S %a\n" plid name name
-            (print_func_no_sugar unit) args
+        p "  method %a = signal %S << %a >>\n" plid name name
+          (print_func unit) args
     | Property(name, typ, access, annots) -> ()
   end content;
   p "end\n"

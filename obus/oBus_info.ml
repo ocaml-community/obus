@@ -18,9 +18,9 @@ let max_array_size = 1 lsl 26
 let max_message_size = 1 lsl 27
 let protocol_version = 1
 
-let verbose = Util.verbose
-let debug = Util.debug
-let dump = Util.dump
+let verbose = Log.verbose_enable
+let debug = Log.debug_enable
+let dump = Log.dump_enable
 
 (* This location depends on where libdbus is installed *)
 let machine_uuid_file = "/var/lib/dbus/machine-id"
@@ -30,11 +30,11 @@ let machine_uuid = lazy(
      have to care about where the uuid file is located *)
   try Util.with_process_in "dbus-uuidgen --get" input_line with
       exn ->
-        LOG("dbus-uuidgen failed: %s" (Printexc.to_string exn));
+        Log.log "dbus-uuidgen failed: %s" (Util.string_of_exn exn);
         (* Try reading the file *)
         try Util.with_open_in machine_uuid_file input_line with
             _ ->
-              LOG("failed to read the local machine uuid file (%s): %s"
-                    machine_uuid_file (Printexc.to_string exn));
+              Log.error "failed to read the local machine uuid file (%s): %s"
+                machine_uuid_file (Util.string_of_exn exn);
               raise exn
 )

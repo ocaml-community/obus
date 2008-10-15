@@ -53,21 +53,8 @@ val with_process_out : string -> (out_channel -> 'a) -> 'a
 val homedir : string Lazy.t
   (** Return the home directory *)
 
-(** {6 Logging} *)
-
-val log : string option -> ('a, unit, string, unit) format4 -> 'a
-  (** [log section fmt] print a log message on stderr *)
-
-val error : string option -> ('a, unit, string, unit) format4 -> 'a
-  (** Print an error message on stderr *)
-
 val string_of_exn : exn -> string
   (** Try to return something better that [Printexc.to_string] *)
-
-val verbose : bool
-val debug : bool
-val dump : bool
-  (** Set from the environment variable OBUS_LOG *)
 
 (** {6 Random number generation} *)
 

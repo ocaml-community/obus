@@ -9,31 +9,6 @@
 
 open Printf
 
-let verbose, debug, dump =
-  try
-    match String.lowercase (Sys.getenv "OBUS_LOG") with
-      | "dump" -> (true, true, true)
-      | "debug" -> (true, true, false)
-      | _ -> (true, false, false)
-  with
-      Not_found -> (false, false, false)
-
-let program_name = Filename.basename Sys.argv.(0)
-
-let section_opt = function
-  | Some s -> "(" ^ s ^ ")"
-  | None -> ""
-
-let log section fmt = ksprintf
-  (fun msg -> eprintf "%s: obus%s: %s\n%!" program_name (section_opt section) msg) fmt
-
-let error section fmt = ksprintf
-  (fun msg ->
-     if Unix.isatty Unix.stdout then
-       eprintf "\027[1;31m%s: obus%s: %s\n%!\027[0m" program_name (section_opt section) msg
-     else
-       eprintf "%s: obus%s: error: %s\n%!" program_name (section_opt section) msg) fmt
-
 let string_of_exn = function
   | Unix.Unix_error(error, _, _) -> Unix.error_message error
   | Sys_error msg -> msg
@@ -189,7 +164,7 @@ let homedir = lazy((Unix.getpwuid (Unix.getuid ())).Unix.pw_dir)
 let init_pseudo = Lazy.lazy_from_fun Random.self_init
 
 let fill_pseudo buffer pos len =
-  DEBUG("using pseudo-random generator");
+  Log.debug "using pseudo-random generator";
   Lazy.force init_pseudo;
   for i = pos to pos + len - 1 do
     String.unsafe_set buffer i (char_of_int (Random.int 256))
@@ -203,7 +178,7 @@ let fill_random buffer pos len =
          if n < len then fill_pseudo buffer (pos + n) (len - n))
   with
       exn ->
-        DEBUG("failed to get random data from /dev/urandom: %s" (Printexc.to_string exn));
+        Log.debug "failed to get random data from /dev/urandom: %s" (string_of_exn exn);
         fill_pseudo buffer pos len
 
 let random_string n =

@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+module Log = Log.Make(struct let section = "connection" end)
+
 open Printf
 open OBus_message
 open OBus_internals
@@ -292,15 +294,15 @@ let dispatch_message connection running message =
              with
                  exn -> error_handler exn)
           (fun _ ->
-             DEBUG("reply to message with serial %ld dropped" reply_serial))
+             Log.debug "reply to message with serial %ld dropped" reply_serial)
 
     | { typ = `Error(reply_serial, error_name) } ->
         let msg = get_error message in
         find_reply_handler running reply_serial
           (fun  (handler, error_handler) -> error_handler & OBus_error.make error_name msg)
           (fun _ ->
-             DEBUG("error reply to message with serial %ld dropped because no reply was expected, \
-                    the error is: %S: %S" reply_serial error_name msg))
+             Log.debug "error reply to message with serial %ld dropped because no reply was expected, \
+                        the error is: %S: %S" reply_serial error_name msg)
 
     | { typ = `Signal _ } as message ->
         MSet.iter
@@ -398,9 +400,9 @@ let dispatch_message connection running message =
 let default_on_disconnect exn =
   begin match exn with
     | OBus_lowlevel.Protocol_error msg ->
-        ERROR("the DBus connection has been closed due to a protocol error: %s" msg)
+        Log.error "the DBus connection has been closed due to a protocol error: %s" msg
     | exn ->
-        ERROR("the DBus connection has been closed due to this uncaught exception: %s" (Printexc.to_string exn))
+        Log.error "the DBus connection has been closed due to this uncaught exception: %s" (Printexc.to_string exn)
   end;
   exit 1
 
@@ -429,7 +431,7 @@ let rec dispatch_forever connection on_disconnect = match !connection with
             return & !on_disconnect exn
           with
               handler_exn ->
-                DEBUG("the error handler failed with this exception: %s" (Printexc.to_string handler_exn));
+                Log.debug "the error handler failed with this exception: %s" (Util.string_of_exn handler_exn);
                 default_on_disconnect exn
           end
             (*      | exn ->

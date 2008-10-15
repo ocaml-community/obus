@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+module Log = Log.Make(struct let section = "address" end)
+
 type name = string
 type key = string
 type value = string
@@ -44,7 +46,7 @@ let of_string str =
                  | None, Some abst, None -> Unix_abstract abst
                  | None, None, Some tmpd -> Unix_tmpdir tmpd
                  | _ ->
-                     ERROR("invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\"");
+                     Log.error "invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\"";
                      Unknown(name, params)
              end
            | "tcp" ->
@@ -54,7 +56,7 @@ let of_string str =
                  | Some "ipv4" -> Tcp(host, port, Some Ipv4)
                  | Some "ipv6" -> Tcp(host, port, Some Ipv6)
                  | Some f ->
-                     ERROR("unknown address family: %S" f);
+                     Log.error "unknown address family: %S" f;
                      Unknown(name, params)
                  | None -> Tcp(host, port, None)
                end
@@ -66,7 +68,7 @@ let of_string str =
            | None -> None) end addresses
   with
       Failure msg ->
-        DEBUG("failed to parse address %S: %s" str msg);
+        Log.debug "failed to parse address %S: %s" str msg;
         raise (Parse_failure msg)
 
 
@@ -129,7 +131,7 @@ let system = lazy(
   match
     try Some (Sys.getenv system_bus_variable) with
         Not_found ->
-          DEBUG("environment variable %s not found, using internal default" system_bus_variable);
+          Log.debug "environment variable %s not found, using internal default" system_bus_variable;
           None
   with
     | Some str -> of_string str
@@ -140,7 +142,7 @@ let session = lazy(
   match
     try Some (Sys.getenv session_bus_variable) with
         Not_found ->
-          LOG("environment variable %s not found" session_bus_variable);
+          Log.log "environment variable %s not found" session_bus_variable;
           try
             (* Try with the root window property, this is bit ugly
                and it depends on the presence of xprop... *)
@@ -148,9 +150,9 @@ let session = lazy(
               (fun ic -> Scanf.fscanf ic ("_DBUS_SESSION_BUS_ADDRESS(STRING) = %S") (fun s -> Some s))
           with
               exn ->
-                LOG("can not get session bus address from property %s \
-                     on root window (maybe x11 is not running), error is: %s"
-                      session_bus_property (Printexc.to_string exn));
+                Log.log "can not get session bus address from property %s \
+                         on root window (maybe x11 is not running), error is: %s"
+                  session_bus_property (Util.string_of_exn exn);
                 None
   with
     | Some str -> of_string str

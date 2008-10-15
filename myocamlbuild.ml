@@ -25,7 +25,8 @@ struct
 
   (* All the modules of the obus library *)
   let all_modules =
-    [ "Addr_lexer";
+    [ "Log";
+      "Addr_lexer";
       "Util";
       "MSet";
       "OBus_info";
@@ -101,7 +102,7 @@ package \"syntax\" (
     Buffer.contents buf
 
   (* Syntax extensions used internally *)
-  let intern_syntaxes = ["pa_log"; "trace"; "pa_obus"]
+  let intern_syntaxes = ["trace"; "pa_obus"]
 end
 
 (***** Packages installed with ocamlfind *****)

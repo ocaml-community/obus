@@ -64,7 +64,7 @@ class type transport = object
 end
 
 (** Create a transport from a connected socket *)
-class socket_transport : Lwt_unix.file_descr -> transport
+class socket : Lwt_unix.file_descr -> transport
 
 val loopback : transport
   (** Loopback transport, each message sent is received on the same
@@ -73,17 +73,3 @@ val loopback : transport
 val transport_of_addresses : OBus_address.t list -> transport Lwt.t
   (** Try to make a working transport from a list of addresses. This
       only works for transport which OBus internally handles *)
-
-(** {6 Listener} *)
-
-class type listener = object
-  method accept : transport Lwt.t
-    (** Wait for a client to connect and create a transport for it *)
-
-  method shutdown : unit
-    (** Shutdown the listener *)
-end
-
-(** Create a listener from a socket. The socket must be ready to
-    accept connection. *)
-class socket_listener : Lwt_unix.file_descr -> listener

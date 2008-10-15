@@ -946,6 +946,8 @@ let get_message ic : OBus_message.any Lwt.t =
 
 (***** Transport *****)
 
+module Log = Log.Make(struct let section = "transport" end)
+
 let failwith fmt = ksprintf (fun msg -> fail (Failure msg)) fmt
 
 class type transport = object
@@ -956,7 +958,7 @@ class type transport = object
   method authenticate : OBus_address.guid Lwt.t Lazy.t
 end
 
-class socket_transport fd =
+class socket fd =
   let ic = Lwt_chan.in_channel_of_descr fd
   and oc = Lwt_chan.out_channel_of_descr fd in
 object
@@ -1012,7 +1014,7 @@ let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in
   try_bind
     (fun _ -> Lwt_unix.connect fd addr)
-    (fun _ -> return (new socket_transport fd))
+    (fun _ -> return (new socket fd))
     (fun exn -> Lwt_unix.close fd; fail exn)
 
 let rec try_one t fallback x =
@@ -1031,7 +1033,7 @@ let rec transport_of_addresses = function
             transport_of_addresses rest
 
       | Unix_tmpdir _ ->
-          ERROR("unix tmpdir can only be used as a listening address");
+          Log.error "unix tmpdir can only be used as a listening address";
           transport_of_addresses rest
 
       | Tcp(host, service, family) ->
@@ -1061,24 +1063,7 @@ let rec transport_of_addresses = function
                 OBus_address.of_string line
               with
                   exn ->
-                    LOG("autolaunch failed: %s" (Printexc.to_string exn));
+                    Log.log "autolaunch failed: %s" (Util.string_of_exn exn);
                     []) @ rest)
 
       | _ -> transport_of_addresses rest
-
-(***** Listener *****)
-
-class type listener = object
-  method accept : transport Lwt.t
-  method shutdown : unit
-end
-
-class socket_listener listen_fd = object
-  method accept =
-    (perform
-       (fd, addr) <-- Lwt_unix.accept listen_fd;
-       return (new socket_transport fd))
-  method shutdown =
-    Lwt_unix.shutdown listen_fd SHUTDOWN_ALL;
-    Lwt_unix.close listen_fd
-end

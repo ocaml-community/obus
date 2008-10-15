@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+module Log = Log.Make(struct let section = "auth" end)
+
 open Printf
 open Lwt
 open Lwt_chan
@@ -106,19 +108,19 @@ let load_cookie context id =
       (fun ic -> aux (Scanf.Scanning.from_channel ic))
   with
       exn ->
-        ERROR("failed to load cookie %ld from %s: %s" id (keyring_file_name context) (Util.string_of_exn exn));
+        Log.error "failed to load cookie %ld from %s: %s" id (keyring_file_name context) (Util.string_of_exn exn);
         raise exn
 
 class client_mech_dbus_cookie_sha1_handler = object
   method init = return (Client_mech_continue(string_of_int (Unix.getuid ())))
   method data chal =
-    DEBUG("client: dbus_cookie_sha1: chal: %s" chal);
+    Log.debug "client: dbus_cookie_sha1: chal: %s" chal;
     Scanf.sscanf chal "%[^/\\ \n\r.] %ld %[a-fA-F0-9]%!" begin fun context id chal ->
       let cookie = load_cookie context id in
       let rand = hex_encode (Util.random_string 16) in
       let resp = sprintf "%s %s" rand
         (hex_encode (Util.sha_1 (sprintf "%s:%s:%s" chal rand cookie))) in
-      DEBUG("client: dbus_cookie_sha1: resp: %s" resp);
+      Log.debug "client: dbus_cookie_sha1: resp: %s" resp;
       return (Client_mech_ok resp)
     end
   method abort = ()
@@ -160,22 +162,22 @@ let lock_file fname =
                   Unix.O_CREAT] 0o600)
   and remove_stale_lock () =
     Unix.unlink fname;
-    LOG("stale lock file %s removed" fname)
+    Log.log "stale lock file %s removed" fname
   in
   let rec aux = function
     | 0 ->
         (perform
            call remove_stale_lock
-             (fun m -> ERROR("failed to remove stale lock file %s: %s" fname m));
+             (fun m -> Log.error "failed to remove stale lock file %s: %s" fname m);
            call really_lock
-             (fun m -> ERROR("failed to lock file %s after removing it: %s" fname m)))
+             (fun m -> Log.error "failed to lock file %s after removing it: %s" fname m))
     | n ->
         try
           really_lock ();
           return ()
         with
             exn ->
-              DEBUG("waiting for lock file %s" fname);
+              Log.debug "waiting for lock file %s" fname;
               Lwt_unix.sleep 0.250 >>= fun _ -> aux (n - 1)
   in
   aux 32
@@ -183,7 +185,7 @@ let lock_file fname =
 let unlock_file fname =
   call
     (fun _ -> Unix.unlink fname)
-    (fun m -> ERROR("failed to unlink file %s: %s" fname m))
+    (fun m -> Log.error "failed to unlink file %s: %s" fname m)
 
 let save_keyring context content =
   let fname = keyring_file_name context in
@@ -197,17 +199,17 @@ let save_keyring context content =
           return ()
         with _ -> call
           (fun _ -> Unix.mkdir dir 0o600)
-          (fun m -> ERROR("failed to create directory %s with permissions 0600%s" dir m)));
+          (fun m -> Log.error "failed to create directory %s with permissions 0600%s" dir m));
        lock_file lock_fname;
        call
          (fun _ -> Util.with_open_out tmp_fname
             (fun oc ->
                List.iter (fun (id, time, cookie) ->
                             fprintf oc "%ld %Ld %s\n" id time cookie) content))
-         (fun m -> ERROR("unable to write temporary keyring file %s: %s" tmp_fname m));
+         (fun m -> Log.error "unable to write temporary keyring file %s: %s" tmp_fname m);
        call
          (fun _ -> Unix.rename tmp_fname fname)
-         (fun m -> ERROR("unable to rename file %s to %s: %s" tmp_fname fname m)))
+         (fun m -> Log.error "unable to rename file %s to %s: %s" tmp_fname fname m))
     (fun _ -> unlock_file lock_fname)
 
 let load_keyring context =
@@ -237,7 +239,7 @@ class server_mech_dbus_cookie_sha1_handler = object
 
   method data resp =
     try
-      DEBUG("server: dbus_cookie_sha1: resp: %s" resp);
+      Log.debug "server: dbus_cookie_sha1: resp: %s" resp;
       match state with
         | `State1 ->
             let keyring = load_keyring context in
@@ -264,7 +266,7 @@ class server_mech_dbus_cookie_sha1_handler = object
                let rand = hex_encode (Util.random_string 16) in
                let chal = sprintf "%s %ld %s" context id rand in
                let _ =
-                 DEBUG("server: dbus_cookie_sha1: chal: %s" chal);
+                 Log.debug "server: dbus_cookie_sha1: chal: %s" chal;
                  state <- `State2(cookie, rand)
                in
                return (Server_mech_continue chal))
@@ -291,7 +293,7 @@ let default_server_mechanisms = [server_mech_dbus_cookie_sha1]
 (***** Transport *****)
 
 let send_line mode oc line =
-  DEBUG("%s: sending: %S" mode line);
+  Log.debug "%s: sending: %S" mode line;
   (perform
      output_string oc line;
      output_string oc "\r\n";
@@ -356,7 +358,7 @@ let preprocess_line line =
 let rec recv mode command_parser (ic, oc) =
   (perform
      line <-- recv_line (Buffer.create 42) ic 0;
-     let _ = DEBUG("%s: received: %S" mode line) in
+     let _ = Log.debug "%s: received: %S" mode line in
 
      (* If a parse failure occur, return an error and try again *)
      match
