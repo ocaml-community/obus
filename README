@@ -83,14 +83,6 @@ url: https://forge.ocamlcore.org/projects/obus/
   definitions at run-time, so you have too look at the source or the
   documentation to find them.
 
-* Planed:
-
-  Next versions of OBus will include:
-
-  - high-level handling of service proposal
-  - server mode for one-to-one communication
-  - support of DBUS_COOKIE_SHA1 authentication
-
 * Development:
 
   The last development version of obus can always be found in the
