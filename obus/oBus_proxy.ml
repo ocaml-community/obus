@@ -72,8 +72,23 @@ let don_signal proxy ?global ~interface ~member f =
   OBus_signal.dadd_receiver (connection proxy) ?global ~interface ~member
     ~path:(path proxy) ?sender:(destination proxy) f
 
-let property proxy ~interface ~name ~access typ =
-  OBus_property.make ~interface ~name ~access ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy) typ
+let property proxy ~interface ~member ~access typ =
+  OBus_property.make ~interface ~member ~access ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy) typ
 
-let dproperty proxy ~interface ~name ~access =
-  OBus_property.dmake ~interface ~name ~access ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy)
+let dproperty proxy ~interface ~member ~access =
+  OBus_property.dmake ~interface ~member ~access ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy)
+
+let set proxy ~interface ~member typ x =
+  OBus_property.set (property proxy ~interface ~member ~access:`writable typ) x
+
+let get proxy ~interface ~member typ =
+  OBus_property.get (property proxy ~interface ~member ~access:`readable typ)
+
+let dset proxy ~interface ~member x =
+  OBus_property.dset (dproperty proxy ~interface ~member ~access:`writable) x
+
+let dget proxy ~interface ~member =
+  OBus_property.dget (dproperty proxy ~interface ~member ~access:`readable)
+
+let dget_all proxy ~interface =
+  OBus_property.dget_all ~interface ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy)

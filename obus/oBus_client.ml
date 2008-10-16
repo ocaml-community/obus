@@ -50,8 +50,8 @@ struct
   let dcall member = OBus_proxy.dmethod_call ~interface:Name.name ~member
   let on_signal ?global member typ proxy = OBus_proxy.on_signal ?global ~interface:Name.name ~member proxy typ
   let don_signal ?global member = OBus_proxy.don_signal ?global ~interface:Name.name ~member
-  let property name access typ proxy = OBus_proxy.property ~interface:Name.name ~name ~access proxy typ
-  let dproperty name access = OBus_proxy.dproperty ~interface:Name.name ~name ~access
+  let property member access typ proxy = OBus_proxy.property ~interface:Name.name ~member ~access proxy typ
+  let dproperty member access = OBus_proxy.dproperty ~interface:Name.name ~member ~access
   let register_exn = register_exn Name.name
 end
 
@@ -67,8 +67,8 @@ struct
     OBus_proxy.dmethod_call ~interface:name ~member (to_proxy obj) body
   let on_signal ?global member typ obj f = OBus_proxy.on_signal ?global ~interface:Params.name ~member (to_proxy obj) typ f
   let don_signal ?global member obj f = OBus_proxy.don_signal ?global ~interface:Params.name ~member (to_proxy obj) f
-  let property name access typ obj = OBus_proxy.property ~interface:Params.name ~name ~access (to_proxy obj) typ
-  let dproperty name access obj = OBus_proxy.dproperty ~interface:Params.name ~name ~access (to_proxy obj)
+  let property member access typ obj = OBus_proxy.property ~interface:Params.name ~member ~access (to_proxy obj) typ
+  let dproperty member access obj = OBus_proxy.dproperty ~interface:Params.name ~member ~access (to_proxy obj)
 
   let register_exn = register_exn Params.name
 end
@@ -116,24 +116,24 @@ struct
       ~interface:Params.name
       ~member f
 
-  let property name access typ connection =
+  let property member access typ connection =
     OBus_property.make
       ~connection
       ?destination:Params.service
       ~interface:Params.name
       ~path:Params.path
-      ~name
+      ~member
       ~access
       typ
 
-  let dproperty name access connection =
+  let dproperty member access connection =
     OBus_property.dmake
       ~connection
       ?destination:Params.service
       ~interface:Params.name
       ~path:Params.path
       ~access
-      ~name
+      ~member
 
   let register_exn = register_exn Params.name
 end
@@ -176,23 +176,23 @@ struct
       OBus_signal.dadd_receiver bus ?global
         ?sender:Params.service ~path ~interface:Params.name ~member f
 
-  let property name access typ path =
+  let property member access typ path =
     OBus_property.lmake
       ~connection:Params.bus
       ?destination:Params.service
       ~interface:Params.name
       ~path
-      ~name
+      ~member
       ~access
       typ
 
-  let dproperty name access path =
+  let dproperty member access path =
     OBus_property.ldmake
       ~connection:Params.bus
       ?destination:Params.service
       ~interface:Params.name
       ~path
-      ~name
+      ~member
       ~access
 
   let register_exn = register_exn Params.name
@@ -205,6 +205,6 @@ module Make_constant(Params : Constant_params) = struct
   let dcall member = dcall member Params.path
   let on_signal ?global member typ f = on_signal ?global member typ Params.path f
   let don_signal ?global member = don_signal ?global member Params.path
-  let property name access typ = property name access typ Params.path
-  let dproperty name access = dproperty name access Params.path
+  let property member access typ = property member access typ Params.path
+  let dproperty member access = dproperty member access Params.path
 end

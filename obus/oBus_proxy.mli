@@ -17,6 +17,8 @@ type t
 val tt : t OBus_type.ty_basic
   (** Type combinator *)
 
+(** {6 Creation/informations} *)
+
 val make : connection:OBus_connection.t -> ?destination:OBus_name.Connection.t ->  path:OBus_path.t -> t
   (** [make connection service path] create a proxy,
 
@@ -30,26 +32,47 @@ val destination : t -> OBus_name.Connection.t option
 val path : t -> OBus_path.t
   (** Access to proxy informations *)
 
-val method_call : t -> ?interface:OBus_name.Interface.t -> member:OBus_name.Member.t -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+(** {6 Method calls} *)
+
+val method_call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
   (** Send a method call on a proxy *)
 
-val kmethod_call : ((t -> 'b Lwt.t) -> 'c) -> ?interface:OBus_name.Interface.t -> member:OBus_name.Member.t -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
+val kmethod_call : ((t -> 'b Lwt.t) -> 'c) -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   (** Same thing but with continuation *)
 
-val dmethod_call : t -> ?interface:OBus_name.Interface.t -> member:OBus_name.Member.t -> OBus_message.body -> OBus_message.body Lwt.t
+val dmethod_call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> OBus_message.body Lwt.t
   (** Send a method call with dynamically typed datas *)
 
-val on_signal : t -> ?global:bool -> interface:OBus_name.Interface.t -> member:OBus_name.Member.t ->
+(** {6 Signals} *)
+
+val on_signal : t -> ?global:bool -> interface:OBus_name.interface -> member:OBus_name.member ->
   [< 'a OBus_type.cl_sequence ] -> ('a -> unit) -> OBus_signal.receiver Lwt.t
   (** Connect a callback function to the given signal. It is possible
       to connect multiple functions to the same signal. *)
 
-val don_signal : t -> ?global:bool -> interface:OBus_name.Interface.t -> member:OBus_name.Member.t ->
+val don_signal : t -> ?global:bool -> interface:OBus_name.interface -> member:OBus_name.member ->
   (OBus_message.body -> unit) -> OBus_signal.receiver Lwt.t
   (** Dynamically-typed version *)
 
-val property : t -> interface:OBus_name.Interface.t -> name:OBus_name.Member.t -> access:([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> ('a, 'b) OBus_property.t
+(** {6 Creation of properties} *)
+
+val property : t -> interface:OBus_name.interface -> member:OBus_name.member -> access:([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> ('a, 'b) OBus_property.t
   (** Create a property *)
 
-val dproperty : t -> interface:OBus_name.Interface.t -> name:OBus_name.Member.t -> access:([< OBus_property.access ] as 'a) -> 'a OBus_property.dt
+val dproperty : t -> interface:OBus_name.interface -> member:OBus_name.member -> access:([< OBus_property.access ] as 'a) -> 'a OBus_property.dt
   (** Dynamically-typed version *)
+
+(** {6 Direct access to properties} *)
+
+val set : t -> interface:OBus_name.interface -> member:OBus_name.member -> [< 'a OBus_type.cl_single ] -> 'a -> unit Lwt.t
+  (** Set the value of a property *)
+
+val get : t -> interface:OBus_name.interface -> member:OBus_name.member -> [< 'a OBus_type.cl_single ] -> 'a Lwt.t
+  (** Get the value of a property *)
+
+val dset : t -> interface:OBus_name.interface -> member:OBus_name.member -> OBus_value.single -> unit Lwt.t
+val dget : t -> interface:OBus_name.interface -> member:OBus_name.member -> OBus_value.single Lwt.t
+  (** Dynamically-typed version *)
+
+val dget_all : t -> interface:OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
+  (** Retreive all properties of an interface *)
