@@ -121,7 +121,7 @@ val emit_signal : t ->
   path:OBus_path.t ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->
-  ('a, unit Lwt.t, unit) OBus_type.ty_function -> 'a
+  [< 'a OBus_type.cl_sequence ] -> 'a -> unit Lwt.t
   (** Emit a signal *)
 
 val demit_signal : t ->
@@ -169,7 +169,7 @@ val add_signal_receiver : t ->
   ?interface:OBus_name.interface ->
   ?member:OBus_name.member ->
   ?args:(int * string) list ->
-  ('a, unit, unit) OBus_type.ty_function -> 'a -> signal_receiver
+  [< 'a OBus_type.cl_sequence ] -> ('a -> unit) -> signal_receiver
   (** Add a signal receiver.
 
       Note that with a message bus, you probably need to also add a

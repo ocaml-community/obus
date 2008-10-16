@@ -40,7 +40,7 @@ OBUS_struct 'a x = { x: 'a }
 OBUS_class dbus "org.freedesktop.DBus" = object
   OBUS_method ListNames : string list;
   OBUS_method Truc : [{string, variant} list * int] -> string;
-  OBUS_signal NameOwnerChanged : string -> string -> string -> unit;
+  OBUS_signal NameOwnerChanged : string * string * string;
   OBUS_val_rw mutable x : int;
   OBUS_property_r y : string
 end

@@ -31,7 +31,7 @@ module type Interface = sig
   val dcall : OBus_name.member -> t -> OBus_message.body -> OBus_message.body Lwt.t
     (** Dynamically typed version. *)
 
-  val on_signal : ?global:bool -> OBus_name.member -> ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
+  val on_signal : ?global:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> t -> ('a -> unit) -> OBus_signal.receiver Lwt.t
     (** [on_signal member typ obj func] register a
         callback function for the given signal *)
 
@@ -105,7 +105,7 @@ module Make_constant(Params : Constant_params) : sig
   val call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
   val kcall : ('b Lwt.t -> 'c) -> OBus_name.member -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   val dcall : OBus_name.member -> OBus_message.body -> OBus_message.body Lwt.t
-  val on_signal : ?global:bool -> OBus_name.member -> ('a, unit, unit) OBus_type.ty_function -> 'a -> OBus_signal.receiver Lwt.t
+  val on_signal : ?global:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> ('a -> unit) -> OBus_signal.receiver Lwt.t
   val don_signal : ?global:bool -> OBus_name.member -> (OBus_message.body -> unit) -> OBus_signal.receiver Lwt.t
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
   val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> ('a, 'b) OBus_property.t

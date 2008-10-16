@@ -181,9 +181,8 @@ let method_call connection ?flags ?sender ?destination ~path ?interface ~member 
   call_and_cast_reply ty & fun body f ->
     f connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
 
-let emit_signal connection ?flags ?sender ?destination ~path ~interface ~member ty =
-  make_func ty & fun body ->
-    send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member body)
+let emit_signal connection ?flags ?sender ?destination ~path ~interface ~member ty x =
+  send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member (make_sequence ty x))
 
 let demit_signal connection ?flags ?sender ?destination ~path ~interface ~member body =
   send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member body)
@@ -226,7 +225,9 @@ let add_signal_receiver connection ?sender ?destination ?path ?interface ?member
          smr_interface = interface;
          smr_member = member;
          smr_args = args },
-       fun msg -> ignore(opt_cast_func typ ~context:(mk_context connection msg) msg.body func))
+       fun msg -> ignore(match opt_cast_sequence typ ~context:(mk_context connection msg) msg.body with
+                           | Some x -> func x
+                           | None -> ()))
 
 let dadd_signal_receiver connection ?sender ?destination ?path ?interface ?member ?(args=[]) func =
   with_running connection & fun running ->

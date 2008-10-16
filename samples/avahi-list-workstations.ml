@@ -20,7 +20,7 @@ let main : unit Lwt.t =
     service_browser <-- Server.service_browser_new (-1) (-1) "_workstation._tcp" "" 0;
 
     Service_browser.on_item_new service_browser
-      (fun interface protocol name service domain flags ->
+      (fun (interface, protocol, name, service, domain, flags) ->
          printf "new workstation found:\n  name = %S\n  domain = %S\n\n%!" name domain;
 
          ignore_result
@@ -28,14 +28,14 @@ let main : unit Lwt.t =
               resolver <-- Server.service_resolver_new interface protocol name service domain (-1) 0;
 
               Service_resolver.on_found resolver
-                (fun interface protocol name typ domain host aprotocol address port txt flags ->
+                (fun (interface, protocol, name, typ, domain, host, aprotocol, address, port, txt, flags) ->
                    printf "the resolver found:\n  name = %S\n  host = %S\n  address = %S\n\n%!" name host address);
 
               Service_resolver.on_failure resolver
                 (printf "failure of the service resolver: %S\n\n%!")));
 
     Service_browser.on_item_remove service_browser
-      (fun interface protocol name service domain flags ->
+      (fun (interface, protocol, name, service, domain, flags) ->
          printf "workstation removed:  name = %S\n  domain = %S\n\n%!" name domain);
 
     Service_browser.on_failure service_browser

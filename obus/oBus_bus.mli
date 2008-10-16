@@ -155,7 +155,7 @@ val get_id : t -> OBus_uuid.t Lwt.t
 
 (** {6 Signals} *)
 
-val on_name_owner_changed : t -> (name -> OBus_name.connection_unique -> OBus_name.connection_unique -> unit) -> OBus_signal.receiver Lwt.t
+val on_name_owner_changed : t -> (name * OBus_name.connection_unique * OBus_name.connection_unique -> unit) -> OBus_signal.receiver Lwt.t
   (** This signal is emited each the owner of a name (unique
       connection name or service name) change.
 

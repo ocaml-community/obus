@@ -21,6 +21,6 @@ val singleton_addon_is_ready : string -> unit Lwt.t
 
 val on_device_added : (Hal_device.udi -> unit) -> OBus_signal.receiver Lwt.t
 val on_device_removed : (Hal_device.udi -> unit) -> OBus_signal.receiver Lwt.t
-val on_new_capability : (Hal_device.udi -> string -> unit) -> OBus_signal.receiver Lwt.t
-val on_global_interface_lock_acquired : (string -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
-val on_global_interface_lock_released : (string -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
+val on_new_capability : (Hal_device.udi * string -> unit) -> OBus_signal.receiver Lwt.t
+val on_global_interface_lock_acquired : (string * string * int -> unit) -> OBus_signal.receiver Lwt.t
+val on_global_interface_lock_released : (string * string * int -> unit) -> OBus_signal.receiver Lwt.t

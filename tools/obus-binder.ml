@@ -86,15 +86,15 @@ let print_proxy_implem sugar pp (name, content, annots) =
             (im_term_of_args ins)
     | Signal(name, args, annots) ->
         let args = match args with
-          | [] -> [unit]
-          | _ -> im_term_of_args args
+          | [] -> unit
+          | _ -> tuple (im_term_of_args args)
         in
         if sugar then
-          p "  let on_%a = on_signal %S << %a >>\n" plid name name
-            (print_func unit) args
+          p "  let on_%a = on_signal %S <:obus_type< %a >>\n" plid name name
+            (print_term true) args
         else
           p "  let on_%a = on_signal %S %a\n" plid name name
-            (print_func_no_sugar unit) args
+            (print_term_no_sugar false) args
     | Property(name, typ, access, annots) ->
         let access = match access with
           | Read -> "rd_only"
@@ -127,11 +127,11 @@ let print_service_implem_no_sugar pp (name, content, annots) =
           (if_term_of_args ins)
     | Signal(name, args, annots) ->
         let args = match args with
-          | [] -> [unit]
-          | _ -> im_term_of_args args
+          | [] -> unit
+          | _ -> tuple (im_term_of_args args)
         in
         p "  method %s = self#obus_emit_signal %S %a\n" (String.uncapitalize name) name
-          (print_func_no_sugar unit) args
+          (print_term_no_sugar false) args
     | Property(name, typ, access, annots) ->
         p "  val virtual mutable %s : %a\n"
           (String.uncapitalize name) (print_term true) (interf_term_of_single typ)
@@ -146,10 +146,10 @@ let print_service_implem_no_sugar pp (name, content, annots) =
           (String.uncapitalize name)
     | Signal(name, args, annots) ->
         let args = match args with
-          | [] -> [unit]
-          | _ -> im_term_of_args args
+          | [] -> unit
+          | _ -> tuple (im_term_of_args args)
         in
-        p "      md_signal %S %a\n" name (print_func_no_sugar unit) args
+        p "      md_signal %S %a\n" name (print_term_no_sugar false) args
     | Property(name, typ, access, annots) ->
         let n = String.uncapitalize name in
         p "      md_property_%s %S " (str_of_access access) name;
@@ -172,11 +172,11 @@ let print_service_implem_sugar pp (name, content, annots) =
           (if_term_of_args ins)
     | Signal(name, args, annots) ->
         let args = match args with
-          | [] -> [unit]
-          | _ -> if_term_of_args args
+          | [] -> unit
+          | _ -> tuple (if_term_of_args args)
         in
         p "  OBUS_signal %s : %a\n" name
-          (print_func unit) args
+          (print_term true) args
     | Property(name, typ, access, annots) ->
         p "  OBUS_val_%s mutable %s : %a\n" (match access with
                                                | Read -> "r"

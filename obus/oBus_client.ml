@@ -17,7 +17,7 @@ module type Interface = sig
   val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> t -> 'a
   val kcall : ((t -> 'b Lwt.t) -> 'c) -> string -> ('a, 'c, 'b) OBus_type.ty_function -> 'a
   val dcall : string -> t -> OBus_value.sequence -> OBus_value.sequence Lwt.t
-  val on_signal : ?global:bool -> string -> ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
+  val on_signal : ?global:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> t -> ('a -> unit) -> OBus_signal.receiver Lwt.t
   val don_signal : ?global:bool -> string -> t -> (OBus_value.sequence -> unit) -> OBus_signal.receiver Lwt.t
   val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
   val property : string -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> t -> ('a, 'b) OBus_property.t

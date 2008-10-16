@@ -354,8 +354,8 @@ struct
     obus_class_member:
       [ [ "OBUS_method"; name = a_ident; ":"; (args, reply) = ftyp ->
             `Method(String.uncapitalize name, name, args, reply)
-        | "OBUS_signal"; name = a_ident; ":"; (args, reply) = ftyp ->
-            `Signal(String.uncapitalize name, name, args, reply)
+        | "OBUS_signal"; name = a_ident; ":"; t = typ ->
+            `Signal(String.uncapitalize name, name, t)
         | "OBUS_val_r"; m = opt_mutable; name = a_ident; ":"; t = typ ->
             `Val_r(String.uncapitalize name, name, t, m)
         | "OBUS_val_w"; m = opt_mutable; name = a_ident; ":"; t = typ ->
@@ -464,8 +464,8 @@ struct
                     (List.map (function
                                  | `Method(cname, dname, args, reply) ->
                                      <:class_str_item< method virtual $lid:cname$ : $ctyp_of_fty (<:ctyp< $ctyp_of_ty reply$ Lwt.t >>) args$ >>
-                                 | `Signal(cname, dname, args, reply) ->
-                                     <:class_str_item< method $lid:cname$ = self#obus_emit $str:iface$ $str:dname$ $expr_of_fty reply args$ >>
+                                 | `Signal(cname, dname, t) ->
+                                     <:class_str_item< method $lid:cname$ = self#obus_emit $str:iface$ $str:dname$ $expr_of_ty t$ >>
                                  | `Val_r(cname, dname, ty, m)
                                  | `Val_w(cname, dname, ty, m)
                                  | `Val_rw(cname, dname, ty, m) ->
@@ -484,8 +484,8 @@ struct
                         (fun def acc -> match def with
                            | `Method(cname, dname, args, reply) ->
                                <:expr< OBus_object.md_method $str:dname$ $expr_of_fty reply args$ (fun _ -> self#$lid:cname$) :: $acc$ >>
-                           | `Signal(cname, dname, args, reply) ->
-                               <:expr< OBus_object.md_signal $str:dname$ $expr_of_fty reply args$ :: $acc$ >>
+                           | `Signal(cname, dname, t) ->
+                               <:expr< OBus_object.md_signal $str:dname$ $expr_of_ty t$ :: $acc$ >>
                            | `Val_r(cname, dname, ty, m) ->
                                <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> Lwt.return $lid:cname$) :: $acc$ >>
                            | `Val_w(cname, dname, ty, m) ->

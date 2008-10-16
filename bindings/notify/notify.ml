@@ -99,7 +99,7 @@ let assoc x l =
       Not_found -> None
 
 let setup_closed_handler =
-  lazy(on_signal ~global:false "NotificationClosed" << uint32 -> unit >>
+  lazy(on_signal ~global:false "NotificationClosed" <:obus_type< uint32 >>
         (fun n ->
            match assoc n !ids with
              | Some id ->
@@ -110,8 +110,8 @@ let setup_closed_handler =
              | None -> ()) >>= fun _ -> return ())
 
 let setup_actions_handler =
-  lazy(on_signal ~global:false "ActionInvoked" << uint32 -> string -> unit >>
-        (fun n key ->
+  lazy(on_signal ~global:false "ActionInvoked" <:obus_type< uint32 * string >>
+        (fun (n, key) ->
            match assoc n !ids with
              | Some id ->
                  id.id_deleted <- true;

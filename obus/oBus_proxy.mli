@@ -43,7 +43,7 @@ val dmethod_call : ?interface:OBus_name.Interface.t -> member:OBus_name.Member.t
   (** Send a method call with dynamically typed datas *)
 
 val on_signal : ?global:bool -> interface:OBus_name.Interface.t -> member:OBus_name.Member.t ->
-  ('a, unit, unit) OBus_type.ty_function -> t -> 'a -> OBus_signal.receiver Lwt.t
+  [< 'a OBus_type.cl_sequence ] -> t -> ('a -> unit) -> OBus_signal.receiver Lwt.t
   (** Connect a callback function to the given signal. It is possible
       to connect multiple functions to the same signal. *)
 

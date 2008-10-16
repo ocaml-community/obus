@@ -83,10 +83,10 @@ let reprobe = call "Reprobe" << bool >>
 let claim_interface = call "ClaimInterface" << string -> string -> bool >>
 let addon_is_ready = call "AddonIsReady" << bool >>
 
-let on_property_modified = on_signal "PropertyModified" << int -> [string * bool * bool] list -> unit >>
-let on_condition = on_signal "Condition" << string -> string -> unit >>
-let on_interface_lock_acquired = on_signal "InterfaceLockAcquired" << string -> string -> int -> unit >>
-let on_interface_lock_released = on_signal "InterfaceLockReleased" << string -> string -> int -> unit >>
+let on_property_modified = on_signal "PropertyModified" <:obus_type< int * [string * bool * bool] list >>
+let on_condition = on_signal "Condition" <:obus_type< string * string >>
+let on_interface_lock_acquired = on_signal "InterfaceLockAcquired" <:obus_type< string * string * int >>
+let on_interface_lock_released = on_signal "InterfaceLockReleased" <:obus_type< string * string * int >>
 
 module Volume = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.Volume" end)

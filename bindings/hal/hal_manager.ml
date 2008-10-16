@@ -49,8 +49,8 @@ let acquire_global_interface_lock = call "AcquireGlobalInterfaceLock" << string 
 let release_global_interface_lock = call "ReleaseGlobalInterfaceLock" << string -> unit >>
 let singleton_addon_is_ready = call "SingletonAddonIsReady" << string -> unit >>
 
-let on_device_added = on_signal "DeviceAdded" << broken_udi -> unit >>
-let on_device_removed = on_signal "DeviceRemoved" << broken_udi -> unit >>
-let on_new_capability = on_signal "NewCapability" << broken_udi -> string -> unit >>
-let on_global_interface_lock_acquired = on_signal "GlobalInterfaceLockAcquired" << string -> string -> int -> unit >>
-let on_global_interface_lock_released = on_signal "GlobalInterfaceLockReleased" << string -> string -> int -> unit >>
+let on_device_added = on_signal "DeviceAdded" <:obus_type< broken_udi >>
+let on_device_removed = on_signal "DeviceRemoved" <:obus_type< broken_udi >>
+let on_new_capability = on_signal "NewCapability" <:obus_type< broken_udi * string >>
+let on_global_interface_lock_acquired = on_signal "GlobalInterfaceLockAcquired" <:obus_type< string * string * int >>
+let on_global_interface_lock_released = on_signal "GlobalInterfaceLockReleased" <:obus_type< string * string * int >>

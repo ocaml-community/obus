@@ -71,11 +71,11 @@ let print_proxy_interf pp (name, content, annots) =
           (print_func (term "Lwt.t" [tuple (if_term_of_args  outs)]))
           (term "t" [] :: if_term_of_args ins)
     | Signal(name, args, annots) ->
-        p "  val on_%a : t -> (%a) -> OBus_signal.receiver Lwt.t\n" plid name
-          (print_func unit)
+        p "  val on_%a : t -> (%a -> unit) -> OBus_signal.receiver Lwt.t\n" plid name
+          (print_term true)
           (match args with
-             | [] -> [unit]
-             | _ -> if_term_of_args args)
+             | [] -> unit
+             | _ -> tuple (if_term_of_args args))
     | Property(name, typ, access, annots) ->
         p "  val %a : t -> %a\n" plid name
           (print_term true)

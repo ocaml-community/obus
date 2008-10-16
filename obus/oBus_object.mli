@@ -18,8 +18,8 @@
 
     {[
       OBUS_class iface "org.mydomain.iface" = object
-        method Foo : int -> int
-        signal bar : string -> unit
+        OBUS_method Foo : int -> int
+        OBUS_signal bar : string
       end
     ]}
 
@@ -59,8 +59,8 @@ type member_desc
   (** Describe an interface member *)
 
 class virtual interface : object
-  method virtual obus_emit_signal : 'a. OBus_name.Interface.t -> OBus_name.Member.t ->
-    ('a, unit Lwt.t, unit) OBus_type.ty_function -> 'a
+  method virtual obus_emit_signal : 'a 'b. OBus_name.Interface.t -> OBus_name.Member.t ->
+    ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     (** Emit a signal *)
 
   method virtual obus_add_interface : OBus_name.interface -> member_desc list -> unit
@@ -68,7 +68,7 @@ class virtual interface : object
 end
 
 val md_method : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> (unit -> 'a) -> member_desc
-val md_signal : OBus_name.member -> ('a, unit, unit) OBus_type.ty_function -> member_desc
+val md_signal : OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> member_desc
 val md_property_r : OBus_name.member -> [< 'a OBus_type.cl_single ] -> (unit -> 'a Lwt.t) -> member_desc
 val md_property_w : OBus_name.member -> [< 'a OBus_type.cl_single ] -> ('a -> unit Lwt.t) -> member_desc
 val md_property_rw : OBus_name.member -> [< 'a OBus_type.cl_single ] -> (unit -> 'a Lwt.t) -> ('a -> unit Lwt.t) -> member_desc
@@ -87,8 +87,8 @@ class t : object
   method getAll : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
     (** Object properties *)
 
-  method obus_emit_signal : 'a. OBus_name.Interface.t -> OBus_name.Member.t ->
-    ('a, unit Lwt.t, unit) OBus_type.ty_function -> 'a
+  method obus_emit_signal : 'a 'b. OBus_name.Interface.t -> OBus_name.Member.t ->
+    ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     (** Emit a signal *)
 
   method obus_add_interface : OBus_name.interface -> member_desc list -> unit

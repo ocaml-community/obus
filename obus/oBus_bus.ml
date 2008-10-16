@@ -94,9 +94,9 @@ let get_connection_selinux_security_context = call "GetConnectionSelinuxSecurity
 let reload_config = call "ReloadConfig" << unit >>
 let get_id = call "GetId" << OBus_uuid.t >>
 
-let on_name_owner_changed = on_signal "NameOwnerChanged" << string -> string -> string -> unit >>
-let on_name_lost = on_signal "NameLost" << string -> unit >>
-let on_name_acquired = on_signal "NameAcquired" << string -> unit >>
+let on_name_owner_changed = on_signal "NameOwnerChanged" <:obus_type< string * string * string >>
+let on_name_lost = on_signal "NameLost" <:obus_type< string >>
+let on_name_acquired = on_signal "NameAcquired" <:obus_type< string >>
 
 type status = [ `up | `down ]
 
@@ -110,5 +110,5 @@ let on_service_status_change bus service f = OBus_signal.add_receiver bus
   ~interface:"org.freedesktop.DBus"
   ~member:"NameOwnerChanged"
   ~args:[0, service]
-  << string -> string -> string -> unit >>
-  (fun _ o n -> f (status o, status n))
+  <:obus_type< string * string * string >>
+  (fun (_, o, n) -> f (status o, status n))

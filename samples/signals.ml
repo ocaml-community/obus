@@ -16,7 +16,7 @@ open Printf
    pressed *)
 let handle_multimedia_keys udi =
   Hal_device.on_condition udi
-    (fun action key ->
+    (fun (action, key) ->
        printf "from Hal: action %S on key %S!\n" action key;
        printf "          the signal come from the device %S\n%!" (OBus_path.to_string udi))
   >>= fun _ -> return ()
@@ -28,7 +28,8 @@ let main : unit Lwt.t =
     (*** Signals from Message bus ***)
 
     OBus_bus.on_name_owner_changed session
-      (printf "from DBus: the owner of the name %S changed: %S -> %S\n%!");
+      (fun (name, old_owner, new_owner) ->
+         printf "from DBus: the owner of the name %S changed: %S -> %S\n%!" name old_owner new_owner);
 
     OBus_bus.on_name_lost session
       (printf "from DBus: i lost the name %S!\n%!");

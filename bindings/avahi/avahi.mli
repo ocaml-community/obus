@@ -13,15 +13,15 @@
 module Address_resolver : sig
   type t
   val free : t -> unit Lwt.t
-  val on_found : t -> (int -> int -> int -> string -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_found : t -> (int * int * int * string * string * int -> unit) -> OBus_signal.receiver Lwt.t
   val on_failure : t -> (string -> unit) -> OBus_signal.receiver Lwt.t
 end
 
 module Domain_browser : sig
   type t
   val free : t -> unit Lwt.t
-  val on_item_new : t -> (int -> int -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
-  val on_item_remove : t -> (int -> int -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_item_new : t -> (int * int * string * int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_item_remove : t -> (int * int * string * int -> unit) -> OBus_signal.receiver Lwt.t
   val on_failure : t -> (string -> unit) -> OBus_signal.receiver Lwt.t
   val on_all_for_now : t -> (unit -> unit) -> OBus_signal.receiver Lwt.t
   val on_cache_exhausted : t -> (unit -> unit) -> OBus_signal.receiver Lwt.t
@@ -33,7 +33,7 @@ module Entry_group : sig
   val commit : t -> unit Lwt.t
   val reset : t -> unit Lwt.t
   val get_state : t -> int Lwt.t
-  val on_state_changed : t -> (int -> string -> unit) -> OBus_signal.receiver Lwt.t
+  val on_state_changed : t -> (int * string -> unit) -> OBus_signal.receiver Lwt.t
   val is_empty : t -> bool Lwt.t
   val add_service : t -> int -> int -> int -> string -> string -> string -> string -> int -> char list list -> unit Lwt.t
   val add_service_subtype : t -> int -> int -> int -> string -> string -> string -> string -> unit Lwt.t
@@ -45,15 +45,15 @@ end
 module Host_name_resolver : sig
   type t
   val free : t -> unit Lwt.t
-  val on_found : t -> (int -> int -> string -> int -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_found : t -> (int * int * string * int * string * int -> unit) -> OBus_signal.receiver Lwt.t
   val on_failure : t -> (string -> unit) -> OBus_signal.receiver Lwt.t
 end
 
 module Record_browser : sig
   type t
   val free : t -> unit Lwt.t
-  val on_item_new : t -> (int -> int -> string -> int -> int -> char list -> int -> unit) -> OBus_signal.receiver Lwt.t
-  val on_item_remove : t -> (int -> int -> string -> int -> int -> char list -> int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_item_new : t -> (int * int * string * int * int * char list * int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_item_remove : t -> (int * int * string * int * int * char list * int -> unit) -> OBus_signal.receiver Lwt.t
   val on_failure : t -> (string -> unit) -> OBus_signal.receiver Lwt.t
   val on_all_for_now : t -> (unit -> unit) -> OBus_signal.receiver Lwt.t
   val on_cache_exhausted : t -> (unit -> unit) -> OBus_signal.receiver Lwt.t
@@ -62,8 +62,8 @@ end
 module Service_browser : sig
   type t
   val free : t -> unit Lwt.t
-  val on_item_new : t -> (int -> int -> string -> string -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
-  val on_item_remove : t -> (int -> int -> string -> string -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_item_new : t -> (int * int * string * string * string * int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_item_remove : t -> (int * int * string * string * string * int -> unit) -> OBus_signal.receiver Lwt.t
   val on_failure : t -> (string -> unit) -> OBus_signal.receiver Lwt.t
   val on_all_for_now : t -> (unit -> unit) -> OBus_signal.receiver Lwt.t
   val on_cache_exhausted : t -> (unit -> unit) -> OBus_signal.receiver Lwt.t
@@ -72,15 +72,15 @@ end
 module Service_resolver : sig
   type t
   val free : t -> unit Lwt.t
-  val on_found : t -> (int -> int -> string -> string -> string -> string -> int -> string -> int -> char list list -> int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_found : t -> (int * int * string * string * string * string * int * string * int * char list list * int -> unit) -> OBus_signal.receiver Lwt.t
   val on_failure : t -> (string -> unit) -> OBus_signal.receiver Lwt.t
 end
 
 module Service_type_browser : sig
   type t
   val free : t -> unit Lwt.t
-  val on_item_new : t -> (int -> int -> string -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
-  val on_item_remove : t -> (int -> int -> string -> string -> int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_item_new : t -> (int * int * string * string * int -> unit) -> OBus_signal.receiver Lwt.t
+  val on_item_remove : t -> (int * int * string * string * int -> unit) -> OBus_signal.receiver Lwt.t
   val on_failure : t -> (string -> unit) -> OBus_signal.receiver Lwt.t
   val on_all_for_now : t -> (unit -> unit) -> OBus_signal.receiver Lwt.t
   val on_cache_exhausted : t -> (unit -> unit) -> OBus_signal.receiver Lwt.t
@@ -95,7 +95,7 @@ module Server : sig
   val get_domain_name : unit -> string Lwt.t
   val is_nsssupport_available : unit -> bool Lwt.t
   val get_state : unit -> int Lwt.t
-  val on_state_changed : (int -> string -> unit) -> OBus_signal.receiver Lwt.t
+  val on_state_changed : (int * string -> unit) -> OBus_signal.receiver Lwt.t
   val get_local_service_cookie : unit -> int Lwt.t
   val get_alternative_host_name : string -> string Lwt.t
   val get_alternative_service_name : string -> string Lwt.t
