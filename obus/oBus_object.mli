@@ -76,6 +76,10 @@ val md_property_rw : OBus_name.member -> [< 'a OBus_type.cl_single ] -> (unit ->
 (** {6 Objects} *)
 
 class t : object
+  method obus_path : OBus_path.t
+    (** Object path of the object. By default it is computed from its
+        object id. *)
+
   method obus_handle_call : OBus_connection.t -> OBus_message.method_call -> unit
     (** Handle a method call *)
 
@@ -94,9 +98,8 @@ class t : object
   method obus_add_interface : OBus_name.interface -> member_desc list -> unit
     (** Add the given interface, for introspection *)
 
-  method obus_export : OBus_connection.t -> OBus_path.t -> unit
-    (** [obus_export connection path] export the object on
-        [connection], with path [path] *)
+  method obus_export : OBus_connection.t -> unit
+    (** [obus_export connection] export the object on [connection]. *)
 
   method obus_remove : OBus_connection.t -> unit
     (** [obus_remove connection] remove the object from

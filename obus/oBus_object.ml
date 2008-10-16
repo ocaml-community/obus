@@ -106,6 +106,8 @@ class t = object(self)
   inherit introspectable
   inherit properties
 
+  method obus_path = ["ocaml_object"; string_of_int (Oo.id self)]
+
   method introspect = return (interfaces, [])
 
   method get iface name =
@@ -159,26 +161,29 @@ class t = object(self)
       | None -> ignore_result (send_exn connection message (unknown_method_exn message))
 
   method obus_emit_signal interface member typ x =
-    let body = make_sequence typ x in
+    let body = make_sequence typ x
+    and path = self#obus_path in
     Lwt_util.iter
-      (fun (connection, path) ->
+      (fun connection ->
          demit_signal connection ~interface ~member ~path body)
       exports
 
-  method obus_export connection path =
-    with_running connection & fun running ->
-      running.exported_objects <- Object_map.add path (self :> dbus_object) running.exported_objects;
-      exports <- (connection, path) :: exports
+  method obus_export connection =
+    with_running connection
+      (fun running ->
+         running.exported_objects <- Object_map.add (self#obus_path) (self :> dbus_object) running.exported_objects;
+         exports <- connection :: exports)
 
-  method obus_remove connection = match Util.assq connection exports with
-    | Some path -> begin
-        exports <- List.remove_assq connection exports;
+  method obus_remove connection = match List.memq connection exports with
+    | true -> begin
+        exports <- List.filter ((!=) connection) exports;
         with_running connection
           (fun running ->
+             let path = self#obus_path in
              match Object_map.lookup path running.exported_objects with
                | Some obj' when (self :> dbus_object) = obj' ->
                    running.exported_objects <- Object_map.remove path running.exported_objects
                | _ -> ())
       end
-    | None -> ()
+    | false -> ()
 end

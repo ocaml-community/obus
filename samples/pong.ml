@@ -20,6 +20,8 @@ let obj = object(self)
   inherit OBus_object.t
   inherit pong
 
+  method obus_path = [ "plip" ]
+
   method ping m = return ("pong in reply to: " ^ m)
 end
 
@@ -30,8 +32,8 @@ let _ = Lwt_unix.run
      (* Request a name *)
      OBus_bus.request_name bus "org.plop" [];
 
-     (* Expose the object on the connection *)
-     let _ = obj#obus_export bus ["plip"] in
+     (* Export the object on the connection *)
+     let _ = obj#obus_export bus in
 
      (* Wait forever *)
      wait ())

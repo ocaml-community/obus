@@ -87,6 +87,7 @@ type 'a handler = 'a -> unit
 
 type dbus_object = <
   obus_handle_call : connection -> method_call -> unit;
+  obus_remove : connection -> unit;
 >
 
 and running_connection = {

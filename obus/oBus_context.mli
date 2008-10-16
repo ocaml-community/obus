@@ -41,9 +41,7 @@ val destination : t -> OBus_name.connection option
   (** Name used to contact us *)
 
 val path : t -> OBus_path.t
-  (** Path used to access to the object. Since an object can be
-      exported on different connection, with different path, it may
-      vary. *)
+  (** Path used to access to the object *)
 
 val interface : t -> OBus_name.interface option
   (** Interface used to access the method *)

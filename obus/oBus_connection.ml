@@ -64,6 +64,8 @@ let set_crash connection exn = match !connection with
   | Running running ->
       connection := Crashed exn;
       remove_connection_of_guid_map running;
+      (* Remove all objects *)
+      Object_map.iter (fun p obj -> obj#obus_remove connection) running.exported_objects;
       (* Abort the transport so the dispatcher will exit *)
       running.transport#abort exn;
       (* Wakeup all reply handlers so they will not wait forever *)
