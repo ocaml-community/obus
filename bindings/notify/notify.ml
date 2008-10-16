@@ -47,13 +47,14 @@ OBUS_flag closed_reason : uint =
     | 3 -> `closed_explicitly
     | 4 -> `undefined ]
 
-type id = {
+type id_desc = {
   id_id : int32;
   mutable id_deleted : bool;
-  id_actions : (string * (unit -> unit)) list;
-  id_on_close : (unit -> unit) option;
-  id_wakeup : (unit -> unit) option;
+  id_on_action : string -> unit;
+  id_on_closed : unit -> unit;
 }
+
+type 'a id = id_desc * 'a Lwt.t
 
 let ids = ref []
 
@@ -78,17 +79,13 @@ let desktop_entry = ref None
 
 open Lwt
 
-let call_func = function
-  | Some f -> f ()
-  | None -> ()
-
 let get_server_information = call "GetServerInformation" << unit -> server_info >>
 let get_capabilities = call "GetCapabilities" << unit -> string list >>
-let close_notification id =
+let close_notification (id, w) =
   if not id.id_deleted then begin
     id.id_deleted <- true;
     ids := List.remove_assoc id.id_id !ids;
-    call_func id.id_wakeup;
+    id.id_on_closed ();
     call "CloseNotification" << uint32 -> unit >> id.id_id
   end else return ()
 
@@ -105,8 +102,7 @@ let setup_closed_handler =
              | Some id ->
                  id.id_deleted <- true;
                  ids := List.remove_assoc n !ids;
-                 call_func id.id_on_close;
-                 call_func id.id_wakeup
+                 id.id_on_closed ()
              | None -> ()) >>= fun _ -> return ())
 
 let setup_actions_handler =
@@ -116,10 +112,7 @@ let setup_actions_handler =
              | Some id ->
                  id.id_deleted <- true;
                  ids := List.remove_assoc n !ids;
-                 (match assoc key id.id_actions with
-                    | Some f -> f ()
-                    | None -> ());
-                 call_func id.id_wakeup
+                 id.id_on_action key
              | None -> ()) >>= fun _ -> return ())
 
 (* Survive to replacement/crash of the notification daemon *)
@@ -128,13 +121,15 @@ let setup_monitor_daemon =
          bus <-- Lazy.force OBus_bus.session;
          OBus_bus.on_service_status_change bus "org.freedesktop.Notifications"
            (fun _ ->
-              List.iter (fun (_, id) -> call_func id.id_wakeup) !ids;
+              List.iter (fun (_, id) -> id.id_on_closed ()) !ids;
               ids := []);
          return ())
 
+let result (id, w) = w
+
 let notify ?(app_name= !app_name) ?desktop_entry
     ?replace ?(icon="") ?image ~summary ?(body="") ?(actions=[])
-    ?urgency ?category ?sound_file ?suppress_sound ?pos ?(hints=[]) ?(timeout= -1) ?on_close ?wakeup () =
+    ?urgency ?category ?sound_file ?suppress_sound ?pos ?(hints=[]) ?(timeout= -1) () =
 
   (*** Creation of hints ***)
   let desktop_entry = match desktop_entry with
@@ -159,44 +154,34 @@ let notify ?(app_name= !app_name) ?desktop_entry
   (*** Handling of actions ***)
   let _, actions_list, actions_map =
     List.fold_right
-      (fun (text, func) (acc, al, am) ->
+      (fun (text, user_key) (acc, al, am) ->
          (* For each action, generate a key and associate it to the
             given function *)
          let key = Printf.sprintf "key%d" acc in
-         (acc + 1, key :: text :: al, (key, func) :: am))
+         (acc + 1, key :: text :: al, (key, user_key) :: am))
       actions (0, [], []) in
 
   perform
-    (* Setup signal handlers only if needed *)
-
-    if wakeup <> None || on_close <> None || actions <> []
-    then
-      (perform
-         Lazy.force setup_closed_handler;
-         Lazy.force setup_monitor_daemon)
-    else return ();
-
-    if actions <> []
-    then Lazy.force setup_actions_handler
-    else return ();
+    (* Setup handlers the first time we open a notification *)
+    Lazy.force setup_closed_handler;
+    Lazy.force setup_monitor_daemon;
+    Lazy.force setup_actions_handler;
 
     (* Create the notification *)
     n <-- call "Notify" << string -> uint32 -> string -> string -> string -> string list -> hint list -> int -> uint32 >>
       app_name (match replace with
-                  | Some id -> id.id_id
+                  | Some (id, w) -> id.id_id
                   | None -> 0l)
       icon summary body actions_list hints timeout;
 
+    let w = wait () in
     let id = { id_id = n;
                id_deleted = false;
-               id_actions = actions_map;
-               id_on_close = on_close;
-               id_wakeup = wakeup } in
+               id_on_action = (fun action -> match assoc action actions_map with
+                                 | Some k -> wakeup w k
+                                 | None -> wakeup w `Closed);
+               id_on_closed = (fun _ -> wakeup w `Closed) } in
 
-    (* Register the handlers if needed *)
-    let _ =
-      if wakeup <> None || on_close <> None || actions <> []
-      then ids := (n, id) :: !ids
-    in
+    let _ = ids := (n, id) :: !ids in
 
-    return id
+    return (id, w)

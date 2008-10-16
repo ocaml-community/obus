@@ -59,7 +59,7 @@ type member_desc
   (** Describe an interface member *)
 
 class virtual interface : object
-  method virtual obus_emit_signal : 'a 'b. OBus_name.Interface.t -> OBus_name.Member.t ->
+  method virtual obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->
     ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     (** Emit a signal *)
 
@@ -87,7 +87,7 @@ class t : object
   method getAll : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
     (** Object properties *)
 
-  method obus_emit_signal : 'a 'b. OBus_name.Interface.t -> OBus_name.Member.t ->
+  method obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->
     ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     (** Emit a signal *)
 

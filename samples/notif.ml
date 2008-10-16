@@ -8,24 +8,24 @@
  *)
 
 open Lwt
-open Notify
 
 let main =
   (perform
-     notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" ();
+     Notify.notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" ();
      Lwt_unix.sleep 0.5;
 
-     let w = wait () in
-
-     notify ~summary:"Actions test" ~body:"click on something!"
+     id <-- Notify.notify ~summary:"Actions test" ~body:"click on something!"
        ~category:"network"
-       ~actions:[("coucou", fun _ -> print_endline "You pressed coucou!");
-                 ("plop", fun _ -> print_endline "You pressed plop!")]
-       ~on_close:(fun _ -> print_endline "popup closed")
-       ~wakeup:(wakeup w) ();
+       ~actions:[("coucou", `Coucou);
+                 ("plop", `Plop)] ();
 
-     (* Wait for the notification to be closed *)
-     w;
+     result <-- Notify.result id;
+
+     let _ = match result with
+       | `Coucou -> print_endline "You pressed coucou!"
+       | `Plop -> print_endline "You pressed plop!"
+       | `Closed -> print_endline "notification closed"
+     in
 
      return ())
 
