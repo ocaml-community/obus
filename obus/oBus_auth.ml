@@ -131,10 +131,13 @@ let client_mech_anonymous = ("ANONYMOUS", fun _ -> new client_mech_anonymous_han
 let client_mech_dbus_cookie_sha1 = ("DBUS_COOKIE_SHA1", fun _ -> new client_mech_dbus_cookie_sha1_handler)
 
 let default_client_mechanisms = [client_mech_external;
-                                 client_mech_anonymous;
-                                 client_mech_dbus_cookie_sha1]
+                                 client_mech_dbus_cookie_sha1;
+                                 client_mech_anonymous]
 
 (***** Predefined server mechanisms *****)
+
+(* This two mechanisms do not work since we need to get credentials
+   which are not available in ocaml.
 
 class server_mech_external_handler = object
   inherit server_mechanism_handler
@@ -145,6 +148,7 @@ class server_mech_anonymous_handler = object
   inherit server_mechanism_handler
   method data _ = return Server_mech_ok
 end
+*)
 
 let call f on_error =
   try
@@ -284,8 +288,10 @@ class server_mech_dbus_cookie_sha1_handler = object
   method abort = ()
 end
 
+(*
 let server_mech_external = ("EXTERNAL", fun _ -> new server_mech_external_handler)
 let server_mech_anonymous = ("ANONYMOUS", fun _ -> new server_mech_anonymous_handler)
+*)
 let server_mech_dbus_cookie_sha1 = ("DBUS_COOKIE_SHA1", fun _ -> new server_mech_dbus_cookie_sha1_handler)
 
 let default_server_mechanisms = [server_mech_dbus_cookie_sha1]

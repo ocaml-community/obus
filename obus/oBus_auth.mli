@@ -72,8 +72,6 @@ end
 
 type server_mechanism = string * (unit -> server_mechanism_handler)
 
-val server_mech_external : server_mechanism
-val server_mech_anonymous : server_mechanism
 val server_mech_dbus_cookie_sha1 : server_mechanism
 val default_server_mechanisms : server_mechanism list
 
