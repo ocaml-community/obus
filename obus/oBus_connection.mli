@@ -145,8 +145,10 @@ val send_error : t -> OBus_message.method_call -> OBus_error.name -> OBus_error.
 val send_exn : t -> OBus_message.method_call -> exn -> unit Lwt.t
   (** [send_exn connection method_call exn] is a short-hand for
       passing [exn] through [OBus_error.unmake] then calling
-      [send_error]. It raise an [Invalid_argument] if the exception is
-      not registred as a DBus exception. *)
+      [send_error].
+
+      It send the exception an {!OBus_error.Failed} if the exception
+      is not registred as a DBus exception. *)
 
 val call_and_cast_reply : ('a, 'b, 'c) OBus_type.ty_function ->
   (OBus_message.body -> (t -> OBus_message.method_call -> 'c Lwt.t) -> 'b) -> 'a

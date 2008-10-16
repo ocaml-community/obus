@@ -215,8 +215,8 @@ let send_exn connection method_call exn =
     | Some(name, msg) ->
         send_error connection method_call name msg
     | None ->
-        raise (Invalid_argument
-                 (sprintf "not a DBus error: %s" (Printexc.to_string exn)))
+        send_error connection method_call "org.freedesktop.DBus.Error.Failed"
+          (sprintf "uncaught ocaml exception: %s" (Printexc.to_string exn))
 
 (***** Signals and filters *****)
 
@@ -267,16 +267,7 @@ let find_reply_handler running serial f g =
 let ignore_send_exn connection method_call exn = ignore_result (send_exn connection method_call exn)
 
 let unknown_method connection message =
-  let `Method_call(path, interface_opt, member) = message.typ in
-  match interface_opt with
-    | Some interface ->
-        ignore_send_exn connection message & OBus_error.Unknown_method
-          (sprintf "Method %S with signature %S on interface %S doesn't exist"
-             member (string_of_signature (type_of_sequence message.body)) interface)
-    | None ->
-        ignore_send_exn connection message & OBus_error.Unknown_method
-          (sprintf "Method %S with signature %S doesn't exist"
-             member (string_of_signature (type_of_sequence message.body)))
+  ignore_send_exn connection message (unknown_method_exn message)
 
 let dispatch_message connection running message =
   (* First of all, pass the message through all filters *)
@@ -337,71 +328,7 @@ let dispatch_message connection running message =
         match Object_map.lookup path running.exported_objects with
           | None ->
               ignore_send_exn connection message & OBus_error.Failed (sprintf "No such object: %S" (OBus_path.to_string path))
-          | Some obj -> match obj#handle_call connection message with
-              | false -> ()
-              | true -> ()
-
-(*
-    (* Method calls with interface fields, the easy case, we just
-       ensure that the sender always get a reply. *)
-    | { typ = `Method_call(path, Some(interface), member) } as header ->
-        begin match Interf_map.lookup interface running.service_handlers with
-          | None ->
-              ignore_send_exn connection header & OBus_error.Unknown_method (sprintf "No such interface: %S" interface)
-          | Some handler -> match handler header signature with
-              | Mchr_no_such_method ->
-                  ignore_send_exn connection header & OBus_error.Unknown_method
-                    (sprintf "Method %S with signature %S on interface %S doesn't exist"
-                       member (string_of_signature signature) interface)
-              | Mchr_no_such_object ->
-                  ignore_send_exn connection header & OBus_error.Failed (sprintf "No such object: %S" path)
-              | Mchr_ok f -> f context body_ptr
-        end
-    (* Method calls with interface fields, the easy case, we just
-       ensure that the sender always get a reply. *)
-    | { typ = `Method_call(path, Some(interface), member) } as header ->
-        begin match Interf_map.lookup interface running.service_handlers with
-          | None ->
-              ignore_send_exn connection header & OBus_error.Unknown_method (sprintf "No such interface: %S" interface)
-          | Some handler -> match handler header signature with
-              | Mchr_no_such_method ->
-                  ignore_send_exn connection header & OBus_error.Unknown_method
-                    (sprintf "Method %S with signature %S on interface %S doesn't exist"
-                       member (string_of_signature signature) interface)
-              | Mchr_no_such_object ->
-                  ignore_send_exn connection header & OBus_error.Failed (sprintf "No such object: %S" path)
-              | Mchr_ok f -> f context body_ptr
-        end
-
-    (* Method calls without interface fields. We try every
-       interfaces. This implementation choose to send an error if
-       two interfaces have the same method with the same signature
-       for an object *)
-    | { typ = `Method_call(path, None, member) } as header ->
-        begin
-          match
-            Interf_map.fold begin fun interface handler acc ->
-              match handler header signature with
-                | Mchr_no_such_method
-                | Mchr_no_such_object -> acc
-                | Mchr_ok f -> (f, interface) :: acc
-            end running.service_handlers []
-          with
-            | [] ->
-                ignore_send_exn connection header & OBus_error.Unknown_method
-                  (sprintf
-                     "No interface have a method %S with signature %S on object %S"
-                     member (string_of_signature signature) path)
-            | [(f, interface)] -> f context body_ptr
-            | l ->
-                ignore_send_exn connection header & OBus_error.Failed
-                  (sprintf
-                     "Ambiguous choice for method %S with signature %S on object %S. \
-                          The following interfaces have this method: \"%s\""
-                     member (string_of_signature signature) path
-                     (String.concat "\", \"" (List.map snd l)))
-        end
-*)
+          | Some obj -> obj#obus_handle_call connection message
 
 let default_on_disconnect exn =
   begin match exn with

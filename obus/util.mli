@@ -13,6 +13,9 @@
 val assoc : 'a -> ('a * 'b) list -> 'b option
   (** Same as List.assoc but return an option *)
 
+val assq : 'a -> ('a * 'b) list -> 'b option
+  (** Same as List.assq but return an option *)
+
 val find_map : ('a -> 'b option) -> 'a list -> 'b option
   (** [find_map f l] Apply [f] on each element of [l] until it return
       [Some x] and return that result or return [None] *)

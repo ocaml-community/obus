@@ -11,20 +11,16 @@
 
 open Lwt
 open OBus_type
-open OBus_value
-open OBus_introspect
 
+OBUS_class pong "org.plop.foo" = object
+  OBUS_method ping : string -> string
+end
 
-let obj = object
-  method path = [ "plip" ]
+let obj = object(self)
+  inherit OBus_object.t
+  inherit pong
 
-  method handle_call connection msg =
-    let `Method_call(path, interface, member) = OBus_message.typ msg in
-    match interface, member, OBus_message.body msg with
-      | Some "org.plop.foo", "ping", [Basic(String m)] ->
-          Lwt.ignore_result (OBus_connection.dsend_reply connection msg [vbasic(String("pong in reply to: " ^ m))]);
-          true
-      | _ -> false
+  method ping m = return ("pong in reply to: " ^ m)
 end
 
 let _ = Lwt_unix.run
@@ -35,7 +31,7 @@ let _ = Lwt_unix.run
      OBus_bus.request_name bus "org.plop" [];
 
      (* Expose the object on the connection *)
-     let _ = OBus_object.expose bus obj in
+     let _ = obj#obus_export bus ["plip"] in
 
      (* Wait forever *)
      wait ())

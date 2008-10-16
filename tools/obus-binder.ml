@@ -110,14 +110,19 @@ let print_proxy_implem sugar pp (name, content, annots) =
   end content;
   p "end\n"
 
+let str_of_access = function
+  | Read -> "r"
+  | Write -> "w"
+  | Read_write -> "rw"
+
 (***** Printing of service code *****)
 let print_service_implem_no_sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
-  p "class virtual %a = object\n" puid name;
+  p "class virtual %a = object(self)\n" plid name;
   p "  inherit OBus_object.interface\n";
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        p "  method virtual %a : %a\n" plid name
+        p "  method virtual %s : %a\n" (String.uncapitalize name)
           (print_func (tuple (if_term_of_args  outs)))
           (if_term_of_args ins)
     | Signal(name, args, annots) ->
@@ -125,29 +130,59 @@ let print_service_implem_no_sugar pp (name, content, annots) =
           | [] -> [unit]
           | _ -> im_term_of_args args
         in
-        p "  method %a = signal %S %a\n" plid name name
+        p "  method %s = self#obus_emit_signal %S %a\n" (String.uncapitalize name) name
           (print_func_no_sugar unit) args
-    | Property(name, typ, access, annots) -> ()
+    | Property(name, typ, access, annots) ->
+        p "  val virtual mutable %s : %a\n"
+          (String.uncapitalize name) (print_term true) (interf_term_of_single typ)
   end content;
+  p "  initializer\n";
+  p "    self#obus_add_interface %S [\n" name;
+  List.iter begin function
+    | Method(name, ins, outs, annots) ->
+        p "      md_method %S %a (fun _ -> self#%s)\n" name
+          (print_func_no_sugar (tuple (im_term_of_args  outs)))
+          (im_term_of_args ins)
+          (String.uncapitalize name)
+    | Signal(name, args, annots) ->
+        let args = match args with
+          | [] -> [unit]
+          | _ -> im_term_of_args args
+        in
+        p "      md_signal %S %a\n" name (print_func_no_sugar unit) args
+    | Property(name, typ, access, annots) ->
+        let n = String.uncapitalize name in
+        p "      md_property_%s %S " (str_of_access access) name;
+        begin match access with
+          | Read -> p "(fun _ -> %s)\n" n
+          | Write -> p "(fun _%s -> %s <- _%s)\n" n n n
+          | Read_write -> p "(fun _ -> %s) (fun _%s -> %s <- _%s)\n" n n n n
+        end
+  end content;
+  p "    ]\n";
   p "end\n"
 
 let print_service_implem_sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
-  p "class virtual %a = object\n" puid name;
-  p "  inherit OBus_object.interface\n";
+  p "OBUS_class %a %S = object\n" plid name name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        p "  method virtual %a : %a\n" plid name
+        p "  OBUS_method %s : %a\n" name
           (print_func (tuple (if_term_of_args  outs)))
           (if_term_of_args ins)
     | Signal(name, args, annots) ->
         let args = match args with
           | [] -> [unit]
-          | _ -> im_term_of_args args
+          | _ -> if_term_of_args args
         in
-        p "  method %a = signal %S << %a >>\n" plid name name
+        p "  OBUS_signal %s : %a\n" name
           (print_func unit) args
-    | Property(name, typ, access, annots) -> ()
+    | Property(name, typ, access, annots) ->
+        p "  OBUS_val_%s mutable %s : %a\n" (match access with
+                                               | Read -> "r"
+                                               | Write -> "w"
+                                               | Read_write -> "rw")
+          name (print_term true) (interf_term_of_single typ)
   end content;
   p "end\n"
 
@@ -183,4 +218,5 @@ let _ =
   with_pp (output_file_prefix ^ ".ml")
     (fun pp ->
        Format.fprintf pp "open OBus_type\n";
+       if !service_mode && !no_sugar then Format.fprintf pp "open OBus_object\n";
        Interf_set.iter (printer pp) interfaces)

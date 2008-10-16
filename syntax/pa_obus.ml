@@ -83,7 +83,6 @@ struct
     | Tuple of Loc.t * ty list
     | Tdict_entry of Loc.t * ty * ty
     | Tvar of Loc.t * string
-    | Tanti of Loc.t * Ast.expr
 
   let tuple _loc = function
     | [t] -> t
@@ -98,7 +97,6 @@ struct
     | Tuple(l, _) -> l
     | Tdict_entry(l, _, _) -> l
     | Tvar(l, _) -> l
-    | Tanti(l, _) -> l
 
   (***** obus type --> caml type *****)
 
@@ -113,7 +111,10 @@ struct
     | Tuple(_loc, l) -> Ast.TyTup(_loc, Ast.tySta_of_list (List.map ctyp_of_ty l))
     | Tdict_entry(_loc, a, b) -> <:ctyp< ($ctyp_of_ty a$ * $ctyp_of_ty b$) >>
     | Tvar(_loc, v) -> <:ctyp< '$v$ >>
-    | Tanti(_loc, e) -> Loc.raise _loc (Stream.Error "antiquotation not allowed here")
+
+  let rec ctyp_of_fty reply = function
+    | [] -> reply
+    | t :: l -> let _loc = loc_of_ty t in <:ctyp< $ctyp_of_ty t$ -> $ctyp_of_fty reply l$ >>
 
   (***** obus type --> expression *****)
 
@@ -158,13 +159,12 @@ struct
     | Tuple(_loc, l) -> make_tuple _loc (List.map expr_of_ty l)
     | Tdict_entry(_loc, a, b) -> <:expr< OBus_type.tdict_entry $expr_of_ty a$ $expr_of_ty b$ >>
     | Tvar(_loc, v) -> <:expr< $lid:v$ >>
-    | Tanti(_loc, e) -> e
+
+  let rec expr_of_fty reply = function
+    | [] -> let _loc = loc_of_ty reply in <:expr< OBus_type.reply $expr_of_ty reply$ >>
+    | t :: l -> let _loc = loc_of_ty t in <:expr< OBus_type.abstract $expr_of_ty t$ $expr_of_fty reply l$ >>
 
   (***** type combinator quotations *****)
-
-  let expr_of_string loc str = Gram.parse_string expr_eoi loc str
-
-  let _ = Camlp4_config.antiquotations := true
 
   let typ = Gram.Entry.mk "obus type"
   let typ_eoi = Gram.Entry.mk "obus type quotation"
@@ -186,7 +186,6 @@ struct
         [ "'"; i = a_LIDENT -> Tvar(_loc, i)
         | i = a_LIDENT -> Tlid(_loc, i)
         | i = a_UIDENT -> Tuid(_loc, i)
-        | `ANTIQUOT((""|"ty"), a) -> Tanti(_loc, expr_of_string _loc a)
         | "("; t = SELF; ","; mk = comma_typ_app; ")"; i = typ LEVEL "typ2" -> mk (Tapp(_loc, i, t))
         | "("; t = SELF; ")" -> t
         | "["; tl = struct_typ ; "]" -> Tstruct(_loc, tuple _loc tl)
@@ -199,8 +198,7 @@ struct
         ] ];
 
     star_typ:
-      [ [ `ANTIQUOT((""|"ty"), a) -> [Tanti(_loc, expr_of_string _loc a)]
-        | t1 = typ LEVEL "typ1"; "*"; t2 = SELF -> t1 :: t2
+      [ [ t1 = typ LEVEL "typ1"; "*"; t2 = SELF -> t1 :: t2
         | t = typ LEVEL "typ1" -> [t]
         ] ];
 
@@ -213,12 +211,11 @@ struct
       [ [ t = typ; `EOI -> expr_of_ty t ] ];
 
     ftyp:
-      [ [ `ANTIQUOT("func", a) -> expr_of_string _loc a
-        | t1 = typ; "->"; t2 = SELF -> <:expr< OBus_type.abstract $expr_of_ty t1$ $t2$ >>
-        | t = typ -> <:expr< OBus_type.reply $expr_of_ty t$ >> ] ];
+      [ [ t = typ; "->"; (tl, reply) = SELF -> (t :: tl, reply)
+        | t = typ -> ([], t) ] ];
 
     ftyp_eoi:
-      [ [ t = ftyp; `EOI -> t ] ];
+      [ [ (args, reply) = ftyp; `EOI -> expr_of_fty reply args ] ];
   END
 
   let expand_typ loc _loc_name_opt quotation_contents =
@@ -320,7 +317,7 @@ struct
     >>
 
   EXTEND Gram
-    GLOBAL:expr str_item;
+    GLOBAL:str_item;
 
     (*** Parsing of module implementation with obus annotations ***)
 
@@ -353,6 +350,30 @@ struct
       [ [ (n, tpl) = type_ident_and_parameters; "="; "{"; fields = obus_record_fields; "}" ->
             (n, tpl, fields)
         ] ];
+
+    obus_class_member:
+      [ [ "OBUS_method"; name = a_ident; ":"; (args, reply) = ftyp ->
+            `Method(String.uncapitalize name, name, args, reply)
+        | "OBUS_signal"; name = a_ident; ":"; (args, reply) = ftyp ->
+            `Signal(String.uncapitalize name, name, args, reply)
+        | "OBUS_val_r"; m = opt_mutable; name = a_ident; ":"; t = typ ->
+            `Val_r(String.uncapitalize name, name, t, m)
+        | "OBUS_val_w"; m = opt_mutable; name = a_ident; ":"; t = typ ->
+            `Val_w(String.uncapitalize name, name, t, m)
+        | "OBUS_val_rw"; m = opt_mutable; name = a_ident; ":"; t = typ ->
+            `Val_rw(String.uncapitalize name, name, t, m)
+        | "OBUS_property_r"; name = a_ident; ":"; t = typ ->
+            `Prop_r(String.uncapitalize name, name, t)
+        | "OBUS_property_w"; name = a_ident; ":"; t = typ ->
+            `Prop_w(String.uncapitalize name, name, t)
+        | "OBUS_property_rw"; name = a_ident; ":"; t = typ ->
+            `Prop_rw(String.uncapitalize name, name, t) ] ];
+
+    obus_class_members:
+      [ [ -> []
+        | a = obus_class_member; b = obus_class_members -> a :: b
+        | a = obus_class_member; ";"; b = obus_class_members -> a :: b
+        | a = obus_class_member; ";;"; b = obus_class_members -> a :: b ] ];
 
     str_item:
       [ [ "OBUS_bitwise"; name = a_LIDENT; ":"; key_typ = typ; "="; (vrntyp, cstrs) = obus_data_type ->
@@ -434,6 +455,53 @@ struct
                 type $Ast.TyDcl(_loc, n, [], ctyp_of_ty t, [])$
                 $make_ty_def _loc n tpl (expr_of_ty t)$
             >>
+
+        | "OBUS_class"; id = a_LIDENT; iface = a_STRING; "="; "object"; defs = obus_class_members; "end" ->
+            <:str_item<
+                class virtual $lid:id$ = object(self)
+                  inherit OBus_object.interface;;
+                  $Ast.crSem_of_list
+                    (List.map (function
+                                 | `Method(cname, dname, args, reply) ->
+                                     <:class_str_item< method virtual $lid:cname$ : $ctyp_of_fty (<:ctyp< $ctyp_of_ty reply$ Lwt.t >>) args$ >>
+                                 | `Signal(cname, dname, args, reply) ->
+                                     <:class_str_item< method $lid:cname$ = self#obus_emit $str:iface$ $str:dname$ $expr_of_fty reply args$ >>
+                                 | `Val_r(cname, dname, ty, m)
+                                 | `Val_w(cname, dname, ty, m)
+                                 | `Val_rw(cname, dname, ty, m) ->
+                                     <:class_str_item< val virtual $mutable:m$ $lid:cname$ : $ctyp_of_ty ty$ >>
+                                 | `Prop_r(cname, dname, ty) ->
+                                     <:class_str_item< method virtual $lid:cname ^ "_get"$ : $ctyp_of_ty ty$ Lwt.t >>
+                                 | `Prop_w(cname, dname, ty) ->
+                                     <:class_str_item< method virtual $lid:cname ^ "_set"$ : $ctyp_of_ty ty$ -> unit Lwt.t >>
+                                 | `Prop_rw(cname, dname, ty) ->
+                                     <:class_str_item< method virtual $lid:cname ^ "_get"$ : $ctyp_of_ty ty$ Lwt.t;;
+                                                       method virtual $lid:cname ^ "_set"$ : $ctyp_of_ty ty$ -> unit Lwt.t >>)
+                       defs)$
+                  initializer
+                    self#obus_add_interface $str:iface$
+                      $List.fold_right
+                        (fun def acc -> match def with
+                           | `Method(cname, dname, args, reply) ->
+                               <:expr< OBus_object.md_method $str:dname$ $expr_of_fty reply args$ (fun _ -> self#$lid:cname$) :: $acc$ >>
+                           | `Signal(cname, dname, args, reply) ->
+                               <:expr< OBus_object.md_signal $str:dname$ $expr_of_fty reply args$ :: $acc$ >>
+                           | `Val_r(cname, dname, ty, m) ->
+                               <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> Lwt.return $lid:cname$) :: $acc$ >>
+                           | `Val_w(cname, dname, ty, m) ->
+                               <:expr< OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) :: $acc$ >>
+                           | `Val_rw(cname, dname, ty, m) ->
+                               <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> Lwt.return $lid:cname$)
+                                    :: OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) :: $acc$ >>
+                           | `Prop_r(cname, dname, ty) ->
+                               <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> self#$lid:cname ^ "_get"$) :: $acc$ >>
+                           | `Prop_w(cname, dname, ty) ->
+                               <:expr< OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun x -> self#$lid:cname ^ "_set"$ x) :: $acc$ >>
+                           | `Prop_rw(cname, dname, ty) ->
+                               <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> self#$lid:cname ^ "_get"$)
+                                    :: OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun x -> self#$lid:cname ^ "_set"$ x) :: $acc$ >>)
+                        defs <:expr< [] >>$
+                end >>
         ] ];
   END
 end

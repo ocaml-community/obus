@@ -19,7 +19,7 @@ OBUS_exn Name_has_owner = "Error.NameHasNoOwner"
 OBUS_global_exn Name_has_owner = "org.freedesktop.DBus.Error.NameHasNoOwner"
 
 let big_tuple =
-  <:obus_type< int * $let x = OBus_type.tstring in x$ * uint * int32 * byte * char * int list * int * int * string * variant * signature >>
+  <:obus_type< int * string * uint * int32 * byte * char * int list * int * int * string * variant * signature >>
 ;;
 
 let other_sugars =
@@ -36,3 +36,11 @@ OBUS_record toto = {
 OBUS_struct ('a, 'b) coord = { x: 'a; y: 'b }
 
 OBUS_struct 'a x = { x: 'a }
+
+OBUS_class dbus "org.freedesktop.DBus" = object
+  OBUS_method ListNames : string list;
+  OBUS_method Truc : [{string, variant} list * int] -> string;
+  OBUS_signal NameOwnerChanged : string -> string -> string -> unit;
+  OBUS_val_rw mutable x : int;
+  OBUS_property_r y : string
+end

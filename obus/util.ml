@@ -20,6 +20,11 @@ let rec assoc x = function
   | (k, v) :: _ when k = x -> Some(v)
   | _ :: l -> assoc x l
 
+let rec assq x = function
+  | [] -> None
+  | (k, v) :: _ when k == x -> Some(v)
+  | _ :: l -> assq x l
+
 let rec find_map f = function
   | [] -> None
   | x :: l -> match f x with

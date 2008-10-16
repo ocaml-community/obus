@@ -42,7 +42,7 @@ let call member typ desc =
     ~path:desc.path
     ~interface:"org.freedesktop.DBus.Properties"
     ~member
-    (<< string -> string -> $func:typ$ >>)
+    (tstring --> (tstring --> typ))
     desc.interface
     desc.name
 

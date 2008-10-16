@@ -74,7 +74,6 @@ let signal_match r { sender = sender;
 (***** Filters and connection *****)
 
 module Serial_map = My_map(struct type t = serial end)
-module Interf_map = My_map(struct type t = string end)
 module Object_map = My_map(struct type t = OBus_path.t end)
 
 type body = OBus_value.sequence
@@ -87,8 +86,7 @@ type 'a handler = 'a -> unit
   (* Type of a message handler. *)
 
 type dbus_object = <
-  path : OBus_path.t;
-  handle_call : connection -> method_call -> bool;
+  obus_handle_call : connection -> method_call -> unit;
 >
 
 and running_connection = {
@@ -151,3 +149,15 @@ let lwt_with_bus connection f = lwt_with_running connection
   (function
      | { name = Some _ } -> f ()
      | _ -> return ())
+
+let unknown_method_exn message =
+  let `Method_call(path, interface_opt, member) = message.typ in
+  match interface_opt with
+    | Some interface ->
+        OBus_error.Unknown_method
+          (Printf.sprintf "Method %S with signature %S on interface %S doesn't exist"
+             member (string_of_signature (type_of_sequence message.body)) interface)
+    | None ->
+        OBus_error.Unknown_method
+          (Printf.sprintf "Method %S with signature %S doesn't exist"
+             member (string_of_signature (type_of_sequence message.body)))
