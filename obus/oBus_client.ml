@@ -45,12 +45,12 @@ let register_exn interface error_name = OBus_error.register (interface ^ "." ^ e
 module Make(Name : sig val name : string end) =
 struct
   type t = OBus_proxy.t
-  let call member = OBus_proxy.method_call ~interface:Name.name ~member
+  let call member typ proxy = OBus_proxy.method_call ~interface:Name.name ~member proxy typ
   let kcall cont member = OBus_proxy.kmethod_call cont ~interface:Name.name ~member
   let dcall member = OBus_proxy.dmethod_call ~interface:Name.name ~member
-  let on_signal ?global member = OBus_proxy.on_signal ?global ~interface:Name.name ~member
+  let on_signal ?global member typ proxy = OBus_proxy.on_signal ?global ~interface:Name.name ~member proxy typ
   let don_signal ?global member = OBus_proxy.don_signal ?global ~interface:Name.name ~member
-  let property name access = OBus_proxy.property ~interface:Name.name ~name ~access
+  let property name access typ proxy = OBus_proxy.property ~interface:Name.name ~name ~access proxy typ
   let dproperty name access = OBus_proxy.dproperty ~interface:Name.name ~name ~access
   let register_exn = register_exn Name.name
 end
@@ -60,14 +60,14 @@ struct
   include Params
 
   let call member typ obj =
-    OBus_proxy.method_call ~interface:name ~member typ (to_proxy obj)
+    OBus_proxy.method_call ~interface:name ~member (to_proxy obj) typ
   let kcall cont member =
     OBus_proxy.kmethod_call (fun f -> cont (fun obj -> f (to_proxy obj))) ~interface:name ~member
   let dcall member obj body =
     OBus_proxy.dmethod_call ~interface:name ~member (to_proxy obj) body
-  let on_signal ?global member typ obj f = OBus_proxy.on_signal ?global ~interface:Params.name ~member typ (to_proxy obj) f
+  let on_signal ?global member typ obj f = OBus_proxy.on_signal ?global ~interface:Params.name ~member (to_proxy obj) typ f
   let don_signal ?global member obj f = OBus_proxy.don_signal ?global ~interface:Params.name ~member (to_proxy obj) f
-  let property name access typ obj = OBus_proxy.property ~interface:Params.name ~name ~access typ (to_proxy obj)
+  let property name access typ obj = OBus_proxy.property ~interface:Params.name ~name ~access (to_proxy obj) typ
   let dproperty name access obj = OBus_proxy.dproperty ~interface:Params.name ~name ~access (to_proxy obj)
 
   let register_exn = register_exn Params.name

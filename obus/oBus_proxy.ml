@@ -36,8 +36,6 @@ let tt = OBus_type.wrap_basic_ctx OBus_type.tobject_path
      | _ -> raise Cast_failure)
   path
 
-let compare a b = Pervasives.compare (destination a, path a) (destination b, path b)
-
 let kmethod_call cont ?interface ~member typ =
   call_and_cast_reply typ begin fun body f ->
     cont begin fun proxy ->
@@ -50,7 +48,7 @@ let kmethod_call cont ?interface ~member typ =
     end
   end
 
-let method_call ?interface ~member typ proxy =
+let method_call proxy ?interface ~member typ =
   method_call (connection proxy)
     ?destination:(destination proxy)
     ~path:(path proxy)
@@ -58,7 +56,7 @@ let method_call ?interface ~member typ proxy =
     ~member
     typ
 
-let dmethod_call ?interface ~member proxy body =
+let dmethod_call proxy ?interface ~member body =
   dmethod_call (connection proxy)
     ?destination:(destination proxy)
     ~path:(path proxy)
@@ -66,16 +64,16 @@ let dmethod_call ?interface ~member proxy body =
     ~member
     body
 
-let on_signal ?global ~interface ~member typ proxy f =
+let on_signal proxy ?global ~interface ~member typ f =
   OBus_signal.add_receiver (connection proxy) ?global ~interface ~member
     ~path:(path proxy) ?sender:(destination proxy) typ f
 
-let don_signal ?global ~interface ~member proxy f =
+let don_signal proxy ?global ~interface ~member f =
   OBus_signal.dadd_receiver (connection proxy) ?global ~interface ~member
     ~path:(path proxy) ?sender:(destination proxy) f
 
-let property ~interface ~name ~access typ proxy =
+let property proxy ~interface ~name ~access typ =
   OBus_property.make ~interface ~name ~access ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy) typ
 
-let dproperty ~interface ~name ~access proxy =
+let dproperty proxy ~interface ~name ~access =
   OBus_property.dmake ~interface ~name ~access ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy)

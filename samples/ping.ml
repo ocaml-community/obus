@@ -24,7 +24,7 @@ let _ = Lwt_unix.run
 
      catch
        (fun _ -> perform
-          msg <-- OBus_proxy.method_call ~interface:"org.plop.foo" ~member:"ping" << string -> string >> proxy "coucou";
+          msg <-- OBus_proxy.method_call proxy ~interface:"org.plop.foo" ~member:"ping" << string -> string >> "coucou";
           let _ = print_endline ("received: " ^ msg) in
           return ())
        (function
