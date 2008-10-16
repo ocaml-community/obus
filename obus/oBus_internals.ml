@@ -96,8 +96,8 @@ and running_connection = {
      connection is shared and it is the guid of the server. *)
   guid : OBus_address.guid option;
 
-  (* Message queue *)
-  queue : OBus_message.any MQueue.t;
+  (* up/down state *)
+  mutable down : unit Lwt.t option;
 
   (* Unique name of the connection *)
   mutable name : string option;

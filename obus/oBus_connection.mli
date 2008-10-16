@@ -215,9 +215,6 @@ val filter_enabled : filter_id -> bool
 
 (** {6 Errors handling} *)
 
-exception Transport_error of exn
-  (** Exception raised when an error happen on the transport *)
-
 val on_disconnect : t -> (exn -> unit) ref
   (** Function called when a fatal error happen. The default behaviour
       is to print an error message and to exit the program. *)

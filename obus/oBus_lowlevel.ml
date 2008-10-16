@@ -19,6 +19,7 @@ open OBus_address
 let (&) a b = a b
 
 exception Protocol_error of string
+exception Transport_error of exn
 
 let pad2 i = i land 1
 let pad4 i = (4 - i) land 3

@@ -42,6 +42,8 @@ val put_message : ?byte_order:OBus_info.byte_order -> OBus_message.any -> Lwt_ch
 
 (** {6 Transport} *)
 
+exception Transport_error of exn
+
 (** A transport is something which know how to receive and send
     message. *)
 class type transport = object
