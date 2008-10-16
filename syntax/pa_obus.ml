@@ -380,6 +380,7 @@ struct
             <:str_item<
               (* First create the caml type definition *)
               type $make_caml_type_def _loc name vrntyp cstrs$
+              type $lid:name ^ "_list"$ = $lid:name$ list
 
               (* Construct the combinator *)
               let $lid:"t" ^ name ^ "_list"$ = OBus_type.wrap_basic $expr_of_ty key_typ$
