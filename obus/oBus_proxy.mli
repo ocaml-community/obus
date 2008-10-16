@@ -43,6 +43,9 @@ val kmethod_call : ((t -> 'b Lwt.t) -> 'c) -> ?interface:OBus_name.interface -> 
 val dmethod_call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> OBus_message.body Lwt.t
   (** Send a method call with dynamically typed datas *)
 
+val introspect : t -> OBus_introspect.document Lwt.t
+  (** Introspect the proxy *)
+
 (** {6 Signals} *)
 
 val on_signal : t -> ?global:bool -> interface:OBus_name.interface -> member:OBus_name.member ->

@@ -19,9 +19,45 @@ let tt = wrap_sequence_ctx tunit
      | _ -> raise Cast_failure)
   (fun _ -> ())
 
+let tconnection = wrap_sequence_ctx tunit
+  (fun context () -> match context with
+     | Context(connection, _) -> connection
+     | _ -> raise Cast_failure)
+  (fun _ -> ())
+
+let tconnection = wrap_sequence_ctx tunit
+  (fun context () -> match context with
+     | Context(connection, _) -> connection
+     | _ -> raise Cast_failure)
+  (fun _ -> ())
+
+let tmessage = wrap_sequence_ctx tunit
+  (fun context () -> match context with
+     | Context(connection, ({ typ = `Method_call _ } as msg)) -> msg
+     | _ -> raise Cast_failure)
+  (fun _ -> ())
+
+let tfield f = wrap_sequence_ctx tunit
+  (fun context () -> match context with
+     | Context(connection, ({ typ = `Method_call _ } as msg)) -> f msg
+     | _ -> raise Cast_failure)
+  (fun _ -> ())
+
+let tsender = tfield sender
+let tdestination = tfield destination
+let tpath = tfield path
+let tinterface = tfield interface
+
 let connection = fst
 let message = snd
 let sender (c, m) = sender m
 let destination (c, m) = destination m
 let path (c, m) = path m
 let interface (c, m) = interface m
+
+type connection = OBus_connection.t
+type sender = OBus_name.connection option
+type destination = OBus_name.connection option
+type path = OBus_path.t
+type interface = OBus_name.interface option
+type message = OBus_message.method_call

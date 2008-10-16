@@ -26,10 +26,10 @@
 *)
 
 type t
+val tt : t OBus_type.ty_sequence
   (** Abstract type for context *)
 
-val tt : t OBus_type.ty_sequence
-  (** The type combinator *)
+(** {6 Context informations} *)
 
 val connection : t -> OBus_connection.t
   (** Connection from which come the call *)
@@ -48,3 +48,26 @@ val interface : t -> OBus_name.interface option
 
 val message : t -> OBus_message.method_call
   (** The raw method call *)
+
+(** {6 Type combinators} *)
+
+(** It is also possible to retreive directly one single information
+    with the following types combinators *)
+
+type connection = OBus_connection.t
+val tconnection : OBus_connection.t OBus_type.ty_sequence
+
+type sender = OBus_name.connection option
+val tsender : OBus_name.connection option OBus_type.ty_sequence
+
+type destination = OBus_name.connection option
+val tdestination : OBus_name.connection option OBus_type.ty_sequence
+
+type path = OBus_path.t
+val tpath : OBus_path.t OBus_type.ty_sequence
+
+type interface = OBus_name.interface option
+val tinterface : OBus_name.interface option OBus_type.ty_sequence
+
+type message = OBus_message.method_call
+val tmessage : OBus_message.method_call OBus_type.ty_sequence

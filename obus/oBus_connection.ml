@@ -326,9 +326,35 @@ let dispatch_message connection running message =
 
     | { typ = `Method_call(path, interface_opt, member) } as message ->
         match Object_map.lookup path running.exported_objects with
-          | None ->
-              ignore_send_exn connection message & OBus_error.Failed (sprintf "No such object: %S" (OBus_path.to_string path))
           | Some obj -> obj#obus_handle_call connection message
+          | None ->
+              (* Handle introspection for missing intermediate object:
+
+                 for example if we have only one exported object with
+                 path "/a/b/c", we need to add introspection support
+                 for virtual objects with path "/", "/a", "/a/b",
+                 "/a/b/c". *)
+              match
+                match interface_opt, member with
+                  | None, "Introspect"
+                  | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
+                      begin match children connection path with
+                        | [] -> false
+                        | l ->
+                            ignore_result
+                              (send_reply connection message <:obus_type< OBus_introspect.document >>
+                                 ([("org.freedesktop.DBus.Introspectable",
+                                    [OBus_interface.Method("Introspect", [],
+                                                           [(None, Tbasic Tstring)], [])],
+                                    [])], l));
+                            true
+                      end
+                  | _ -> false
+              with
+                | true -> ()
+                | false ->
+                    ignore_send_exn connection message & OBus_error.Failed (sprintf "No such object: %S" (OBus_path.to_string path))
+
 
 let default_on_disconnect exn =
   begin match exn with

@@ -162,3 +162,9 @@ let unknown_method_exn message =
         OBus_error.Unknown_method
           (Printf.sprintf "Method %S with signature %S doesn't exist"
              member (string_of_signature (type_of_sequence message.body)))
+
+let children connection path = with_running connection
+  (fun running ->
+     Object_map.fold (fun p obj acc -> match OBus_path.after path p with
+                        | Some(elt :: _) -> elt :: acc
+                        | _ -> acc) running.exported_objects [])

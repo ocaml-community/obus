@@ -64,6 +64,9 @@ let dmethod_call proxy ?interface ~member body =
     ~member
     body
 
+let introspect proxy =
+  method_call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" << OBus_introspect.document >>
+
 let on_signal proxy ?global ~interface ~member typ f =
   OBus_signal.add_receiver (connection proxy) ?global ~interface ~member
     ~path:(path proxy) ?sender:(destination proxy) typ f

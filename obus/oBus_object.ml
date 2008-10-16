@@ -85,7 +85,7 @@ end
 include OBus_object
 
 OBUS_class introspectable "org.freedesktop.DBus.Introspectable" = object
-  OBUS_method Introspect : OBus_introspect.document
+  OBUS_method Introspect : OBus_context.connection -> OBus_introspect.document
 end
 
 OBUS_class properties "org.freedesktop.DBus.Properties" = object
@@ -108,7 +108,7 @@ class t = object(self)
 
   method obus_path = ["ocaml_object"; string_of_int (Oo.id self)]
 
-  method introspect = return (interfaces, [])
+  method introspect connection = return (interfaces, children connection (self#obus_path))
 
   method get iface name =
     match Property_map.lookup (iface, name) properties with

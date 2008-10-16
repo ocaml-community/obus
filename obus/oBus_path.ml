@@ -125,3 +125,8 @@ let unescape s =
                             ((int_of_char s.[j + 1] - int_of_char 'a') lsl 4))
   done;
   r
+
+let rec after prefix path = match prefix, path with
+  | [], p -> Some p
+  | e1 :: p1, e2 :: p2 when e1 = e2 -> after p1 p2
+  | _ -> None

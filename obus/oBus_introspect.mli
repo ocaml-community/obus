@@ -30,9 +30,3 @@ val of_xml : Xml.xml -> document
 
 val to_xml : document -> Xml.xml
   (** Create an xml from an introspection document*)
-
-(** {6 Service introspection} *)
-
-val introspect : OBus_connection.t -> ?service:OBus_name.connection -> OBus_path.t -> document Lwt.t
-  (** [introspect connection ?service path] introspect the object with
-      path [path] on the given service *)

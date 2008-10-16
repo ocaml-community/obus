@@ -83,7 +83,7 @@ class t : object
   method obus_handle_call : OBus_connection.t -> OBus_message.method_call -> unit
     (** Handle a method call *)
 
-  method introspect : OBus_introspect.document Lwt.t
+  method introspect : OBus_connection.t -> OBus_introspect.document Lwt.t
     (** Self introspection *)
 
   method get : OBus_name.interface -> OBus_name.member -> OBus_value.single Lwt.t

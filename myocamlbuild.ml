@@ -46,9 +46,9 @@ struct
       "OBus_message";
       "OBus_internals";
       "OBus_error";
+      "OBus_introspect";
       "OBus_connection";
       "OBus_context";
-      "OBus_introspect";
       "OBus_object";
       "OBus_signal";
       "OBus_property";

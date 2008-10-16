@@ -20,6 +20,10 @@ type t = element list
 val empty : t
   (** Empty path *)
 
+val after : t -> t -> t option
+  (** [after prefix path] if [path = prefix @ p] return [Some p], and
+      [None] if not *)
+
 val of_string : string -> t
   (** Create an object path from a string.
 

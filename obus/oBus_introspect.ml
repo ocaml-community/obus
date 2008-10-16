@@ -140,11 +140,3 @@ let tdocument = wrap_basic tstring
      XmlParser.prove p false;
      of_xml (XmlParser.parse p (XmlParser.SString x)))
   (fun x -> Xml.to_string_fmt (to_xml x))
-
-let introspect connection ?service path =
-  OBus_connection.method_call connection
-    ?destination:service
-    ~path:path
-    ~interface:"org.freedesktop.DBus.Introspectable"
-    ~member:"Introspect"
-    (<< document >>)

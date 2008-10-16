@@ -38,7 +38,7 @@ module Interf_map = Map.Make(struct type t = string let compare = compare end)
 
 let rec get (nodes, map) bus service path =
   (perform
-     (interfaces, subs) <-- OBus_introspect.introspect bus ~service path;
+     (interfaces, subs) <-- OBus_proxy.introspect (OBus_proxy.make ~connection:bus ~destination:service ~path);
      let map = List.fold_left (fun map (name, content, annots) -> Interf_map.add name (content, annots) map) map interfaces in
      let nodes = (path, List.map (fun (name, _, _) -> name) interfaces) :: nodes in
      match !recursive with
