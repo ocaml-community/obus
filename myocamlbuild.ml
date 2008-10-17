@@ -49,12 +49,12 @@ struct
       "OBus_introspect";
       "OBus_connection";
       "OBus_context";
-      "OBus_object";
       "OBus_signal";
       "OBus_property";
       "OBus_proxy";
       "OBus_client";
       "OBus_bus";
+      "OBus_object";
       "OBus_server"]
 
   (* Modules of the API *)

@@ -120,6 +120,9 @@ class t : object
     (** [obus_remove connection] remove the object from
         [connection] *)
 
+  method obus_clear : unit
+    (** Remove the object from any connection it is exported on *)
+
   method obus_connection_closed : OBus_connection.t -> unit
     (** This method is called by the connection when it is closed (by
         {!OBus_connection.close} or for an unexpected reason).
@@ -129,3 +132,12 @@ class t : object
         By the way it is ok to override this if you still call the
         original one. *)
 end
+
+(** Object ``owned'' by someone else. This is for when the object is
+    created for a specific client.
+
+    This means that, when the client exit:
+
+    - the object is destroyed, i.e. [obus_clear] is called
+    - signals will be sent only to this client *)
+class owned : OBus_bus.t -> OBus_name.connection_unique -> t

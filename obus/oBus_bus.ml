@@ -129,3 +129,20 @@ let on_service_status_change bus service f = OBus_signal.add_receiver bus
   ~args:[0, service]
   <:obus_type< string * string * string >>
   (fun (_, o, n) -> f (status o, status n))
+
+let on_client_exit bus name f =
+  let w = wait () in
+  let called = ref false in
+  ignore_result
+    (perform
+       id <-- OBus_signal.dadd_receiver bus
+         ~sender:"org.freedesktop.DBus"
+         ~path:["org"; "freedesktop"; "DBus"]
+         ~interface:"org.freedesktop.DBus"
+         ~member:"NameOwnerChanged"
+         ~args:[(0, name); (1, name); (2, "")]
+         (fun _ -> match !called with
+            | false -> wakeup w ()
+            | true -> ());
+       w;
+       OBus_signal.disable_receiver id)

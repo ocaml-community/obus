@@ -194,6 +194,26 @@ class t = object(self)
       end
     | false -> ()
 
+  method obus_clear =
+    List.iter (fun c -> self#obus_remove c) exports
+
   method obus_connection_closed connection =
     exports <- List.filter ((!=) connection) exports
+end
+
+class owned bus name = object(self)
+  inherit t as super
+
+  method obus_emit_signal ?connection ?destination interface member typ x =
+    super#obus_emit_signal
+      ~connection:(match connection with
+                     | Some c -> c
+                     | None -> bus)
+      ~destination:(match destination with
+                      | Some d -> d
+                      | None -> name)
+      interface member typ x
+
+  initializer
+    OBus_bus.on_client_exit bus name (fun _ -> self#obus_clear)
 end

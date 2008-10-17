@@ -187,3 +187,7 @@ val on_service_status_change : t -> name -> (status * status -> unit) -> OBus_si
   (** [on_service_status_change bus service f] call f each the status
       of the service [service] change. The first argument of [f] is
       [(old_status, new_status)]. *)
+
+val on_client_exit : t -> OBus_name.connection_unique -> (unit -> unit) -> unit
+  (** [on_client_exit client handler] call [handler] when [client]
+      exit *)
