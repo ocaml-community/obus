@@ -27,7 +27,10 @@ type member_desc = OBus_interface.declaration * member_info
 module OBus_object =
 struct
   class virtual interface = object
-    method virtual obus_emit_signal : 'a 'b. OBus_name.Interface.t -> OBus_name.Member.t ->
+    method virtual obus_emit_signal : 'a 'b.
+      ?connection:OBus_connection.t ->
+      ?destination:OBus_name.connection ->
+      OBus_name.interface -> OBus_name.member ->
       ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     method virtual obus_add_interface : OBus_name.interface -> member_desc list -> unit
   end
@@ -160,13 +163,17 @@ class t = object(self)
       | Some f -> f connection message
       | None -> ignore_result (send_exn connection message (unknown_method_exn message))
 
-  method obus_emit_signal interface member typ x =
+  method obus_emit_signal ?connection ?destination interface member typ x =
     let body = make_sequence typ x
     and path = self#obus_path in
-    Lwt_util.iter
-      (fun connection ->
-         demit_signal connection ~interface ~member ~path body)
-      exports
+    match connection with
+      | Some connection ->
+          demit_signal connection ?destination ~interface ~member ~path body
+      | None ->
+          Lwt_util.iter
+            (fun connection ->
+               demit_signal connection ?destination ~interface ~member ~path body)
+            exports
 
   method obus_export connection =
     with_running connection

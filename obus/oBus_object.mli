@@ -19,7 +19,7 @@
     {[
       OBUS_class iface "org.mydomain.iface" = object
         OBUS_method Foo : int -> int
-        OBUS_signal bar : string
+        OBUS_signal bar : string * int
       end
     ]}
 
@@ -34,7 +34,9 @@
       class virtual iface : object
         inherit OBus_object.interface
         method virtual foo : int -> int Lwt.t
-        method bar : string -> unit Lwt.t
+        method bar : ?connection:OBus_connection.t ->
+                     ?destination:OBus_name.connection ->
+                     string * int -> unit Lwt.t
       end
     ]}
 
@@ -59,7 +61,10 @@ type member_desc
   (** Describe an interface member *)
 
 class virtual interface : object
-  method virtual obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->
+  method virtual obus_emit_signal : 'a 'b.
+    ?connection:OBus_connection.t ->
+    ?destination:OBus_name.connection ->
+    OBus_name.interface -> OBus_name.member ->
     ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     (** Emit a signal *)
 
@@ -91,9 +96,19 @@ class t : object
   method getAll : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
     (** Object properties *)
 
-  method obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->
+  method obus_emit_signal : 'a 'b.
+    ?connection:OBus_connection.t ->
+    ?destination:OBus_name.connection ->
+    OBus_name.interface -> OBus_name.member ->
     ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
-    (** Emit a signal *)
+    (** Emit a signal.
+
+        If [connection] is specified, it will be sent on this
+        connection, otherwise it is sent on any connection the object
+        is exported on.
+
+        If [destnation] is specified then the signal will be sent to
+        this specific destination, otherwise it will be broadcasted *)
 
   method obus_add_interface : OBus_name.interface -> member_desc list -> unit
     (** Add the given interface, for introspection *)
