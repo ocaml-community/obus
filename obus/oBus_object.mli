@@ -133,6 +133,18 @@ class t : object
         original one. *)
 end
 
+val get_by_path : OBus_connection.t -> OBus_path.t -> t
+  (** [get_by_path connection path] return the object with path [path]
+      exported on [connection]
+
+      @raise Not_found if no such object exists *)
+
+val opt_get_by_path : OBus_connection.t -> OBus_path.t -> t option
+  (** Same thing but return an option instead of raise an exception *)
+
+val tt : t OBus_type.ty_basic
+  (** Type combinator *)
+
 (** Object ``owned'' by someone else. This is for when the object is
     created for a specific client.
 

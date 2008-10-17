@@ -16,12 +16,7 @@ open OBus_type
 open OBus_internals
 open OBus_connection
 
-type member_info =
-  | MI_method of OBus_name.member * tsequence * (OBus_connection.t -> method_call -> unit)
-  | MI_signal
-  | MI_property of OBus_name.member * (unit -> single Lwt.t) option * (single -> unit Lwt.t) option
-
-type member_desc = OBus_interface.declaration * member_info
+type member_desc = connection OBus_internals.member_desc
 
 (* We use a module here to make [pa_obus] happy *)
 module OBus_object =
@@ -200,6 +195,26 @@ class t = object(self)
   method obus_connection_closed connection =
     exports <- List.filter ((!=) connection) exports
 end
+
+let get_by_path connection path =
+  with_running connection (fun running -> Object_map.find path running.exported_objects)
+
+let opt_get_by_path connection path =
+  with_running connection (fun running -> Object_map.lookup path running.exported_objects)
+
+let tt = wrap_basic_ctx tpath
+  (fun context path -> match context with
+     | Context(connection, _) ->
+         (* Note that this will never fail because:
+
+            - a first successful search has been done has dispatching
+            time, so the object exists
+
+            - since dispatching, no lwt operation has been performed
+            so the connection is still running *)
+         get_by_path connection path
+     | _ -> raise Cast_failure)
+  (fun obj -> obj#obus_path)
 
 class owned bus name = object(self)
   inherit t as super
