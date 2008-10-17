@@ -22,16 +22,33 @@ OBUS_type name = string
 
 let hello = call "Hello" << name >>
 
+let error_handler = function
+  | OBus_lowlevel.Protocol_error msg ->
+      Log.error "the DBus connection with the message bus has been closed due to a protocol error: %s" msg;
+      exit 1
+  | OBus_connection.Connection_lost ->
+      Log.log "disconnected from DBus message bus";
+      exit 0
+  | OBus_lowlevel.Transport_error exn ->
+      Log.error "the DBus connection with the message bus has been closed due to a transport error: %s" (Util.string_of_exn exn);
+      exit 1
+  | exn ->
+      Log.error "the DBus connection with the message bus has been closed due to this uncaught exception: %s" (Printexc.to_string exn);
+      exit 1
+
 let register_connection connection =
-  lwt_with_running connection & function
-    | { name = Some _ } ->
-        (* Do not call two times the Hello method *)
-        return ()
-    | { name = None } ->
-        hello connection >>= fun name ->
-          lwt_with_running connection & fun running ->
-            running.name <- Some name;
-            return ()
+  lwt_with_running connection
+    (function
+       | { name = Some _ } ->
+           (* Do not call two times the Hello method *)
+           return ()
+       | { name = None; on_disconnect = f } ->
+           f := error_handler;
+           hello connection >>= fun name ->
+             lwt_with_running connection
+               (fun running ->
+                  running.name <- Some name;
+                  return ()))
 
 let of_addresses addresses =
   (perform

@@ -45,7 +45,7 @@ val put_message : ?byte_order:OBus_info.byte_order -> OBus_message.any -> Lwt_ch
 exception Transport_error of exn
 
 (** A transport is something which know how to receive and send
-    message. *)
+    messages. *)
 class type transport = object
   method get_message : OBus_message.any Lwt.t
     (** Receive one message from the transport *)
@@ -54,11 +54,20 @@ class type transport = object
     (** Send one message. The sending must not be delayed, i.e. if the
         transport is buffurized, then it shoud be flushed. *)
 
-  method shutdown : unit
-    (** Shutdown the transport *)
+  (** Notes:
+
+      - [get_message] and [put_message] are supposed to return
+      [End_of_file] when the transport is closed unexpectedly
+
+      - all [get_message] calls are serialized as well as
+      [put_message] ones, so there is no need for locks
+  *)
 
   method abort : exn -> unit
     (** [abort exn] should behave like [Lwt_unix.abort] *)
+
+  method shutdown : unit
+    (** Shutdown the transport *)
 end
 
 (** A transport from the client point of view. In addition it must
@@ -100,7 +109,7 @@ class server_socket :
   inherit server_transport
 end
 
-val loopback : transport
+class loopback : transport
   (** Loopback transport, each message sent is received on the same
       transport *)
 

@@ -104,4 +104,13 @@ class t : object
   method obus_remove : OBus_connection.t -> unit
     (** [obus_remove connection] remove the object from
         [connection] *)
+
+  method obus_connection_closed : OBus_connection.t -> unit
+    (** This method is called by the connection when it is closed (by
+        {!OBus_connection.close} or for an unexpected reason).
+
+        Warning : /!\ You must not call this method directly /!\
+
+        By the way it is ok to override this if you still call the
+        original one. *)
 end

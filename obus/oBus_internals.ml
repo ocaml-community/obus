@@ -13,10 +13,6 @@
 open OBus_message
 open OBus_info
 
-let (&) a b = a b
-let (|>) a b x = b (a x)
-let (<|) a b x = a (b x)
-
 module My_map(T : sig type t end) =
 struct
   include Map.Make(struct type t = T.t let compare = compare end)
@@ -87,7 +83,7 @@ type 'a handler = 'a -> unit
 
 type dbus_object = <
   obus_handle_call : connection -> method_call -> unit;
-  obus_remove : connection -> unit;
+  obus_connection_closed : connection -> unit;
 >
 
 and running_connection = {
@@ -100,6 +96,10 @@ and running_connection = {
   (* up/down state *)
   mutable down : unit Lwt.t option;
 
+  (* Its a waiting thread which is wakeup when the connection is
+     closed or aborted. It is used to make the dispatcher to exit. *)
+  abort : OBus_message.any Lwt.t;
+
   (* Unique name of the connection *)
   mutable name : string option;
 
@@ -110,7 +110,7 @@ and running_connection = {
   filters : filter MSet.t;
   signal_handlers : (signal_match_rule * signal handler) MSet.t;
 
-  mutable reply_handlers : (method_return handler * (exn -> unit)) Serial_map.t;
+  mutable reply_waiters : OBus_message.method_return Lwt.t Serial_map.t;
 
   mutable exported_objects : dbus_object Object_map.t;
 

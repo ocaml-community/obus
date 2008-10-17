@@ -36,7 +36,4 @@ let test mech =
        return ())
 
 let _ =
-  run (perform
-         test server_mech_anonymous;
-         test server_mech_external;
-         test server_mech_dbus_cookie_sha1)
+  run (test server_mech_dbus_cookie_sha1)

@@ -147,14 +147,16 @@ struct
   open Lwt
 
   let kcall cont member ty =
-    call_and_cast_reply ty & fun body f ->
-      cont & fun path ->
+    call_and_cast_reply ty begin fun body f ->
+      cont begin fun path ->
         Lazy.force Params.bus >>= fun bus ->
           f bus (OBus_message.method_call
                    ?destination:Params.service
                    ~path
                    ~interface:Params.name
                    ~member body)
+      end
+    end
 
   let call member typ path = kcall (fun f -> f path) member typ
 

@@ -36,18 +36,35 @@ val of_addresses : ?shared:bool -> OBus_address.t list -> t Lwt.t
       the default behaviour. *)
 
 val loopback : t
-  (** Connection with loopback transport *)
+  (** Connection with a loopback transport *)
 
 val close : t -> unit
   (** Close a connection.
 
       All thread waiting for a reply will fail with the exception
-      [Connection_closed].
+      {!Connection_closed}.
 
       Note: when a connection is closed, the transport it use is
       closed too. *)
 
+val running : t -> bool
+  (** Return weather a connection is running. *)
+
+val watch : t -> unit Lwt.t
+  (** Return a waiting thread which is wakeup when the connection is
+      closed.
+
+      If the connection is closed using {!close} then it return [()].
+
+      If the connection is closed for an external reason it fail with
+      the exception which make the connection to crash. *)
+
 exception Connection_closed
+  (** Raise when tring to use a normally closed connection *)
+
+exception Connection_lost
+  (** Raised when a connection has been closed by the other
+      end-point *)
 
 (** {6 Informations} *)
 
@@ -150,14 +167,6 @@ val send_exn : t -> OBus_message.method_call -> exn -> unit Lwt.t
       It send the exception an {!OBus_error.Failed} if the exception
       is not registred as a DBus exception. *)
 
-val call_and_cast_reply : ('a, 'b, 'c) OBus_type.ty_function ->
-  (OBus_message.body -> (t -> OBus_message.method_call -> 'c Lwt.t) -> 'b) -> 'a
-  (** [call_and_cast_reply typ cont ...] Construct a message from
-      using the given functionnal type, then pass it to [cont]. The
-      second argument for [cont] is a function which will call the
-      method, cast its reply and raise the standart error message if
-      the cast fail *)
-
 (** {6 Receiving signals} *)
 
 type signal_receiver
@@ -215,9 +224,20 @@ val filter_enabled : filter_id -> bool
 
 (** {6 Errors handling} *)
 
+(** Note: when a filter/signal handler/method_call handler raise an
+    exception, it is just dropped. If {!OBus_info.debug} is set then a
+    message is printed on [stderr] *)
+
 val on_disconnect : t -> (exn -> unit) ref
-  (** Function called when a fatal error happen. The default behaviour
-      is to print an error message and to exit the program. *)
+  (** Function called when a fatal error happen or when the conection
+      is lost.
+
+      Notes:
+      - the default function do nothing
+      - it is not called when the connection is closed using
+      {!close}
+      - for connection to a message bus, the behaviour is different,
+      see {!OBus_bus} for explanation *)
 
 (** {6 Low-level} *)
 
@@ -234,3 +254,12 @@ val of_server_transport : OBus_lowlevel.server_transport -> t Lwt.t
 val is_up : t -> bool
 val set_up : t -> unit
 val set_down : t -> unit
+
+(**/**)
+val call_and_cast_reply : ('a, 'b, 'c) OBus_type.ty_function ->
+  (OBus_message.body -> (t -> OBus_message.method_call -> 'c Lwt.t) -> 'b) -> 'a
+  (* [call_and_cast_reply typ cont ...] Construct a message using the
+      given functionnal type, then pass it to [cont]. The second
+      argument for [cont] is a function which will call the method,
+      cast its reply and raise the standart error message if the cast
+      fail *)

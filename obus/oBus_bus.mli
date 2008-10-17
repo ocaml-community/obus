@@ -32,8 +32,20 @@ val register_connection : OBus_connection.t -> unit Lwt.t
   (** This function just request a unique name to the other side of
       the connection which is supposed to be a message bus.
 
-      If this is nqot the case, it will (probably) raise an
-      [OBus_error.Unknown_method] *)
+      If this is not the case, it will (probably) raise an
+      {!OBus_error.Unknown_method} *)
+
+(** Notes:
+
+    - when the connection to a message bus is lost
+    ({!OBus_connection.Connection_lost}, the program is exited with a
+    return code of 0
+
+    - when a fatal error happen, a message is printed on stderr and
+    the program is exited with an exit code of 1
+
+    This can be changed by overriding
+    {!OBus_connection.on_disconnect} *)
 
 (** {6 Bus names acquiring} *)
 

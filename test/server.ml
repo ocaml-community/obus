@@ -24,5 +24,5 @@ let _ =
          ~path:["plop"]
          ~interface:"truc.bidule"
          ~member:"Coucou"
-         (<< string -> unit >>) "Hello world!";
+         (<:obus_type< string >>) "Hello world!";
        Lwt_unix.sleep 2.0)

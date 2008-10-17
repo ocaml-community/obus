@@ -16,8 +16,6 @@ open OBus_info
 open OBus_message
 open OBus_address
 
-let (&) a b = a b
-
 exception Protocol_error of string
 exception Transport_error of exn
 
@@ -992,8 +990,8 @@ class server_socket ?mechanisms guid fd = object
   method server_authenticate = lazy(OBus_auth.server_authenticate ?mechanisms guid (ic, oc))
 end
 
-let loopback = object(self)
-  val mutable queue = MQueue.create ()
+class loopback = object(self)
+  val mutable queue : OBus_message.any MQueue.t = MQueue.create ()
   method get_message = MQueue.get queue
   method put_message msg = Marshaler_success(fun () -> MQueue.put msg queue; return ())
   method shutdown = self#abort (Failure "transport closed")

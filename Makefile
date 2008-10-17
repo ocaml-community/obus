@@ -14,7 +14,7 @@ SAMPLES = hello bus-functions eject notif monitor signals list-services avahi-li
 LIB = obus
 BINDINGS = hal notify
 TOOLS = obus-introspect obus-binder
-TEST = data dyn valid auth server
+TEST = data dyn valid auth server errors
 
 .PHONY: tools samples bindings all test lib default install
 

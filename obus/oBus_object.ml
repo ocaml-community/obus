@@ -186,4 +186,7 @@ class t = object(self)
                | _ -> ())
       end
     | false -> ()
+
+  method obus_connection_closed connection =
+    exports <- List.filter ((!=) connection) exports
 end
