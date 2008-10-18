@@ -56,7 +56,7 @@ struct
 
   let md_property_w name typ writer =
     let ty = type_single typ in
-    (Property(name, ty, Read, []),
+    (Property(name, ty, Write, []),
      MI_property(name,
                  None,
                  Some(fun x -> match opt_cast_single typ x with
@@ -68,7 +68,7 @@ struct
 
   let md_property_rw name typ reader writer =
     let ty = type_single typ in
-    (Property(name, ty, Read, []),
+    (Property(name, ty, Read_write, []),
      MI_property(name,
                  Some(fun _ -> perform
                         x <-- reader ();
@@ -189,7 +189,7 @@ class t = object(self)
       end
     | false -> ()
 
-  method obus_clear =
+  method obus_destroy =
     List.iter (fun c -> self#obus_remove c) exports
 
   method obus_connection_closed connection =
@@ -230,5 +230,6 @@ class owned bus name = object(self)
       interface member typ x
 
   initializer
-    OBus_bus.on_client_exit bus name (fun _ -> self#obus_clear)
+    OBus_bus.on_client_exit bus name (fun _ -> self#obus_destroy);
+    self#obus_export bus
 end

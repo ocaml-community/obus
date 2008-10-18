@@ -54,8 +54,8 @@ type 'typ t = {
   flags : flags;
   serial : serial;
   typ : 'typ;
-  destination : OBus_name.Connection.t option;
-  sender : OBus_name.Connection.t option;
+  destination : OBus_name.connection option;
+  sender : OBus_name.connection option;
   body : body;
 }
 

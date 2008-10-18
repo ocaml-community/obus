@@ -244,8 +244,9 @@ struct
     | Vrn_poly -> Ast.PaVrn(_loc, id)
 
   let vrn_type_def _loc typ cstrs = match typ with
-    | Vrn_classic -> Ast.sum_type_of_list
-        (List.map (fun (p, e, loc, id) -> (loc, id, [])) cstrs)
+    | Vrn_classic ->
+        Ast.TySum(_loc, Ast.sum_type_of_list
+                    (List.map (fun (p, e, loc, id) -> (loc, id, [])) cstrs))
     | Vrn_poly ->
         Ast.TyVrnEq(_loc, Ast.tyOr_of_list
                       (List.map (fun (p, e, _loc, id) -> <:ctyp< ` $id$ >>) cstrs))
@@ -466,7 +467,7 @@ struct
                                  | `Method(cname, dname, args, reply) ->
                                      <:class_str_item< method virtual $lid:cname$ : $ctyp_of_fty (<:ctyp< $ctyp_of_ty reply$ Lwt.t >>) args$ >>
                                  | `Signal(cname, dname, t) ->
-                                     <:class_str_item< method $lid:cname$ = self#obus_emit $str:iface$ $str:dname$ $expr_of_ty t$ >>
+                                     <:class_str_item< method $lid:cname$ = self#obus_emit_signal $str:iface$ $str:dname$ $expr_of_ty t$ >>
                                  | `Val_r(cname, dname, ty, m)
                                  | `Val_w(cname, dname, ty, m)
                                  | `Val_rw(cname, dname, ty, m) ->
@@ -492,15 +493,15 @@ struct
                            | `Val_w(cname, dname, ty, m) ->
                                <:expr< OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) :: $acc$ >>
                            | `Val_rw(cname, dname, ty, m) ->
-                               <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> Lwt.return $lid:cname$)
-                                    :: OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) :: $acc$ >>
+                               <:expr< OBus_object.md_property_rw $str:dname$ $expr_of_ty ty$ (fun _ -> Lwt.return $lid:cname$)
+                                         (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) :: $acc$ >>
                            | `Prop_r(cname, dname, ty) ->
                                <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> self#$lid:cname ^ "_get"$) :: $acc$ >>
                            | `Prop_w(cname, dname, ty) ->
                                <:expr< OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun x -> self#$lid:cname ^ "_set"$ x) :: $acc$ >>
                            | `Prop_rw(cname, dname, ty) ->
-                               <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> self#$lid:cname ^ "_get"$)
-                                    :: OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun x -> self#$lid:cname ^ "_set"$ x) :: $acc$ >>)
+                               <:expr< OBus_object.md_property_rw $str:dname$ $expr_of_ty ty$ (fun _ -> self#$lid:cname ^ "_get"$)
+                                         (fun x -> self#$lid:cname ^ "_set"$ x) :: $acc$ >>)
                         defs <:expr< [] >>$
                 end >>
         ] ];

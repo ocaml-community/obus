@@ -568,7 +568,7 @@ struct
     let acc = wfield2 4 OBus_name.Error.validate fields._error_name acc in
     let acc = wfield 5 Tuint32 (fun i x -> write 4 i output_uint32 x) fields._reply_serial acc in
     let acc = wfield2 6 OBus_name.Connection.validate fields._destination acc in
-    let acc = wfield2 7 OBus_name.Connection_unique.validate fields._sender acc in
+    let acc = wfield2 7 OBus_name.Connection.validate fields._sender acc in
     let fields_length, fields_writer = _wfield 8 Tsignature wsignature fields._signature acc in
 
     if fields_length > max_array_size then
@@ -610,7 +610,10 @@ let put_message ?(byte_order=native_byte_order) (msg : OBus_message.any) =
         Marshaler_failure msg
     | OBus_path.Invalid_element(elt, msg) ->
         Marshaler_failure(sprintf "invalid path element(%S): %s" elt msg)
+    | OBus_name.Invalid_name(typ, name, reason) ->
+        Marshaler_failure(sprintf "invalid %s name(%S): %s" typ name reason)
     | exn ->
+        Log.error "unexpected exception: %s" (Printexc.to_string exn);
         assert false
 
 (***** Message reading *****)

@@ -142,7 +142,7 @@ let on_client_exit bus name f =
          ~member:"NameOwnerChanged"
          ~args:[(0, name); (1, name); (2, "")]
          (fun _ -> match !called with
-            | false -> wakeup w ()
+            | false -> wakeup w (); f ()
             | true -> ());
        w;
        OBus_signal.disable_receiver id)

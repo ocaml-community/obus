@@ -43,14 +43,14 @@ let disable_receiver (mr, bus, id) =
 let add_receiver bus ?(global=true) ?sender ?destination ?path ?interface ?member ?args typ func =
   let id = add_signal_receiver bus ?sender ?destination ?path ?interface ?member ?args typ func in
   let mr = match global with
-    | true -> Some(Rules.to_string ~typ:`signal ?sender ?path ?interface ?member ())
+    | true -> Some(Rules.to_string ~typ:`signal ?sender ?destination ?path ?interface ?member ?args ())
     | false -> None in
   add bus mr >>= (fun _ -> return (mr, bus, id))
 
 let dadd_receiver bus ?(global=true) ?sender ?destination ?path ?interface ?member ?args func =
   let id = dadd_signal_receiver bus ?sender ?destination ?path ?interface ?member ?args func in
   let mr = match global with
-    | true -> Some(Rules.to_string ~typ:`signal ?sender ?path ?interface ?member ())
+    | true -> Some(Rules.to_string ~typ:`signal ?sender ?destination ?path ?interface ?member ?args ())
     | false -> None in
   add bus mr >>= (fun _ -> return (mr, bus, id))
 

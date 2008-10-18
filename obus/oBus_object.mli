@@ -120,7 +120,7 @@ class t : object
     (** [obus_remove connection] remove the object from
         [connection] *)
 
-  method obus_clear : unit
+  method obus_destroy : unit
     (** Remove the object from any connection it is exported on *)
 
   method obus_connection_closed : OBus_connection.t -> unit
@@ -150,6 +150,6 @@ val tt : t OBus_type.ty_basic
 
     This means that, when the client exit:
 
-    - the object is destroyed, i.e. [obus_clear] is called
+    - the object is destroyed, i.e. [obus_destroy] is called
     - signals will be sent only to this client *)
 class owned : OBus_bus.t -> OBus_name.connection_unique -> t

@@ -32,10 +32,23 @@ type signal_match_rule = {
   smr_path : OBus_path.t option;
   smr_interface : OBus_name.interface option;
   smr_member : OBus_name.member option;
+
+  (* Matching on signals arguments. It is a list of
+     (relative_position, pattern) where relative_position is the
+     difference between the pattern absolute position and the previous
+     pattern absolute position *)
   smr_args : (int * string) list;
 }
 
 open OBus_value
+
+(* Compute [smr_args] *)
+let make_args_filter l =
+  let rec aux prev = function
+    | [] -> []
+    | (n, p) :: l -> (n - prev, p) :: aux n l
+  in
+  aux 0 (List.sort (fun (x, _) (y, _) -> x - y) l)
 
 (* Matching on signals arguments *)
 let rec tst_args args body = match args with
@@ -43,7 +56,7 @@ let rec tst_args args body = match args with
   | (n, p) :: rest -> tst_one_arg n p rest body
 
 and tst_one_arg n p arest body = match n, body with
-  | 0, Basic (String s) :: brest when s = p -> tst_args arest brest
+  | 0, Basic (String s) :: brest when s = p -> tst_args arest body
   | n, _ :: brest -> tst_one_arg (n - 1) p arest brest
   | _ -> false
 
@@ -104,7 +117,7 @@ class type ['connection] _dbus_object = object
   method obus_add_interface : OBus_name.interface -> 'connection member_desc list -> unit
   method obus_export : 'connection -> unit
   method obus_remove : 'connection -> unit
-  method obus_clear : unit
+  method obus_destroy : unit
   method obus_connection_closed : 'connection -> unit
 end
 
@@ -190,5 +203,5 @@ let unknown_method_exn message =
 let children connection path = with_running connection
   (fun running ->
      Object_map.fold (fun p obj acc -> match OBus_path.after path p with
-                        | Some(elt :: _) -> elt :: acc
+                        | Some(elt :: _) -> if List.mem elt acc then acc else elt :: acc
                         | _ -> acc) running.exported_objects [])

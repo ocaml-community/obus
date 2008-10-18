@@ -96,6 +96,7 @@ let send_message_backend reply_waiter return_thread connection message =
     running.outgoing <- w;
     outgoing >>= fun serial ->
       let serial = Int32.succ serial in
+      let message = { message with serial = serial } in
 
       (match reply_waiter with
          | Some w ->
@@ -106,7 +107,7 @@ let send_message_backend reply_waiter return_thread connection message =
         Format.eprintf "-----@\n@[<hv 2>sending message:@\n%a@]@."
           OBus_message.print message;
 
-      match running.transport#put_message ({ message with serial = serial } :> OBus_message.any) with
+      match running.transport#put_message (message :> OBus_message.any) with
         | OBus_lowlevel.Marshaler_failure msg ->
             wakeup w serial;
             fail (Failure ("can not send message: " ^ msg))
@@ -227,7 +228,7 @@ let add_signal_receiver connection ?sender ?destination ?path ?interface ?member
          smr_path = path;
          smr_interface = interface;
          smr_member = member;
-         smr_args = args },
+         smr_args = make_args_filter args },
        fun msg -> ignore(match opt_cast_sequence typ ~context:(mk_context connection msg) msg.body with
                            | Some x -> func x
                            | None -> ()))
@@ -241,7 +242,7 @@ let dadd_signal_receiver connection ?sender ?destination ?path ?interface ?membe
          smr_path = path;
          smr_interface = interface;
          smr_member = member;
-         smr_args = args },
+         smr_args = make_args_filter args },
        fun msg -> func msg.body)
   end
 
