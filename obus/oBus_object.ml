@@ -82,13 +82,13 @@ struct
 end
 include OBus_object
 
-OBUS_class introspectable "org.freedesktop.DBus.Introspectable" = object
+class virtual introspectable = OBUS_interface "org.freedesktop.DBus.Introspectable"
   OBUS_method Introspect : OBus_context.connection -> OBus_introspect.document
 end
 
-OBUS_class properties "org.freedesktop.DBus.Properties" = object
-  OBUS_method Get : string -> string -> variant;
-  OBUS_method Set : string -> string -> variant -> unit;
+class virtual properties = OBUS_interface "org.freedesktop.DBus.Properties"
+  OBUS_method Get : string -> string -> variant
+  OBUS_method Set : string -> string -> variant -> unit
   OBUS_method GetAll : string -> {string, variant} list
 end
 

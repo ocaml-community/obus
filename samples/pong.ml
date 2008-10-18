@@ -12,7 +12,7 @@
 open Lwt
 open OBus_type
 
-OBUS_class pong "org.plop.foo" = object
+class virtual pong = OBUS_interface "org.plop.foo"
   OBUS_method ping : string -> string
 end
 

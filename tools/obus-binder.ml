@@ -164,7 +164,7 @@ let print_service_implem_no_sugar pp (name, content, annots) =
 
 let print_service_implem_sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
-  p "OBUS_class %a %S = object\n" plid name name;
+  p "class virtual %a = OBUS_interface %S\n" plid name name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  OBUS_method %s : %a\n" name

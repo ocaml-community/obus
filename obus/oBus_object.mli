@@ -17,7 +17,7 @@
     It looks like:
 
     {[
-      OBUS_class iface "org.mydomain.iface" = object
+      class virtual iface = OBUS_interface iface "org.mydomain.iface"
         OBUS_method Foo : int -> int
         OBUS_signal bar : string * int
       end

@@ -318,7 +318,7 @@ struct
     >>
 
   EXTEND Gram
-    GLOBAL:str_item;
+    GLOBAL:str_item class_expr;
 
     (*** Parsing of module implementation with obus annotations ***)
 
@@ -457,10 +457,13 @@ struct
                 type $Ast.TyDcl(_loc, n, [], ctyp_of_ty t, [])$
                 $make_ty_def _loc n tpl (expr_of_ty t)$
             >>
+        ] ];
 
-        | "OBUS_class"; id = a_LIDENT; iface = a_STRING; "="; "object"; defs = obus_class_members; "end" ->
-            <:str_item<
-                class virtual $lid:id$ = object(self)
+    class_expr:
+      [ "simple"
+        [ "OBUS_interface"; iface = a_STRING; defs = obus_class_members; "end" ->
+            <:class_expr<
+                object(self)
                   inherit OBus_object.interface;;
                   $Ast.crSem_of_list
                     (List.map (function

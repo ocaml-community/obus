@@ -19,15 +19,15 @@ OBUS_flag closed_reason : uint =
     | 2 -> Explicitly_closed
     | 3 -> Killed
 
-OBUS_class if_manager "org.ocamlcore.forge.obus.ProgressBar.Manager" = object
-  OBUS_method ServerVersion : string;
-  OBUS_method CreateProgressBar : OBus_context.t -> int -> OBus_object.t;
+class virtual if_manager = OBUS_interface "org.ocamlcore.forge.obus.ProgressBar.Manager"
+  OBUS_method ServerVersion : string
+  OBUS_method CreateProgressBar : OBus_context.t -> int -> OBus_object.t
 end
 
-OBUS_class if_bar "org.ocamlcore.forge.obus.ProgressBar.Bar" = object
-  OBUS_property_rw Position : int;
-  OBUS_method Close : unit;
-  OBUS_signal Closed : closed_reason;
+class virtual if_bar = OBUS_interface "org.ocamlcore.forge.obus.ProgressBar.Bar"
+  OBUS_property_rw Position : int
+  OBUS_method Close : unit
+  OBUS_signal Closed : closed_reason
 end
 
 OBUS_global_exn Invalid_value = "org.ocamlcore.forge.obus.ProgressBar.InvalidValue"
