@@ -26,7 +26,7 @@ val make : ?mechanisms:OBus_auth.server_mechanism list -> ?addresses:OBus_addres
       successfully authenticate itself.
 
       Note that the connection passed to [on_connection] is down to
-      avoid race condition. It is set up just after.
+      avoid race condition. It must be set up by this function.
 
       @raise Invalid_argument if [addresses] is empty *)
 

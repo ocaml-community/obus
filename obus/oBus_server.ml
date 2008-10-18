@@ -31,8 +31,11 @@ let rec loop server (listen_fd, guid) =
          (fun _ -> perform
             connection <-- OBus_connection.of_server_transport transport;
             let _ =
-              !(server.on_connection) connection;
-              OBus_connection.set_up connection
+              try
+                !(server.on_connection) connection
+              with
+                  exn ->
+                    Log.debug "on_connection failed with: %s" (Printexc.to_string exn)
             in
             return ())
          (fun exn ->
