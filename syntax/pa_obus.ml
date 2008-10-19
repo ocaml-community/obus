@@ -11,6 +11,8 @@ open Camlp4
 open Camlp4.PreCast
 open Printf
 
+INCLUDE "../name_translator.ml"
+
 module Id : Sig.Id = struct
   let name = "Syntactic sugar for obus types"
   let version = "0.1"
@@ -56,7 +58,30 @@ struct
         (Stream.Error "recbinding_of_patt: antiquotation are not yet supported")
     | p -> Loc.raise (Ast.loc_of_patt p) (Stream.Error "recbinding_of_patt: not reached")
 
-  (*** Utils ***)
+  (***** Name translator *****)
+
+  let name_translator = ref `Lower
+
+  let buffer = Buffer.create 42
+  let pp = Format.formatter_of_buffer buffer
+
+  let lid str =
+    Buffer.clear buffer;
+    (match !name_translator with
+       | `Lower -> Lower.plid
+       | `Upper -> Upper.plid) pp str;
+    Format.pp_print_flush pp ();
+    Buffer.contents buffer
+
+  let uid str =
+    Buffer.clear buffer;
+    (match !name_translator with
+       | `Lower -> Lower.puid
+       | `Upper -> Upper.puid) pp str;
+    Format.pp_print_flush pp ();
+    Buffer.contents buffer
+
+  (***** Utils *****)
 
   let abstract args expr =
     List.fold_right (fun arg acc ->
@@ -354,21 +379,21 @@ struct
 
     obus_class_member:
       [ [ "OBUS_method"; name = a_ident; ":"; (args, reply) = ftyp ->
-            `Method(String.uncapitalize name, name, args, reply)
+            `Method(lid name, name, args, reply)
         | "OBUS_signal"; name = a_ident; ":"; t = typ ->
-            `Signal(String.uncapitalize name, name, t)
+            `Signal(lid name, name, t)
         | "OBUS_val_r"; m = opt_mutable; name = a_ident; ":"; t = typ ->
-            `Val_r(String.uncapitalize name, name, t, m)
+            `Val_r(lid name, name, t, m)
         | "OBUS_val_w"; m = opt_mutable; name = a_ident; ":"; t = typ ->
-            `Val_w(String.uncapitalize name, name, t, m)
+            `Val_w(lid name, name, t, m)
         | "OBUS_val_rw"; m = opt_mutable; name = a_ident; ":"; t = typ ->
-            `Val_rw(String.uncapitalize name, name, t, m)
+            `Val_rw(lid name, name, t, m)
         | "OBUS_property_r"; name = a_ident; ":"; t = typ ->
-            `Prop_r(String.uncapitalize name, name, t)
+            `Prop_r(lid name, name, t)
         | "OBUS_property_w"; name = a_ident; ":"; t = typ ->
-            `Prop_w(String.uncapitalize name, name, t)
+            `Prop_w(lid name, name, t)
         | "OBUS_property_rw"; name = a_ident; ":"; t = typ ->
-            `Prop_rw(String.uncapitalize name, name, t) ] ];
+            `Prop_rw(lid name, name, t) ] ];
 
     obus_class_members:
       [ [ -> []
@@ -457,6 +482,29 @@ struct
                 type $Ast.TyDcl(_loc, n, [], ctyp_of_ty t, [])$
                 $make_ty_def _loc n tpl (expr_of_ty t)$
             >>
+
+        | "OBUS_name_translator"; n = a_ident ->
+            begin match n with
+              | "upper" -> name_translator := `Upper
+              | "lower" -> name_translator := `Lower
+              | _ -> Loc.raise _loc (Stream.Error (sprintf "invalid name translator: %S, must be \"upper\" or \"lower\"" n))
+            end;
+            <:str_item< >>
+
+        | "OBUS_method"; name = a_ident; ":"; (args, reply) = ftyp ->
+            <:str_item< let $lid:lid name$ = call $str:name$ $expr_of_fty reply args$ >>
+
+        | "OBUS_signal"; name = a_ident; ":"; t = typ ->
+            <:str_item< let $lid:lid ("on" ^ name)$ = on_signal $str:name$ $expr_of_ty t$ >>
+
+        | "OBUS_property_r"; name = a_ident; ":"; t = typ ->
+            <:str_item< let $lid:lid name$ = property $str:name$ OBus_property.rd_only $expr_of_ty t$ >>
+
+        | "OBUS_property_w"; name = a_ident; ":"; t = typ ->
+            <:str_item< let $lid:lid name$ = property $str:name$ OBus_property.wr_only $expr_of_ty t$ >>
+
+        | "OBUS_property_rw"; name = a_ident; ":"; t = typ ->
+            <:str_item< let $lid:lid name$ = property $str:name$ OBus_property.rdwr $expr_of_ty t$ >>
         ] ];
 
     class_expr:

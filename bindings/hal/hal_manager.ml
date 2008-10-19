@@ -19,10 +19,10 @@ include OBus_client.Make_constant
      let bus = OBus_bus.system
    end)
 
-let get_all_devices = call "GetAllDevices" << unit -> Hal_device.udi list >>
-let get_all_devices_with_properties = call "GetAllDevicesWithProperties" << unit -> [Hal_device.udi * {string, Hal_device.property} list] list >>
-let device_exists = call "DeviceExists" << object_path -> bool >>
-let find_device_string_match = call "FindDeviceStringMatch" << string -> string -> Hal_device.udi list >>
+OBUS_method GetAllDevices : unit -> Hal_device.udi list
+OBUS_method GetAllDevicesWithProperties : unit -> [Hal_device.udi * {string, Hal_device.property} list] list
+OBUS_method DeviceExists : object_path -> bool
+OBUS_method FindDeviceStringMatch : string -> string -> Hal_device.udi list
 
 let tbroken_udi = wrap_basic tstring OBus_path.of_string OBus_path.to_string
 
@@ -42,15 +42,15 @@ let find_device_by_capability capability =
                                on interface \"org.freedesktop.Hal.Manager\", expected: \"ao\", got: %S"
                               (string_of_signature (type_of_sequence v))))
 
-let new_device = call "NewDevice" << unit -> string >>
-let remove = call "Remove" << string -> unit >>
-let commit_to_gdl = call "CommitToGdl" << string -> string -> unit >>
-let acquire_global_interface_lock = call "AcquireGlobalInterfaceLock" << string -> bool -> unit >>
-let release_global_interface_lock = call "ReleaseGlobalInterfaceLock" << string -> unit >>
-let singleton_addon_is_ready = call "SingletonAddonIsReady" << string -> unit >>
+OBUS_method NewDevice : unit -> string
+OBUS_method Remove : string -> unit
+OBUS_method CommitToGdl : string -> string -> unit
+OBUS_method AcquireGlobalInterfaceLock : string -> bool -> unit
+OBUS_method ReleaseGlobalInterfaceLock : string -> unit
+OBUS_method SingletonAddonIsReady : string -> unit
 
-let on_device_added = on_signal "DeviceAdded" <:obus_type< broken_udi >>
-let on_device_removed = on_signal "DeviceRemoved" <:obus_type< broken_udi >>
-let on_new_capability = on_signal "NewCapability" <:obus_type< broken_udi * string >>
-let on_global_interface_lock_acquired = on_signal "GlobalInterfaceLockAcquired" <:obus_type< string * string * int >>
-let on_global_interface_lock_released = on_signal "GlobalInterfaceLockReleased" <:obus_type< string * string * int >>
+OBUS_signal DeviceAdded : broken_udi
+OBUS_signal DeviceRemoved : broken_udi
+OBUS_signal NewCapability : broken_udi * string
+OBUS_signal GlobalInterfaceLockAcquired : string * string * int
+OBUS_signal GlobalInterfaceLockReleased : string * string * int

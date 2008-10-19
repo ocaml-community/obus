@@ -23,7 +23,13 @@ let args = [
   "-service", Arg.Set service_mode,
   "generate code for service implementation instead of proxy code";
   "-no-sugar", Arg.Set no_sugar,
-  "disable the use of syntactic sugars in generated files"
+  "disable the use of syntactic sugars in generated files";
+  "-name-translator", Arg.Symbol(["upper"; "lower"],
+                                 (function
+                                    | "upper" -> translator := Upper
+                                    | "lower" -> translator := Lower
+                                    | n -> failwith "invalid name translator")),
+  " how to translate dbus names to caml names";
 ]
 
 let usage_msg = Printf.sprintf "Usage: %s <options> <xml-files>
@@ -70,43 +76,57 @@ let parse_file fname =
 
 let im_term_of_args = List.map (fun (name, typ) -> implem_term_of_single typ)
 
-let print_proxy_implem sugar pp (name, content, annots) =
+let print_proxy_implem_no_sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
   p "  include OBus_client.Make(struct let name = %S end)\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        if sugar then
-          p "  let %a = call %S << %a >>\n" plid name name
-            (print_func (tuple (im_term_of_args  outs)))
-            (im_term_of_args ins)
-        else
-          p "  let %a = call %S %a\n" plid name name
-            (print_func_no_sugar (tuple (im_term_of_args  outs)))
-            (im_term_of_args ins)
+        p "  let %a = call %S %a\n" plid name name
+          (print_func_no_sugar (tuple (im_term_of_args  outs)))
+          (im_term_of_args ins)
     | Signal(name, args, annots) ->
         let args = match args with
           | [] -> unit
           | _ -> tuple (im_term_of_args args)
         in
-        if sugar then
-          p "  let on_%a = on_signal %S <:obus_type< %a >>\n" plid name name
-            (print_term true) args
-        else
-          p "  let on_%a = on_signal %S %a\n" plid name name
-            (print_term_no_sugar false) args
+        p "  let on_%a = on_signal %S %a\n" plid name name
+          (print_term_no_sugar false) args
     | Property(name, typ, access, annots) ->
         let access = match access with
           | Read -> "rd_only"
           | Write -> "wr_only"
           | Read_write -> "rdwr"
         and term = implem_term_of_single typ in
-        if sugar then
-          p "  let %a = property %S OBus_property.%s <:obus_type< %a >>\n" plid name name access
-            (print_term true) term
-        else
-          p "  let %a = property %S OBus_property.%s %a\n" plid name name access
-            (print_term_no_sugar false) term
+        p "  let %a = property %S OBus_property.%s %a\n" plid name name access
+          (print_term_no_sugar false) term
+  end content;
+  p "end\n"
+
+let print_proxy_implem_sugar pp (name, content, annots) =
+  let p fmt = fprintf pp fmt in
+  p "module %a = struct\n" puid name;
+  p "  include OBus_client.Make(struct let name = %S end)\n" name;
+  List.iter begin function
+    | Method(name, ins, outs, annots) ->
+        p "  OBUS_method %s : %a\n" name
+          (print_func (tuple (im_term_of_args  outs)))
+          (im_term_of_args ins)
+    | Signal(name, args, annots) ->
+        let args = match args with
+          | [] -> unit
+          | _ -> tuple (im_term_of_args args)
+        in
+        p "  OBUS_signal %s : %a\n" name
+          (print_term true) args
+    | Property(name, typ, access, annots) ->
+        let access = match access with
+          | Read -> "r"
+          | Write -> "w"
+          | Read_write -> "rw"
+        and term = implem_term_of_single typ in
+        p "  OBUS_property_%s %s : %a\n" access name
+          (print_term true) term
   end content;
   p "end\n"
 
@@ -116,6 +136,7 @@ let str_of_access = function
   | Read_write -> "rw"
 
 (***** Printing of service code *****)
+
 let print_service_implem_no_sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "class virtual %a = object(self)\n" plid name;
@@ -213,7 +234,8 @@ let _ =
   let printer = match !service_mode, !no_sugar with
     | true, true -> print_service_implem_no_sugar
     | true, false -> print_service_implem_sugar
-    | false, _ -> print_proxy_implem (not !no_sugar) in
+    | false, true -> print_proxy_implem_no_sugar
+    | false, false -> print_proxy_implem_sugar in
 
   with_pp (output_file_prefix ^ ".ml")
     (fun pp ->

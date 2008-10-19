@@ -93,7 +93,7 @@ class t : object
 
   method get : OBus_name.interface -> OBus_name.member -> OBus_value.single Lwt.t
   method set : OBus_name.interface -> OBus_name.member -> OBus_value.single -> unit Lwt.t
-  method getAll : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
+  method get_all : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
     (** Object properties *)
 
   method obus_emit_signal : 'a 'b.

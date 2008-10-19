@@ -37,10 +37,21 @@ OBUS_struct ('a, 'b) coord = { x: 'a; y: 'b }
 
 OBUS_struct 'a x = { x: 'a }
 
-OBUS_class dbus "org.freedesktop.DBus" = object
+class virtual dbus = OBUS_interface "org.freedesktop.DBus"
   OBUS_method ListNames : string list;
   OBUS_method Truc : [{string, variant} list * int] -> string;
   OBUS_signal NameOwnerChanged : string * string * string;
   OBUS_val_rw mutable x : int;
   OBUS_property_r y : string
 end
+
+OBUS_method Plop : int -> string
+OBUS_signal HaHaHa : string
+
+OBUS_name_translator upper
+
+OBUS_method SetCPUFreqGovernor : string
+
+OBUS_name_translator lower
+
+OBUS_method SetCPUFreqGovernor : string

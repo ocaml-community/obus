@@ -29,9 +29,9 @@ let main =
        List.iter (Printf.printf "  %s\n") names
      in
 
-     names <-- OBus_bus.list_activable_names bus;
+     names <-- OBus_bus.list_activatable_names bus;
      let _ =
-       printf "these names are activable:\n";
+       printf "these names are activatable:\n";
        List.iter (Printf.printf "  %s\n") names
      in
 

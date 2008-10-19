@@ -20,9 +20,9 @@ module Bar =
 struct
   include OBus_client.Make(struct let name = "org.ocamlcore.forge.obus.ProgressBar.Bar" end)
   let tt = OBus_proxy.tt
-  let position = property "Position" OBus_property.rdwr <:obus_type< int >>
-  let close = call "Close" << unit >>
-  let on_closed = on_signal "Closed" <:obus_type< closed_reason >>
+  OBUS_property_rw Position : int
+  OBUS_method Close : unit
+  OBUS_signal Closed : closed_reason
 end
 
 module Manager =
@@ -35,8 +35,8 @@ struct
        let bus = OBus_bus.session
      end)
 
-  let server_version = call "ServerVersion" << unit -> string >>
-  let create_progress_bar = call "CreateProgressBar" << int -> Bar.t >>
+  OBUS_method ServerVersion : unit -> string
+  OBUS_method CreateProgressBar : int -> Bar.t
 end
 
 let _ = Random.self_init ()

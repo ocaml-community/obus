@@ -79,8 +79,9 @@ let desktop_entry = ref None
 
 open Lwt
 
-let get_server_information = call "GetServerInformation" << unit -> server_info >>
-let get_capabilities = call "GetCapabilities" << unit -> string list >>
+OBUS_method GetServerInformation : unit -> server_info
+OBUS_method GetCapabilities : unit -> string list
+
 let close_notification (id, w) =
   if not id.id_deleted then begin
     id.id_deleted <- true;

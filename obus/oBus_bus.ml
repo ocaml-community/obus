@@ -20,7 +20,7 @@ include OBus_client.Make_constant_path
 
 OBUS_type name = string
 
-let hello = call "Hello" << name >>
+OBUS_method Hello : name
 
 let error_handler = function
   | OBus_lowlevel.Protocol_error msg ->
@@ -75,14 +75,14 @@ OBUS_flag request_name_result : uint =
   | 3 -> `exists
   | 4 -> `already_owner ]
 
-let request_name = call "RequestName" << string -> request_name_flag_list -> request_name_result >>
+OBUS_method RequestName : string -> request_name_flag_list -> request_name_result
 
 OBUS_flag release_name_result : uint =
     [ 1 -> `released
     | 2 -> `non_existent
     | 3 -> `not_owner ]
 
-let release_name = call "ReleaseName" << string -> release_name_result >>
+OBUS_method ReleaseName : string -> release_name_result
 
 type start_service_flag
 let tstart_service_flag : start_service_flag list ty_basic = wrap_basic tuint (fun _ -> []) (fun _ -> 0)
@@ -91,29 +91,29 @@ OBUS_flag start_service_by_name_result : uint =
   [ 1 -> `success
   | 2 -> `already_running ]
 
-let start_service_by_name = call "StartServiceByName" << string -> start_service_flag -> start_service_by_name_result >>
-let name_has_owner = call "NameHasOwner" << string -> bool >>
-let list_names = call "ListNames" << name list >>
-let list_activable_names = call "ListActivatableNames" << name list >>
-let get_name_owner = call "GetNameOwner" << name -> name >>
-let list_queued_owners = call "ListQueuedOwners" << name -> name list >>
+OBUS_method StartServiceByName : string -> start_service_flag -> start_service_by_name_result
+OBUS_method NameHasOwner : string -> bool
+OBUS_method ListNames : name list
+OBUS_method ListActivatableNames : name list
+OBUS_method GetNameOwner : name -> name
+OBUS_method ListQueuedOwners : name -> name list
 
 OBUS_type match_rule = string
 
 let match_rule = Rules.to_string
 
-let add_match = call "AddMatch" << match_rule -> unit >>
-let remove_match = call "RemoveMatch" << match_rule -> unit >>
+OBUS_method AddMatch : match_rule -> unit
+OBUS_method RemoveMatch : match_rule -> unit
 
-let get_connection_unix_user = call "GetConnectionUnixUser" << string -> int >>
-let get_connection_unix_process_id = call "GetConnectionUnixProcessId" << string -> int >>
-let get_connection_selinux_security_context = call "GetConnectionSelinuxSecurityContext" << string -> byte_array >>
-let reload_config = call "ReloadConfig" << unit >>
-let get_id = call "GetId" << OBus_uuid.t >>
+OBUS_method GetConnectionUnixUser : string -> int
+OBUS_method GetConnectionUnixProcessId : string -> int
+OBUS_method GetConnectionSelinuxSecurityContext : string -> byte_array
+OBUS_method ReloadConfig : unit
+OBUS_method GetId : OBus_uuid.t
 
-let on_name_owner_changed = on_signal "NameOwnerChanged" <:obus_type< string * string * string >>
-let on_name_lost = on_signal "NameLost" <:obus_type< string >>
-let on_name_acquired = on_signal "NameAcquired" <:obus_type< string >>
+OBUS_signal NameOwnerChanged : name * name * name
+OBUS_signal NameLost : name
+OBUS_signal NameAcquired : name
 
 type status = [ `up | `down ]
 

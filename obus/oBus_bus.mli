@@ -105,7 +105,7 @@ val name_has_owner : t -> name -> bool Lwt.t
 val list_names : t -> name list Lwt.t
   (** List names currently running on the message bus *)
 
-val list_activable_names : t -> name list Lwt.t
+val list_activatable_names : t -> name list Lwt.t
   (** List services that can be activated. A service is automatically
       activated when you call one of its method or when you use
       [start_service_by_name] *)

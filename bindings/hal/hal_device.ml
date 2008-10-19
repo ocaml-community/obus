@@ -48,97 +48,97 @@ let tproperty = wrap_single tvariant
      | Pbool x -> vbasic (Boolean x)
      | Pdouble x -> vbasic (Double x))
 
-let get_all_properties = call "GetAllProperties" << {string, property} list >>
-let set_multiple_properties = call "SetMultipleProperties" << {string, property} list -> unit >>
-let get_property = call "GetProperty" << string -> property >>
-let get_property_string = call "GetPropertyString" << string -> string >>
-let get_property_string_list = call "GetPropertyStringList" << string -> string list >>
-let get_property_integer = call "GetPropertyInteger" << string -> int >>
-let get_property_boolean = call "GetPropertyBoolean" << string -> bool >>
-let get_property_double = call "GetPropertyDouble" << string -> float >>
-let set_property = call "SetProperty" << string -> property -> unit >>
-let set_property_string = call "SetPropertyString" << string -> string -> unit >>
-let set_property_string_list = call "SetPropertyStringList" << string -> string list -> unit >>
-let set_property_integer = call "SetPropertyInteger" << string -> int -> unit >>
-let set_property_boolean = call "SetPropertyBoolean" << string -> bool -> unit >>
-let set_property_double = call "SetPropertyDouble" << string -> float -> unit >>
-let remove_property = call "RemoveProperty" << string -> unit >>
-let get_property_type = call "GetPropertyType" << string -> int >>
-let property_exists = call "PropertyExists" << string -> bool >>
-let add_capability = call "AddCapability" << string -> unit >>
-let query_capability = call "QueryCapability" << string -> bool >>
-let lock = call "Lock" << string -> bool >>
-let unlock = call "Unlock" << bool >>
-let acquire_interface_lock = call "AcquireInterfaceLock" << string -> bool -> unit >>
-let release_interface_lock = call "ReleaseInterfaceLock" << string -> unit >>
-let is_caller_locked_out = call "IsCallerLockedOut" << string -> string -> bool >>
-let is_caller_privileged = call "IsCallerPrivileged" << string -> string list -> string -> string >>
-let is_locked_by_others = call "IsLockedByOthers" << string -> bool >>
-let string_list_append = call "StringListAppend" << string -> string -> unit >>
-let string_list_prepend = call "StringListPrepend" << string -> string -> unit >>
-let string_list_remove = call "StringListRemove" << string -> string -> unit >>
-let emit_condition = call "EmitCondition" << string -> string -> bool >>
-let rescan = call "Rescan" << bool >>
-let reprobe = call "Reprobe" << bool >>
-let claim_interface = call "ClaimInterface" << string -> string -> bool >>
-let addon_is_ready = call "AddonIsReady" << bool >>
+OBUS_method GetAllProperties : {string, property} list
+OBUS_method SetMultipleProperties : {string, property} list -> unit
+OBUS_method GetProperty : string -> property
+OBUS_method GetPropertyString : string -> string
+OBUS_method GetPropertyStringList : string -> string list
+OBUS_method GetPropertyInteger : string -> int
+OBUS_method GetPropertyBoolean : string -> bool
+OBUS_method GetPropertyDouble : string -> float
+OBUS_method SetProperty : string -> property -> unit
+OBUS_method SetPropertyString : string -> string -> unit
+OBUS_method SetPropertyStringList : string -> string list -> unit
+OBUS_method SetPropertyInteger : string -> int -> unit
+OBUS_method SetPropertyBoolean : string -> bool -> unit
+OBUS_method SetPropertyDouble : string -> float -> unit
+OBUS_method RemoveProperty : string -> unit
+OBUS_method GetPropertyType : string -> int
+OBUS_method PropertyExists : string -> bool
+OBUS_method AddCapability : string -> unit
+OBUS_method QueryCapability : string -> bool
+OBUS_method Lock : string -> bool
+OBUS_method Unlock : bool
+OBUS_method AcquireInterfaceLock : string -> bool -> unit
+OBUS_method ReleaseInterfaceLock : string -> unit
+OBUS_method IsCallerLockedOut : string -> string -> bool
+OBUS_method IsCallerPrivileged : string -> string list -> string -> string
+OBUS_method IsLockedByOthers : string -> bool
+OBUS_method StringListAppend : string -> string -> unit
+OBUS_method StringListPrepend : string -> string -> unit
+OBUS_method StringListRemove : string -> string -> unit
+OBUS_method EmitCondition : string -> string -> bool
+OBUS_method Rescan : bool
+OBUS_method Reprobe : bool
+OBUS_method ClaimInterface : string -> string -> bool
+OBUS_method AddonIsReady : bool
 
-let on_property_modified = on_signal "PropertyModified" <:obus_type< int * [string * bool * bool] list >>
-let on_condition = on_signal "Condition" <:obus_type< string * string >>
-let on_interface_lock_acquired = on_signal "InterfaceLockAcquired" <:obus_type< string * string * int >>
-let on_interface_lock_released = on_signal "InterfaceLockReleased" <:obus_type< string * string * int >>
+OBUS_signal PropertyModified : int * [string * bool * bool] list
+OBUS_signal Condition : string * string
+OBUS_signal InterfaceLockAcquired : string * string * int
+OBUS_signal InterfaceLockReleased : string * string * int
 
 module Volume = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.Volume" end)
-  let mount = call "Mount" << string -> string -> string list -> int >>
-  let unmount = call "Unmount" << string list -> int >>
-  let eject = call "Eject" << string list -> int >>
+  OBUS_method Mount : string -> string -> string list -> int
+  OBUS_method Unmount : string list -> int
+  OBUS_method Eject : string list -> int
 end
 module Storage = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.Storage" end)
-  let eject = call "Eject" << string list -> int >>
-  let close_tray = call "CloseTray" << string list -> int >>
+  OBUS_method Eject : string list -> int
+  OBUS_method CloseTray : string list -> int
 end
 module Storage_removable = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.Storage.Removable" end)
-  let check_for_media = call "CheckForMedia" << bool >>
+  OBUS_method CheckForMedia : bool
 end
 module Wake_on_lan = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.WakeOnLan" end)
-  let get_supported = call "GetSupported" << int >>
-  let get_enabled = call "GetEnabled" << int >>
-  let set_enabled = call "SetEnabled" << bool -> int >>
+  OBUS_method GetSupported : int
+  OBUS_method GetEnabled : int
+  OBUS_method SetEnabled : bool -> int
 end
 module System_power_management = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.SystemPowerManagement" end)
-  let suspend = call "Suspend" << int -> int >>
-  let suspend_hybrid = call "SuspendHybrid" << int -> int >>
-  let hibernate = call "Hibernate" << int >>
-  let shutdown = call "Shutdown" << int >>
-  let reboot = call "Reboot" << int >>
-  let set_power_save = call "SetPowerSave" << bool -> int >>
+  OBUS_method Suspend : int -> int
+  OBUS_method SuspendHybrid : int -> int
+  OBUS_method Hibernate : int
+  OBUS_method Shutdown : int
+  OBUS_method Reboot : int
+  OBUS_method SetPowerSave : bool -> int
 end
 module Cpufreq = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.CPUFreq" end)
-  let set_cpufreq_governor = call "SetCPUFreqGovernor" << string -> unit >>
-  let set_cpufreq_performance = call "SetCPUFreqPerformance" << int -> unit >>
-  let set_cpufreq_consider_nice = call "SetCPUFreqConsiderNice" << bool -> unit >>
-  let get_cpufreq_governor = call "GetCPUFreqGovernor" << string >>
-  let get_cpufreq_performance = call "GetCPUFreqPerformance" << int >>
-  let get_cpufreq_consider_nice = call "GetCPUFreqConsiderNice" << bool >>
-  let get_cpufreq_available_governors = call "GetCPUFreqAvailableGovernors" << string list >>
+  OBUS_method SetCPUFreqGovernor : string -> unit
+  OBUS_method SetCPUFreqPerformance : int -> unit
+  OBUS_method SetCPUFreqConsiderNice : bool -> unit
+  OBUS_method GetCPUFreqGovernor : string
+  OBUS_method GetCPUFreqPerformance : int
+  OBUS_method GetCPUFreqConsiderNice : bool
+  OBUS_method GetCPUFreqAvailableGovernors : string list
 end
 module Laptop_panel = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.LaptopPanel" end)
-  let set_brightness = call "SetBrightness" << int -> int >>
-  let get_brightness = call "GetBrightness" << int >>
+  OBUS_method SetBrightness : int -> int
+  OBUS_method GetBrightness : int
 end
 module Dock_station = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.DockStation" end)
-  let undock = call "Undock" << int >>
+  OBUS_method Undock : int
 end
 module Kill_switch = struct
   include Make_interf(struct let name = "org.freedesktop.Hal.Device.KillSwitch" end)
-  let set_power = call "SetPower" << bool -> int >>
-  let get_power = call "GetPower" << int >>
+  OBUS_method SetPower : bool -> int
+  OBUS_method GetPower : int
 end

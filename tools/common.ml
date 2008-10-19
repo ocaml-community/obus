@@ -8,54 +8,23 @@
  *)
 
 open Format
-
 open OBus_interface
-
-(***** Name camlization *****)
-
-(* Apply the following transformations:
-
-   "SetCPUFreqGovernor" -> ["set"; "cpufreq"; "governor"]
-   "org.freedesktop.DBus" -> ["org"; "freedesktop"; "dbus"] *)
-let split name =
-  let len = String.length name in
-  let rec find_end_word previous_is_upper i =
-    if i = len
-    then (i, i)
-    else match name.[i] with
-      | '.' -> (i, i + 1)
-      | ch when ch >= 'A' && ch <= 'Z' -> begin
-          match previous_is_upper with
-            | true -> find_end_word true (i + 1)
-            | false -> (i, i)
-        end
-      | _ -> find_end_word false (i + 1)
-  in
-  let rec split i =
-    if i = len
-    then []
-    else
-      let j, k = find_end_word true (i + 1) in
-      String.lowercase (String.sub name i (j - i)) :: split k
-  in
-  split 0
-
-let rec print_parts pp = function
-  | [] -> ()
-  | [e] -> pp_print_string pp e
-  | e :: l -> fprintf pp "%s_%a" e print_parts l
-
-let plid pp str = print_parts pp (split str)
-let puid pp str = match split str with
-  | [] -> ()
-  | e :: l -> print_parts pp (String.capitalize e :: l)
+open Term
+open Name_translator
 
 (***** Printing of module interfaces *****)
 
-(* We do not use camlp4 because we must print implementation using the
-   syntax extension *)
+type translator = Lower | Upper
 
-open Term
+let translator = ref Lower
+
+let plid pp str = match !translator with
+  | Lower -> Lower.plid pp str
+  | Upper -> Upper.plid pp str
+
+let puid pp str = match !translator with
+  | Lower -> Lower.puid pp str
+  | Upper -> Upper.puid pp str
 
 let unit = term "unit" []
 
@@ -71,7 +40,7 @@ let print_proxy_interf pp (name, content, annots) =
           (print_func (term "Lwt.t" [tuple (if_term_of_args  outs)]))
           (term "t" [] :: if_term_of_args ins)
     | Signal(name, args, annots) ->
-        p "  val on_%a : t -> (%a -> unit) -> OBus_signal.receiver Lwt.t\n" plid name
+        p "  val %a : t -> (%a -> unit) -> OBus_signal.receiver Lwt.t\n" plid ("on" ^ name)
           (print_term true)
           (match args with
              | [] -> unit

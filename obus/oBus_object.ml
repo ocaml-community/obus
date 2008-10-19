@@ -126,7 +126,7 @@ class t = object(self)
       | None ->
           fail (OBus_error.Failed (sprintf "no such property: %S on interface %S" name iface))
 
-  method getAll iface =
+  method get_all iface =
     Property_map.fold (fun (iface', member) (reader, writer) acc ->
                          if iface = iface' then
                            match reader with

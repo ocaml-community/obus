@@ -115,9 +115,9 @@ let manager = object
 
   method obus_path = ["org"; "ocamlcore"; "forge"; "obus"; "ProgressBar"; "Manager"]
 
-  method serverVersion = return "1.0"
+  method server_version = return "1.0"
 
-  method createProgressBar ctx x =
+  method create_progress_bar ctx x =
     if x < 0 || x > 100 then
       fail (Invalid_value "position must be between 0 and 100")
     else

@@ -108,7 +108,7 @@ class type ['connection] _dbus_object = object
   method introspect : 'connection -> OBus_introspect.document Lwt.t
   method get : OBus_name.interface -> OBus_name.member -> OBus_value.single Lwt.t
   method set : OBus_name.interface -> OBus_name.member -> OBus_value.single -> unit Lwt.t
-  method getAll : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
+  method get_all : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
   method obus_emit_signal : 'a 'b.
     ?connection:'connection ->
     ?destination:OBus_name.connection ->
