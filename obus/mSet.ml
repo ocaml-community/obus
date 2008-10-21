@@ -7,66 +7,87 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-class ['a] node x set = object(self)
-  val mutable prev = (set :> < set_next : 'a node option -> unit >)
-  val mutable next = None
-  val mutable enabled = false
+type 'a prev =
+  | Set of 'a set
+  | Node of 'a node
+  | Alone
 
-  method data = x
+and 'a node = {
+  set : 'a set;
+  mutable prev : 'a prev;
+  mutable next : 'a node option;
+  data : 'a;
+}
 
-  method set_prev p = prev <- p
-  method set_next n = next <- n
+and 'a set = 'a node option ref
 
-  method iter f =
-    (match enabled with
-       | false -> ()
-       | true -> f (self#data));
-    match next with
-      | Some n -> n#iter f
-      | None -> ()
+type 'a t = 'a set
 
-  method enabled = enabled
+let make _ = ref None
+let is_empty s = !s = None
 
-  method disable = match enabled with
-    | false -> ()
-    | true ->
-        enabled <- false;
-        prev#set_next next;
-        match next with
-          | Some n -> n#set_prev prev
-          | None -> ()
-
-  method enable = match enabled with
-    | true -> ()
-    | false ->
-        enabled <- true;
-        next <- set#first;
-        set#set_next (Some (self :> 'a node));
-        match next with
-          | Some n -> n#set_prev (self :> < set_next : 'a node option -> unit >)
-          | None -> ()
-
-end and ['a] t = object(self)
-  val mutable first : 'a node option = None
-  method first = first
-  method set_next n = first <- n
-
-  method add x =
-    let node = new node x (self :> 'a t) in
-    node#enable;
-    node
-
-  method iter (f : 'a -> unit) = match first with
-    | Some n -> n#iter f
+let add s x =
+  let first = !s in
+  let n = { set = s;
+            prev = Set s;
+            next = first;
+            data = x } in
+  begin match first with
+    | Some f -> f.prev <- Node n
     | None -> ()
-end
+  end;
+  s := Some n;
+  n
 
-let make _ = new t
-let is_empty s = match s#first with
-  | Some _ -> false
-  | None -> true
-let add s x = s#add x
-let enabled n = n#enabled
-let enable n = n#enable
-let disable n = n#disable
-let iter f n = n#iter f
+let enabled n = n.prev = Alone
+
+let disable n =
+  begin match n.next with
+    | None -> ()
+    | Some n -> n.prev <- n.prev
+  end;
+  begin match n.prev with
+    | Set s -> s := n.next
+    | Node p -> p.next <- n.next
+    | Alone -> ()
+  end;
+  n.prev <- Alone;
+  n.next <- None
+
+let enable n =
+  if n.prev = Alone then begin
+    let first = !(n.set) in
+    n.next <- first;
+    n.prev <- Set n.set;
+    n.set := Some n;
+    match first with
+      | Some f -> f.prev <- Node n
+      | None -> ()
+  end
+
+let iter f s =
+  let rec aux = function
+    | None -> ()
+    | Some n -> f n.data; aux n.next
+  in
+  aux !s
+
+let fold f acc s =
+  let rec aux acc = function
+    | None -> acc
+    | Some n -> aux (f n.data acc) n.next
+  in
+  aux acc !s
+
+let clear s =
+  let rec aux = function
+    | None -> ()
+    | Some n ->
+        let next = n.next in
+        n.prev <- Alone;
+        n.next <- None;
+        aux next
+  in
+  let first = !s in
+  s := None;
+  aux first
