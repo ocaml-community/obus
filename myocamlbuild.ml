@@ -21,7 +21,7 @@ module Config =
 struct
   (***** Library configuration *****)
 
-  let obus_version = "0.2"
+  let obus_version = "0.3"
 
   (* All the modules of the obus library *)
   let all_modules =
@@ -223,6 +223,12 @@ let _ =
         (***** Other *****)
 
         (* Set the obus version number with pa_macro *)
-        flag_all_stages_except_link "file:obus/oBus_info.ml" & S[A"-ppopt"; A(sprintf "-D OBUS_VERSION=%S" Config.obus_version)]
+        flag_all_stages_except_link "file:obus/oBus_info.ml" & S[A"-ppopt"; A(sprintf "-D OBUS_VERSION=%S" Config.obus_version)];
+
+        (* Enable backtrace support if we have ocaml>=3.11 *)
+        Scanf.sscanf Sys.ocaml_version "%d.%d" begin fun major minor ->
+          if (major, minor) >= (3, 11) then
+            flag_all_stages_except_link "backtrace_support" & S[A"-ppopt"; A"-D HAVE_BACKTRACE"]
+        end
     | _ -> ()
   end

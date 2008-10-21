@@ -36,15 +36,15 @@ val native_byte_order : byte_order
   (** Byte order of the current architecture. It is used as default
       for sending messages. *)
 
-val verbose : bool
+val verbose : bool ref
   (** [true] is the environment variable OBUS_LOG is set. This will
       make obus verbose. *)
 
-val debug : bool
+val debug : bool ref
   (** [true] is the environment variable OBUS_LOG is set to
       "debug". This will make obus more verbose. *)
 
-val dump : bool
+val dump : bool ref
   (** [true] is the environment variable OBUS_LOG is set to
       "dump". This will dump all incoming and outgoind message on
       stderr. *)
