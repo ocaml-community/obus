@@ -467,7 +467,12 @@ struct
              output_uint32 oc (Int32.of_int len);
              output_padding oc initial_padding;
              output_array oc)
-    | Struct x -> wsequence i x
+    | Struct x ->
+        let padding = pad8 i in
+        let i, output_sequence = wsequence (i + padding) x in
+        (i, fun oc ->
+           output_padding oc padding;
+           output_sequence oc)
     | Variant x ->
         let t = OBus_value.type_of_single x in
         let len = Types_writer.single_signature_size t in
@@ -482,9 +487,13 @@ struct
 
   and welement i = function
     | Dict_entry(k, v) ->
-        let i, output_key = wbasic i k in
+        let padding = pad8 i in
+        let i, output_key = wbasic (i + padding) k in
         let i, output_val = wsingle i v in
-        (i, fun oc -> perform output_key oc; output_val oc)
+        (i, fun oc -> perform
+           output_padding oc padding;
+           output_key oc;
+           output_val oc)
     | Single x -> wsingle i x
 
   and wsequence i = function
@@ -790,9 +799,15 @@ struct
                return (limit, varray t l))
     | Tstruct tl ->
         let reader = rsequence tl in
-        (fun ic i size -> perform
-           (i, l) <-- reader ic i size;
-           return (i, vstruct l))
+        (fun ic i size ->
+           let padding = pad8 i in
+           let i = i + padding in
+           if i > size then
+             out_of_bounds ()
+           else perform
+             input_padding ic padding;
+             (i, l) <-- reader ic i size;
+             return (i, vstruct l))
     | Tvariant ->
         (fun ic i size -> perform
            (i, t) <-- rtype ic i size;
