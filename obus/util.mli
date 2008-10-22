@@ -44,14 +44,23 @@ val hex_decode : string -> string
       replaced by two hexadecimal characters which represent his ascii
       code *)
 
-val with_open_in : string -> (in_channel -> 'a) -> 'a
-val with_open_out : string -> (out_channel -> 'a) -> 'a
+val exn_to_lwt : ('a -> 'b) -> 'a -> 'b Lwt.t
+
+val with_open_in : string -> (Lwt_chan.in_channel -> 'a Lwt.t) -> 'a Lwt.t
+val with_open_out : string -> (Lwt_chan.out_channel -> 'a Lwt.t) -> 'a Lwt.t
   (** [with_open_* fname f] open [fname], apply [f] on the channel and
       close it after whatever happen *)
 
-val with_process_in : string -> (in_channel -> 'a) -> 'a
-val with_process_out : string -> (out_channel -> 'a) -> 'a
+val with_process_in : string -> string array -> (Lwt_chan.in_channel -> 'a Lwt.t) -> 'a Lwt.t
+val with_process_out : string -> string array -> (Lwt_chan.out_channel -> 'a Lwt.t) -> 'a Lwt.t
   (** Same thing but for processes *)
+
+val apply : ('a -> 'b) -> 'a -> (string -> unit) -> 'b Lwt.t
+  (** [apply f x g] apply [f] to [x] and call [g] with an error
+      message if it fail *)
+
+val call : (unit -> 'a) -> (string -> unit) -> 'a Lwt.t
+  (** [call f g] same as [apply f () g] *)
 
 val homedir : string Lazy.t
   (** Return the home directory *)

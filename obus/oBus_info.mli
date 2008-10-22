@@ -12,7 +12,7 @@
 val version : string
   (** version of obus *)
 
-val machine_uuid : string Lazy.t
+val machine_uuid : OBus_uuid.t Lwt.t Lazy.t
   (** UUID of the machine we are running on *)
 
 val protocol_version : int

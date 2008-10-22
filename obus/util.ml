@@ -7,10 +7,11 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+open Lwt
 open Printf
 
 let string_of_exn = function
-  | Unix.Unix_error(error, _, _) -> Unix.error_message error
+  | Unix.Unix_error(err, _, _) -> Unix.error_message err
   | Sys_error msg -> msg
   | Failure msg -> msg
   | exn -> Printexc.to_string exn
@@ -40,18 +41,6 @@ let part_map f l =
   List.fold_right (fun x (success, failure) -> match f x with
                      | None -> (success, x :: failure)
                      | Some(v) -> (v :: success, failure)) l ([], [])
-
-let try_finally f close arg =
-  let result =
-    try
-      f arg
-    with
-      | e ->
-          close arg;
-          raise e
-  in
-    close arg;
-    result
 
 type ('a, 'b) either =
   | Left of 'a
@@ -98,30 +87,68 @@ let hex_decode hex =
   done;
   str
 
+let exn_to_lwt f x =
+  try
+    return (f x)
+  with
+      exn -> fail exn
+
+let apply f x on_error =
+  try
+    return (f x)
+  with exn ->
+    on_error (string_of_exn exn);
+    fail exn
+
+let call f on_error = apply f () on_error
+
 let with_open_in fname f =
-  try_finally f close_in (open_in fname)
+  (perform
+     ic <-- exn_to_lwt Lwt_chan.open_in fname;
+     finalize
+       (fun _ -> f ic)
+       (fun _ -> Lwt_chan.close_in ic))
 
 let with_open_out fname f =
-  try_finally f close_out (open_out fname)
+  (perform
+     oc <-- exn_to_lwt Lwt_chan.open_out fname;
+     finalize
+       (fun _ -> f oc)
+       (fun _ -> perform
+          Lwt_chan.flush oc;
+          Lwt_chan.close_out oc))
 
-let with_process openp closep cmd f =
-  let c = openp cmd in
-  let result =
-    try
-      f c
-    with
-        exn ->
-          ignore (closep c);
-          raise exn
-  in
-  match closep c with
-    | Unix.WEXITED 0 -> result
-    | Unix.WEXITED n -> failwith (sprintf "command %S exited with status %d" cmd n)
-    | Unix.WSIGNALED n -> failwith (sprintf "command %S killed by signal %d" cmd n)
-    | Unix.WSTOPPED n -> failwith (sprintf "command %S stopped by signal %d" cmd n)
+let parallel cmd args stdin stdout toclose =
+  ignore
+    (perform
+       pid <-- call
+         (fun _ -> Unix.create_process cmd args stdin stdout Unix.stderr)
+         (Log.error "cannot create process %s: %s" cmd);
+       let _ = Unix.close toclose in
+       (_, status) <-- Lwt_unix.waitpid [] pid;
+       match status with
+         | Unix.WEXITED 0 -> return ()
+         | Unix.WEXITED n -> fail (Failure (sprintf "command %S exited with status %d" cmd n))
+         | Unix.WSIGNALED n -> fail (Failure (sprintf "command %S killed by signal %d" cmd n))
+         | Unix.WSTOPPED n -> fail (Failure (sprintf "command %S stopped by signal %d" cmd n)))
 
-let with_process_in cmd = with_process Unix.open_process_in Unix.close_process_in cmd
-let with_process_out cmd = with_process Unix.open_process_out Unix.close_process_out cmd
+let with_process_in cmd args f =
+  (perform
+     (fdr, fdw) <-- call Lwt_unix.pipe_in (Log.error "cannot create pipe: %s");
+     let _ = parallel cmd args Unix.stdin fdw fdw in
+     let ic = Lwt_chan.in_channel_of_descr fdr in
+     finalize
+       (fun _ -> f ic)
+       (fun _ -> Lwt_chan.close_in ic))
+
+let with_process_out cmd args f =
+  (perform
+     (fdr, fdw) <-- call Lwt_unix.pipe_out (Log.error "cannot create pipe: %s");
+     let _ = parallel cmd args fdr Unix.stdout fdr in
+     let oc = Lwt_chan.out_channel_of_descr fdw in
+     finalize
+       (fun _ -> f oc)
+       (fun _ -> Lwt_chan.close_out oc))
 
 module type Monad = sig
   type 'a t
@@ -177,10 +204,10 @@ let fill_pseudo buffer pos len =
 
 let fill_random buffer pos len =
   try
-    with_open_in "/dev/urandom"
-      (fun ic ->
-         let n = input ic buffer pos len in
-         if n < len then fill_pseudo buffer (pos + n) (len - n))
+    let ic = open_in "/dev/urandom" in
+    let n = input ic buffer pos len in
+    if n < len then fill_pseudo buffer (pos + n) (len - n);
+    close_in ic
   with
       exn ->
         Log.debug "failed to get random data from /dev/urandom: %s" (string_of_exn exn);

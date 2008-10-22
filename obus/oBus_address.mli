@@ -56,8 +56,8 @@ val to_string : t list -> string
   (** [to_string addresses] return a string representation of a list
       of addresses *)
 
-val system : t list Lazy.t
+val system : t list Lwt.t Lazy.t
   (** [system] list of addresses for system bus *)
 
-val session : t list Lazy.t
+val session : t list Lwt.t Lazy.t
   (** [session] list of addresses for session bus *)

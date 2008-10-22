@@ -372,10 +372,6 @@ let validate_string s =
 
 (***** Message writing *****)
 
-type 'output message_marshaler =
-  | Marshaler_failure of string
-  | Marshaler_success of ('output -> unit Lwt.t)
-
 module Types_writer = Types_rw.Make_writer(OBus_value)
   (struct
      include Lwt
@@ -604,17 +600,17 @@ let put_message ?(byte_order=native_byte_order) (msg : OBus_message.any) =
       | Big_endian ->
           'B', BEWriter.wmessage msg
     in
-    Marshaler_success(fun oc -> perform output_char oc bo_char; writer oc)
+    return (fun oc -> perform output_char oc bo_char; writer oc)
   with
     | Failure msg ->
-        Marshaler_failure msg
+        fail (Failure msg)
     | OBus_path.Invalid_element(elt, msg) ->
-        Marshaler_failure(sprintf "invalid path element(%S): %s" elt msg)
+        fail (Failure (sprintf "invalid path element(%S): %s" elt msg))
     | OBus_name.Invalid_name(typ, name, reason) ->
-        Marshaler_failure(sprintf "invalid %s name(%S): %s" typ name reason)
+        fail (Failure (sprintf "invalid %s name(%S): %s" typ name reason))
     | exn ->
-        Log.error "unexpected exception: %s" (Printexc.to_string exn);
-        assert false
+        Log.failure exn "unexpected exception";
+        fail exn
 
 (***** Message reading *****)
 
@@ -954,7 +950,7 @@ let failwith fmt = ksprintf (fun msg -> fail (Failure msg)) fmt
 
 class type transport = object
   method get_message : OBus_message.any Lwt.t
-  method put_message : OBus_message.any -> unit message_marshaler
+  method put_message : OBus_message.any -> (unit -> unit Lwt.t) Lwt.t
   method shutdown : unit
   method abort : exn -> unit
 end
@@ -973,9 +969,10 @@ class socket fd = object
   val ic = Lwt_chan.in_channel_of_descr fd
   val oc = Lwt_chan.out_channel_of_descr fd
   method get_message = get_message ic
-  method put_message msg = match put_message msg with
-      | Marshaler_success f -> Marshaler_success(fun () -> f oc)
-      | Marshaler_failure msg -> Marshaler_failure msg
+  method put_message msg =
+    (perform
+       f <-- put_message msg;
+       return (fun () -> f oc))
   method shutdown =
     Lwt_unix.shutdown fd SHUTDOWN_ALL;
     Lwt_unix.close fd
@@ -996,7 +993,7 @@ end
 class loopback = object(self)
   val mutable queue : OBus_message.any MQueue.t = MQueue.create ()
   method get_message = MQueue.get queue
-  method put_message msg = Marshaler_success(fun () -> MQueue.put msg queue; return ())
+  method put_message msg = return (fun () -> MQueue.put msg queue; return ())
   method shutdown = self#abort (Failure "transport closed")
   method abort exn = MQueue.abort queue exn
 end
@@ -1042,19 +1039,24 @@ let rec client_transport_of_addresses = function
           try_all (getaddrinfo host port opts)
 
       | Autolaunch ->
-          client_transport_of_addresses
-            ((try
-                let line = Util.with_process_in (sprintf "dbus-launch --autolaunch %s --binary-syntax"
-                                                   (Lazy.force OBus_info.machine_uuid)) Pervasives.input_line in
-                let line =
-                  try
-                    String.sub line 0 (String.index line '\000')
-                  with _ -> line
-                in
-                OBus_address.of_string line
-              with
-                  exn ->
-                    Log.log "autolaunch failed: %s" (Util.string_of_exn exn);
-                    []) @ rest)
+          (perform
+             addresses <-- catch
+               (fun _ -> perform
+                  uuid <-- Lazy.force OBus_info.machine_uuid;
+                  line <-- catch
+                    (fun _ -> Util.with_process_in "dbus-launch"
+                       [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|]
+                       Lwt_chan.input_line)
+                    (fun exn ->
+                       Log.log "autolaunch failed: %s" (Util.string_of_exn exn);
+                       fail exn);
+                  let line =
+                    try
+                      String.sub line 0 (String.index line '\000')
+                    with _ -> line
+                  in
+                  return (OBus_address.of_string line))
+               (fun exn -> return []);
+             client_transport_of_addresses (addresses @ rest))
 
       | _ -> client_transport_of_addresses rest

@@ -86,42 +86,37 @@ end
 let keyring_file_name context = sprintf "%s/.dbus-keyrings/%s" (Lazy.force Util.homedir) context
 
 let load_cookie context id =
-  let rec aux scanbuf =
-    match
-      try
-        Scanf.bscanf scanbuf "%ld %Ld %s\n"
-          (fun id' time cookie ->
-             if id = id' then
-               `Found cookie
-             else
-               `Not_found)
-      with
-          exn -> `Error exn
-    with
-      | `Found cookie -> cookie
-      | `Not_found -> aux scanbuf
-      | `Error End_of_file -> failwith "cookie id not found"
-      | `Error exn -> failwith "invalid cookie file contents"
+  let rec aux ic =
+    (perform
+       line <-- input_line ic;
+       (id', cookie) <-- catch
+         (fun _ -> Scanf.sscanf line "%ld %Ld %s"
+            (fun id' time cookie -> return (id', cookie)))
+         (fun _ -> fail (Failure "invalid cookie file contents"));
+       if id = id' then
+         return cookie
+       else
+         aux ic)
   in
-  try
-    Util.with_open_in (keyring_file_name context)
-      (fun ic -> aux (Scanf.Scanning.from_channel ic))
-  with
-      exn ->
-        Log.error "failed to load cookie %ld from %s: %s" id (keyring_file_name context) (Util.string_of_exn exn);
-        raise exn
+  catch
+    (fun _ -> Util.with_open_in (keyring_file_name context) aux)
+    (function
+       | End_of_file -> fail (Failure "cookie id not found")
+       | exn ->
+           Log.error "failed to load cookie %ld from %s: %s" id (keyring_file_name context) (Util.string_of_exn exn);
+           fail exn)
 
 class client_mech_dbus_cookie_sha1_handler = object
   method init = return (Client_mech_continue(string_of_int (Unix.getuid ())))
   method data chal =
     Log.debug "client: dbus_cookie_sha1: chal: %s" chal;
     Scanf.sscanf chal "%[^/\\ \n\r.] %ld %[a-fA-F0-9]%!" begin fun context id chal ->
-      let cookie = load_cookie context id in
-      let rand = hex_encode (Util.random_string 16) in
-      let resp = sprintf "%s %s" rand
-        (hex_encode (Util.sha_1 (sprintf "%s:%s:%s" chal rand cookie))) in
-      Log.debug "client: dbus_cookie_sha1: resp: %s" resp;
-      return (Client_mech_ok resp)
+      load_cookie context id >>= fun cookie ->
+        let rand = hex_encode (Util.random_string 16) in
+        let resp = sprintf "%s %s" rand
+          (hex_encode (Util.sha_1 (sprintf "%s:%s:%s" chal rand cookie))) in
+        Log.debug "client: dbus_cookie_sha1: resp: %s" resp;
+        return (Client_mech_ok resp)
     end
   method abort = ()
 end
@@ -150,14 +145,6 @@ class server_mech_anonymous_handler = object
 end
 *)
 
-let call f on_error =
-  try
-    f ();
-    return ()
-  with exn ->
-    on_error (Util.string_of_exn exn);
-    fail exn
-
 let lock_file fname =
   let really_lock () =
     Unix.close(Unix.openfile fname
@@ -171,9 +158,9 @@ let lock_file fname =
   let rec aux = function
     | 0 ->
         (perform
-           call remove_stale_lock
+           Util.call remove_stale_lock
              (fun m -> Log.error "failed to remove stale lock file %s: %s" fname m);
-           call really_lock
+           Util.call really_lock
              (fun m -> Log.error "failed to lock file %s after removing it: %s" fname m))
     | n ->
         try
@@ -187,7 +174,7 @@ let lock_file fname =
   aux 32
 
 let unlock_file fname =
-  call
+  Util.call
     (fun _ -> Unix.unlink fname)
     (fun m -> Log.error "failed to unlink file %s: %s" fname m)
 
@@ -201,39 +188,44 @@ let save_keyring context content =
        (try
           Unix.access dir [Unix.F_OK];
           return ()
-        with _ -> call
+        with _ -> Util.call
           (fun _ -> Unix.mkdir dir 0o600)
           (fun m -> Log.error "failed to create directory %s with permissions 0600%s" dir m));
        lock_file lock_fname;
-       call
+       catch
          (fun _ -> Util.with_open_out tmp_fname
             (fun oc ->
-               List.iter (fun (id, time, cookie) ->
-                            fprintf oc "%ld %Ld %s\n" id time cookie) content))
-         (fun m -> Log.error "unable to write temporary keyring file %s: %s" tmp_fname m);
-       call
+               Lwt_util.iter_serial
+                 (fun (id, time, cookie) ->
+                    output_string oc (sprintf  "%ld %Ld %s\n" id time cookie))
+                 content))
+         (fun exn ->
+            Log.error "unable to write temporary keyring file %s: %s" tmp_fname (Util.string_of_exn exn);
+            fail exn);
+       Util.call
          (fun _ -> Unix.rename tmp_fname fname)
          (fun m -> Log.error "unable to rename file %s to %s: %s" tmp_fname fname m))
     (fun _ -> unlock_file lock_fname)
 
 let load_keyring context =
-  let rec aux acc scanbuf =
-    match
-      try
-        Scanf.bscanf scanbuf "%ld %Ld %[a-fA-F0-9]\n"
-          (fun id time cookie -> `Entry(id, time, cookie))
-      with
-        | End_of_file -> `End_of_file
-        | exn -> `Failure
-    with
-      | `Entry x -> aux (x :: acc) scanbuf
-      | `End_of_file -> acc
-      | `Failure -> []
+  let rec aux acc ic =
+    catch
+      (fun _ -> input_line ic >>= fun line -> return (Some line))
+      (function
+         | End_of_file -> return None
+         | exn -> fail exn)
+    >>= function
+      | Some line ->
+          (try
+             Scanf.sscanf line "%ld %Ld %[a-fA-F0-9]\n"
+               (fun id time cookie -> return (id, time, cookie))
+           with
+               exn -> fail Exit) >>= (fun entry -> aux (entry :: acc) ic)
+      | None -> return acc
   in
-  try
-    Util.with_open_in (keyring_file_name context)
-      (fun ic -> aux [] (Scanf.Scanning.from_channel ic))
-  with _ -> []
+  catch
+    (fun _ -> Util.with_open_in (keyring_file_name context) (aux []))
+    (fun _ -> return [])
 
 class server_mech_dbus_cookie_sha1_handler = object
   inherit server_mechanism_handler
@@ -246,34 +238,34 @@ class server_mech_dbus_cookie_sha1_handler = object
       Log.debug "server: dbus_cookie_sha1: resp: %s" resp;
       match state with
         | `State1 ->
-            let keyring = load_keyring context in
-            let cur_time = Int64.of_float (Unix.time ()) in
-            (* Filter old and future keys *)
-            let keyring = List.filter
-              (fun (id, time, cookie) -> Int64.abs (Int64.sub time cur_time) <= 300L) keyring in
+            load_keyring context >>= begin fun keyring ->
+              let cur_time = Int64.of_float (Unix.time ()) in
+              (* Filter old and future keys *)
+              let keyring = List.filter
+                (fun (id, time, cookie) -> Int64.abs (Int64.sub time cur_time) <= 300L) keyring in
 
-            (* Find a working cookie *)
-            (perform
-               (id, cookie) <-- begin match keyring with
+              (* Find a working cookie *)
+              begin match keyring with
 
-                 (* There is still valid cookies, just choose one *)
-                 | (id, time, cookie) :: _ -> return (id, cookie)
+                (* There is still valid cookies, just choose one *)
+                | (id, time, cookie) :: _ -> return (id, cookie)
 
-                 (* No one left, generate a new one *)
-                 | [] ->
-                     let id = Util.random_int32 () in
-                     let cookie = hex_encode (Util.random_string 24) in
-                     (perform
-                        save_keyring context [(id, cur_time, cookie)];
-                        return (id, cookie))
-               end;
-               let rand = hex_encode (Util.random_string 16) in
-               let chal = sprintf "%s %ld %s" context id rand in
-               let _ =
-                 Log.debug "server: dbus_cookie_sha1: chal: %s" chal;
-                 state <- `State2(cookie, rand)
-               in
-               return (Server_mech_continue chal))
+                (* No one left, generate a new one *)
+                | [] ->
+                    let id = Util.random_int32 () in
+                    let cookie = hex_encode (Util.random_string 24) in
+                    (perform
+                       save_keyring context [(id, cur_time, cookie)];
+                       return (id, cookie))
+              end >>= fun (id, cookie) ->
+                let rand = hex_encode (Util.random_string 16) in
+                let chal = sprintf "%s %ld %s" context id rand in
+                let _ =
+                  Log.debug "server: dbus_cookie_sha1: chal: %s" chal;
+                  state <- `State2(cookie, rand)
+                in
+                return (Server_mech_continue chal)
+            end
 
         | `State2(cookie, my_rand) ->
             Scanf.sscanf resp "%s %s"

@@ -136,34 +136,38 @@ let session_bus_property = "_DBUS_SESSION_BUS_ADDRESS"
 let default_session_bus_addresses = [Autolaunch, None]
 let default_system_bus_addresses = [Unix_path "/var/run/dbus/system_bus_socket", None]
 
-let system = lazy(
+open Lwt
+
+let system = lazy begin
   match
     try Some (Sys.getenv system_bus_variable) with
         Not_found ->
           Log.debug "environment variable %s not found, using internal default" system_bus_variable;
           None
   with
-    | Some str -> of_string str
-    | None -> default_system_bus_addresses
-)
+    | Some str -> Util.exn_to_lwt of_string str
+    | None -> return default_system_bus_addresses
+end
 
-let session = lazy(
-  match
-    try Some (Sys.getenv session_bus_variable) with
-        Not_found ->
-          Log.log "environment variable %s not found" session_bus_variable;
-          try
-            (* Try with the root window property, this is bit ugly
-               and it depends on the presence of xprop... *)
-            Util.with_process_in (Printf.sprintf "xprop -root %s" session_bus_property)
-              (fun ic -> Scanf.fscanf ic ("_DBUS_SESSION_BUS_ADDRESS(STRING) = %S") (fun s -> Some s))
-          with
-              exn ->
-                Log.log "can not get session bus address from property %s \
-                         on root window (maybe x11 is not running), error is: %s"
-                  session_bus_property (Util.string_of_exn exn);
-                None
-  with
-    | Some str -> of_string str
-    | None -> default_session_bus_addresses
-)
+let session = lazy begin
+  catch
+    (fun _ -> perform
+       line <-- catch (fun _ -> return (Sys.getenv session_bus_variable))
+         (fun _ ->
+            Log.log "environment variable %s not found" session_bus_variable;
+            catch
+              (fun _ ->
+                 (* Try with the root window property, this is bit ugly
+                    and it depends on the presence of xprop... *)
+                 Util.with_process_in "xprop" [|"xprop"; "-root"; session_bus_property|]
+                   (fun ic -> perform
+                      line <-- Lwt_chan.input_line ic;
+                      Scanf.sscanf line "_DBUS_SESSION_BUS_ADDRESS(STRING) = %S" return))
+              (fun exn ->
+                 Log.log "can not get session bus address from property %s \
+                          on root window (maybe x11 is not running), error is: %s"
+                   session_bus_property (Util.string_of_exn exn);
+                 fail exn));
+       return (of_string line))
+    (fun _ -> return default_session_bus_addresses)
+end
