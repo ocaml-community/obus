@@ -79,6 +79,15 @@ let fold f acc s =
   in
   aux acc !s
 
+let filter s x =
+  let rec aux x = function
+    | None -> Some x
+    | Some n -> match n.data x with
+        | Some x -> aux x n.next
+        | None -> None
+  in
+  aux x !s
+
 let clear s =
   let rec aux = function
     | None -> ()

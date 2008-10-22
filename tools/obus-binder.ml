@@ -50,10 +50,13 @@ let choose_output_file_prefix () = match !output_file_prefix with
         end
       | _ -> "obus.out"
 
-let with_pp fname f = Util.with_open_out fname
-  (fun oc ->
-     f (Format.formatter_of_out_channel oc);
-     Printf.eprintf "File %S written.\n" fname)
+let with_pp fname =
+  Unix.handle_unix_error begin fun f ->
+    let oc = open_out fname in
+    f (Format.formatter_of_out_channel oc);
+    close_out oc;
+    Printf.eprintf "File %S written.\n" fname
+  end
 
 module Interf_set = Set.Make(struct type t = OBus_interface.t let compare = compare end)
 

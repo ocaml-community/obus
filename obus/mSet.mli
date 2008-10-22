@@ -39,5 +39,9 @@ val iter : ('a -> unit) -> 'a t -> unit
 val fold : ('a -> 'b -> 'b) -> 'b -> 'a t -> 'b
   (** Fold function. Same remark than for [iter] *)
 
+val filter : ('a -> 'a option) t -> 'a -> 'a option
+  (** [filter set x] pass [x] though all element of [set] until one
+      return [None] *)
+
 val clear : 'a t -> unit
   (** Disable all elements *)

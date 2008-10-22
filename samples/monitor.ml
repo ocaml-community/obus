@@ -17,13 +17,15 @@ open OBus_value
 
 let filter what_bus message =
   Format.printf "@[<hv 2>message intercepted on %s bus:@\n%a@]@."
-    what_bus OBus_message.print message
+    what_bus OBus_message.print message;
+  (* Drop the message so we do not respond to method call *)
+  None
 
 let add_filter what_bus lbus =
   (perform
      bus <-- Lazy.force lbus;
      let _ =
-       ignore (OBus_connection.add_filter bus (filter what_bus));
+       ignore (OBus_connection.add_incoming_filter bus (filter what_bus));
 
        List.iter (fun typ -> ignore_result (OBus_bus.add_match bus (OBus_bus.match_rule ~typ ())))
          [ `method_call; `method_return; `error; `signal ]

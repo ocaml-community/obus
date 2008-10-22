@@ -14,6 +14,8 @@ exception Failed of message
 exception Unknown_method of message
 exception Out_of_memory of message
 
+let failwith msg = Lwt.fail (Failed msg)
+
 open Printf
 
 let errors = ref

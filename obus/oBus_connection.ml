@@ -19,6 +19,7 @@ open Lwt
 type guid = OBus_address.guid
 type name = string
 
+type filter = OBus_internals.filter
 type filter_id = filter MSet.node
 type signal_receiver = (signal_match_rule * signal handler) MSet.node
 
@@ -35,28 +36,49 @@ let remove_connection_of_guid_map = function
   | { guid = Some guid } -> guid_connection_map := Guid_map.remove guid !guid_connection_map
   | { guid = None } -> ()
 
+let apply_filters typ message filters =
+  try
+    MSet.filter filters message
+  with
+      exn ->
+        Log.failure exn "%s filters failed with" typ;
+        None
+
 (***** Error handling *****)
 
 (* Put the connection in a "crashed" state. This means that all
    subsequent call using the connection will fail. *)
-let set_crash connection exn = match !connection with
-  | Crashed exn -> (true, exn)
-  | Running running ->
-      connection := Crashed exn;
-      remove_connection_of_guid_map running;
+let set_crash connection exn = match connection.crashed with
+  | Some exn -> exn
+  | None ->
+      connection.crashed <- Some exn;
+      remove_connection_of_guid_map connection;
+
+      let { reply_waiters = reply_waiters;
+            exported_objects = exported_objects } = connection in
+
+      connection.reply_waiters <- Serial_map.empty;
+      connection.exported_objects <- Object_map.empty;
+      MSet.clear connection.signal_handlers;
+      MSet.clear connection.incoming_filters;
+      MSet.clear connection.outgoing_filters;
 
       (* This make the dispatcher to exit if it is waiting on
          [get_message] *)
-      wakeup_exn running.abort exn;
+      wakeup_exn connection.abort exn;
+      (match connection.down with
+         | Some w -> wakeup_exn w exn
+         | None -> ());
 
-      (* Abort and shutdown the transport *)
+      (* Shutdown the transport *)
       (try
-         running.transport#abort exn;
-         running.transport#shutdown
+         connection.transport#shutdown
        with
            exn ->
-             Log.debug "fail to abort/shutdown the transport: %s"
-               (Printexc.to_string exn));
+             Log.failure exn "failed to abort/shutdown the transport");
+
+      (* Wakeup all reply handlers so they will not wait forever *)
+      Serial_map.iter (fun _ w -> wakeup_exn w exn) reply_waiters;
 
       (* Remove all objects *)
       Object_map.iter begin fun p obj ->
@@ -64,23 +86,15 @@ let set_crash connection exn = match !connection with
           obj#obus_connection_closed connection
         with
             exn ->
-              (* This may happen if the programmer has overridden
-                 the method *)
-              Log.debug "obus_connection_closed on object with path %S fail with: %s"
-                (OBus_path.to_string p) (Printexc.to_string exn)
-      end running.exported_objects;
+              (* This may happen if the programmer has overridden the
+                 method *)
+              Log.failure exn "obus_connection_closed on object with path %S failed with"
+                (OBus_path.to_string p)
+      end exported_objects;
 
-      (* Wakeup all reply handlers so they will not wait forever *)
-      Serial_map.iter (fun _ w -> wakeup_exn w exn) running.reply_waiters;
-      (false, exn)
+      exn
 
-let check_crash connection = match !connection with
-  | Crashed exn -> raise exn
-  | _ -> ()
-
-let close connection = match set_crash connection Connection_closed with
-  | true, exn -> raise exn
-  | _ -> ()
+let close = with_running (fun connection -> ignore (set_crash connection Connection_closed))
 
 (* Get the error message of an error *)
 let get_error msg = match msg.body with
@@ -90,41 +104,53 @@ let get_error msg = match msg.body with
 (***** Sending messages *****)
 
 let send_message_backend reply_waiter return_thread connection message =
-  lwt_with_running connection begin fun running ->
-    let outgoing = running.outgoing in
+  lwt_with_running begin fun connection ->
+    let outgoing = connection.outgoing in
     let w = wait () in
-    running.outgoing <- w;
-    outgoing >>= fun serial ->
-      let serial = Int32.succ serial in
-      let message = { message with serial = serial } in
+    connection.outgoing <- w;
+    outgoing >>= fun old_serial ->
+      let serial = Int32.succ old_serial in
 
-      (match reply_waiter with
-         | Some w ->
-             running.reply_waiters <- Serial_map.add serial w running.reply_waiters
-         | None -> ());
+      match apply_filters "outgoing" { (message :> any) with serial = serial } connection.outgoing_filters with
+        | None ->
+            Log.debug "outgoing message dropped by filters";
+            wakeup w old_serial;
+            fail (Failure "message dropped by filters")
 
-      if OBus_info.dump then
-        Format.eprintf "-----@\n@[<hv 2>sending message:@\n%a@]@."
-          OBus_message.print message;
+        | Some message ->
+            begin match reply_waiter with
+              | Some w ->
+                  connection.reply_waiters <- Serial_map.add serial w connection.reply_waiters
+              | None -> ()
+            end;
 
-      match running.transport#put_message (message :> OBus_message.any) with
-        | OBus_lowlevel.Marshaler_failure msg ->
-            wakeup w serial;
-            fail (Failure ("can not send message: " ^ msg))
+            if !(OBus_info.dump) then
+              Format.eprintf "-----@\n@[<hv 2>sending message:@\n%a@]@."
+                OBus_message.print message;
 
-        | OBus_lowlevel.Marshaler_success f ->
-            try_bind f
-              (fun _ ->
-                 wakeup w serial;
-                 return_thread)
-              (fun exn ->
-                 (* Any error is fatal here, because this is possible
-                    that a message has been partially sent on the
-                    connection, so the message stream is broken *)
-                 let exn = snd (set_crash connection exn) in
-                 wakeup_exn w exn;
-                 fail exn)
-  end
+            (perform
+               writer <-- catch
+                 (fun _ -> connection.transport#put_message (message :> OBus_message.any))
+                 (function
+                    | Failure msg ->
+                        wakeup w old_serial;
+                        fail (Failure ("can not send message: " ^ msg))
+                    | exn ->
+                        wakeup w old_serial;
+                        fail exn (* This should not happen *));
+               catch writer
+                 (fun exn ->
+                    (* Any error is fatal here, because this is
+                       possible that a message has been partially sent
+                       on the connection, so the message stream is
+                       broken *)
+                    let exn = set_crash connection exn in
+                    wakeup_exn w exn;
+                    fail exn);
+               let _ = wakeup w serial in
+               return_thread)
+  end connection
+
 
 let send_message connection message =
   send_message_backend None (return ()) connection message
@@ -215,14 +241,14 @@ let send_exn connection method_call exn =
     | Some(name, msg) ->
         send_error connection method_call name msg
     | None ->
-        send_error connection method_call "org.freedesktop.DBus.Error.Failed"
-          (sprintf "uncaught ocaml exception: %s" (Printexc.to_string exn))
+        Log.failure exn "sending an unregistred ocaml exception as a DBus error";
+        send_error connection method_call "ocaml.Exception" (Printexc.to_string exn)
 
 (***** Signals and filters *****)
 
 let add_signal_receiver connection ?sender ?destination ?path ?interface ?member ?(args=[]) typ func =
-  with_running connection begin fun running ->
-    MSet.add running.signal_handlers
+  with_running begin fun connection ->
+    MSet.add connection.signal_handlers
       ({ smr_sender = sender;
          smr_destination = destination;
          smr_path = path;
@@ -232,11 +258,11 @@ let add_signal_receiver connection ?sender ?destination ?path ?interface ?member
        fun msg -> ignore(match opt_cast_sequence typ ~context:(mk_context connection msg) msg.body with
                            | Some x -> func x
                            | None -> ()))
-  end
+  end connection
 
 let dadd_signal_receiver connection ?sender ?destination ?path ?interface ?member ?(args=[]) func =
-  with_running connection begin fun running ->
-    MSet.add running.signal_handlers
+  with_running begin fun connection ->
+    MSet.add connection.signal_handlers
       ({ smr_sender = sender;
          smr_destination = destination;
          smr_path = path;
@@ -244,10 +270,12 @@ let dadd_signal_receiver connection ?sender ?destination ?path ?interface ?membe
          smr_member = member;
          smr_args = make_args_filter args },
        fun msg -> func msg.body)
-  end
+  end connection
 
-let add_filter connection filter =
-  with_running connection (fun running -> MSet.add running.filters filter)
+let add_incoming_filter connection filter =
+  with_running (fun connection -> MSet.add connection.incoming_filters filter) connection
+let add_outgoing_filter connection filter =
+  with_running (fun connection -> MSet.add connection.outgoing_filters filter) connection
 
 let signal_receiver_enabled = MSet.enabled
 let enable_signal_receiver = MSet.enable
@@ -260,10 +288,10 @@ let disable_filter = MSet.disable
 (***** Reading/dispatching *****)
 
 (* Find the handler for a reply and remove it. *)
-let find_reply_waiter running serial f g =
-  match Serial_map.lookup serial running.reply_waiters with
+let find_reply_waiter connection serial f g =
+  match Serial_map.lookup serial connection.reply_waiters with
     | Some x ->
-        running.reply_waiters <- Serial_map.remove serial running.reply_waiters;
+        connection.reply_waiters <- Serial_map.remove serial connection.reply_waiters;
         f x
     | None ->
         g ()
@@ -273,149 +301,153 @@ let ignore_send_exn connection method_call exn = ignore (send_exn connection met
 let unknown_method connection message =
   ignore_send_exn connection message (unknown_method_exn message)
 
-let dispatch_message connection running message =
-  let call typ f message =
-    begin try
-      f message
-    with
-        exn ->
-          Log.debug "%s failed with this exception: %s" typ (Printexc.to_string exn)
-    end;
-    (* The connection may have crash during the execution of f *)
-    check_crash connection
-  in
+(* Call a filter/signal handler/method call handler *)
+let call typ f message =
+  try
+    f message
+  with
+      exn ->
+        Log.failure exn "%s failed with" typ
 
+let dispatch_message connection message =
   (* First of all, pass the message through all filters *)
-  MSet.iter (fun filter -> call "filter" filter message) running.filters;
+  match apply_filters "incoming" message connection.incoming_filters with
+    | None ->
+        Log.debug "incoming message %ld dropped by filters" message.serial
 
-  (* Now we do the specific dispatching *)
-  match message with
+    | Some message ->
+        match message with
 
-    (* For method return and errors, we lookup at the reply
-       waiters. If one is find then it get the reply, if none, then
-       the reply is dropped. *)
-    | { typ = `Method_return(reply_serial) } as message ->
-        find_reply_waiter running reply_serial
-          (fun w -> wakeup w message)
-          (fun _ -> Log.debug "reply to message with serial %ld dropped" reply_serial)
+          (* For method return and errors, we lookup at the reply
+             waiters. If one is find then it get the reply, if none,
+             then the reply is dropped. *)
+          | { typ = `Method_return(reply_serial) } as message ->
+              find_reply_waiter connection reply_serial
+                (fun w -> wakeup w message)
+                (fun _ -> Log.debug "reply to message with serial %ld dropped" reply_serial)
 
-    | { typ = `Error(reply_serial, error_name) } ->
-        let msg = get_error message in
-        find_reply_waiter running reply_serial
-          (fun w -> wakeup_exn w (OBus_error.make error_name msg))
-          (fun _ ->
-             Log.debug "error reply to message with serial %ld dropped because no reply was expected, \
-                        the error is: %S: %S" reply_serial error_name msg)
+          | { typ = `Error(reply_serial, error_name) } ->
+              let msg = get_error message in
+              find_reply_waiter connection reply_serial
+                (fun w -> wakeup_exn w (OBus_error.make error_name msg))
+                (fun _ ->
+                   Log.debug "error reply to message with serial %ld dropped because no reply was expected, \
+                              the error is: %S: %S" reply_serial error_name msg)
 
-    | { typ = `Signal _ } as message ->
-        MSet.iter
-          (fun (match_rule, handler) ->
-             if signal_match match_rule message
-             then call "signal handler" handler message)
-          running.signal_handlers
+          | { typ = `Signal _ } as message ->
+              MSet.iter
+                (fun (match_rule, handler) ->
+                   if signal_match match_rule message
+                   then call "signal handler" handler message)
+                connection.signal_handlers
 
-    (* Hacks for the special "org.freedesktop.DBus.Peer" interface *)
-    | { typ = `Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } as message -> begin
-        match member, body with
-          | "Ping", [] ->
-              (* Just pong *)
-              ignore (dsend_reply connection message [])
-          | "GetMachineId", [] ->
-              let machine_uuid = Lazy.force OBus_info.machine_uuid in
-              ignore (dsend_reply connection message [vbasic(String machine_uuid)])
-          | _ ->
-              unknown_method connection message
-      end
+          (* Hacks for the special "org.freedesktop.DBus.Peer" interface *)
+          | { typ = `Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } as message -> begin
+              match member, body with
+                | "Ping", [] ->
+                    (* Just pong *)
+                    ignore (dsend_reply connection message [])
+                | "GetMachineId", [] ->
+                    ignore
+                      (perform
+                         machine_uuid <-- catch
+                           (fun _ -> Lazy.force OBus_info.machine_uuid)
+                           (fun exn -> perform
+                              send_exn connection message (OBus_error.Failed "cannot get machine uuuid");
+                              fail exn);
+                         send_reply connection message <:obus_type< string >> (OBus_uuid.to_string machine_uuid))
+                | _ ->
+                    unknown_method connection message
+            end
 
-    | { typ = `Method_call(path, interface_opt, member) } as message ->
-        match Object_map.lookup path running.exported_objects with
-          | Some obj -> call "method call" (fun msg -> obj#obus_handle_call connection msg) message
-          | None ->
-              (* Handle introspection for missing intermediate object:
+          | { typ = `Method_call(path, interface_opt, member) } as message ->
+              match Object_map.lookup path connection.exported_objects with
+                | Some obj -> call "method call" (fun msg -> obj#obus_handle_call connection msg) message
+                | None ->
+                    (* Handle introspection for missing intermediate object:
 
-                 for example if we have only one exported object with
-                 path "/a/b/c", we need to add introspection support
-                 for virtual objects with path "/", "/a", "/a/b",
-                 "/a/b/c". *)
-              match
-                match interface_opt, member with
-                  | None, "Introspect"
-                  | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
-                      begin match children connection path with
-                        | [] -> false
-                        | l ->
-                            ignore
-                              (send_reply connection message <:obus_type< OBus_introspect.document >>
-                                 ([("org.freedesktop.DBus.Introspectable",
-                                    [OBus_interface.Method("Introspect", [],
-                                                           [(None, Tbasic Tstring)], [])],
-                                    [])], l));
-                            true
-                      end
-                  | _ -> false
-              with
-                | true -> ()
-                | false ->
-                    ignore_send_exn connection message (OBus_error.Failed (sprintf "No such object: %S" (OBus_path.to_string path)))
+                       for example if we have only one exported object with
+                       path "/a/b/c", we need to add introspection support
+                       for virtual objects with path "/", "/a", "/a/b",
+                       "/a/b/c". *)
+                    match
+                      match interface_opt, member with
+                        | None, "Introspect"
+                        | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
+                            begin match children connection path with
+                              | [] -> false
+                              | l ->
+                                  ignore
+                                    (send_reply connection message <:obus_type< OBus_introspect.document >>
+                                       ([("org.freedesktop.DBus.Introspectable",
+                                          [OBus_interface.Method("Introspect", [],
+                                                                 [(None, Tbasic Tstring)], [])],
+                                          [])], l));
+                                  true
+                            end
+                        | _ -> false
+                    with
+                      | true -> ()
+                      | false ->
+                          ignore_send_exn connection message
+                            (OBus_error.Failed (sprintf "No such object: %S" (OBus_path.to_string path)))
 
-let read_dispatch connection running =
-  bind
-    (catch
-       (fun _ -> choose [running.transport#get_message;
-                         running.abort])
-       (function
-          | End_of_file
-          | OBus_lowlevel.Transport_error End_of_file -> fail Connection_lost
-          | OBus_lowlevel.Transport_error _
-          | OBus_lowlevel.Protocol_error _ as exn -> fail exn
-          | exn -> fail (OBus_lowlevel.Transport_error exn)))
-    (fun message ->
-       if OBus_info.dump then
-         Format.eprintf "-----@\n@[<hv 2>message received:@\n%a@]@."
-           OBus_message.print message;
-       try
-         dispatch_message connection running message;
-         return ()
-       with
-           _ ->
-             (* The exception has been raised by check_crash, so we
-                can ignore it here *)
-             return ())
+let read_dispatch connection =
+  catch
+    (fun _ -> choose [connection.transport#get_message;
+                      connection.abort])
+    (fun exn ->
+       fail (set_crash connection
+               (match exn with
+                  | End_of_file
+                  | OBus_lowlevel.Transport_error End_of_file -> Connection_lost
+                  | OBus_lowlevel.Transport_error _
+                  | OBus_lowlevel.Protocol_error _ as exn -> exn
+                  | exn -> OBus_lowlevel.Transport_error exn)))
+  >>= fun message ->
+    if !(OBus_info.dump) then
+      Format.eprintf "-----@\n@[<hv 2>message received:@\n%a@]@."
+        OBus_message.print message;
+    dispatch_message connection message;
+    return ()
 
-let rec dispatch_forever connection running =
+let rec dispatch_forever connection =
   try_bind
-    (fun _ -> match running.down with
-       | Some w -> w >>= (fun _ -> read_dispatch connection running)
-       | None -> read_dispatch connection running)
-    (fun _ -> dispatch_forever connection running)
+    (fun _ -> match connection.down with
+       | Some w -> w >>= (fun _ -> read_dispatch connection)
+       | None -> read_dispatch connection)
+    (fun _ -> dispatch_forever connection)
     (function
        | Connection_closed -> return ()
        | exn ->
            try
-             !(running.on_disconnect) exn;
+             !(connection.on_disconnect) exn;
              return ()
            with
                exn ->
-                 Log.debug "the error handler (OBus_connection.on_disconnect) failed with this exception: %s" (Printexc.to_string exn);
+                 Log.failure exn "the error handler (OBus_connection.on_disconnect) failed with:";
                  return ())
 
 let of_transport ?guid ?down transport =
   let make () =
-    let running = {
+    let abort = wait () in
+    let connection = {
+      crashed = None;
       transport = (transport :> OBus_lowlevel.transport);
       outgoing = Lwt.return 0l;
       reply_waiters = Serial_map.empty;
       signal_handlers = MSet.make ();
       exported_objects = Object_map.empty;
-      filters = MSet.make ();
+      incoming_filters = MSet.make ();
+      outgoing_filters = MSet.make ();
       name = None;
       guid = guid;
       on_disconnect = ref (fun _ -> ());
       down = down;
-      abort = wait ();
+      abort = abort;
+      watch = abort >>= fun _ -> return ();
     } in
-    let connection = ref (Running running) in
-    ignore (dispatch_forever connection running);
+    ignore (dispatch_forever connection);
     connection
   in
   match guid with
@@ -442,21 +474,20 @@ let of_server_transport transport =
      Lazy.force (transport#server_authenticate);
      return (of_transport ~down:(wait ()) transport))
 
-let is_up connection =
-  with_running connection (fun running -> running.down = None)
-let set_up connection =
-  with_running connection begin fun running ->
-    match running.down with
+let is_up = with_running (fun connection -> connection.down = None)
+let set_up =
+  with_running begin fun connection ->
+    match connection.down with
       | None -> ()
       | Some w ->
-          running.down <- None;
+          connection.down <- None;
           wakeup w ()
   end
-let set_down connection =
-  with_running connection begin fun running ->
-    match running.down with
+let set_down =
+  with_running begin fun connection ->
+    match connection.down with
       | Some _ -> ()
-      | None -> running.down <- Some(wait ())
+      | None -> connection.down <- Some(wait ())
   end
 
 let of_addresses ?(shared=true) addresses = match shared with
@@ -482,16 +513,15 @@ let of_addresses ?(shared=true) addresses = match shared with
 
 let loopback = of_transport (new OBus_lowlevel.loopback)
 
-let on_disconnect connection =
-  with_running connection (fun running -> running.on_disconnect)
-let transport connection =
-  with_running connection (fun running -> running.transport)
-let name connection =
-  with_running connection (fun running -> running.name)
-let running connection = match !connection with
-  | Running _ -> true
-  | Crashed _ -> false
-let watch connection = match !connection with
-  | Running running -> running.abort >>= (fun _ -> return ())
-  | Crashed Connection_closed -> return ()
-  | Crashed exn -> fail exn
+let on_disconnect = with_running (fun connection -> connection.on_disconnect)
+let transport = with_running (fun connection -> connection.transport)
+let name = with_running (fun connection -> connection.name)
+let running connection = match connection.crashed with
+  | None -> true
+  | Some _ -> false
+let watch connection = match connection.crashed with
+  | None -> connection.watch
+  | Some Connection_closed -> return ()
+  | Some exn -> fail exn
+let incoming_filters = with_running (fun connection -> connection.incoming_filters)
+let outgoing_filters = with_running (fun connection -> connection.outgoing_filters)

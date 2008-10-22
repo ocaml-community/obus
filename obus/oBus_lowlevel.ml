@@ -952,7 +952,6 @@ class type transport = object
   method get_message : OBus_message.any Lwt.t
   method put_message : OBus_message.any -> (unit -> unit Lwt.t) Lwt.t
   method shutdown : unit
-  method abort : exn -> unit
 end
 
 class type client_transport = object
@@ -976,8 +975,6 @@ class socket fd = object
   method shutdown =
     Lwt_unix.shutdown fd SHUTDOWN_ALL;
     Lwt_unix.close fd
-  method abort exn =
-    Lwt_unix.abort fd exn
 end
 
 class client_socket fd = object
@@ -994,8 +991,7 @@ class loopback = object(self)
   val mutable queue : OBus_message.any MQueue.t = MQueue.create ()
   method get_message = MQueue.get queue
   method put_message msg = return (fun () -> MQueue.put msg queue; return ())
-  method shutdown = self#abort (Failure "transport closed")
-  method abort exn = MQueue.abort queue exn
+  method shutdown = MQueue.abort queue (Failure "transport closed")
 end
 
 let make_socket domain typ addr =

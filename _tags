@@ -6,7 +6,8 @@
 <{obus,tools,test,samples}/*.*>: pkg_lwt, pkg_xml-light
 # Library
 <obus/oBus_{bus,connection,signal,proxy,property,introspect,object}.ml>: pa_obus
-<obus/oBus_info.ml>: pkg_camlp4.macro
+<obus/{oBus_info.ml}>: pkg_camlp4.macro
+<obus/log.ml>: pkg_camlp4.macro, backtrace_support
 # Samples
 <samples/*.*>: use_obus
 <samples/*.ml>: pa_obus
@@ -18,6 +19,7 @@
 <tools/obus-introspect.ml>: pa_obus
 # Tests
 <test/**>: pkg_str, pkg_xml-light, pa_obus
+<test/{logging.ml,errors.ml}>: pkg_camlp4.macro, backtrace_support
 # Bindings distributed with obus
 <bindings/**/*.ml>: syntax_camlp4o, pkg_monad, pa_obus
 <bindings/**/*.*>: use_obus, pkg_lwt

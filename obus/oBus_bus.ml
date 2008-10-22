@@ -33,22 +33,19 @@ let error_handler = function
       Log.error "the DBus connection with the message bus has been closed due to a transport error: %s" (Util.string_of_exn exn);
       exit 1
   | exn ->
-      Log.error "the DBus connection with the message bus has been closed due to this uncaught exception: %s" (Printexc.to_string exn);
+      Log.failure exn "the DBus connection with the message bus has been closed due to this uncaught exception";
       exit 1
 
-let register_connection connection =
-  lwt_with_running connection
-    (function
-       | { name = Some _ } ->
+let register_connection = lwt_with_running
+    (fun connection -> match connection.name with
+       | Some _ ->
            (* Do not call two times the Hello method *)
            return ()
-       | { name = None; on_disconnect = f } ->
-           f := error_handler;
+       | None ->
+           connection.on_disconnect := error_handler;
            hello connection >>= fun name ->
-             lwt_with_running connection
-               (fun running ->
-                  running.name <- Some name;
-                  return ()))
+             connection.name <- Some name;
+             return ())
 
 let of_addresses addresses =
   (perform
@@ -56,8 +53,10 @@ let of_addresses addresses =
      register_connection connection;
      return connection)
 
-let session = lazy(of_addresses (Lazy.force OBus_address.session))
-let system = lazy(of_addresses (Lazy.force OBus_address.system))
+let of_laddresses laddr = Lazy.force laddr >>= of_addresses
+
+let session = lazy(of_laddresses OBus_address.session)
+let system = lazy(of_laddresses OBus_address.system)
 
 OBUS_exn Service_unknown = "Error.ServiceUnknown"
 OBUS_exn Name_has_no_owner = "Error.NameHasNoOwner"

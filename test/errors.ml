@@ -14,7 +14,12 @@ let filter message = assert false
 let handler x = failwith "plop"
 
 let _ =
-  ignore (add_filter loopback filter);
+  OBus_info.verbose := true;
+  OBus_info.debug := true;
+  IFDEF HAVE_BACKTRACE THEN
+    Printexc.record_backtrace true;
+  END;
+  ignore (add_incoming_filter loopback filter);
   ignore (dadd_signal_receiver loopback handler);
   Lwt_unix.run
     (perform

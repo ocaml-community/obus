@@ -15,8 +15,10 @@ let _ =
     (perform
        server <-- OBus_server.make (fun connection ->
                                       print_endline "new connection";
-                                      ignore (OBus_connection.add_filter connection
-                                                (Format.printf "@[<hv 2>message received:@\n%a@]@." OBus_message.print));
+                                      ignore (OBus_connection.add_incoming_filter connection
+                                                (fun message ->
+                                                   Format.printf "@[<hv 2>message received:@\n%a@]@." OBus_message.print message;
+                                                   Some message));
                                       OBus_connection.set_up connection);
        let addresses = OBus_server.addresses server in
        let _ = Printf.eprintf "server addresses: %S\n%!" (OBus_address.to_string addresses) in

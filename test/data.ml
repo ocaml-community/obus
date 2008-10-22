@@ -62,9 +62,9 @@ let write bo x =
        String.blit str pos buffer !i sz;
        i := !i + sz;
        return sz) in
-  Lwt_unix.run (match put_message ~byte_order:bo (make_msg x :> OBus_message.any) with
-                  | Marshaler_success f -> (f oc >>= fun _ -> Lwt_chan.flush oc)
-                  | Marshaler_failure msg -> failwith msg)
+  Lwt_unix.run (perform
+                  f <-- put_message ~byte_order:bo (make_msg x :> OBus_message.any);
+                  f oc)
 
 let test bo =
   write bo [data_val];

@@ -15,17 +15,17 @@ OBUS_type match_rule = string
 
 type receiver = match_rule option * OBus_connection.t * signal_receiver
 
-let call member bus = function
+let call member connection = function
   | None -> return ()
   | Some m ->
-      OBus_internals.lwt_with_bus bus
-        (fun _ -> method_call bus
+      OBus_internals.lwt_with_bus
+        (fun bus -> method_call bus
            ~destination:"org.freedesktop.DBus"
            ~path:["org"; "freedesktop"; "DBus"]
            ~interface:"org.freedesktop.DBus"
            ~member
            (<< match_rule -> unit >>)
-           m)
+           m) connection
 
 let add = call "AddMatch"
 let rem = call "RemoveMatch"

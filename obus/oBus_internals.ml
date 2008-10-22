@@ -93,7 +93,7 @@ type ptr = int
 type 'a handler = 'a -> unit
   (* Type of a message handler. *)
 
-type filter = any handler
+type filter = any -> any option
 
 type 'connection member_info =
   | MI_method of OBus_name.member * tsequence * ('connection -> method_call -> unit)
@@ -121,12 +121,15 @@ class type ['connection] _dbus_object = object
   method obus_connection_closed : 'connection -> unit
 end
 
-type running_connection = {
+type connection = {
   transport : OBus_lowlevel.transport;
 
   (* For client-side connection, if specified this means that the
      connection is shared and it is the guid of the server. *)
   guid : OBus_address.guid option;
+
+  (* Set when the connection has crashed or hsa been closed *)
+  mutable crashed : exn option;
 
   (* up/down state *)
   mutable down : unit Lwt.t option;
@@ -134,6 +137,7 @@ type running_connection = {
   (* Its a waiting thread which is wakeup when the connection is
      closed or aborted. It is used to make the dispatcher to exit. *)
   abort : any Lwt.t;
+  watch : unit Lwt.t;
 
   (* Unique name of the connection *)
   mutable name : string option;
@@ -142,7 +146,8 @@ type running_connection = {
      result of this thread to the action of sending a message. *)
   mutable outgoing : serial Lwt.t;
 
-  filters : filter MSet.t;
+  incoming_filters : filter MSet.t;
+  outgoing_filters : filter MSet.t;
   signal_handlers : (signal_match_rule * signal handler) MSet.t;
 
   mutable reply_waiters : method_return Lwt.t Serial_map.t;
@@ -152,13 +157,6 @@ type running_connection = {
   (* Handling of fatal errors *)
   on_disconnect : (exn -> unit) ref;
 }
-
-and connection_state =
-  | Crashed of exn
-      (* If the connection has crashed. *)
-  | Running of running_connection
-
-and connection = connection_state ref
 
 and dbus_object = connection _dbus_object
 
@@ -170,23 +168,23 @@ let is_bus = function
   | { name = Some _ } -> true
   | _ -> false
 
-let lwt_with_running connection f = match !connection with
-  | Crashed exn -> fail exn
-  | Running running -> f running
+let lwt_with_running f connection = match connection.crashed with
+  | Some exn -> fail exn
+  | None -> f connection
 
-let with_running connection f = match !connection with
-  | Crashed exn -> raise exn
-  | Running running -> f running
+let with_running f connection = match connection.crashed with
+  | Some exn -> raise exn
+  | None -> f connection
 
-let with_bus connection f = with_running connection
-  (function
-     | { name = Some _ } -> f ()
-     | _ -> ())
+let with_bus f = with_running
+  (fun connection -> match connection.name with
+     | Some _ -> f connection
+     | None -> ())
 
-let lwt_with_bus connection f = lwt_with_running connection
-  (function
-     | { name = Some _ } -> f ()
-     | _ -> return ())
+let lwt_with_bus f = lwt_with_running
+  (fun connection -> match connection.name with
+     | Some _ -> f connection
+     | None -> return ())
 
 let unknown_method_exn message =
   let `Method_call(path, interface_opt, member) = message.typ in
@@ -200,8 +198,9 @@ let unknown_method_exn message =
           (Printf.sprintf "Method %S with signature %S doesn't exist"
              member (string_of_signature (type_of_sequence message.body)))
 
-let children connection path = with_running connection
-  (fun running ->
+let children connection path = with_running
+  (fun connection ->
      Object_map.fold (fun p obj acc -> match OBus_path.after path p with
                         | Some(elt :: _) -> if List.mem elt acc then acc else elt :: acc
-                        | _ -> acc) running.exported_objects [])
+                        | _ -> acc) connection.exported_objects [])
+  connection

@@ -40,6 +40,9 @@ exception Out_of_memory of message
   (** Raised when a call fail because the service does not have enough
       memory to satisfy the request *)
 
+val failwith : message -> 'a Lwt.t
+  (** [failwith msg] same as [Lwt.fail (OBus_error.Failed msg)] *)
+
 (** {6 Exception registration} *)
 
 val register : name -> (message -> exn) -> (exn -> message option) -> unit

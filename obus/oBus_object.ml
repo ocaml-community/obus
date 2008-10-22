@@ -170,22 +170,23 @@ class t = object(self)
                demit_signal connection ?destination ~interface ~member ~path body)
             exports
 
-  method obus_export connection =
-    with_running connection
-      (fun running ->
-         running.exported_objects <- Object_map.add (self#obus_path) (self :> dbus_object) running.exported_objects;
+  method obus_export =
+    with_running
+      (fun connection ->
+         connection.exported_objects <- Object_map.add (self#obus_path) (self :> dbus_object) connection.exported_objects;
          exports <- connection :: exports)
 
   method obus_remove connection = match List.memq connection exports with
     | true -> begin
         exports <- List.filter ((!=) connection) exports;
-        with_running connection
+        with_running
           (fun running ->
              let path = self#obus_path in
-             match Object_map.lookup path running.exported_objects with
+             match Object_map.lookup path connection.exported_objects with
                | Some obj' when (self :> dbus_object) = obj' ->
-                   running.exported_objects <- Object_map.remove path running.exported_objects
+                   connection.exported_objects <- Object_map.remove path connection.exported_objects
                | _ -> ())
+          connection
       end
     | false -> ()
 
@@ -197,10 +198,10 @@ class t = object(self)
 end
 
 let get_by_path connection path =
-  with_running connection (fun running -> Object_map.find path running.exported_objects)
+  with_running (fun running -> Object_map.find path connection.exported_objects) connection
 
 let opt_get_by_path connection path =
-  with_running connection (fun running -> Object_map.lookup path running.exported_objects)
+  with_running (fun running -> Object_map.lookup path connection.exported_objects) connection
 
 let tt = wrap_basic_ctx tpath
   (fun context path -> match context with

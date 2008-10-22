@@ -59,9 +59,6 @@ class type transport = object
       [put_message] ones, so there is no need for locks
   *)
 
-  method abort : exn -> unit
-    (** [abort exn] should behave like [Lwt_unix.abort] *)
-
   method shutdown : unit
     (** Shutdown the transport *)
 end

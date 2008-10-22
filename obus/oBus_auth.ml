@@ -252,7 +252,7 @@ class server_mech_dbus_cookie_sha1_handler = object
 
                 (* No one left, generate a new one *)
                 | [] ->
-                    let id = Util.random_int32 () in
+                    let id = Int32.abs (Util.random_int32 ()) in
                     let cookie = hex_encode (Util.random_string 24) in
                     (perform
                        save_keyring context [(id, cur_time, cookie)];

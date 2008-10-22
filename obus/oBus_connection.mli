@@ -164,8 +164,10 @@ val send_exn : t -> OBus_message.method_call -> exn -> unit Lwt.t
       passing [exn] through [OBus_error.unmake] then calling
       [send_error].
 
-      It send the exception an {!OBus_error.Failed} if the exception
-      is not registred as a DBus exception. *)
+      It send the dbus error ["ocaml.Exception"] with the exception as
+      message if it is not registred as a DBus exception. Note that
+      this is bad thing since DBus errors are supposed to be user
+      readable. *)
 
 (** {6 Receiving signals} *)
 
@@ -204,18 +206,29 @@ val signal_receiver_enabled : signal_receiver -> bool
 
 (** {6 Filters} *)
 
-(** Filters are functions whose are applied on all incomming
-    messages.
+(** Filters are functions whose are applied on all incoming and
+    outgoing messages.
 
-    Filters can be used to for debugging purpose or to write low-level
-    DBus application (look at [samples/monitor.ml] to see an example
-    of use of filters). *)
+    For incoming messages they are called before dispatching, for
+    outgoing, they are called just before being sent.
+*)
+
+type filter = OBus_message.any -> OBus_message.any option
+  (** The result of a filter must be:
+
+      - [Some msg] where [msg] is the message given to the filter
+      modified or not, which means that the message is replaced by
+      this one
+
+      - [None] which means that the message will be dropped, i.e. not
+      dispatched or not sent *)
 
 type filter_id
 
-val add_filter : t -> (OBus_message.any -> unit) -> filter_id
-  (** [add_filter connection filter] add a filter to the given
-      connection. *)
+val add_incoming_filter : t -> filter -> filter_id
+val add_outgoing_filter : t -> filter -> filter_id
+  (** Add a filter to the given connection. It will be called before
+      all previously defined filters *)
 
 val enable_filter : filter_id -> unit
 val disable_filter : filter_id -> unit
