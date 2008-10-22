@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Printf
+open Format
 
 module T =
 struct
@@ -39,6 +39,21 @@ include T
 type tsequence = tsingle list
 type signature = tsequence
 
+let string_of printer x =
+  let buf = Buffer.create 42 in
+  let pp = formatter_of_buffer buf in
+  printer pp x;
+  pp_print_flush pp ();
+  Buffer.contents buf
+
+let rec print_seq sep f pp = function
+  | [] -> ()
+  | [x] -> f pp x
+  | x :: l ->
+      f pp x;
+      pp_print_string pp sep;
+      print_seq sep f pp l
+
 let string_of_tbasic = function
   | Tbyte -> "Tbyte"
   | Tboolean -> "Tboolean"
@@ -53,17 +68,19 @@ let string_of_tbasic = function
   | Tsignature -> "Tsignature"
   | Tobject_path -> "Tobject_path"
 
-let rec string_of_tsingle = function
-  | Tbasic t -> sprintf "Tbasic %s" (string_of_tbasic t)
-  | Tarray t -> sprintf "Tarray(%s)" (string_of_telement t)
-  | Tstruct tl -> sprintf "Tstruct %s" (string_of_tsequence tl)
-  | Tvariant -> "Tvariant"
+let print_tbasic pp t = pp_print_string pp (string_of_tbasic t)
 
-and string_of_telement = function
-  | Tdict_entry(tk, tv) -> sprintf "Tdict_entry(%s, %s)" (string_of_tbasic tk) (string_of_tsingle tv)
-  | Tsingle t -> sprintf "Tsingle(%s)" (string_of_tsingle t)
+let rec print_tsingle pp = function
+  | Tbasic t -> fprintf pp "Tbasic %a" print_tbasic t
+  | Tarray t -> fprintf pp "Tarray(%a)" print_telement t
+  | Tstruct tl -> fprintf pp "Tstruct %a" print_tsequence tl
+  | Tvariant -> fprintf pp "Tvariant"
 
-and string_of_tsequence tl = sprintf "[%s]" (String.concat "; " (List.map string_of_tsingle tl))
+and print_telement pp = function
+  | Tdict_entry(tk, tv) -> fprintf pp "Tdict_entry(%a, %a)" print_tbasic tk print_tsingle tv
+  | Tsingle t -> fprintf pp "Tsingle(%a)" print_tsingle t
+
+and print_tsequence pp tl = fprintf pp "[%a]" (print_seq "; " print_tsingle) tl
 
 open Types_rw
 
@@ -204,33 +221,36 @@ let vvariant v = Variant v
 let vdict_entry k v = Dict_entry(k, v)
 let vsingle x = Single x
 
-open Printf
+let print_basic pp = function
+  | Byte x -> fprintf pp  "%C" x
+  | Boolean x -> fprintf pp "%B" x
+  | Int16 x -> fprintf pp "%d" x
+  | Int32 x -> fprintf pp "%ldl" x
+  | Int64 x -> fprintf pp "%LdL" x
+  | Uint16 x -> fprintf pp "%d" x
+  | Uint32 x -> fprintf pp "%ldl" x
+  | Uint64 x -> fprintf pp "%LdL" x
+  | Double x -> fprintf pp "%f" x
+  | String x -> fprintf pp "%S" x
+  | Signature x -> print_tsequence pp x
+  | Object_path x -> fprintf pp "[%a]" (print_seq "; " (fun pp elt -> fprintf pp "%S" elt)) x
 
-let string_of_basic = function
-  | Byte x -> sprintf "Byte %C" x
-  | Boolean x -> sprintf "Boolean %B" x
-  | Int16 x -> sprintf "Int16 %d" x
-  | Int32 x -> sprintf "Int32 %ldl" x
-  | Int64 x -> sprintf "Int64 %LdL" x
-  | Uint16 x -> sprintf "Uint16 %d" x
-  | Uint32 x -> sprintf "Uint32 %ldl" x
-  | Uint64 x -> sprintf "Uint64 %LdL" x
-  | Double x -> sprintf "Double %f" x
-  | String x -> sprintf "String %S" x
-  | Signature x -> sprintf "Signature(%s)" (string_of_tsequence x)
-  | Object_path x -> sprintf "Object_path [%s]" (String.concat "; " (List.map (sprintf "%S") x))
+let rec print_single pp = function
+  | Basic v -> print_basic pp v
+  | Array(t, l) -> fprintf pp "[%a]" (print_seq "; "  print_element) l
+  | Struct l -> print_sequence pp l
+  | Variant x -> fprintf pp "Variant(%a, %a)" print_tsingle (type_of_single x) print_single x
 
-let rec string_of_single = function
-  | Basic v -> sprintf "Basic(%s)" (string_of_basic v)
-  | Array(t, l) ->
-      sprintf "Array(%s, [%s])"
-        (string_of_telement t)
-        (String.concat "; " (List.map string_of_element l))
-  | Struct l -> sprintf "Structure %s" (string_of_sequence l)
-  | Variant x -> sprintf "Variant(%s)" (string_of_single x)
+and print_element pp = function
+  | Dict_entry(k, v) -> fprintf pp "(%a, %a)" print_basic k print_single v
+  | Single x -> print_single pp x
 
-and string_of_element = function
-  | Dict_entry(k, v) -> sprintf "Dict_entry(%s, %s)" (string_of_basic k) (string_of_single v)
-  | Single x -> sprintf "Single(%s)" (string_of_single x)
+and print_sequence pp l = fprintf pp "(%a)" (print_seq ", " print_single) l
 
-and string_of_sequence l = sprintf "[%s]" (String.concat "; " (List.map string_of_single l))
+let string_of_tsingle = string_of print_tsingle
+let string_of_telement = string_of print_telement
+let string_of_tsequence = string_of print_tsequence
+let string_of_basic = string_of print_basic
+let string_of_single = string_of print_single
+let string_of_element = string_of print_element
+let string_of_sequence = string_of print_sequence

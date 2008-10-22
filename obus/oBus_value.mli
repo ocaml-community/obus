@@ -111,6 +111,16 @@ val type_of_element : element -> telement
 val type_of_sequence : sequence -> tsequence
   (** Return the type of a value *)
 
+val print_tbasic : Format.formatter -> tbasic -> unit
+val print_tsingle : Format.formatter -> tsingle -> unit
+val print_telement : Format.formatter -> telement -> unit
+val print_tsequence : Format.formatter -> tsequence -> unit
+val print_basic : Format.formatter -> basic -> unit
+val print_single : Format.formatter -> single -> unit
+val print_element : Format.formatter -> element -> unit
+val print_sequence : Format.formatter -> sequence -> unit
+  (** Pretty-printing *)
+
 val string_of_tbasic : tbasic -> string
 val string_of_tsingle : tsingle -> string
 val string_of_telement : telement -> string
@@ -119,4 +129,3 @@ val string_of_basic : basic -> string
 val string_of_single : single -> string
 val string_of_element : element -> string
 val string_of_sequence : sequence -> string
-  (** Pretty-printing *)

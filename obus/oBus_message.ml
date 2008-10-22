@@ -115,8 +115,8 @@ message_type = %a@
 destination = %a@
 sender = %a@
 signature = %S@
-body_type = %s@
-body = %s@
+body_type = %a@
+body = %a@
 " message.flags.no_reply_expected message.flags.no_auto_start message.serial
     (fun pp -> function
        | `Method_call(path, interface, member) ->
@@ -139,5 +139,5 @@ member = %S" (OBus_path.to_string path) interface member) message.typ
     opt message.destination
     opt message.sender
     (string_of_signature (type_of_sequence message.body))
-    (string_of_tsequence  (type_of_sequence message.body))
-    (string_of_sequence message.body)
+    print_tsequence (type_of_sequence message.body)
+    print_sequence message.body
