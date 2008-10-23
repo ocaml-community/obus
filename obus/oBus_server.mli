@@ -30,9 +30,10 @@ val make : ?mechanisms:OBus_auth.server_mechanism list -> ?addresses:OBus_addres
 
       @raise Invalid_argument if [addresses] is empty *)
 
-val on_connection : t -> (OBus_connection.t -> unit) ref
-val mechanisms : t -> OBus_auth.server_mechanism list ref
-  (** Access to server parameters after its creation *)
+val make_lowlevel : ?mechanisms:OBus_auth.server_mechanism list -> ?addresses:OBus_address.desc list ->
+  (OBus_lowlevel.transport -> unit) -> t Lwt.t
+  (** Same thing but pass directly a transport to the callback
+      function instead of a connection *)
 
 val addresses : t -> OBus_address.t list
   (** Return the listening address of a server, with their associated

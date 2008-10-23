@@ -16,34 +16,42 @@ open OBus_address
 type t = {
   listeners : (Lwt_unix.file_descr * OBus_address.guid) list;
   addresses : OBus_address.t list;
-  mechanisms : OBus_auth.server_mechanism list ref;
-  on_connection : (OBus_connection.t -> unit) ref;
+  mechanisms : OBus_auth.server_mechanism list option;
+  on_connection : (OBus_lowlevel.transport -> unit);
 }
 
 exception Shutdown
+
+let socket fd (ic, oc) = OBus_lowlevel.transport
+  ~recv:(fun _ -> OBus_lowlevel.get_message ic)
+  ~send:(fun msg -> perform
+           f <-- OBus_lowlevel.put_message msg;
+           return (fun () -> f oc))
+  ~shutdown:(fun _ ->
+               Lwt_unix.shutdown fd SHUTDOWN_ALL;
+               Lwt_unix.close fd)
 
 let rec loop server (listen_fd, guid) =
   catch
     (fun _ -> perform
        (fd, addr) <-- Lwt_unix.accept listen_fd;
-       let transport = new OBus_lowlevel.server_socket ~mechanisms:!(server.mechanisms) guid fd in
+       let chans = (Lwt_chan.in_channel_of_descr fd,
+                    Lwt_chan.out_channel_of_descr fd) in
        catch
-         (fun _ -> perform
-            connection <-- OBus_connection.of_server_transport transport;
-            let _ =
-              try
-                !(server.on_connection) connection
-              with
-                  exn ->
-                    Log.debug "on_connection failed with: %s" (Printexc.to_string exn)
-            in
-            return ())
+         (fun _ -> OBus_auth.server_authenticate ?mechanisms:server.mechanisms guid chans)
          (fun exn ->
-            Log.log "authentication failure from %a"
+            Log.log "authentication failure for client from %a"
               (fun oc -> function
                  | ADDR_UNIX path -> output_string oc path
                  | ADDR_INET(ia, port) -> Printf.fprintf oc "%s:%d" (string_of_inet_addr ia) port) addr;
             return ());
+       let _ =
+         try
+           server.on_connection (socket fd chans)
+         with
+             exn ->
+               Log.failure exn "on_connection failed with"
+       in
        return true)
     (function
        | Shutdown ->
@@ -111,7 +119,7 @@ let fds_of_address addr = match addr with
 
 let tmpdir = try Unix.getenv "TMPDIR" with _ -> "/tmp"
 
-let make ?(mechanisms=OBus_auth.default_server_mechanisms) ?(addresses=[Unix_tmpdir tmpdir]) on_connection =
+let make_lowlevel ?mechanisms ?(addresses=[Unix_tmpdir tmpdir]) on_connection =
   match addresses with
     | [] -> fail (Invalid_argument "OBus_server.make: no addresses given")
     | addresses ->
@@ -139,8 +147,8 @@ let make ?(mechanisms=OBus_auth.default_server_mechanisms) ?(addresses=[Unix_tmp
                listeners = List.flatten (List.map2 (fun (fds, addr) guid ->
                                                       List.map (fun fd -> (fd, guid)) fds) l guids);
                addresses = List.map2 (fun (fds, addr) guid -> (addr, Some guid)) l guids;
-               mechanisms = ref mechanisms;
-               on_connection = ref on_connection;
+               mechanisms = mechanisms;
+               on_connection = on_connection;
              } in
 
              (* Launch waiting loops *)
@@ -149,9 +157,10 @@ let make ?(mechanisms=OBus_auth.default_server_mechanisms) ?(addresses=[Unix_tmp
              return server
            end)
 
+let make ?mechanisms ?addresses on_connection = make_lowlevel ?mechanisms ?addresses
+  (fun transport -> on_connection (OBus_connection.of_transport ~up:false transport))
+
 let addresses server = server.addresses
-let mechanisms server = server.mechanisms
-let on_connection server = server.on_connection
 
 let shutdown server =
   List.iter (fun (fd, guid) -> Lwt_unix.abort fd Shutdown) server.listeners

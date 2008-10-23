@@ -254,13 +254,15 @@ val on_disconnect : t -> (exn -> unit) ref
 
 (** {6 Low-level} *)
 
-val of_client_transport : ?shared:bool -> OBus_lowlevel.client_transport -> t Lwt.t
-val of_server_transport : OBus_lowlevel.server_transport -> t Lwt.t
-  (** Create a DBus connection on the given transport *)
+val of_transport : ?guid:OBus_address.guid -> ?up:bool -> OBus_lowlevel.transport -> t
+  (** Create a DBus connection on the given transport. If [guid] is
+      provided the connection will be shared.
+
+      [up] tell weather the connection is initially up or down,
+      default is [true]. *)
 
 (** A connection can be up or down, expect for connection created with
-    [of_client_transport] and [of_server_transport], newly created
-    connection are always up.
+    [of_transport], newly created connection are always up.
 
     When a connection is down, messages will not be dispatched *)
 

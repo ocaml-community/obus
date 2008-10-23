@@ -470,7 +470,7 @@ struct
     | Struct x ->
         let padding = pad8 i in
         let i, output_sequence = wsequence (i + padding) x in
-        (i, fun oc ->
+        (i, fun oc -> perform
            output_padding oc padding;
            output_sequence oc)
     | Variant x ->
@@ -963,111 +963,135 @@ module Log = Log.Make(struct let section = "transport" end)
 
 let failwith fmt = ksprintf (fun msg -> fail (Failure msg)) fmt
 
-class type transport = object
-  method get_message : OBus_message.any Lwt.t
-  method put_message : OBus_message.any -> (unit -> unit Lwt.t) Lwt.t
-  method shutdown : unit
-end
+type transport = {
+  recv : unit -> OBus_message.any Lwt.t;
+  send : OBus_message.any -> (unit -> unit Lwt.t) Lwt.t;
+  shutdown : unit -> unit;
+}
 
-class type client_transport = object
-  inherit transport
-  method client_authenticate : OBus_address.guid Lwt.t Lazy.t
-end
+let transport ~recv ~send ~shutdown = { recv = recv; send = send; shutdown = shutdown }
 
-class type server_transport = object
-  inherit transport
-  method server_authenticate : unit Lwt.t Lazy.t
-end
+let wrap f = catch f (fun exn -> fail (Transport_error exn))
 
-class socket fd = object
-  val ic = Lwt_chan.in_channel_of_descr fd
-  val oc = Lwt_chan.out_channel_of_descr fd
-  method get_message = get_message ic
-  method put_message msg =
-    (perform
-       f <-- put_message msg;
-       return (fun () -> f oc))
-  method shutdown =
-    Lwt_unix.shutdown fd SHUTDOWN_ALL;
-    Lwt_unix.close fd
-end
+let recv { recv = recv } = wrap recv
+let send { send = send } message =
+  try_bind
+    (fun _ -> send message)
+    (fun f -> return (fun _ -> wrap f))
+    (fun exn -> fail (Transport_error exn))
+let shutdown { shutdown = shutdown } =
+  try
+    shutdown ()
+  with
+      exn -> raise (Transport_error exn)
 
-class client_socket fd = object
-  inherit socket fd
-  method client_authenticate = lazy(OBus_auth.client_authenticate (ic, oc))
-end
+let chans_of_fd fd = (Lwt_chan.in_channel_of_descr fd,
+                       Lwt_chan.out_channel_of_descr fd)
 
-class server_socket ?mechanisms guid fd = object
-  inherit socket fd
-  method server_authenticate = lazy(OBus_auth.server_authenticate ?mechanisms guid (ic, oc))
-end
+let socket fd (ic, oc) =
+  { recv = (fun _ -> get_message ic);
+    send = (fun msg -> perform
+              f <-- put_message msg;
+              return (fun () -> f oc));
+    shutdown = (fun _ ->
+                  Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                  Lwt_unix.close fd) }
 
-class loopback = object(self)
-  val mutable queue : OBus_message.any MQueue.t = MQueue.create ()
-  method get_message = MQueue.get queue
-  method put_message msg = return (fun () -> MQueue.put msg queue; return ())
-  method shutdown = MQueue.abort queue (Failure "transport closed")
-end
+type transport_state =
+  | Empty
+  | Waiting of OBus_message.any Lwt.t
+  | Full of OBus_message.any * unit Lwt.t
+
+let loopback _ =
+  let queue = MQueue.create () in
+  { recv = (fun _ -> MQueue.get queue);
+    send = (fun m -> return (fun _ -> MQueue.put m queue; return ()));
+    shutdown = (fun _ -> MQueue.abort queue (Failure "transport closed")) }
 
 let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in
-  try_bind
-    (fun _ -> Lwt_unix.connect fd addr)
-    (fun _ -> return (new client_socket fd))
+  catch
+    (fun _ -> perform
+       Lwt_unix.connect fd addr;
+       return fd)
     (fun exn -> Lwt_unix.close fd; fail exn)
 
-let rec try_one t fallback x =
-  catch (fun _ -> t)
-    (fun exn -> fallback x)
+let transport_of_addresses ?mechanisms addresses =
+  let rec try_one domain typ addr fallback x =
+    catch
+      (fun _ -> perform
+         fd <-- make_socket domain typ addr;
+         let chans = chans_of_fd fd in
+         guid <-- OBus_auth.client_authenticate ?mechanisms chans;
+         return (guid, socket fd chans))
+      (fun exn ->
+         Log.log "transport creation failed for address: domain=%s typ=%s addr=%s: %s"
+           (match domain with
+              | PF_UNIX -> "unix"
+              | PF_INET -> "inet"
+              | PF_INET6 -> "inet6")
+           (match typ with
+              | SOCK_STREAM -> "stream"
+              | SOCK_DGRAM -> "dgram"
+              | SOCK_RAW -> "raw"
+              | SOCK_SEQPACKET -> "seqpacket")
+           (match addr with
+              | ADDR_UNIX path -> sprintf "unix(%s)" path
+              | ADDR_INET(addr, port) -> sprintf "inet(%s,%d)" (string_of_inet_addr addr) port)
+           (Util.string_of_exn exn);
+         fallback x)
+  in
+  let rec aux = function
+    | [] -> failwith "no working DBus address found"
+    | (desc, _) :: rest ->
+        match desc with
+          | Unix_path path ->
+              try_one PF_UNIX SOCK_STREAM (ADDR_UNIX(path))
+                aux rest
 
-let rec client_transport_of_addresses = function
-  | [] -> failwith "no working DBus address found"
-  | (desc, _) :: rest -> match desc with
-      | Unix_path path ->
-          try_one (make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX(path)))
-            client_transport_of_addresses rest
+          | Unix_abstract path ->
+              try_one PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ path))
+                aux rest
 
-      | Unix_abstract path ->
-          try_one (make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ path)))
-            client_transport_of_addresses rest
+          | Unix_tmpdir _ ->
+              Log.error "unix tmpdir can only be used as a listening address";
+              aux rest
 
-      | Unix_tmpdir _ ->
-          Log.error "unix tmpdir can only be used as a listening address";
-          client_transport_of_addresses rest
+          | Tcp { tcp_host = host; tcp_port = port; tcp_family = family } ->
+              let opts = [AI_SOCKTYPE SOCK_STREAM] in
+              let opts = match family with
+                | Some `Ipv4 -> AI_FAMILY PF_INET :: opts
+                | Some `Ipv6 -> AI_FAMILY PF_INET6 :: opts
+                | None -> opts in
+              let rec try_all = function
+                | [] -> aux rest
+                | ai :: ais ->
+                    try_one ai.ai_family ai.ai_socktype ai.ai_addr
+                      try_all ais
+              in
+              try_all (getaddrinfo host port opts)
 
-      | Tcp { tcp_host = host; tcp_port = port; tcp_family = family } ->
-          let opts = [AI_SOCKTYPE SOCK_STREAM] in
-          let opts = match family with
-            | Some `Ipv4 -> AI_FAMILY PF_INET :: opts
-            | Some `Ipv6 -> AI_FAMILY PF_INET6 :: opts
-            | None -> opts in
-          let rec try_all = function
-            | [] -> client_transport_of_addresses rest
-            | ai :: ais ->
-                try_one (make_socket ai.ai_family ai.ai_socktype ai.ai_addr)
-                  try_all ais
-          in
-          try_all (getaddrinfo host port opts)
+          | Autolaunch ->
+              (perform
+                 addresses <-- catch
+                   (fun _ -> perform
+                      uuid <-- Lazy.force OBus_info.machine_uuid;
+                      line <-- catch
+                        (fun _ -> Util.with_process_in "dbus-launch"
+                           [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|]
+                           Lwt_chan.input_line)
+                        (fun exn ->
+                           Log.log "autolaunch failed: %s" (Util.string_of_exn exn);
+                           fail exn);
+                      let line =
+                        try
+                          String.sub line 0 (String.index line '\000')
+                        with _ -> line
+                      in
+                      return (OBus_address.of_string line))
+                   (fun exn -> return []);
+                 aux (addresses @ rest))
 
-      | Autolaunch ->
-          (perform
-             addresses <-- catch
-               (fun _ -> perform
-                  uuid <-- Lazy.force OBus_info.machine_uuid;
-                  line <-- catch
-                    (fun _ -> Util.with_process_in "dbus-launch"
-                       [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|]
-                       Lwt_chan.input_line)
-                    (fun exn ->
-                       Log.log "autolaunch failed: %s" (Util.string_of_exn exn);
-                       fail exn);
-                  let line =
-                    try
-                      String.sub line 0 (String.index line '\000')
-                    with _ -> line
-                  in
-                  return (OBus_address.of_string line))
-               (fun exn -> return []);
-             client_transport_of_addresses (addresses @ rest))
-
-      | _ -> client_transport_of_addresses rest
+          | _ -> aux rest
+  in
+  aux addresses

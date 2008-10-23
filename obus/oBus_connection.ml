@@ -72,7 +72,7 @@ let set_crash connection exn = match connection.crashed with
 
       (* Shutdown the transport *)
       (try
-         connection.transport#shutdown
+         OBus_lowlevel.shutdown connection.transport
        with
            exn ->
              Log.failure exn "failed to abort/shutdown the transport");
@@ -130,7 +130,7 @@ let send_message_backend reply_waiter return_thread connection message =
 
             (perform
                writer <-- catch
-                 (fun _ -> connection.transport#put_message (message :> OBus_message.any))
+                 (fun _ -> OBus_lowlevel.send connection.transport (message :> OBus_message.any))
                  (function
                     | Failure msg ->
                         wakeup w old_serial;
@@ -394,16 +394,13 @@ let dispatch_message connection message =
 
 let read_dispatch connection =
   catch
-    (fun _ -> choose [connection.transport#get_message;
+    (fun _ -> choose [OBus_lowlevel.recv connection.transport;
                       connection.abort])
     (fun exn ->
        fail (set_crash connection
                (match exn with
-                  | End_of_file
                   | OBus_lowlevel.Transport_error End_of_file -> Connection_lost
-                  | OBus_lowlevel.Transport_error _
-                  | OBus_lowlevel.Protocol_error _ as exn -> exn
-                  | exn -> OBus_lowlevel.Transport_error exn)))
+                  | exn -> exn)))
   >>= fun message ->
     if !(OBus_info.dump) then
       Format.eprintf "-----@\n@[<hv 2>message received:@\n%a@]@."
@@ -428,7 +425,7 @@ let rec dispatch_forever connection =
                  Log.failure exn "the error handler (OBus_connection.on_disconnect) failed with:";
                  return ())
 
-let of_transport ?guid ?down transport =
+let of_transport ?guid ?(up=true) transport =
   let make () =
     let abort = wait () in
     let connection = {
@@ -443,7 +440,9 @@ let of_transport ?guid ?down transport =
       name = None;
       guid = guid;
       on_disconnect = ref (fun _ -> ());
-      down = down;
+      down = (match up with
+                | true -> None
+                | false -> Some(wait ()));
       abort = abort;
       watch = abort >>= fun _ -> return ();
     } in
@@ -459,20 +458,6 @@ let of_transport ?guid ?down transport =
               let connection = make () in
               guid_connection_map := Guid_map.add guid connection !guid_connection_map;
               connection
-
-let of_client_transport ?(shared=true) transport =
-  (perform
-     guid <-- Lazy.force (transport#client_authenticate);
-     let down = wait () in
-     return (if shared then
-               of_transport ~down ~guid transport
-             else
-               of_transport ~down transport))
-
-let of_server_transport transport =
-  (perform
-     Lazy.force (transport#server_authenticate);
-     return (of_transport ~down:(wait ()) transport))
 
 let is_up = with_running (fun connection -> connection.down = None)
 let set_up =
@@ -493,8 +478,7 @@ let set_down =
 let of_addresses ?(shared=true) addresses = match shared with
   | false ->
       (perform
-         transport <-- OBus_lowlevel.client_transport_of_addresses addresses;
-         Lazy.force (transport#client_authenticate);
+         (guid, transport) <-- OBus_lowlevel.transport_of_addresses addresses;
          return (of_transport transport))
   | true ->
       (* Try to find a guid that we already have *)
@@ -507,11 +491,10 @@ let of_addresses ?(shared=true) addresses = match shared with
                guid, because during the authentification another
                thread can add a new connection. *)
             (perform
-               transport <-- OBus_lowlevel.client_transport_of_addresses addresses;
-               guid <-- Lazy.force (transport#client_authenticate);
+               (guid, transport) <-- OBus_lowlevel.transport_of_addresses addresses;
                return (of_transport ~guid transport))
 
-let loopback = of_transport (new OBus_lowlevel.loopback)
+let loopback = of_transport (OBus_lowlevel.loopback ())
 
 let on_disconnect = with_running (fun connection -> connection.on_disconnect)
 let transport = with_running (fun connection -> connection.transport)

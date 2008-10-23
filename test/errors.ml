@@ -25,6 +25,6 @@ let _ =
     (perform
        demit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [];
        Lwt_unix.sleep 0.5;
-       let _ = (transport loopback)#abort (Failure "plip") in
+       let _ = close loopback in
        demit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [])
 
