@@ -51,7 +51,8 @@ let _ =
     (fun s -> cmd_args := s :: !cmd_args)
     usage_msg;
 
-  let cmd = match !cmd_args with
+  let cmd_args = List.rev !cmd_args in
+  let cmd = match cmd_args with
     | [] ->
         Arg.usage args usage_msg;
         exit 2
@@ -66,7 +67,7 @@ let _ =
        Lwt_util.join [launch pp "session" OBus_address.session;
                       launch pp "system" OBus_address.system];
        Lwt_unix.waitpid []
-         (Unix.create_process cmd (Array.of_list (List.rev !cmd_args))
+         (Unix.create_process cmd (Array.of_list cmd_args)
             Unix.stdin Unix.stdout Unix.stderr);
        let _ = close_out oc in
        return ())
