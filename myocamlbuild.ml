@@ -33,13 +33,12 @@ struct
       "OBus_info";
       "Types_rw";
       "OBus_path";
-      "OBus_name";
       "OBus_value";
       "OBus_type";
+      "OBus_name";
       "OBus_uuid";
       "Rules";
       "Xparser";
-      "OBus_interface";
       "OBus_address";
       "OBus_lowlevel";
       "OBus_auth";
@@ -48,11 +47,11 @@ struct
       "OBus_error";
       "OBus_introspect";
       "OBus_connection";
-      "OBus_context";
+      "OBus_peer";
+      "OBus_proxy";
       "OBus_signal";
       "OBus_property";
-      "OBus_proxy";
-      "OBus_client";
+      "OBus_interface";
       "OBus_bus";
       "OBus_object";
       "OBus_server"]
@@ -66,7 +65,7 @@ struct
   let bindings =
     [ { name = "hal";
         desc = "Hal service binding";
-        modules = ["Hal_device"; "Hal_manager"] };
+        modules = ["Hal"] };
       { name = "notify";
         desc = "Notifications service binding";
         modules = ["Notify"] };
@@ -228,7 +227,7 @@ let _ =
         (* Enable backtrace support if we have ocaml>=3.11 *)
         Scanf.sscanf Sys.ocaml_version "%d.%d" begin fun major minor ->
           if (major, minor) >= (3, 11) then
-            flag_all_stages_except_link "backtrace_support" & S[A"-ppopt"; A"-D HAVE_BACKTRACE"]
+            flag_all_stages_except_link "pkg_camlp4.macro" & S[A"-ppopt"; A"-D HAVE_BACKTRACE"]
         end
     | _ -> ()
   end
