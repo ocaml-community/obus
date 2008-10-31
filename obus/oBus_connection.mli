@@ -16,6 +16,9 @@
 
 type t = OBus_internals.connection
 
+val tt : t OBus_type.ty_sequence
+  (** This return the connection from which a message come *)
+
 (** {6 Creation} *)
 
 (** The following functions will return a connection which is ready to
@@ -63,8 +66,11 @@ exception Connection_closed
   (** Raise when tring to use a normally closed connection *)
 
 exception Connection_lost
-  (** Raised when a connection has been closed by the other
-      end-point *)
+  (** Raised when a connection has been lost *)
+
+exception Transport_error of exn
+  (** Raised when something wrong happen on the backend transport of
+      the connection *)
 
 (** {6 Informations} *)
 
@@ -72,7 +78,7 @@ val transport : t -> OBus_lowlevel.transport
   (** [transport connection] get the transport associated with a
       connection *)
 
-val name : t -> OBus_name.connection_unique option
+val name : t -> OBus_name.unique option
   (** Unique name of the connection. This is only relevant if the
       other side of the connection is a message bus.
 
@@ -88,7 +94,7 @@ val name : t -> OBus_name.connection_unique option
 
 val send_message : t -> [< OBus_message.any_type ] OBus_message.t -> unit Lwt.t
   (** [send_message connection message] send a message without
-      expecting a reply *)
+      expecting a reply. *)
 
 val send_message_with_reply : t -> OBus_message.method_call -> OBus_message.method_return Lwt.t
   (** [send_message_with_reply connection message] Send a message and
@@ -102,7 +108,7 @@ exception Context of t * OBus_message.any
 
 val method_call : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.connection ->
+  ?sender:OBus_name.unique ->
   ?destination:OBus_name.connection ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
@@ -110,30 +116,53 @@ val method_call : t ->
   ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
   (** Send a method call and wait for the reply *)
 
-val kmethod_call : ((t -> 'a Lwt.t) -> 'b) ->
+val method_call_no_reply : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.connection ->
+  ?sender:OBus_name.unique ->
   ?destination:OBus_name.connection ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
-  ('c, 'b, 'a) OBus_type.ty_function -> 'c
-  (** Same thing but take a continuation *)
+  ('a, unit Lwt.t, unit) OBus_type.ty_function -> 'a
+  (** Send a method call without waiting for the reply. The
+      [no_reply_expected] flag is automatically set to [true]. *)
+
+val method_call' : t ->
+  ?flags:OBus_message.flags ->
+  ?sender:OBus_name.unique ->
+  ?destination:OBus_name.connection ->
+  path:OBus_path.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
+  OBus_message.body ->
+  [< 'a OBus_type.cl_sequence ] -> 'a Lwt.t
+  (** Same thing but take the body of the message as a
+      dynamically-typed value. *)
 
 val dmethod_call : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.connection ->
+  ?sender:OBus_name.unique ->
   ?destination:OBus_name.connection ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
   OBus_message.body -> OBus_message.body Lwt.t
   (** Dynamically-typed version, take the message body as a
-      dynamically-typed value *)
+      dynamically-typed value and return the reply as a
+      dynamically-typed value too *)
+
+val dmethod_call_no_reply : t ->
+  ?flags:OBus_message.flags ->
+  ?sender:OBus_name.unique ->
+  ?destination:OBus_name.connection ->
+  path:OBus_path.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
+  OBus_message.body -> unit Lwt.t
 
 val emit_signal : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.connection ->
+  ?sender:OBus_name.unique ->
   ?destination:OBus_name.connection ->
   path:OBus_path.t ->
   interface:OBus_name.interface ->
@@ -143,7 +172,7 @@ val emit_signal : t ->
 
 val demit_signal : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.connection ->
+  ?sender:OBus_name.unique ->
   ?destination:OBus_name.connection ->
   path:OBus_path.t ->
   interface:OBus_name.interface ->
@@ -168,41 +197,6 @@ val send_exn : t -> OBus_message.method_call -> exn -> unit Lwt.t
       message if it is not registred as a DBus exception. Note that
       this is bad thing since DBus errors are supposed to be user
       readable. *)
-
-(** {6 Receiving signals} *)
-
-type signal_receiver
-
-val add_signal_receiver : t ->
-  ?sender:OBus_name.connection ->
-  ?destination:OBus_name.connection_unique ->
-  ?path:OBus_path.t ->
-  ?interface:OBus_name.interface ->
-  ?member:OBus_name.member ->
-  ?args:(int * string) list ->
-  [< 'a OBus_type.cl_sequence ] -> ('a -> unit) -> signal_receiver
-  (** Add a signal receiver.
-
-      Note that with a message bus, you probably need to also add a
-      matching rule. *)
-
-val dadd_signal_receiver : t ->
-  ?sender:OBus_name.connection ->
-  ?destination:OBus_name.connection_unique ->
-  ?path:OBus_path.t ->
-  ?interface:OBus_name.interface ->
-  ?member:OBus_name.member ->
-  ?args:(int * string) list ->
-  (OBus_message.body -> unit) -> signal_receiver
-  (** Dynamically-typed version. This one is more generic than
-      [add_signal_handler] since it does not put constraint on the
-      signal signature. *)
-
-val enable_signal_receiver : signal_receiver -> unit
-
-val disable_signal_receiver : signal_receiver -> unit
-val signal_receiver_enabled : signal_receiver -> bool
-  (** Manipulation of registred receiver *)
 
 (** {6 Filters} *)
 
@@ -269,12 +263,3 @@ val of_transport : ?guid:OBus_address.guid -> ?up:bool -> OBus_lowlevel.transpor
 val is_up : t -> bool
 val set_up : t -> unit
 val set_down : t -> unit
-
-(**/**)
-val call_and_cast_reply : ('a, 'b, 'c) OBus_type.ty_function ->
-  (OBus_message.body -> (t -> OBus_message.method_call -> 'c Lwt.t) -> 'b) -> 'a
-  (* [call_and_cast_reply typ cont ...] Construct a message using the
-      given functionnal type, then pass it to [cont]. The second
-      argument for [cont] is a function which will call the method,
-      cast its reply and raise the standart error message if the cast
-      fail *)

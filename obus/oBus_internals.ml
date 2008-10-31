@@ -10,8 +10,10 @@
 (* This file contain data type that need to be shared between the
    different modules of OBus *)
 
+open Lwt
 open OBus_message
 open OBus_info
+open OBus_value
 
 module My_map(T : sig type t end) =
 struct
@@ -24,83 +26,17 @@ struct
         Not_found -> None
 end
 
-(***** Signal matching *****)
-
-type signal_match_rule = {
-  smr_sender : OBus_name.connection option;
-  smr_destination : OBus_name.connection_unique option;
-  smr_path : OBus_path.t option;
-  smr_interface : OBus_name.interface option;
-  smr_member : OBus_name.member option;
-
-  (* Matching on signals arguments. It is a list of
-     (relative_position, pattern) where relative_position is the
-     difference between the pattern absolute position and the previous
-     pattern absolute position *)
-  smr_args : (int * string) list;
-}
-
-open OBus_value
-
-(* Compute [smr_args] *)
-let make_args_filter l =
-  let rec aux prev = function
-    | [] -> []
-    | (n, p) :: l -> (n - prev, p) :: aux n l
-  in
-  aux 0 (List.sort (fun (x, _) (y, _) -> x - y) l)
-
-(* Matching on signals arguments *)
-let rec tst_args args body = match args with
-  | [] -> true
-  | (n, p) :: rest -> tst_one_arg n p rest body
-
-and tst_one_arg n p arest body = match n, body with
-  | 0, Basic (String s) :: brest when s = p -> tst_args arest body
-  | n, _ :: brest -> tst_one_arg (n - 1) p arest brest
-  | _ -> false
-
-let signal_match r { sender = sender;
-                     destination = dest;
-                     typ = `Signal(path, interface, member);
-                     body = body } =
-  let tst m f = match m with
-    | None -> true
-    | Some r -> r = f
-  in
-  (match r.smr_sender, sender with
-     | Some s, Some s' when OBus_name.is_unique_connection_name s -> s = s'
-     | _ -> true) &&
-    (match r.smr_destination, dest with
-       | None, _ -> true
-       | Some s, Some s' -> s = s'
-       | _ -> false) &&
-    (tst r.smr_path path) &&
-    (tst r.smr_interface interface) &&
-    (tst r.smr_member member) &&
-    (tst_args r.smr_args body)
-
-(***** Filters and connection *****)
+(***** Connection *****)
 
 module Serial_map = My_map(struct type t = serial end)
 module Object_map = My_map(struct type t = OBus_path.t end)
-
-type body = OBus_value.sequence
-
-type buffer = string
-type ptr = int
-
-type 'a handler = 'a -> unit
-  (* Type of a message handler. *)
-
-type filter = any -> any option
 
 type 'connection member_info =
   | MI_method of OBus_name.member * tsequence * ('connection -> method_call -> unit)
   | MI_signal
   | MI_property of OBus_name.member * (unit -> single Lwt.t) option * (single -> unit Lwt.t) option
 
-type 'connection member_desc = OBus_interface.declaration * 'connection member_info
+type 'connection member_desc = OBus_introspect.declaration * 'connection member_info
 
 class type ['connection] _dbus_object = object
   method obus_path : OBus_path.t
@@ -109,11 +45,6 @@ class type ['connection] _dbus_object = object
   method get : OBus_name.interface -> OBus_name.member -> OBus_value.single Lwt.t
   method set : OBus_name.interface -> OBus_name.member -> OBus_value.single -> unit Lwt.t
   method get_all : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
-  method obus_emit_signal : 'a 'b.
-    ?connection:'connection ->
-    ?destination:OBus_name.connection ->
-    OBus_name.interface -> OBus_name.member ->
-    ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
   method obus_add_interface : OBus_name.interface -> 'connection member_desc list -> unit
   method obus_export : 'connection -> unit
   method obus_remove : 'connection -> unit
@@ -121,46 +52,95 @@ class type ['connection] _dbus_object = object
   method obus_connection_closed : 'connection -> unit
 end
 
+type filter = OBus_message.any -> OBus_message.any option
+
 type connection = {
+  (* The backend transport used by the connection *)
   transport : OBus_lowlevel.transport;
+
+  (* This tell weather we must shutdown the transport when the
+     connection is closed by the programmer or by a crash *)
+  shutdown_transport_on_close : bool ref;
 
   (* For client-side connection, if specified this means that the
      connection is shared and it is the guid of the server. *)
   guid : OBus_address.guid option;
 
-  (* Set when the connection has crashed or hsa been closed *)
+  (* Set when the connection has crashed or has been closed, all
+     functions will fail with this exception if it is set *)
   mutable crashed : exn option;
 
-  (* up/down state *)
+  (* up/down state. If [None] it means that the connection is up, if
+     [Some w] it means that the connection is down, [w] being a
+     waiting thread which will be wake up when the connection is set
+     up *)
   mutable down : unit Lwt.t option;
 
-  (* Its a waiting thread which is wakeup when the connection is
-     closed or aborted. It is used to make the dispatcher to exit. *)
+  (* [abort] is a waiting thread which is wakeup when the connection
+     is closed or aborted. It is used to make the dispatcher to
+     exit. *)
   abort : any Lwt.t;
+
+  (* [watch = abort >>= fun _ -> return ()], this is the value
+     returned by [OBus_connection.watch] *)
   watch : unit Lwt.t;
 
-  (* Unique name of the connection *)
-  mutable name : string option;
+  (* Unique name of the connection. If set this means that the other
+     side is a message bus. *)
+  mutable name : OBus_name.unique option;
 
-  (* The ougoing thread. To send a message we just have bind the
-     result of this thread to the action of sending a message. *)
+  (* The ougoing thread.
+
+     If a message is being sent it is a waiting thread which is wakeup
+     when the message is sent. It return the current serial. *)
   mutable outgoing : serial Lwt.t;
+
+  signal_receivers : signal_receiver MSet.t;
+
+  (* Mapping serial -> thread waiting for a reply *)
+  mutable reply_waiters : method_return Lwt.t Serial_map.t;
+
+  (* Objects which are exported on a connection, and available to
+     other applications *)
+  mutable exported_objects : dbus_object Object_map.t;
 
   incoming_filters : filter MSet.t;
   outgoing_filters : filter MSet.t;
-  signal_handlers : (signal_match_rule * signal handler) MSet.t;
 
-  mutable reply_waiters : method_return Lwt.t Serial_map.t;
-
-  mutable exported_objects : dbus_object Object_map.t;
-
-  (* Handling of fatal errors *)
+  (* [on_disconnect] is called when the connection is disconnect. This
+     can happen is receiving a message on the transport fail, or if a
+     failure happen while a message is being sent. *)
   on_disconnect : (exn -> unit) ref;
 }
 
 and dbus_object = connection _dbus_object
 
-open Lwt
+and signal_receiver = {
+  (* Matching rules *)
+  sr_sender : OBus_name.unique option;
+  sr_path : OBus_path.t option;
+  sr_interface : OBus_name.interface;
+  sr_member : OBus_name.member;
+
+  (* Matching on signal arguments:
+
+     The message bus offer the possibility to match string arguments
+     of messages. To implement this we also need to match arguments
+     when the signal is received. *)
+  sr_args : (int * string) list;
+  (* This is a list of (relative position, constraint). Each position
+     is relative to the previous.
+
+     So for example the filter [(0, "a"); (1, "b"); (0, "c")] will
+     match any signal which have at least 4 arguments with:
+
+     - "a" for argument 0
+     - "b" for argument 2
+     - "c" for argument 3
+  *)
+
+  sr_handler : connection -> signal -> unit;
+}
 
 (***** Utils *****)
 

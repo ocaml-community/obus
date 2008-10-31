@@ -19,14 +19,14 @@ open Lwt
 type guid = OBus_address.guid
 type name = string
 
-type filter = OBus_internals.filter
-type filter_id = filter MSet.node
-type signal_receiver = (signal_match_rule * signal handler) MSet.node
-
 exception Connection_closed
 exception Connection_lost
+exception Transport_error of exn
 
 type t = connection
+
+type filter = OBus_internals.filter
+type filter_id = filter MSet.node * filter MSet.t
 
 (* Mapping from server guid to connection. *)
 module Guid_map = My_map(struct type t = guid end)
@@ -57,11 +57,11 @@ let set_crash connection exn = match connection.crashed with
       let { reply_waiters = reply_waiters;
             exported_objects = exported_objects } = connection in
 
-      connection.reply_waiters <- Serial_map.empty;
-      connection.exported_objects <- Object_map.empty;
-      MSet.clear connection.signal_handlers;
+      MSet.clear connection.signal_receivers;
       MSet.clear connection.incoming_filters;
       MSet.clear connection.outgoing_filters;
+      connection.reply_waiters <- Serial_map.empty;
+      connection.exported_objects <- Object_map.empty;
 
       (* This make the dispatcher to exit if it is waiting on
          [get_message] *)
@@ -71,11 +71,12 @@ let set_crash connection exn = match connection.crashed with
          | None -> ());
 
       (* Shutdown the transport *)
-      (try
-         OBus_lowlevel.shutdown connection.transport
-       with
-           exn ->
-             Log.failure exn "failed to abort/shutdown the transport");
+      if !(connection.shutdown_transport_on_close) then
+        (try
+           OBus_lowlevel.shutdown connection.transport
+         with
+             exn ->
+               Log.failure exn "failed to abort/shutdown the transport");
 
       (* Wakeup all reply handlers so they will not wait forever *)
       Serial_map.iter (fun _ w -> wakeup_exn w exn) reply_waiters;
@@ -108,13 +109,11 @@ let send_message_backend reply_waiter return_thread connection message =
     let outgoing = connection.outgoing in
     let w = wait () in
     connection.outgoing <- w;
-    outgoing >>= fun old_serial ->
-      let serial = Int32.succ old_serial in
-
+    outgoing >>= fun serial ->
       match apply_filters "outgoing" { (message :> any) with serial = serial } connection.outgoing_filters with
         | None ->
             Log.debug "outgoing message dropped by filters";
-            wakeup w old_serial;
+            wakeup w serial;
             fail (Failure "message dropped by filters")
 
         | Some message ->
@@ -130,24 +129,23 @@ let send_message_backend reply_waiter return_thread connection message =
 
             (perform
                writer <-- catch
-                 (fun _ -> OBus_lowlevel.send connection.transport (message :> OBus_message.any))
+                 (fun _ -> OBus_lowlevel.send connection.transport message)
                  (function
                     | Failure msg ->
-                        wakeup w old_serial;
+                        wakeup w serial;
                         fail (Failure ("can not send message: " ^ msg))
                     | exn ->
-                        wakeup w old_serial;
+                        wakeup w serial;
                         fail exn (* This should not happen *));
                catch writer
                  (fun exn ->
-                    (* Any error is fatal here, because this is
-                       possible that a message has been partially sent
-                       on the connection, so the message stream is
-                       broken *)
-                    let exn = set_crash connection exn in
+                    (* Any error is fatal here, because this is possible
+                       that a message has been partially sent on the
+                       connection, so the message stream is broken *)
+                    let exn = set_crash connection (Transport_error exn) in
                     wakeup_exn w exn;
                     fail exn);
-               let _ = wakeup w serial in
+               let _ = wakeup w (Int32.succ serial) in
                return_thread)
   end connection
 
@@ -164,35 +162,40 @@ let send_message_with_reply connection message =
 exception Context of connection * OBus_message.any
 let mk_context connection msg = Context(connection, (msg :> OBus_message.any))
 
-let call_and_cast_reply ty cont =
-  make_func ty begin fun body ->
-    cont body begin fun connection message ->
-      send_message_with_reply connection message >>= fun msg ->
-        match opt_cast_sequence ~context:(mk_context connection msg) (func_reply ty) msg.body with
+let tt = wrap_sequence_ctx tunit
+  (fun context () -> match context with
+     | Context(connection, msg) -> connection
+     | _ -> raise Cast_failure)
+  (fun _ -> ())
 
-          (* If the cast success, just return the result *)
-          | Some x -> return x
-
+let method_call' connection ?flags ?sender ?destination ~path ?interface ~member body ty_reply =
+  send_message_with_reply connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
+  >>= fun msg ->
+    try
+      return (cast_sequence ~context:(mk_context connection msg) ty_reply msg.body)
+    with
+      | Cast_failure ->
           (* If not, check why the cast fail *)
-          | None ->
-              let expected_sig = osignature ty
-              and got_sig = type_of_sequence msg.body in
-              if expected_sig = got_sig
-              then
-                (* If the signature match, this means that the
-                   user defined a combinator raising a
-                   Cast_failure *)
-                fail Cast_failure
-              else
-                (* In other case this means that the expected
-                   signature is wrong *)
-                let { typ = `Method_call(path, interf, member) } = message in
-                fail
-                  (Failure (sprintf "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
-                              member (match interf with Some i -> i | None -> "")
-                              (string_of_signature expected_sig)
-                              (string_of_signature got_sig)))
-    end
+          let expected_sig = type_sequence ty_reply
+          and got_sig = type_of_sequence msg.body in
+          if expected_sig = got_sig
+          then
+            (* If the signature match, this means that the user
+               defined a combinator raising a Cast_failure *)
+            fail Cast_failure
+          else
+            (* In other case this means that the expected signature is
+               wrong *)
+            fail
+              (Failure (sprintf "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
+                          member (match interface with Some i -> i | None -> "")
+                          (string_of_signature expected_sig)
+                          (string_of_signature got_sig)))
+
+let method_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member ty =
+  make_func ty begin fun body ->
+    send_message connection (method_call ~flags:{ flags with no_reply_expected = true }
+                               ?sender ?destination ~path ?interface ~member body)
   end
 
 let dmethod_call connection ?flags ?sender ?destination ~path ?interface ~member body =
@@ -200,15 +203,14 @@ let dmethod_call connection ?flags ?sender ?destination ~path ?interface ~member
     (method_call ?flags ?sender ?destination ~path ?interface ~member body)
   >>= fun { body = x } -> return x
 
-let kmethod_call cont ?flags ?sender ?destination ~path ?interface ~member ty =
-  call_and_cast_reply ty begin fun body f ->
-    cont (fun connection ->
-            f connection (method_call ?flags ?sender ?destination ~path ?interface ~member body))
-  end
+let dmethod_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member body =
+  send_message connection
+    (method_call ~flags:{ flags with no_reply_expected = true }
+       ?sender ?destination ~path ?interface ~member body)
 
 let method_call connection ?flags ?sender ?destination ~path ?interface ~member ty =
-  call_and_cast_reply ty begin fun body f ->
-    f connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
+  make_func ty begin fun body ->
+    method_call' connection ?flags ?sender ?destination ~path ?interface ~member body (func_reply ty)
   end
 
 let emit_signal connection ?flags ?sender ?destination ~path ~interface ~member ty x =
@@ -244,46 +246,48 @@ let send_exn connection method_call exn =
         Log.failure exn "sending an unregistred ocaml exception as a DBus error";
         send_error connection method_call "ocaml.Exception" (Printexc.to_string exn)
 
-(***** Signals and filters *****)
+(***** Signal matching *****)
 
-let add_signal_receiver connection ?sender ?destination ?path ?interface ?member ?(args=[]) typ func =
-  with_running begin fun connection ->
-    MSet.add connection.signal_handlers
-      ({ smr_sender = sender;
-         smr_destination = destination;
-         smr_path = path;
-         smr_interface = interface;
-         smr_member = member;
-         smr_args = make_args_filter args },
-       fun msg -> ignore(match opt_cast_sequence typ ~context:(mk_context connection msg) msg.body with
-                           | Some x -> func x
-                           | None -> ()))
-  end connection
+(* Matching on signals arguments *)
+let rec tst_args args body = match args with
+  | [] -> true
+  | (n, p) :: rest -> tst_one_arg n p rest body
 
-let dadd_signal_receiver connection ?sender ?destination ?path ?interface ?member ?(args=[]) func =
-  with_running begin fun connection ->
-    MSet.add connection.signal_handlers
-      ({ smr_sender = sender;
-         smr_destination = destination;
-         smr_path = path;
-         smr_interface = interface;
-         smr_member = member;
-         smr_args = make_args_filter args },
-       fun msg -> func msg.body)
-  end connection
+and tst_one_arg n p arest body = match n, body with
+  | 0, Basic (String s) :: brest when s = p -> tst_args arest brest
+  | n, _ :: brest -> tst_one_arg (n - 1) p arest brest
+  | _ -> false
+
+let signal_match r
+    { sender = sender;
+      typ = `Signal(path, interface, member);
+      body = body } =
+  (r.sr_sender = sender) &&
+    (match r.sr_path with
+       | Some p -> p = path
+       | None -> true) &&
+    (r.sr_interface = interface) &&
+    (r.sr_member = member) &&
+    (tst_args r.sr_args body)
+
+let signal_match_ignore_sender r
+    { typ = `Signal(path, interface, member);
+      body = body } =
+  (match r.sr_path with
+     | Some p -> p = path
+     | None -> true) &&
+    (r.sr_interface = interface) &&
+    (r.sr_member = member) &&
+    (tst_args r.sr_args body)
 
 let add_incoming_filter connection filter =
-  with_running (fun connection -> MSet.add connection.incoming_filters filter) connection
+  with_running (fun connection -> (MSet.add connection.incoming_filters filter, connection.incoming_filters)) connection
 let add_outgoing_filter connection filter =
-  with_running (fun connection -> MSet.add connection.outgoing_filters filter) connection
+  with_running (fun connection -> (MSet.add connection.outgoing_filters filter, connection.outgoing_filters)) connection
 
-let signal_receiver_enabled = MSet.enabled
-let enable_signal_receiver = MSet.enable
-let disable_signal_receiver = MSet.disable
-
-let filter_enabled = MSet.enabled
-let enable_filter = MSet.enable
-let disable_filter = MSet.disable
+let filter_enabled (node, set) = not (MSet.is_alone node)
+let enable_filter (node, set) = MSet.insert node set
+let disable_filter (node, set) = MSet.remove node
 
 (***** Reading/dispatching *****)
 
@@ -301,96 +305,97 @@ let ignore_send_exn connection method_call exn = ignore (send_exn connection met
 let unknown_method connection message =
   ignore_send_exn connection message (unknown_method_exn message)
 
-(* Call a filter/signal handler/method call handler *)
-let call typ f message =
-  try
-    f message
-  with
-      exn ->
-        Log.failure exn "%s failed with" typ
+let dispatch_message connection = function
+    (* For method return and errors, we lookup at the reply
+       waiters. If one is find then it get the reply, if none, then
+       the reply is dropped. *)
+  | { typ = `Method_return(reply_serial) } as message ->
+      find_reply_waiter connection reply_serial
+        (fun w -> wakeup w message)
+        (fun _ -> Log.debug "reply to message with serial %ld dropped" reply_serial);
 
-let dispatch_message connection message =
-  (* First of all, pass the message through all filters *)
-  match apply_filters "incoming" message connection.incoming_filters with
-    | None ->
-        Log.debug "incoming message %ld dropped by filters" message.serial
+  | { typ = `Error(reply_serial, error_name) } as message ->
+      let msg = get_error message in
+      find_reply_waiter connection reply_serial
+        (fun w -> wakeup_exn w (OBus_error.make error_name msg))
+        (fun _ ->
+           Log.debug "error reply to message with serial %ld dropped because no reply was expected, \
+                      the error is: %S: %S" reply_serial error_name msg)
 
-    | Some message ->
-        match message with
+  | { typ = `Signal _ } as message ->
+      begin match connection.name, message.sender with
+        | None, _
+        | _, None ->
+            (* If this is a peer-to-peer connection, we do match on
+               the sender *)
+            MSet.iter
+              (fun receiver ->
+                 if signal_match_ignore_sender receiver message
+                 then receiver.sr_handler connection message)
+              connection.signal_receivers
 
-          (* For method return and errors, we lookup at the reply
-             waiters. If one is find then it get the reply, if none,
-             then the reply is dropped. *)
-          | { typ = `Method_return(reply_serial) } as message ->
-              find_reply_waiter connection reply_serial
-                (fun w -> wakeup w message)
-                (fun _ -> Log.debug "reply to message with serial %ld dropped" reply_serial)
+        | Some _, Some _ ->
+            MSet.iter
+              (fun receiver ->
+                 if signal_match receiver message
+                 then receiver.sr_handler connection message)
+              connection.signal_receivers
+      end
 
-          | { typ = `Error(reply_serial, error_name) } ->
-              let msg = get_error message in
-              find_reply_waiter connection reply_serial
-                (fun w -> wakeup_exn w (OBus_error.make error_name msg))
-                (fun _ ->
-                   Log.debug "error reply to message with serial %ld dropped because no reply was expected, \
-                              the error is: %S: %S" reply_serial error_name msg)
+  (* Hacks for the special "org.freedesktop.DBus.Peer" interface *)
+  | { typ = `Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } as message -> begin
+      match member, body with
+        | "Ping", [] ->
+            (* Just pong *)
+            ignore (dsend_reply connection message [])
+        | "GetMachineId", [] ->
+            ignore
+              (try_bind (fun _ -> Lazy.force OBus_info.machine_uuid)
+                 (fun machine_uuid -> send_reply connection message <:obus_type< string >> (OBus_uuid.to_string machine_uuid))
+                 (fun exn -> perform
+                    send_exn connection message (OBus_error.Failed "cannot get machine uuuid");
+                    fail exn))
+        | _ ->
+            unknown_method connection message
+    end
 
-          | { typ = `Signal _ } as message ->
-              MSet.iter
-                (fun (match_rule, handler) ->
-                   if signal_match match_rule message
-                   then call "signal handler" handler message)
-                connection.signal_handlers
-
-          (* Hacks for the special "org.freedesktop.DBus.Peer" interface *)
-          | { typ = `Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } as message -> begin
-              match member, body with
-                | "Ping", [] ->
-                    (* Just pong *)
-                    ignore (dsend_reply connection message [])
-                | "GetMachineId", [] ->
-                    ignore
-                      (perform
-                         machine_uuid <-- catch
-                           (fun _ -> Lazy.force OBus_info.machine_uuid)
-                           (fun exn -> perform
-                              send_exn connection message (OBus_error.Failed "cannot get machine uuuid");
-                              fail exn);
-                         send_reply connection message <:obus_type< string >> (OBus_uuid.to_string machine_uuid))
-                | _ ->
-                    unknown_method connection message
+  | { typ = `Method_call(path, interface_opt, member) } as message ->
+      match Object_map.lookup path connection.exported_objects with
+        | Some obj ->
+            begin try
+              obj#obus_handle_call connection message
+            with
+                exn ->
+                  Log.failure exn "method call handler failed with"
             end
+        | None ->
+            (* Handle introspection for missing intermediate object:
 
-          | { typ = `Method_call(path, interface_opt, member) } as message ->
-              match Object_map.lookup path connection.exported_objects with
-                | Some obj -> call "method call" (fun msg -> obj#obus_handle_call connection msg) message
-                | None ->
-                    (* Handle introspection for missing intermediate object:
-
-                       for example if we have only one exported object with
-                       path "/a/b/c", we need to add introspection support
-                       for virtual objects with path "/", "/a", "/a/b",
-                       "/a/b/c". *)
-                    match
-                      match interface_opt, member with
-                        | None, "Introspect"
-                        | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
-                            begin match children connection path with
-                              | [] -> false
-                              | l ->
-                                  ignore
-                                    (send_reply connection message <:obus_type< OBus_introspect.document >>
-                                       ([("org.freedesktop.DBus.Introspectable",
-                                          [OBus_interface.Method("Introspect", [],
-                                                                 [(None, Tbasic Tstring)], [])],
-                                          [])], l));
-                                  true
-                            end
-                        | _ -> false
-                    with
-                      | true -> ()
-                      | false ->
-                          ignore_send_exn connection message
-                            (OBus_error.Failed (sprintf "No such object: %S" (OBus_path.to_string path)))
+               for example if we have only one exported object with
+               path "/a/b/c", we need to add introspection support for
+               virtual objects with path "/", "/a", "/a/b",
+               "/a/b/c". *)
+            match
+              match interface_opt, member with
+                | None, "Introspect"
+                | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
+                    begin match children connection path with
+                      | [] -> false
+                      | l ->
+                          ignore
+                            (send_reply connection message <:obus_type< OBus_introspect.document >>
+                               ([("org.freedesktop.DBus.Introspectable",
+                                  [OBus_introspect.Method("Introspect", [],
+                                                          [(None, Tbasic Tstring)], [])],
+                                  [])], l));
+                          true
+                    end
+                | _ -> false
+            with
+              | true -> ()
+              | false ->
+                  ignore_send_exn connection message
+                    (OBus_error.Failed (sprintf "No such object: %S" (OBus_path.to_string path)))
 
 let read_dispatch connection =
   catch
@@ -399,14 +404,21 @@ let read_dispatch connection =
     (fun exn ->
        fail (set_crash connection
                (match exn with
-                  | OBus_lowlevel.Transport_error End_of_file -> Connection_lost
-                  | exn -> exn)))
+                  | End_of_file -> Connection_lost
+                  | exn -> Transport_error exn)))
   >>= fun message ->
+
     if !(OBus_info.dump) then
       Format.eprintf "-----@\n@[<hv 2>message received:@\n%a@]@."
         OBus_message.print message;
-    dispatch_message connection message;
-    return ()
+
+    match apply_filters "incoming" message connection.incoming_filters with
+      | None ->
+          Log.debug "incoming message dropped by filters";
+          return ()
+      | Some message ->
+          dispatch_message connection message;
+          return ()
 
 let rec dispatch_forever connection =
   try_bind
@@ -431,9 +443,9 @@ let of_transport ?guid ?(up=true) transport =
     let connection = {
       crashed = None;
       transport = (transport :> OBus_lowlevel.transport);
-      outgoing = Lwt.return 0l;
+      outgoing = Lwt.return 1l;
       reply_waiters = Serial_map.empty;
-      signal_handlers = MSet.make ();
+      signal_receivers = MSet.make ();
       exported_objects = Object_map.empty;
       incoming_filters = MSet.make ();
       outgoing_filters = MSet.make ();
@@ -444,7 +456,8 @@ let of_transport ?guid ?(up=true) transport =
                 | true -> None
                 | false -> Some(wait ()));
       abort = abort;
-      watch = abort >>= fun _ -> return ();
+      watch = abort >>= (fun _ -> return ());
+      shutdown_transport_on_close = ref true;
     } in
     ignore (dispatch_forever connection);
     connection
