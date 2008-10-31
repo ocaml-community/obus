@@ -11,16 +11,15 @@ open Lwt
 open OBus_internals
 open OBus_type
 
-include OBus_client.Make_constant_path
-  (struct
-     let name = "org.freedesktop.DBus"
-     let path = ["org"; "freedesktop"; "DBus"]
-     let service = Some "org.freedesktop.DBus"
-   end)
+include OBus_interface.Make(struct let name = "org.freedesktop.DBus" end)
 
-OBUS_type name = string
+let peer connection = OBus_peer.make connection "org.freedesktop.DBus"
+let make connection = OBus_proxy.make (peer connection) ["org"; "freedesktop"; "DBus"]
+let connection bus = OBus_peer.connection (OBus_proxy.peer bus)
+let make_peer bus name = OBus_peer.make (connection bus) name
+let make_proxy bus name path = OBus_proxy.make (make_peer bus name) path
 
-OBUS_method Hello : name
+OBUS_method Hello : string
 
 let error_handler = function
   | OBus_lowlevel.Protocol_error msg ->
@@ -29,39 +28,37 @@ let error_handler = function
   | OBus_connection.Connection_lost ->
       Log.log "disconnected from DBus message bus";
       exit 0
-  | OBus_lowlevel.Transport_error exn ->
+  | OBus_connection.Transport_error exn ->
       Log.error "the DBus connection with the message bus has been closed due to a transport error: %s" (Util.string_of_exn exn);
       exit 1
   | exn ->
       Log.failure exn "the DBus connection with the message bus has been closed due to this uncaught exception";
       exit 1
 
-let register_connection = lwt_with_running
-    (fun connection -> match connection.name with
-       | Some _ ->
-           (* Do not call two times the Hello method *)
-           return ()
-       | None ->
-           connection.on_disconnect := error_handler;
-           hello connection >>= fun name ->
-             connection.name <- Some name;
-             return ())
+let of_connection = lwt_with_running
+  (fun connection -> match connection.name with
+     | Some _ ->
+         (* Do not call two times the Hello method *)
+         return (make connection)
+     | None ->
+         connection.on_disconnect := error_handler;
+         let bus = make connection in
+         hello bus >>= fun name ->
+           connection.name <- Some name;
+           return bus)
 
 let of_addresses addresses =
-  (perform
-     connection <-- OBus_connection.of_addresses addresses ~shared:true;
-     register_connection connection;
-     return connection)
+  OBus_connection.of_addresses addresses ~shared:true >>= of_connection
 
 let of_laddresses laddr = Lazy.force laddr >>= of_addresses
 
 let session = lazy(of_laddresses OBus_address.session)
 let system = lazy(of_laddresses OBus_address.system)
 
-OBUS_exn Service_unknown = "Error.ServiceUnknown"
-OBUS_exn Name_has_no_owner = "Error.NameHasNoOwner"
-OBUS_exn Match_rule_not_found = "Error.MatchRuleNotFound"
-OBUS_exn Service_unknown = "Error.ServiceUnknown"
+OBUS_exception Error.ServiceUnknown
+OBUS_exception Error.NameHasNoOwner
+OBUS_exception Error.MatchRuleNotFound
+OBUS_exception Error.ServiceUnknown
 
 OBUS_bitwise request_name_flag : uint =
   [ 1 -> `allow_replacement
@@ -75,6 +72,7 @@ OBUS_flag request_name_result : uint =
   | 4 -> `already_owner ]
 
 OBUS_method RequestName : string -> request_name_flag_list -> request_name_result
+let request_name bus ?(flags=[]) name = request_name bus name flags
 
 OBUS_flag release_name_result : uint =
     [ 1 -> `released
@@ -83,19 +81,17 @@ OBUS_flag release_name_result : uint =
 
 OBUS_method ReleaseName : string -> release_name_result
 
-type start_service_flag
-let tstart_service_flag : start_service_flag list ty_basic = wrap_basic tuint (fun _ -> []) (fun _ -> 0)
-
 OBUS_flag start_service_by_name_result : uint =
   [ 1 -> `success
   | 2 -> `already_running ]
 
-OBUS_method StartServiceByName : string -> start_service_flag -> start_service_by_name_result
+OBUS_method StartServiceByName : string -> uint -> start_service_by_name_result
+let start_service_by_name bus name = start_service_by_name bus name 0
 OBUS_method NameHasOwner : string -> bool
-OBUS_method ListNames : name list
-OBUS_method ListActivatableNames : name list
-OBUS_method GetNameOwner : name -> name
-OBUS_method ListQueuedOwners : name -> name list
+OBUS_method ListNames : string list
+OBUS_method ListActivatableNames : string list
+OBUS_method GetNameOwner : string -> string
+OBUS_method ListQueuedOwners : string -> string list
 
 OBUS_type match_rule = string
 
@@ -110,38 +106,46 @@ OBUS_method GetConnectionSelinuxSecurityContext : string -> byte_array
 OBUS_method ReloadConfig : unit
 OBUS_method GetId : OBus_uuid.t
 
-OBUS_signal NameOwnerChanged : name * name * name
-OBUS_signal NameLost : name
-OBUS_signal NameAcquired : name
+let tname_opt = wrap_basic tstring
+  (function
+     | "" -> None
+     | str -> Some str)
+  (function
+     | None -> ""
+     | Some str -> str)
 
-type status = [ `up | `down ]
+OBUS_signal NameOwnerChanged : string * name_opt * name_opt
+OBUS_signal NameLost : string
+OBUS_signal NameAcquired : string
 
-let status = function
-  | "" -> `down
-  | _ -> `up
+let wait_for_exit peer =
+  let w = wait ()
+  and bus = make (OBus_peer.connection peer)
+  and args = match OBus_peer.name peer with
+    | Some name -> [(0, name); (1, name); (2, "")]
+    | None -> [(2, "")] in
+  (perform
+     id <-- OBus_signal.connect bus ~args name_owner_changed
+       (fun _ -> wakeup w ());
+     w;
+     OBus_signal.disable id)
 
-let on_service_status_change bus service f = OBus_signal.add_receiver bus
-  ~sender:"org.freedesktop.DBus"
-  ~path:["org"; "freedesktop"; "DBus"]
-  ~interface:"org.freedesktop.DBus"
-  ~member:"NameOwnerChanged"
-  ~args:[0, service]
-  <:obus_type< string * string * string >>
-  (fun (_, o, n) -> f (status o, status n))
+let get_peer bus name =
+  let connection = connection bus in
+  try_bind
+    (fun _ -> get_name_owner bus name)
+    (fun n -> return (OBus_peer.make connection n))
+    (function
+       | Name_has_no_owner _ ->
+           (perform
+              start_service_by_name bus name;
+              n <-- get_name_owner bus name;
+              return (OBus_peer.make connection n))
+       | exn -> fail exn)
 
-let on_client_exit bus name f =
-  let w = wait () in
-  let called = ref false in
-  ignore_result
-    (perform
-       id <-- OBus_signal.dadd_receiver bus
-         ~sender:"org.freedesktop.DBus"
-         ~path:["org"; "freedesktop"; "DBus"]
-         ~interface:"org.freedesktop.DBus"
-         ~member:"NameOwnerChanged"
-         ~args:[(0, name); (1, name); (2, "")]
-         (fun _ -> match !called with
-            | false -> wakeup w (); f ()
-            | true -> ());
-       w;
-       OBus_signal.disable_receiver id)
+let get_proxy bus name path =
+  (perform
+     peer <-- get_peer bus name;
+     return (OBus_proxy.make peer path))
+
+let watch bus = OBus_connection.watch (connection bus)

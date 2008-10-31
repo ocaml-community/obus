@@ -7,91 +7,80 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open OBus_type
-open OBus_connection
 open Lwt
+open OBus_type
+open OBus_peer
+open OBus_connection
 
 type t = {
-  connection : OBus_connection.t;
-  destination : OBus_name.connection option;
+  peer : OBus_peer.t;
   path : OBus_path.t;
 }
 
-let make ~connection ?destination ~path = {
-  connection = connection;
-  destination = destination;
+let make peer path = {
+  peer = peer;
   path = path;
 }
 
-let connection p = p.connection
+let peer p = p.peer
 let path p = p.path
-let destination p = p.destination
 
 let tt = OBus_type.wrap_basic_ctx OBus_type.tobject_path
   (fun context path -> match context with
      | Context(connection, msg) ->
-         { connection = connection;
-           destination = OBus_message.sender msg;
+         { peer = { connection = connection;
+                    name = OBus_message.sender msg };
            path = path }
      | _ -> raise Cast_failure)
   path
 
-let kmethod_call cont ?interface ~member typ =
-  call_and_cast_reply typ begin fun body f ->
-    cont begin fun proxy ->
-      f (connection proxy)
-        (OBus_message.method_call
-           ?destination:(destination proxy)
-           ~path:(path proxy)
-           ?interface
-           ~member body)
-    end
-  end
-
-let method_call proxy ?interface ~member typ =
-  method_call (connection proxy)
-    ?destination:(destination proxy)
-    ~path:(path proxy)
+let call proxy ?interface ~member typ =
+  method_call proxy.peer.connection
+    ?destination:proxy.peer.name
+    ~path:proxy.path
     ?interface
     ~member
     typ
 
-let dmethod_call proxy ?interface ~member body =
-  dmethod_call (connection proxy)
-    ?destination:(destination proxy)
-    ~path:(path proxy)
+let call_no_reply proxy ?interface ~member typ =
+  method_call_no_reply proxy.peer.connection
+    ?destination:proxy.peer.name
+    ~path:proxy.path
+    ?interface
+    ~member
+    typ
+
+let call' proxy ?interface ~member body typ =
+  method_call' proxy.peer.connection
+    ?destination:proxy.peer.name
+    ~path:proxy.path
+    ?interface
+    ~member
+    body
+    typ
+
+let dcall proxy ?interface ~member body =
+  dmethod_call proxy.peer.connection
+    ?destination:proxy.peer.name
+    ~path:proxy.path
     ?interface
     ~member
     body
 
+let dcall_no_reply proxy ?interface ~member body =
+  dmethod_call_no_reply proxy.peer.connection
+    ?destination:proxy.peer.name
+    ~path:proxy.path
+    ?interface
+    ~member
+    body
+
+type introspection = OBus_introspect.interface list * t list
+
+let raw_introspect proxy =
+  call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" << OBus_introspect.document >>
+
 let introspect proxy =
-  method_call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" << OBus_introspect.document >>
-
-let on_signal proxy ?global ~interface ~member typ f =
-  OBus_signal.add_receiver (connection proxy) ?global ~interface ~member
-    ~path:(path proxy) ?sender:(destination proxy) typ f
-
-let don_signal proxy ?global ~interface ~member f =
-  OBus_signal.dadd_receiver (connection proxy) ?global ~interface ~member
-    ~path:(path proxy) ?sender:(destination proxy) f
-
-let property proxy ~interface ~member ~access typ =
-  OBus_property.make ~interface ~member ~access ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy) typ
-
-let dproperty proxy ~interface ~member ~access =
-  OBus_property.dmake ~interface ~member ~access ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy)
-
-let set proxy ~interface ~member typ x =
-  OBus_property.set (property proxy ~interface ~member ~access:`writable typ) x
-
-let get proxy ~interface ~member typ =
-  OBus_property.get (property proxy ~interface ~member ~access:`readable typ)
-
-let dset proxy ~interface ~member x =
-  OBus_property.dset (dproperty proxy ~interface ~member ~access:`writable) x
-
-let dget proxy ~interface ~member =
-  OBus_property.dget (dproperty proxy ~interface ~member ~access:`readable)
-
-let dget_all proxy ~interface =
-  OBus_property.dget_all ~interface ~connection:(connection proxy) ?destination:(destination proxy) ~path:(path proxy)
+  raw_introspect proxy >>= fun (ifaces, sub_nodes) ->
+    return (ifaces, List.map (fun node -> { peer = proxy.peer;
+                                            path = proxy.path @ [node] }) sub_nodes)

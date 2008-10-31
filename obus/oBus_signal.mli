@@ -9,54 +9,60 @@
 
 (** Handling of signals *)
 
-(** {6 Catching signals from remote objects} *)
+type 'a t
+  (** A signal definition. ['a] is the type of signals contents. *)
+
+(** {6 Receiving signals} *)
 
 type receiver
-  (** Function which receive signals *)
+  (** Id of a function which receive signals *)
 
-val add_receiver : OBus_connection.t ->
-  ?global:bool ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection_unique.t ->
-  ?path:OBus_path.t ->
-  ?interface:OBus_name.Interface.t ->
-  ?member:OBus_name.Member.t ->
-  ?args:(int * string) list ->
-  [< 'a OBus_type.cl_sequence ] -> ('a -> unit) -> receiver Lwt.t
-  (** [add_receiver connection sender destination path interface
-      member typ func]
+val connect : OBus_proxy.t -> 'a t -> ?args:(int * string) list -> ('a -> unit) -> receiver Lwt.t
+  (** [connect obj signal ?args func] connect [func] to signals
+      [signal] emitted by [obj].
 
-      Add a receiver on the given connection. If it is a message bus,
-      then a matching rule is automatically added.
+      [args] is a pattern for string argument of signals. For example
+      [(0, "a"); (2, "b")] will match signals for which argument 0 is
+      [Basic(String "a")] and argument 2 is [Basic(String "b")].
 
-      [sender], [destination], [path], [interface] and [member],
-      [args] and [typ] act as filters.
+      The filtering with [args] is also done by the message bus so
+      this may reduce the number of wakup. *)
 
-      [global] tell weather the signal is a ``global'' signal,
-      i.e. destined to anyone who would want to get it, or if it is
-      especially destined to us. This is basically to avoid to receive
-      signal destined to other applications. This is basically of
-      equivalent of passing our connection unqiue name as
-      [destination] filter. The default value is [true].  *)
+val connect_any : OBus_peer.t -> 'a t -> ?args:(int * string) list -> (OBus_proxy.t -> 'a -> unit) -> receiver Lwt.t
+  (** [connect_any peer signal ?args func] same as connect but [func]
+      will receive signals emited by any objects of [peer]. *)
 
-val dadd_receiver : OBus_connection.t ->
-  ?global:bool ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection_unique.t ->
-  ?path:OBus_path.t ->
-  ?interface:OBus_name.Interface.t ->
-  ?member:OBus_name.Member.t ->
-  ?args:(int * string) list ->
-  (OBus_message.body -> unit) -> receiver Lwt.t
-  (** Same thing but the callback function receive a dynamically typed
-      value, and there is no constraint on the message signature *)
-
-val disable_receiver : receiver -> unit Lwt.t
+val disable : receiver -> unit Lwt.t
   (** Disable a receiver. Do nothing if the receiver is already
       disabled *)
 
-val enable_receiver : receiver -> unit Lwt.t
+val enable : receiver -> unit Lwt.t
   (** Enable a receiver. Do nothing if the receiver is already
       enabled *)
 
-val receiver_enabled : receiver -> bool
+val enabled : receiver -> bool
+  (** Tell weather the given receiver is currently active *)
+
+(** {6 Signal creation} *)
+
+val map : ('a -> 'b) -> 'a t -> 'b t
+  (** Mapping of signal contents *)
+
+val make :
+  ?broadcast:bool ->
+  interface:OBus_name.Interface.t ->
+  member:OBus_name.Member.t ->
+  [< 'a OBus_type.cl_sequence ] -> 'a t
+  (** [make ?broadcast interface member typ] create a signal.
+
+      [broadcast] tell weather the signal is broadcasted or not. It
+      default to [true]. *)
+
+val dmake :
+  ?broadcast:bool ->
+  interface:OBus_name.Interface.t ->
+  member:OBus_name.Member.t ->
+  OBus_message.body t
+  (** Same thing but the value returned are dynamically typed and
+      there is no constraint on the signal type *)
+

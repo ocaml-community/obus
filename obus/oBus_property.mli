@@ -16,37 +16,25 @@ val wr_only : [ `writable ]
 val rdwr : [ `readable | `writable ]
   (** Access modes *)
 
-(** Property with known type *)
-
 type ('a, 'access) t
+  (** A property of type ['a] with allowed operations ['access]. *)
 
-val make : connection:OBus_connection.t -> ?destination:string -> path:OBus_path.t ->
-  interface:OBus_name.interface -> member:OBus_name.member -> access:([< access ] as 'access) ->
-  [< 'a OBus_type.cl_single ] -> ('a, 'access) t
-   (** Create a property *)
+val make :  interface:OBus_name.interface -> member:OBus_name.member ->
+  access:([< access ] as 'access) -> [< 'a OBus_type.cl_single ] -> ('a, 'access) t
+  (** Create a property *)
 
-val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
+val dmake :  interface:OBus_name.interface -> member:OBus_name.member ->
+  access:([< access ] as 'access) -> (OBus_value.single, 'access) t
+  (** Create a dynamically typed property *)
+
+val set : OBus_proxy.t -> ('a, [> `writable ]) t -> 'a -> unit Lwt.t
   (** Set the value of a property *)
 
-val get : ('a, [> `readable]) t -> 'a Lwt.t
-  (** Get the value of a property *)
+val get : OBus_proxy.t -> ('a, [> `readable ]) t -> 'a Lwt.t
+  (** Get the value of a property.
 
-(** Dynamically-typed properties *)
+      @rase OBus_type.Cast_failure if the property do not have the
+      expected type *)
 
-type 'access dt
-
-val dmake : connection:OBus_connection.t -> ?destination:string -> path:OBus_path.t ->
-  interface:OBus_name.interface -> member:OBus_name.member -> access:([< access ] as 'access) -> 'access dt
-
-val dset : [> `writable ] dt -> OBus_value.single -> unit Lwt.t
-val dget : [> `readable ] dt -> OBus_value.single Lwt.t
-
-val dget_all : connection:OBus_connection.t -> ?destination:string -> path:OBus_path.t ->
-  interface:OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
+val get_all : OBus_proxy.t -> OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
   (** Retreive all properties of an object *)
-
-(**/**)
-val lmake : connection:OBus_connection.t Lwt.t Lazy.t -> ?destination:string -> path:OBus_path.t ->
-  interface:OBus_name.interface -> member:OBus_name.member -> access:([< access ] as 'access) -> [< 'a OBus_type.cl_single ] -> ('a, 'access) t
-val ldmake : connection:OBus_connection.t Lwt.t Lazy.t -> ?destination:string -> path:OBus_path.t ->
-  interface:OBus_name.interface -> member:OBus_name.member -> access:([< access ] as 'access) -> 'access dt

@@ -9,9 +9,7 @@
 
 (** Interface to DBus message bus *)
 
-type t = OBus_connection.t
-    (** A bus is a connection with a special application which act as
-        a router between several applications. *)
+type t = OBus_proxy.t
 
 (** {6 Well-known instances} *)
 
@@ -24,13 +22,25 @@ val system : t Lwt.t Lazy.t
 
 (** {6 Creation} *)
 
+val make : OBus_connection.t -> t
+  (** [make connection] return the bus object for [connection] *)
+
+val peer : OBus_connection.t -> OBus_peer.t
+  (** [peer connection] return the message bus peer for
+      [connection] *)
+
 val of_addresses : OBus_address.t list -> t Lwt.t
   (** Establish a connection with a message bus. The bus must be
       accessible with at least one of the given addresses *)
 
-val register_connection : OBus_connection.t -> unit Lwt.t
-  (** This function just request a unique name to the other side of
-      the connection which is supposed to be a message bus.
+val of_connection : OBus_connection.t -> t Lwt.t
+  (** Make a bus object from the given connection. It has the side
+      effect of requesting a name to the message bus if not already
+      done.
+
+      If the connection is a connection to a message bus, created with
+      one of the function of {!OBus_connection} then {!of_connection}
+      must be called on it before any other.
 
       If this is not the case, it will (probably) raise an
       {!OBus_error.Unknown_method} *)
@@ -38,7 +48,7 @@ val register_connection : OBus_connection.t -> unit Lwt.t
 (** Notes:
 
     - when the connection to a message bus is lost
-    ({!OBus_connection.Connection_lost}, the program is exited with a
+    {!OBus_connection.Connection_lost}, the program is exited with a
     return code of 0
 
     - when a fatal error happen, a message is printed on stderr and
@@ -47,10 +57,36 @@ val register_connection : OBus_connection.t -> unit Lwt.t
     This can be changed by overriding
     {!OBus_connection.on_disconnect} *)
 
-(** {6 Bus names acquiring} *)
+val connection : t -> OBus_connection.t
+  (** Return the connection used by a bus object *)
 
-type name = OBus_name.bus
-    (** A bus name, for example "org.freedesktop.DBus" *)
+val watch : t -> unit Lwt.t
+  (** Short-hand for [OBus_connection.watch (OBus_bus.connection
+      bus)] *)
+
+(** {6 Peer/proxy} *)
+
+val make_peer : t -> OBus_name.connection -> OBus_peer.t
+  (** Short-hand for:
+
+      [OBus_peer.make (OBus_bus.connection bus) name] *)
+
+val make_proxy : t -> OBus_name.connection -> OBus_path.t -> OBus_proxy.t
+  (** Short-hand for:
+
+      [OBus_proxy.make (OBus_bus.make_peer bus name) path] *)
+
+val get_peer : t -> OBus_name.bus -> OBus_peer.t Lwt.t
+  (** [get_peer bus name] return the peer owning the bus name
+      [name]. If the service is not activated and is activable, then
+      it is started *)
+
+val get_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t Lwt.t
+  (** [get_proxy bus name path] resolve [name] with {!get_peer} and
+      return a proxy for the object with path [path] on this
+      service *)
+
+(** {6 Bus names acquiring} *)
 
 type request_name_flag =
     [ `allow_replacement
@@ -71,16 +107,16 @@ type request_name_result =
     | `already_owner
         (** You already have the name *) ]
 
-val request_name : t -> name -> request_name_flag list -> request_name_result Lwt.t
-  (** Request a name to the bus. This allow you to acquire a well-know
-      name so other applications can easily access to your service. *)
+val request_name : t -> ?flags:request_name_flag list -> OBus_name.bus -> request_name_result Lwt.t
+  (** Request a name to the bus. This is the way to acquire a
+      well-know name. *)
 
 type release_name_result =
     [ `released
     | `non_existent
     | `not_owner ]
 
-val release_name : t -> name -> release_name_result Lwt.t
+val release_name : t -> OBus_name.bus -> release_name_result Lwt.t
 
 (** {6 Service starting/discovering} *)
 
@@ -88,35 +124,32 @@ exception Service_unknown of string
   (** Exception raised when a service is not present on a message bus
       and can not be started automatically *)
 
-type start_service_flag
-  (** These flags are currently unused. *)
-
 type start_service_by_name_result =
     [ `success
     | `already_running ]
 
-val start_service_by_name : t -> name -> start_service_flag list -> start_service_by_name_result Lwt.t
+val start_service_by_name : t -> OBus_name.bus -> start_service_by_name_result Lwt.t
   (** Start a service on the given bus by its name *)
 
-val name_has_owner : t -> name -> bool Lwt.t
+val name_has_owner : t -> OBus_name.connection -> bool Lwt.t
   (** Return [true] if the service is currently running, i.e. some
       application offer it on the message bus *)
 
-val list_names : t -> name list Lwt.t
+val list_names : t -> OBus_name.connection list Lwt.t
   (** List names currently running on the message bus *)
 
-val list_activatable_names : t -> name list Lwt.t
+val list_activatable_names : t -> OBus_name.bus list Lwt.t
   (** List services that can be activated. A service is automatically
       activated when you call one of its method or when you use
       [start_service_by_name] *)
 
 exception Name_has_no_owner of string
 
-val get_name_owner : t -> name -> OBus_name.connection_unique Lwt.t
+val get_name_owner : t -> OBus_name.connection -> OBus_name.unique Lwt.t
   (** Return the connection unique name of the given service. Raise a
       [Name_has_no_owner] if the given name does not have an owner. *)
 
-val list_queued_owners : t -> name -> OBus_name.connection_unique list Lwt.t
+val list_queued_owners : t -> OBus_name.bus -> OBus_name.unique list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
@@ -135,7 +168,7 @@ val match_rule :
   ?interface:OBus_name.interface ->
   ?member:OBus_name.member ->
   ?path:OBus_path.t ->
-  ?destination:OBus_name.connection_unique ->
+  ?destination:OBus_name.connection ->
   ?args:(int * string) list ->
   unit -> match_rule
   (** Create a matching rule. Matching the argument [n] with string
@@ -144,7 +177,7 @@ val match_rule :
 
 val add_match : t -> match_rule -> unit Lwt.t
   (** Add a matching rule on a message bus. This means that every
-      message routed on the message bus matching the rules will be
+      message routed on the message bus matching this rule will be
       sent to us.
 
       It can raise an [Out_of_memory]. *)
@@ -167,27 +200,18 @@ val get_id : t -> OBus_uuid.t Lwt.t
 
 (** {6 Signals} *)
 
-val on_name_owner_changed : t -> (name * OBus_name.connection_unique * OBus_name.connection_unique -> unit) -> OBus_signal.receiver Lwt.t
+val name_owner_changed : (OBus_name.connection * OBus_name.unique option * OBus_name.unique option) OBus_signal.t
   (** This signal is emited each the owner of a name (unique
       connection name or service name) change.
 
-      Connection message looks like: name: "" -> name
-      and disconnection message looks like: name: name -> ""
+      Connection message looks like: [(name, None, Some name)] and
+      disconnection message looks like: [(name, Some name, None)]
       where is a connection unique name. *)
 
-val on_name_lost : t -> (name -> unit) -> OBus_signal.receiver Lwt.t
-val on_name_acquired : t -> (name -> unit) -> OBus_signal.receiver Lwt.t
+val name_lost : OBus_name.connection OBus_signal.t
+val name_acquired : OBus_name.connection OBus_signal.t
 
 (** {6 Service monotiring} *)
 
-type status = [ `down | `up ]
-    (** Service status *)
-
-val on_service_status_change : t -> name -> (status * status -> unit) -> OBus_signal.receiver Lwt.t
-  (** [on_service_status_change bus service f] call f each the status
-      of the service [service] change. The first argument of [f] is
-      [(old_status, new_status)]. *)
-
-val on_client_exit : t -> OBus_name.connection_unique -> (unit -> unit) -> unit
-  (** [on_client_exit client handler] call [handler] when [client]
-      exit *)
+val wait_for_exit : OBus_peer.t -> unit Lwt.t
+  (** [wait_for_exit bus peer] wait for [peer] to exit, then return *)
