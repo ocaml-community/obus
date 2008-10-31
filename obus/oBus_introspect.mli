@@ -9,8 +9,22 @@
 
 (** Introspection *)
 
-type node = string
-type document = OBus_interface.t list * node list
+type name = string
+
+type annotation = name * string
+type argument = name option * OBus_value.tsingle
+
+type access = Read | Write | Read_write
+    (** Access mode of properties *)
+
+type declaration =
+  | Method of name * argument list * argument list * annotation list
+  | Signal of name * argument list * annotation list
+  | Property of name * OBus_value.tsingle * access * annotation list
+
+type interface = name * declaration list * annotation list
+type node = OBus_path.element
+type document = interface list * node list
 val tdocument : document OBus_type.ty_basic
 
 (** {6 Xml conversion} *)
