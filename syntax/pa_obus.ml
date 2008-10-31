@@ -401,6 +401,12 @@ struct
         | a = obus_class_member; ";"; b = obus_class_members -> a :: b
         | a = obus_class_member; ";;"; b = obus_class_members -> a :: b ] ];
 
+    obus_error_name:
+      [ [ m = a_ident; "."; (dname, cname) = obus_error_name ->
+            (m ^ "." ^ dname, cname)
+        | n = a_ident ->
+            (n, uid n) ] ];
+
     str_item:
       [ [ "OBUS_bitwise"; name = a_LIDENT; ":"; key_typ = typ; "="; (vrntyp, cstrs) = obus_data_type ->
             <:str_item<
@@ -445,7 +451,7 @@ struct
                           cstrs) $)
             >>
 
-        | "OBUS_exn"; name = a_UIDENT; "="; dbus_name = a_STRING ->
+        | "OBUS_exception"; (dbus_name, name) = obus_error_name ->
             <:str_item<
                 exception $uid:name$ of OBus_error.message
                 let _ = register_exn $str:dbus_name$
@@ -455,7 +461,7 @@ struct
                      | _ -> None)
             >>
 
-        | "OBUS_global_exn"; name = a_UIDENT; "="; dbus_name = a_STRING ->
+        | "OBUS_global_exception"; (dbus_name, name) = obus_error_name ->
             <:str_item<
                 exception $uid:name$ of OBus_error.message
                 let _ = OBus_error.register $str:dbus_name$
@@ -494,8 +500,13 @@ struct
         | "OBUS_method"; name = a_ident; ":"; (args, reply) = ftyp ->
             <:str_item< let $lid:lid name$ = call $str:name$ $expr_of_fty reply args$ >>
 
-        | "OBUS_signal"; name = a_ident; ":"; t = typ ->
-            <:str_item< let $lid:lid ("on" ^ name)$ = on_signal $str:name$ $expr_of_ty t$ >>
+        | "OBUS_signal"; no_broadcast = OPT "!"; name = a_ident; ":"; t = typ ->
+            begin match no_broadcast with
+              | Some _ ->
+                  <:str_item< let $lid:lid name$ = signal ~broadcast:false $str:name$ $expr_of_ty t$ >>
+              | None ->
+                  <:str_item< let $lid:lid name$ = signal $str:name$ $expr_of_ty t$ >>
+            end
 
         | "OBUS_property_r"; name = a_ident; ":"; t = typ ->
             <:str_item< let $lid:lid name$ = property $str:name$ OBus_property.rd_only $expr_of_ty t$ >>
