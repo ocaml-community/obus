@@ -20,7 +20,9 @@ let _ =
     Printexc.record_backtrace true;
   END;
   ignore (add_incoming_filter loopback filter);
-  ignore (dadd_signal_receiver loopback handler);
+  ignore (OBus_signal.connect (OBus_proxy.make (OBus_peer.anonymous loopback) [])
+            (OBus_signal.dmake "aa" "plop")
+            handler);
   Lwt_unix.run
     (perform
        demit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [];

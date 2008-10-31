@@ -17,7 +17,7 @@ let test f s =
   with exn -> prerr_endline (Printexc.to_string exn)
 
 let testc b s =
-  catch (fun _ -> OBus_connection.method_call b
+  catch (fun _ -> OBus_connection.method_call (OBus_bus.connection b)
            ~interface:"toto"
            ~member:"toto"
            ~path:[]

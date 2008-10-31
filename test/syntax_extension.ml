@@ -15,8 +15,8 @@ OBUS_flag request_name_result : uint =
   | 3 -> `exists
   | 4 -> `already_owner ]
 
-OBUS_exn Name_has_owner = "Error.NameHasNoOwner"
-OBUS_global_exn Name_has_owner = "org.freedesktop.DBus.Error.NameHasNoOwner"
+OBUS_exception Error.NameHasNoOwner
+OBUS_global_exception org.freedesktop.DBus.Error.NameHasNoOwner
 
 let big_tuple =
   <:obus_type< int * string * uint * int32 * byte * char * int list * int * int * string * variant * signature >>
