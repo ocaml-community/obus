@@ -11,13 +11,10 @@ open Lwt
 open OBus_type
 open OBus_value
 
-include OBus_client.Make_constant
-  (struct
-     let name = "org.freedesktop.Notifications"
-     let path = ["org"; "freedesktop"; "Notifications"]
-     let service = Some name
-     let bus = OBus_bus.session
-   end)
+let name = "org.freedesktop.Notifications"
+let path = ["org"; "freedesktop"; "Notifications"]
+
+include OBus_interface.Make(struct let name = "org.freedesktop.Notifications" end)
 
 OBUS_record server_info = {
   server_name : string;
@@ -79,52 +76,74 @@ let desktop_entry = ref None
 
 open Lwt
 
-OBUS_method GetServerInformation : unit -> server_info
-OBUS_method GetCapabilities : unit -> string list
+OBUS_method GetServerInformation : server_info
+OBUS_method GetCapabilities : string list
+
+OBUS_method Notify : string -> uint32 -> string -> string -> string -> string list -> hint list -> int -> uint32
+OBUS_method CloseNotification : uint32 -> unit
+
+(* Signals sent by the notification daemon are not braodcasted and it is an
+   error to match on the bus for them because there is no way to distinguish
+   between signals destined to us and signals destined to other application *)
+OBUS_signal! NotificationClosed : uint32
+OBUS_signal! ActionInvoked : uint32 * string
+
+let assoc x l =
+  try Some(List.assoc x l) with
+      Not_found -> None
+
+let init =
+  lazy(perform
+         bus <-- Lazy.force OBus_bus.session;
+         let daemon = OBus_bus.make_proxy bus name path in
+
+         (* Handle signals for closed notifications *)
+         OBus_signal.connect daemon notification_closed
+           (fun n ->
+              match assoc n !ids with
+                | Some id ->
+                    id.id_deleted <- true;
+                    ids := List.remove_assoc n !ids;
+                    id.id_on_closed ()
+                | None -> ());
+
+         (* Handle signals for actions *)
+         OBus_signal.connect daemon action_invoked
+           (fun (n, key) ->
+              match assoc n !ids with
+                | Some id ->
+                    id.id_deleted <- true;
+                    ids := List.remove_assoc n !ids;
+                    id.id_on_action key
+                | None -> ());
+
+         return daemon)
+
+let get_server_information _ =
+  Lazy.force init >>= get_server_information
+
+let get_capabilities _ =
+  Lazy.force init >>= get_capabilities
 
 let close_notification (id, w) =
   if not id.id_deleted then begin
     id.id_deleted <- true;
     ids := List.remove_assoc id.id_id !ids;
     id.id_on_closed ();
-    call "CloseNotification" << uint32 -> unit >> id.id_id
+    Lazy.force init >>= fun p -> close_notification p id.id_id
   end else return ()
 
 let de = desktop_entry
 
-let assoc x l =
-  try Some(List.assoc x l) with
-      Not_found -> None
-
-let setup_closed_handler =
-  lazy(on_signal ~global:false "NotificationClosed" <:obus_type< uint32 >>
-        (fun n ->
-           match assoc n !ids with
-             | Some id ->
-                 id.id_deleted <- true;
-                 ids := List.remove_assoc n !ids;
-                 id.id_on_closed ()
-             | None -> ()) >>= fun _ -> return ())
-
-let setup_actions_handler =
-  lazy(on_signal ~global:false "ActionInvoked" <:obus_type< uint32 * string >>
-        (fun (n, key) ->
-           match assoc n !ids with
-             | Some id ->
-                 id.id_deleted <- true;
-                 ids := List.remove_assoc n !ids;
-                 id.id_on_action key
-             | None -> ()) >>= fun _ -> return ())
-
 (* Survive to replacement/crash of the notification daemon *)
-let setup_monitor_daemon =
+(*let setup_monitor_daemon =
   lazy(perform
          bus <-- Lazy.force OBus_bus.session;
          OBus_bus.on_service_status_change bus "org.freedesktop.Notifications"
            (fun _ ->
               List.iter (fun (_, id) -> id.id_on_closed ()) !ids;
               ids := []);
-         return ())
+         return ())*)
 
 let result (id, w) = w
 
@@ -163,13 +182,11 @@ let notify ?(app_name= !app_name) ?desktop_entry
       actions (0, [], []) in
 
   perform
-    (* Setup handlers the first time we open a notification *)
-    Lazy.force setup_closed_handler;
-    Lazy.force setup_monitor_daemon;
-    Lazy.force setup_actions_handler;
+    (* Retreive the daemon *)
+    daemon <-- Lazy.force init;
 
     (* Create the notification *)
-    n <-- call "Notify" << string -> uint32 -> string -> string -> string -> string list -> hint list -> int -> uint32 >>
+    n <-- notify daemon
       app_name (match replace with
                   | Some (id, w) -> id.id_id
                   | None -> 0l)
