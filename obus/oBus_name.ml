@@ -9,6 +9,9 @@
 
 open Printf
 open String
+open Lwt
+open Lwt_chan
+open OBus_type
 
 exception Invalid_name of string * string * string
 
@@ -18,25 +21,28 @@ module type Name = sig
   val validate : string -> unit
 end
 
-module type Specs = sig
+let is_digit ch = ch >= '0' && ch <= '9'
+
+module type Params = sig
   val typ : string
   val range : string
   val is_valid_char : char -> bool
 end
 
-let is_digit ch = ch >= '0' && ch <= '9'
-
-module Default(S : Specs) = struct
-  include S
-
+(* Common names, which are of the form member1.member2.member3... *)
+module Common(Params : Params) = struct
   type t = string
 
-  let invalid_char str i =
-    sprintf "at position %d: invalid character %C, must be one of [0-9]%S" i str.[i] range
-  let invalid_first_char str i =
-    sprintf "at position %d: invalid character %C at begining of member, must be one of %S" i str.[i] range
+  open Params
 
-  let _test str i =
+  let invalid_char str i =
+    sprintf "at position %d: invalid character %C, must be one of [0-9%s]" i str.[i] range
+  let invalid_first_char str i =
+    sprintf "at position %d: invalid character %C at begining of member, must be one of [%s]" i str.[i] range
+
+  (* [test_from str i] test that the name in [str] starting at [i] is
+     valid *)
+  let test_from str i =
     let len = String.length str in
     let rec aux_member_start i =
       if i = len
@@ -61,63 +67,75 @@ module Default(S : Specs) = struct
     else aux_member_start i
 
   let test = function
-    | "" -> Some "empty len"
-    | s -> _test s 0
-
-  let _validate x i = match _test x i with
-    | None -> ()
-    | Some msg -> raise (Invalid_name(typ, x, msg))
+    | "" -> Some "empty name"
+    | n -> test_from n 0
 
   let validate x = match test x with
     | None -> ()
     | Some msg -> raise (Invalid_name(typ, x, msg))
 end
 
-module Interface = Default(struct
-                             let typ = "interface"
-                             let range = "[A-Z][a-z]_"
-                             let is_valid_char ch =
-                               (ch >= 'A' && ch <= 'Z') ||
-                                 (ch >= 'a' && ch <= 'z') ||
-                                 ch = '_'
-                           end)
+module Interface_params =
+struct
+  let typ = "interface"
+  let range = "A-Za-z_"
+  let is_valid_char ch =
+    (ch >= 'A' && ch <= 'Z') ||
+      (ch >= 'a' && ch <= 'z') ||
+      ch = '_'
+end
 
-module Error = Default(struct
-                         let typ = "error"
-                         let range = Interface.range
-                         let is_valid_char = Interface.is_valid_char
-                       end)
+module Error_params =
+struct
+  let typ = "error"
+  let range = Interface_params.range
+  let is_valid_char = Interface_params.is_valid_char
+end
 
-module Bus = Default(struct
-                       let typ = "bus"
-                       let range = "[A-Z][a-z]_-"
-                       let is_valid_char ch =
-                         (ch >= 'A' && ch <= 'Z') ||
-                           (ch >= 'a' && ch <= 'z') ||
-                           ch = '_' || ch = '-'
-                     end)
+module Bus_params =
+struct
+  let typ = "bus"
+  let range = "A-Za-z_-"
+  let is_valid_char ch =
+    (ch >= 'A' && ch <= 'Z') ||
+      (ch >= 'a' && ch <= 'z') ||
+      ch = '_' || ch = '-'
+end
 
-module Connection_unique = struct
-  include Default(struct
-                    let typ = "connection unique"
-                    let range = Bus.range
-                    let is_valid_char ch = Bus.is_valid_char ch || is_digit ch
+module Interface = Common(Interface_params)
+module Error = Common(Interface_params)
+module Bus = Common(Bus_params)
+
+module Unique = struct
+  include Common(struct
+                    let typ = "unique"
+                    let range = Bus_params.range
+                    let is_valid_char ch = Bus_params.is_valid_char ch || is_digit ch
                   end)
+
   let test = function
     | "" -> Some "empty name"
-    | s when unsafe_get s 0 = ':' -> _test s 1
+    | s when unsafe_get s 0 = ':' -> test_from s 1
+
+    (* ugly hack: the message bus seems to use this name instead of a
+       valid unique name *)
+    | "org.freedesktop.DBus" -> None
+
     | _ -> Some "must start with ':'"
+
   let validate x = match test x with
     | None -> ()
-    | Some msg -> raise (Invalid_name(typ, x, msg))
+    | Some msg -> raise (Invalid_name("unique", x, msg))
 end
 
 module Connection = struct
   type t = string
+
   let test = function
     | "" -> Some "empty name"
-    | s when unsafe_get s 0 = ':' -> Connection_unique._test s 1
-    | s -> Bus._test s 0
+    | s when unsafe_get s 0 = ':' -> Unique.test_from s 1
+    | s -> Bus.test_from s 0
+
   let validate x = match test x with
     | None -> ()
     | Some msg -> raise (Invalid_name("connection", x, msg))
@@ -125,11 +143,13 @@ end
 
 module Member = struct
   type t = string
+
   let is_valid_first_char ch =
     (ch >= 'A' && ch <= 'Z') ||
       (ch >= 'a' && ch <= 'z') ||
       ch = '_'
   let is_valid_char ch = is_valid_first_char ch || is_digit ch
+
   let test str =
     let len = String.length str in
     let rec aux i =
@@ -138,7 +158,7 @@ module Member = struct
       else
         if is_valid_char (unsafe_get str i)
         then aux (i + 1)
-        else Some(sprintf "at position %d: invalid character %C, must be one of [0-9][A-Z][a-z]_" i str.[i])
+        else Some(sprintf "at position %d: invalid character %C, must be one of [0-9A-Za-z_]" i str.[i])
     in
     if len = 0
     then Some "empty name"
@@ -148,16 +168,14 @@ module Member = struct
       else
         if is_valid_first_char (unsafe_get str 0)
         then aux 1
-        else Some(sprintf "at position 0: invalid character %C, must be one of [A-Z][a-z]_" str.[0])
+        else Some(sprintf "at position 0: invalid character %C, must be one of [A-Za-z_]" str.[0])
+
   let validate x = match test x with
     | None -> ()
     | Some msg -> raise (Invalid_name("member", x, msg))
 end
 
-let is_unique_connection_name s = s <> "" && unsafe_get s 0 = ':'
-let is_bus_name s = not (is_unique_connection_name s)
-
-type connection_unique = Connection_unique.t
+type unique = Unique.t
 type bus = Bus.t
 type connection = Connection.t
 type interface = Interface.t
