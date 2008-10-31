@@ -46,7 +46,7 @@ let atype =
     (fun signature -> match OBus_value.signature_of_string signature with
        | [] -> failwith "empty signature"
        | [t] -> return t
-       | _ -> failwith (Printf.sprintf "this signature contains more than one single type: %S" signature))
+       | _ -> failwith "this signature contains more than one single type: %S" signature)
 
 let arguments =
   any (elt "arg"
@@ -56,10 +56,20 @@ let arguments =
             typ <-- atype;
             return (dir, (name, typ))))
 
+let mk_aname typ test =
+  ar "name" >>= fun name ->
+    match test name with
+      | Some msg -> failwith "invalid %s name %S: %s" typ name msg
+      | None -> return name
+
+let amember = mk_aname "member" OBus_name.Member.test
+let anode = mk_aname "node" OBus_path.test_element
+let ainterface = mk_aname "interface" OBus_name.Interface.test
+
 let method_decl =
   elt "method"
     (perform
-       name <-- ar "name";
+       name <-- amember;
        (ins, outs) <-- arguments >>= (fun args ->
                                         return (Util.split (function
                                                               | (In, x) -> Util.Left x
@@ -70,7 +80,7 @@ let method_decl =
 let signal_decl =
   elt "signal"
     (perform
-       name <-- ar "name";
+       name <-- amember;
        args <-- arguments;
        annots <-- annotations;
        return (Signal(name, List.map snd args, annots)))
@@ -78,18 +88,23 @@ let signal_decl =
 let property_decl =
   elt "property"
     (perform
-       name <-- ar "name";
+       name <-- amember;
        access <-- afr "access" [("read", Read); ("write", Write); ("readwrite", Read_write)];
        typ <-- atype;
        annots <-- annotations;
        return (Property(name, typ, access, annots)))
 
-let node = elt "node" (ar "name")
+let node =
+  elt "node" (perform
+                name <-- anode;
+                match OBus_path.test_element name with
+                  | None -> return name
+                  | Some msg -> failwith "invalid node name %S: %s" name msg)
 
 let interface =
   elt "interface"
     (perform
-       name <-- ar "name";
+       name <-- ainterface;
        decls <-- any (union [method_decl;
                              signal_decl;
                              property_decl]);
