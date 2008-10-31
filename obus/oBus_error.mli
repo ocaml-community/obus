@@ -40,8 +40,14 @@ exception Out_of_memory of message
   (** Raised when a call fail because the service does not have enough
       memory to satisfy the request *)
 
-val failwith : message -> 'a Lwt.t
-  (** [failwith msg] same as [Lwt.fail (OBus_error.Failed msg)] *)
+exception No_reply of message
+  (** Raised when a method did not receive a reply, for example
+      because of a timeout *)
+
+val failwith : ('b, unit, string, 'a Lwt.t) format4 -> 'b
+  (** [failwith fmt ...] short-hand for:
+
+      [Lwt.fail (OBus_error.Failed (Printf.sprintf fmt ...)] *)
 
 (** {6 Exception registration} *)
 
@@ -51,7 +57,25 @@ val register : name -> (message -> exn) -> (exn -> message option) -> unit
 
       [construct] is a function which take an error message and create
       an exception and [desctruct] take an exception and return an
-      error message *)
+      error message.
+
+      An exception definition looks like:
+
+      {[
+        exception Caml_name of string
+        let _ = OBus_error.register "Full.DBus.Name"
+                  (fun msg -> Caml_name msg)
+                  (function
+                     | Caml_name -> Some msg
+                     | _ -> None)
+      ]}
+
+      Or, with the syntax extension:
+
+      {[
+        OBUS_global_exception Full.DBus.Name
+      ]}
+  *)
 
 val make : name -> message -> exn
   (** Make an exception from a DBus error name and message. It return

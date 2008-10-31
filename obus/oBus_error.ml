@@ -13,8 +13,9 @@ exception DBus of name * message
 exception Failed of message
 exception Unknown_method of message
 exception Out_of_memory of message
+exception No_reply of message
 
-let failwith msg = Lwt.fail (Failed msg)
+let failwith fmt = Printf.ksprintf (fun msg -> Lwt.fail (Failed msg)) fmt
 
 open Printf
 
@@ -33,6 +34,11 @@ let errors = ref
     ((fun msg -> Out_of_memory msg),
      (function
         | Out_of_memory msg -> Some msg
+        | _ -> None));
+    "org.freedesktop.DBus.Error.NoReply",
+    ((fun msg -> No_reply msg),
+     (function
+        | No_reply msg -> Some msg
         | _ -> None)) ]
 
 let make name msg =
