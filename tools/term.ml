@@ -87,22 +87,22 @@ open Format
 
 let rec print_term top pp = function
   | Term("structure", []) -> fprintf pp "[]"
-  | Term("structure", [Tuple tl]) -> fprintf pp "[%a]" (print_seq " * ") tl
+  | Term("structure", [Tuple tl]) -> fprintf pp "[%a]" (print_seq false " * ") tl
   | Term("structure", [t]) -> fprintf pp "[%a]" (print_term true) t
   | Term("dict_entry", [tk; tv]) -> fprintf pp "{%a, %a}" (print_term true) tk (print_term true) tv
   | Term(id, []) -> pp_print_string pp id
   | Term(id, [t]) -> fprintf pp "%a %s" (print_term false) t id
-  | Term(id, tl) -> fprintf pp "(%a) %s" (print_seq ", ") tl id
+  | Term(id, tl) -> fprintf pp "(%a) %s" (print_seq true ", ") tl id
   | Var v -> fprintf pp "'%s" v
   | Tuple [] -> pp_print_string pp "unit"
   | Tuple tl -> match top with
-      | true -> print_seq " * " pp tl
-      | false -> fprintf pp "(%a)" (print_seq " * ") tl
+      | true -> print_seq false " * " pp tl
+      | false -> fprintf pp "(%a)" (print_seq false " * ") tl
 
-and print_seq sep pp = function
+and print_seq top sep pp = function
   | [] -> ()
-  | [t] -> print_term false pp t
-  | t :: tl -> fprintf pp "%a%s%a" (print_term false) t sep (print_seq sep) tl
+  | [t] -> print_term top pp t
+  | t :: tl -> fprintf pp "%a%s%a" (print_term top) t sep (print_seq top sep) tl
 
 let rec print_func ret pp = function
   | [] -> print_term true pp ret

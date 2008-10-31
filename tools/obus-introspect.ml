@@ -36,14 +36,14 @@ let (&) a b = a b
 
 module Interf_map = Map.Make(struct type t = string let compare = compare end)
 
-let rec get (nodes, map) bus service path =
+let rec get (nodes, map) proxy =
   (perform
-     (interfaces, subs) <-- OBus_proxy.introspect (OBus_proxy.make ~connection:bus ~destination:service ~path);
+     (interfaces, subs) <-- OBus_proxy.introspect proxy;
      let map = List.fold_left (fun map (name, content, annots) -> Interf_map.add name (content, annots) map) map interfaces in
-     let nodes = (path, List.map (fun (name, _, _) -> name) interfaces) :: nodes in
+     let nodes = (proxy, List.map (fun (name, _, _) -> name) interfaces) :: nodes in
      match !recursive with
        | true ->
-           Lwt_util.fold_left (fun acc name -> get acc bus service & path @ [name]) (nodes, map) subs
+           Lwt_util.fold_left get (nodes, map) subs
        | false ->
            return (nodes, map))
 
@@ -58,7 +58,7 @@ let main service path =
        | true, false -> OBus_bus.session
        | false, true -> OBus_bus.system
      end;
-     (nodes, map) <-- get ([], Interf_map.empty) bus service path;
+     (nodes, map) <-- get ([], Interf_map.empty) (OBus_bus.make_proxy bus service path);
      let _ = match !obj_mode with
        | false ->
            begin match !mli with
@@ -72,8 +72,8 @@ let main service path =
                    map
            end
        | true ->
-           List.iter begin fun (path, interfaces) ->
-             print_endline (OBus_path.to_string path);
+           List.iter begin fun (proxy, interfaces) ->
+             print_endline (OBus_path.to_string (OBus_proxy.path proxy));
              List.iter (Printf.printf " + %s\n") interfaces;
              print_newline ();
            end nodes

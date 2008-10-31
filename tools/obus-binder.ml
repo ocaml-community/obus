@@ -10,7 +10,7 @@
 open Term
 open Common
 open Format
-open OBus_interface
+open OBus_introspect
 
 let output_file_prefix = ref None
 let xml_files = ref []
@@ -58,7 +58,7 @@ let with_pp fname =
     Printf.eprintf "File %S written.\n" fname
   end
 
-module Interf_set = Set.Make(struct type t = OBus_interface.t let compare = compare end)
+module Interf_set = Set.Make(struct type t = interface let compare = compare end)
 
 (* Parse an xml file and handle possible errors *)
 let parse_file fname =
@@ -82,7 +82,7 @@ let im_term_of_args = List.map (fun (name, typ) -> implem_term_of_single typ)
 let print_proxy_implem_no_sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
-  p "  include OBus_client.Make(struct let name = %S end)\n" name;
+  p "  include OBus_interface.Make(struct let name = %S end)\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  let %a = call %S %a\n" plid name name
@@ -93,7 +93,7 @@ let print_proxy_implem_no_sugar pp (name, content, annots) =
           | [] -> unit
           | _ -> tuple (im_term_of_args args)
         in
-        p "  let on_%a = on_signal %S %a\n" plid name name
+        p "  let %a = signal %S %a\n" plid name name
           (print_term_no_sugar false) args
     | Property(name, typ, access, annots) ->
         let access = match access with
@@ -109,7 +109,7 @@ let print_proxy_implem_no_sugar pp (name, content, annots) =
 let print_proxy_implem_sugar pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
-  p "  include OBus_client.Make(struct let name = %S end)\n" name;
+  p "  include OBus_interface.Make(struct let name = %S end)\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  OBUS_method %s : %a\n" name

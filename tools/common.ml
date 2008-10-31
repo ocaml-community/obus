@@ -8,7 +8,7 @@
  *)
 
 open Format
-open OBus_interface
+open OBus_introspect
 open Term
 open Name_translator
 
@@ -40,13 +40,14 @@ let print_proxy_interf pp (name, content, annots) =
           (print_func (term "Lwt.t" [tuple (if_term_of_args  outs)]))
           (term "t" [] :: if_term_of_args ins)
     | Signal(name, args, annots) ->
-        p "  val %a : t -> (%a -> unit) -> OBus_signal.receiver Lwt.t\n" plid ("on" ^ name)
+        p "  val %a : %a\n" plid name
           (print_term true)
-          (match args with
-             | [] -> unit
-             | _ -> tuple (if_term_of_args args))
+          (term "OBus_signal.t"
+             [match args with
+                | [] -> unit
+                | _ -> tuple (if_term_of_args args)])
     | Property(name, typ, access, annots) ->
-        p "  val %a : t -> %a\n" plid name
+        p "  val %a : %a\n" plid name
           (print_term true)
           (term "OBus_property.t"
              [interf_term_of_single typ;
