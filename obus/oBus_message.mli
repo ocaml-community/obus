@@ -55,7 +55,7 @@ type 'typ t = {
   serial : serial;
   typ : 'typ;
   destination : OBus_name.connection option;
-  sender : OBus_name.connection option;
+  sender : OBus_name.unique option;
   body : body;
 }
 
@@ -69,8 +69,8 @@ val body : 'a t -> body
 val flags : 'a t -> flags
 val serial : 'a t -> serial
 val typ : 'a t -> 'a
-val destination : 'a t -> OBus_name.Connection.t option
-val sender : 'a t -> OBus_name.Connection.t option
+val destination : 'a t -> OBus_name.connection option
+val sender : 'a t -> OBus_name.unique option
 val path : [< method_call_type | signal_type ] t -> OBus_path.t
 val interface : [< method_call_type | signal_type ] t -> OBus_name.Interface.t option
 val signal_interface : signal -> OBus_name.Interface.t
@@ -86,46 +86,46 @@ val error_name : error -> OBus_name.Error.t
 val make :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.unique ->
+  ?destination:OBus_name.connection ->
   typ:'a ->
   body -> 'a t
 
 val method_call :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.unique ->
+  ?destination:OBus_name.connection ->
   path:OBus_path.t ->
-  ?interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
   body -> method_call
 
 val method_return :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.unique ->
+  ?destination:OBus_name.connection ->
   reply_serial:serial ->
   body -> method_return
 
 val error :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.unique ->
+  ?destination:OBus_name.connection ->
   reply_serial:serial ->
-  error_name:OBus_name.Error.t ->
+  error_name:OBus_name.error ->
   body -> error
 
 val signal :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.Connection.t ->
-  ?destination:OBus_name.Connection.t ->
+  ?sender:OBus_name.unique ->
+  ?destination:OBus_name.connection ->
   path:OBus_path.t ->
-  interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  interface:OBus_name.interface ->
+  member:OBus_name.member ->
   body -> signal
 
 (** {6 Pretty-printing} *)

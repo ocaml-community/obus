@@ -47,8 +47,8 @@ type 'typ t = {
   flags : flags;
   serial : serial;
   typ : 'typ;
-  destination : OBus_name.Connection.t option;
-  sender : OBus_name.Connection.t option;
+  destination : OBus_name.connection option;
+  sender : OBus_name.unique option;
   body : body;
 }
 
@@ -104,16 +104,16 @@ open OBus_value
 
 let print pp message =
   let opt pp = function
-    | Some s -> fprintf pp "Some %S" s
-    | None -> pp_print_string pp "None"
+    | Some x -> fprintf pp "%S" x
+    | None -> pp_print_string pp "-"
   in
   fprintf pp "\
 no_reply_expected = %B@
 no_auto_start = %B@
 serial = %ld@
 message_type = %a@
-destination = %a@
 sender = %a@
+destination = %a@
 signature = %S@
 body_type = %a@
 body = %a@
@@ -136,8 +136,8 @@ error_name = %S" reply_serial error_name
 path = %S@
 interface = %S@
 member = %S" (OBus_path.to_string path) interface member) message.typ
-    opt message.destination
     opt message.sender
+    opt message.destination
     (string_of_signature (type_of_sequence message.body))
     print_tsequence (type_of_sequence message.body)
     print_sequence message.body
