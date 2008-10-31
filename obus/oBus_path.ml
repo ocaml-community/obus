@@ -100,10 +100,12 @@ let of_string = function
             let i = rindex_from str j '/' in
             let len = j - i in
             let elt = create len in
-              unsafe_blit str (i + 1) elt 0 len;
-              aux (elt :: acc) (i - 1)
+            unsafe_blit str (i + 1) elt 0 len;
+            match test_element elt with
+              | Some _ -> validate str; assert false
+              | None -> aux (elt :: acc) (i - 1)
       in
-        aux [] (length str - 1)
+      aux [] (length str - 1)
   | s -> validate s; assert false
 
 let escape s =

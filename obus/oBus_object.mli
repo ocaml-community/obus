@@ -18,8 +18,8 @@
 
     {[
       class virtual iface = OBUS_interface iface "org.mydomain.iface"
-        OBUS_method Foo : int -> int
-        OBUS_signal bar : string * int
+        OBUS_method FooBar : int -> int
+        OBUS_signal plop : string * int
       end
     ]}
 
@@ -33,10 +33,8 @@
     {[
       class virtual iface : object
         inherit OBus_object.interface
-        method virtual foo : int -> int Lwt.t
-        method bar : ?connection:OBus_connection.t ->
-                     ?destination:OBus_name.connection ->
-                     string * int -> unit Lwt.t
+        method virtual foo_bar : int -> int Lwt.t
+        method plop : ?peer:OBus_peer.t -> string * int -> unit Lwt.t
       end
     ]}
 
@@ -48,23 +46,20 @@
         inherit OBus_object.t
         inherit iface
 
-        method foo x = return (x * 42)
+        method foo_bar x = return (x * 42)
       end
     ]}
 
-    Note: since interface member may start with a capital letter but
-    caml methods can not, the caml version is always uncapitalized,
-    but the dbus version is kept unchanged.
+    Note: It is possible to do it without the syntax extension but it
+    is really more verbose. Look at the result of [obus-binder
+    -service -no-sugar <file.xml>] to see how it works.
 *)
 
 type member_desc
   (** Describe an interface member *)
 
 class virtual interface : object
-  method virtual obus_emit_signal : 'a 'b.
-    ?connection:OBus_connection.t ->
-    ?destination:OBus_name.connection ->
-    OBus_name.interface -> OBus_name.member ->
+  method virtual obus_emit_signal : 'a 'b. ?peer:OBus_peer.t -> OBus_name.interface -> OBus_name.member ->
     ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     (** Emit a signal *)
 
@@ -96,19 +91,13 @@ class t : object
   method get_all : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
     (** Object properties *)
 
-  method obus_emit_signal : 'a 'b.
-    ?connection:OBus_connection.t ->
-    ?destination:OBus_name.connection ->
-    OBus_name.interface -> OBus_name.member ->
+  method obus_emit_signal : 'a 'b. ?peer:OBus_peer.t -> OBus_name.interface -> OBus_name.member ->
     ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     (** Emit a signal.
 
-        If [connection] is specified, it will be sent on this
-        connection, otherwise it is sent on any connection the object
-        is exported on.
-
-        If [destnation] is specified then the signal will be sent to
-        this specific destination, otherwise it will be broadcasted *)
+        If [peer] is specified it will be sent to this peer only,
+        otherwise it will be broadcasted on any connection the object
+        is exported on *)
 
   method obus_add_interface : OBus_name.interface -> member_desc list -> unit
     (** Add the given interface, for introspection *)
@@ -133,18 +122,6 @@ class t : object
         original one. *)
 end
 
-val get_by_path : OBus_connection.t -> OBus_path.t -> t
-  (** [get_by_path connection path] return the object with path [path]
-      exported on [connection]
-
-      @raise Not_found if no such object exists *)
-
-val opt_get_by_path : OBus_connection.t -> OBus_path.t -> t option
-  (** Same thing but return an option instead of raise an exception *)
-
-val tt : t OBus_type.ty_basic
-  (** Type combinator *)
-
 (** Object ``owned'' by someone else. This is for when the object is
     created for a specific client.
 
@@ -152,4 +129,4 @@ val tt : t OBus_type.ty_basic
 
     - the object is destroyed, i.e. [obus_destroy] is called
     - signals will be sent only to this client *)
-class owned : OBus_bus.t -> OBus_name.connection_unique -> t
+class owned : OBus_peer.t -> t

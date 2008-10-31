@@ -35,7 +35,7 @@ val (>>=) : 'a t -> ('a -> 'b t) -> 'b t
 (** Note that it is not possible to catch errors during parsing,
     error are reported only by the [run] operation. *)
 
-val failwith : string -> 'a t
+val failwith : ('b, unit, string, 'a t) format4 -> 'b
   (** Fail at current position with this error message *)
 
 val parse : 'a node -> Xml.xml -> 'a

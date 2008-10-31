@@ -38,17 +38,16 @@ val put_message : ?byte_order:OBus_info.byte_order -> OBus_message.any -> (Lwt_c
 
 (** {6 Transport} *)
 
-exception Transport_error of exn
-  (** Raised by [send], [recv] and [shutdown] when any of the backend
-      functions raise an exception *)
+type transport = {
+  recv : unit -> OBus_message.any Lwt.t;
+  send : OBus_message.any -> (unit -> unit Lwt.t) Lwt.t;
+  shutdown : unit -> unit;
+}
 
-type transport
-
-val transport :
+val make_transport :
   recv:(unit -> OBus_message.any Lwt.t) ->
   send:(OBus_message.any -> (unit -> unit Lwt.t) Lwt.t) ->
   shutdown:(unit -> unit) -> transport
-  (** Make a transport from the given functions *)
 
 val recv : transport -> OBus_message.any Lwt.t
 val send : transport -> OBus_message.any -> (unit -> unit Lwt.t) Lwt.t

@@ -10,7 +10,7 @@
 open Printf
 open Lwt
 open OBus_message
-open OBus_interface
+open OBus_introspect
 open OBus_value
 open OBus_type
 open OBus_internals
@@ -23,8 +23,7 @@ module OBus_object =
 struct
   class virtual interface = object
     method virtual obus_emit_signal : 'a 'b.
-      ?connection:OBus_connection.t ->
-      ?destination:OBus_name.connection ->
+      ?peer:OBus_peer.t ->
       OBus_name.interface -> OBus_name.member ->
       ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
     method virtual obus_add_interface : OBus_name.interface -> member_desc list -> unit
@@ -83,7 +82,7 @@ end
 include OBus_object
 
 class virtual introspectable = OBUS_interface "org.freedesktop.DBus.Introspectable"
-  OBUS_method Introspect : OBus_context.connection -> OBus_introspect.document
+  OBUS_method Introspect : OBus_connection.t -> OBus_introspect.document
 end
 
 class virtual properties = OBUS_interface "org.freedesktop.DBus.Properties"
@@ -158,16 +157,16 @@ class t = object(self)
       | Some f -> f connection message
       | None -> ignore_result (send_exn connection message (unknown_method_exn message))
 
-  method obus_emit_signal ?connection ?destination interface member typ x =
+  method obus_emit_signal ?peer interface member typ x =
     let body = make_sequence typ x
     and path = self#obus_path in
-    match connection with
-      | Some connection ->
+    match peer with
+      | Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
           demit_signal connection ?destination ~interface ~member ~path body
       | None ->
           Lwt_util.iter
             (fun connection ->
-               demit_signal connection ?destination ~interface ~member ~path body)
+               demit_signal connection ~interface ~member ~path body)
             exports
 
   method obus_export =
@@ -217,20 +216,16 @@ let tt = wrap_basic_ctx tpath
      | _ -> raise Cast_failure)
   (fun obj -> obj#obus_path)
 
-class owned bus name = object(self)
+class owned owner = object(self)
   inherit t as super
 
-  method obus_emit_signal ?connection ?destination interface member typ x =
-    super#obus_emit_signal
-      ~connection:(match connection with
-                     | Some c -> c
-                     | None -> bus)
-      ~destination:(match destination with
-                      | Some d -> d
-                      | None -> name)
+  method obus_emit_signal ?peer interface member typ x =
+    super#obus_emit_signal ~peer:(match peer with
+                                    | Some peer -> peer
+                                    | None -> owner)
       interface member typ x
 
   initializer
-    OBus_bus.on_client_exit bus name (fun _ -> self#obus_destroy);
-    self#obus_export bus
+    ignore (OBus_bus.wait_for_exit owner >>= fun _ -> self#obus_destroy; return ());
+    self#obus_export (OBus_peer.connection owner)
 end

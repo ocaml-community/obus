@@ -17,7 +17,6 @@ open OBus_message
 open OBus_address
 
 exception Protocol_error of string
-exception Transport_error of exn
 
 let pad2 i = i land 1
 let pad4 i = (4 - i) land 3
@@ -40,8 +39,8 @@ type raw_fields = {
   _interface : OBus_name.Interface.t option;
   _error_name : OBus_name.Error.t option;
   _reply_serial : serial option;
-  _destination : OBus_name.Connection.t option;
-  _sender : OBus_name.Connection_unique.t option;
+  _destination : OBus_name.connection option;
+  _sender : OBus_name.unique option;
   _signature : signature;
 }
 
@@ -546,7 +545,7 @@ struct
              _sender = msg.sender;
              _signature = type_of_sequence msg.body })
     in
-    let _wfield code typ f v (i, wacc) =
+    let wfield_real code typ f v (i, wacc) =
       let padding = pad8 i in
       let i = i + padding + 4 in
       let i, writer = f i v in
@@ -561,20 +560,20 @@ struct
          writer oc) in
     let wfield code typ f field acc = match field with
       | None -> acc
-      | Some v -> _wfield code typ f v acc in
-    let wfield2  code validator field acc = match field with
+      | Some v -> wfield_real code typ f v acc in
+    let wfield_val code validator field acc = match field with
       | None -> acc
-      | Some v -> validator v; _wfield code Tstring wstring v acc in
+      | Some v -> validator v; wfield_real code Tstring wstring v acc in
 
     let acc = 0, (fun oc -> return ()) in
     let acc = wfield 1 Tobject_path wobject_path fields._path acc in
-    let acc = wfield2 2 OBus_name.Interface.validate fields._interface acc in
-    let acc = wfield2 3 OBus_name.Member.validate fields._member acc in
-    let acc = wfield2 4 OBus_name.Error.validate fields._error_name acc in
+    let acc = wfield_val 2 OBus_name.Interface.validate fields._interface acc in
+    let acc = wfield_val 3 OBus_name.Member.validate fields._member acc in
+    let acc = wfield_val 4 OBus_name.Error.validate fields._error_name acc in
     let acc = wfield 5 Tuint32 (fun i x -> write 4 i output_uint32 x) fields._reply_serial acc in
-    let acc = wfield2 6 OBus_name.Connection.validate fields._destination acc in
-    let acc = wfield2 7 OBus_name.Connection.validate fields._sender acc in
-    let fields_length, fields_writer = _wfield 8 Tsignature wsignature fields._signature acc in
+    let acc = wfield_val 6 OBus_name.Connection.validate fields._destination acc in
+    let acc = wfield_val 7 OBus_name.Unique.validate fields._sender acc in
+    let fields_length, fields_writer = wfield_real 8 Tsignature wsignature fields._signature acc in
 
     if fields_length > max_array_size then
       failwith "array size exceed the limit: %d" fields_length;
@@ -696,7 +695,8 @@ struct
        let i = i + len + 1 in
        if len < 0 || i > size then
          out_of_bounds ()
-       else let str = String.create len in perform
+       else let str = String.create len in
+       perform
          really_input ic str 0 len;
          input_char ic >>= function
            | '\000' -> return (i, str)
@@ -724,7 +724,8 @@ struct
       try
         return (i, OBus_path.of_string str)
       with
-          exn -> fail exn
+          OBus_path.Invalid_path(path, msg) ->
+            fail (Failure (sprintf "invalid path (%S): %s" path msg))
 
   let rbasic  = function
     | Tbyte ->
@@ -854,14 +855,11 @@ struct
            | _ -> failwith "invalid header field signature for code %d: %S, should be %S"
                code (string_of_signature [t]) (string_of_signature [Tbasic typ]))
     in
-
-    let rfield2 code validator i =
-      (rfield code Tstring rstring i >>= fun (i, v) ->
-         try
-           validator v;
-           return (i, v)
-         with
-             exn -> fail exn) in
+    let rfield_val code validate i =
+      rfield code Tstring rstring i >>= fun ((_, name) as x) ->
+        validate name;
+        return x
+    in
 
     let rec aux (i, acc) =
       if i = limit then
@@ -874,12 +872,12 @@ struct
            input_uint8 ic >>=
              (function
                 | 1 -> rfield 1 Tobject_path robject_path i >>= (fun (i, x) -> aux (i, { acc with _path = Some x }))
-                | 2 -> rfield2 2 OBus_name.Interface.validate i >>= (fun (i, x) -> aux (i, { acc with _interface = Some x }))
-                | 3 -> rfield2 3 OBus_name.Member.validate i >>= (fun (i, x) -> aux (i, { acc with _member = Some x }))
-                | 4 -> rfield2 4 OBus_name.Error.validate i >>= (fun (i, x) -> aux (i, { acc with _error_name = Some x }))
+                | 2 -> rfield_val 2 OBus_name.Interface.validate i >>= (fun (i, x) -> aux (i, { acc with _interface = Some x }))
+                | 3 -> rfield_val 3 OBus_name.Member.validate i >>= (fun (i, x) -> aux (i, { acc with _member = Some x }))
+                | 4 -> rfield_val 4 OBus_name.Error.validate i >>= (fun (i, x) -> aux (i, { acc with _error_name = Some x }))
                 | 5 -> rfield 5 Tuint32 ruint32 i >>= (fun (i, x) -> aux (i, { acc with _reply_serial = Some x }))
-                | 6 -> rfield2 6 OBus_name.Connection.validate i >>= (fun (i, x) -> aux (i, { acc with _destination = Some x }))
-                | 7 -> rfield2 7 OBus_name.Connection.validate i >>= (fun (i, x) -> aux (i, { acc with _sender = Some x }))
+                | 6 -> rfield_val 6 OBus_name.Connection.validate i >>= (fun (i, x) -> aux (i, { acc with _destination = Some x }))
+                | 7 -> rfield_val 7 OBus_name.Unique.validate i >>= (fun (i, x) -> aux (i, { acc with _sender = Some x }))
                 | 8 -> rfield 8 Tsignature rsignature i >>= (fun (i, x) -> aux (i, { acc with _signature = x }))
                 | n ->
                     (perform
@@ -969,21 +967,11 @@ type transport = {
   shutdown : unit -> unit;
 }
 
-let transport ~recv ~send ~shutdown = { recv = recv; send = send; shutdown = shutdown }
+let make_transport ~recv ~send ~shutdown = { recv = recv; send = send; shutdown = shutdown }
 
-let wrap f = catch f (fun exn -> fail (Transport_error exn))
-
-let recv { recv = recv } = wrap recv
-let send { send = send } message =
-  try_bind
-    (fun _ -> send message)
-    (fun f -> return (fun _ -> wrap f))
-    (fun exn -> fail (Transport_error exn))
-let shutdown { shutdown = shutdown } =
-  try
-    shutdown ()
-  with
-      exn -> raise (Transport_error exn)
+let recv { recv = recv } = recv ()
+let send { send = send } message = send message
+let shutdown { shutdown = shutdown } = shutdown ()
 
 let chans_of_fd fd = (Lwt_chan.in_channel_of_descr fd,
                        Lwt_chan.out_channel_of_descr fd)
@@ -1006,7 +994,10 @@ let loopback _ =
   let queue = MQueue.create () in
   { recv = (fun _ -> MQueue.get queue);
     send = (fun m -> return (fun _ -> MQueue.put m queue; return ()));
-    shutdown = (fun _ -> MQueue.abort queue (Failure "transport closed")) }
+    shutdown = (fun _ ->
+                  Queue.iter (fun w -> wakeup_exn w (Failure "transport closed")) queue.MQueue.waiters;
+                  Queue.clear queue.MQueue.waiters;
+                  Queue.clear queue.MQueue.queued) }
 
 let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in

@@ -55,7 +55,7 @@ end
 include M
 module MaybeM = Util.MaybeT(M)
 
-let failwith msg xmls attrs = (xmls, Error([], msg))
+let failwith fmt = Printf.ksprintf (fun msg xmls attrs -> (xmls, Error([], msg))) fmt
 
 let (>>=) = bind
 
@@ -65,7 +65,7 @@ let ao name xmls attrs =
 let ar name =
   ao name >>= (function
                  | Some v -> return v
-                 | None -> failwith (sprintf "attribute '%s' missing" name))
+                 | None -> failwith "attribute '%s' missing" name)
 
 let ad name default =
   ao name >>= (function
@@ -74,8 +74,8 @@ let ad name default =
 
 let af name field value = match Util.assoc value field with
   | Some v -> return v
-  | None -> failwith (sprintf "unexpected value for '%s' (%s), must be one of %s"
-                        name value (String.concat ", " (List.map fst field)))
+  | None -> failwith "unexpected value for '%s' (%s), must be one of %s"
+      name value (String.concat ", " (List.map fst field))
 
 let afr name field = ar name >>= af name field
 let afo name field = MaybeM.bind (ao name) (fun v -> af name field v >>= MaybeM.return)
@@ -149,7 +149,7 @@ let opt (typ, f) xmls attrs =
 let one (typ, f) =
   opt (typ, f) >>= function
     | Some x -> return x
-    | None -> failwith ("element missing: " ^ string_of_type typ)
+    | None -> failwith "element missing: %s" (string_of_type typ)
 
 let rec any (typ, f) xmls attrs =
   let success, rest = Util.part_map f xmls in

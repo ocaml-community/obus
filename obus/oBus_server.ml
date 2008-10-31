@@ -22,7 +22,7 @@ type t = {
 
 exception Shutdown
 
-let socket fd (ic, oc) = OBus_lowlevel.transport
+let socket fd (ic, oc) = OBus_lowlevel.make_transport
   ~recv:(fun _ -> OBus_lowlevel.get_message ic)
   ~send:(fun msg -> perform
            f <-- OBus_lowlevel.put_message msg;
