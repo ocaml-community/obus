@@ -36,7 +36,7 @@ let main =
      in
 
      let _ = printf "trying to start service %S: %!" service in
-     result <-- OBus_bus.start_service_by_name bus service [];
+     result <-- OBus_bus.start_service_by_name bus service;
      let _ = print_endline
        (match result with
           | `success -> "success"
@@ -44,7 +44,7 @@ let main =
      in
 
      let _ = printf "trying to acquire the name %S: %!" name in
-     result <-- OBus_bus.request_name bus name [ `replace_existing; `do_not_queue ];
+     result <-- OBus_bus.request_name bus ~flags:[ `replace_existing; `do_not_queue ] name;
      let _ = print_endline
        (match result with
           | `primary_owner -> "success"

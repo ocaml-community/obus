@@ -24,17 +24,14 @@ let filter what_bus message =
 let add_filter what_bus lbus =
   (perform
      bus <-- Lazy.force lbus;
-     let _ =
-       ignore (OBus_connection.add_incoming_filter bus (filter what_bus));
+     let _ = OBus_connection.add_incoming_filter (OBus_bus.connection bus) (filter what_bus) in
+     Lwt_util.iter (fun typ -> OBus_bus.add_match bus (OBus_bus.match_rule ~typ ()))
+       [ `method_call; `method_return; `error; `signal ])
 
-       List.iter (fun typ -> ignore_result (OBus_bus.add_match bus (OBus_bus.match_rule ~typ ())))
-         [ `method_call; `method_return; `error; `signal ]
-     in
-     return ())
+let _ = Lwt_unix.run
+  (perform
+     Lwt_util.join [add_filter "session" OBus_bus.session;
+                    add_filter "system" OBus_bus.system];
 
-let _ =
-  ignore_result (add_filter "session" OBus_bus.session);
-  ignore_result (add_filter "system" OBus_bus.system);
-
-  Printf.printf "type Ctrl+C to stop\n%!";
-  Lwt_unix.run (wait ())
+     let _ = Printf.printf "type Ctrl+C to stop\n%!" in
+     wait ())

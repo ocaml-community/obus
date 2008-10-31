@@ -16,32 +16,34 @@ open Printf
 open Avahi
 
 let main : unit Lwt.t =
-  perform
-    service_browser <-- Server.service_browser_new (-1) (-1) "_workstation._tcp" "" 0;
+  (perform
+     avahi <-- Lazy.force server;
 
-    Service_browser.on_item_new service_browser
-      (fun (interface, protocol, name, service, domain, flags) ->
-         printf "new workstation found:\n  name = %S\n  domain = %S\n\n%!" name domain;
+     service_browser <-- Server.service_browser_new avahi (-1) (-1) "_workstation._tcp" "" 0;
 
-         ignore_result
-           (perform
-              resolver <-- Server.service_resolver_new interface protocol name service domain (-1) 0;
+     OBus_signal.connect service_browser Service_browser.item_new
+       (fun (interface, protocol, name, service, domain, flags) ->
+          printf "new workstation found:\n  name = %S\n  domain = %S\n\n%!" name domain;
 
-              Service_resolver.on_found resolver
-                (fun (interface, protocol, name, typ, domain, host, aprotocol, address, port, txt, flags) ->
-                   printf "the resolver found:\n  name = %S\n  host = %S\n  address = %S\n\n%!" name host address);
+          ignore_result
+            (perform
+               resolver <-- Server.service_resolver_new avahi interface protocol name service domain (-1) 0;
 
-              Service_resolver.on_failure resolver
-                (printf "failure of the service resolver: %S\n\n%!")));
+               OBus_signal.connect resolver Service_resolver.found
+                 (fun (interface, protocol, name, typ, domain, host, aprotocol, address, port, txt, flags) ->
+                    printf "the resolver found:\n  name = %S\n  host = %S\n  address = %S\n\n%!" name host address);
 
-    Service_browser.on_item_remove service_browser
-      (fun (interface, protocol, name, service, domain, flags) ->
-         printf "workstation removed:  name = %S\n  domain = %S\n\n%!" name domain);
+               OBus_signal.connect resolver Service_resolver.failure
+                 (printf "failure of the service resolver: %S\n\n%!")));
 
-    Service_browser.on_failure service_browser
-      (printf "failure of the service browser: %S\n\n%!");
+     OBus_signal.connect service_browser Service_browser.item_remove
+       (fun (interface, protocol, name, service, domain, flags) ->
+          printf "workstation removed:  name = %S\n  domain = %S\n\n%!" name domain);
 
-    let _ = printf "type Ctrl+C to stop\n%!" in
-    wait ()
+     OBus_signal.connect service_browser Service_browser.failure
+       (printf "failure of the service browser: %S\n\n%!");
+
+     let _ = printf "type Ctrl+C to stop\n%!" in
+     wait ())
 
 let _ = Lwt_unix.run main

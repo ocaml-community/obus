@@ -30,10 +30,10 @@ let _ = Lwt_unix.run
      bus <-- Lazy.force OBus_bus.session;
 
      (* Request a name *)
-     OBus_bus.request_name bus "org.plop" [];
+     OBus_bus.request_name bus "org.plop";
 
      (* Export the object on the connection *)
-     let _ = obj#obus_export bus in
+     let _ = obj#obus_export (OBus_bus.connection bus) in
 
      (* Wait forever *)
      wait ())

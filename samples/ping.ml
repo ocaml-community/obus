@@ -17,14 +17,14 @@ let _ = Lwt_unix.run
      bus <-- Lazy.force OBus_bus.session;
 
      (* Create a proxy for the remote object *)
-     let proxy = OBus_proxy.make ~connection:bus ~destination:"org.plop" ~path:["plip"] in
+     let proxy = OBus_bus.make_proxy bus "org.plop" ["plip"] in
 
      (* Send a ping *)
      let _ = print_endline "trying to ping the pong service..." in
 
      catch
        (fun _ -> perform
-          msg <-- OBus_proxy.method_call proxy ~interface:"org.plop.foo" ~member:"ping" << string -> string >> "coucou";
+          msg <-- OBus_proxy.call proxy ~interface:"org.plop.foo" ~member:"ping" << string -> string >> "coucou";
           let _ = print_endline ("received: " ^ msg) in
           return ())
        (function

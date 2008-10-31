@@ -21,7 +21,7 @@ OBUS_flag closed_reason : uint =
 
 class virtual if_manager = OBUS_interface "org.ocamlcore.forge.obus.ProgressBar.Manager"
   OBUS_method ServerVersion : string
-  OBUS_method CreateProgressBar : OBus_context.t -> int -> OBus_object.t
+  OBUS_method CreateProgressBar : OBus_peer.t -> int -> path
 end
 
 class virtual if_bar = OBUS_interface "org.ocamlcore.forge.obus.ProgressBar.Bar"
@@ -30,10 +30,10 @@ class virtual if_bar = OBUS_interface "org.ocamlcore.forge.obus.ProgressBar.Bar"
   OBUS_signal Closed : closed_reason
 end
 
-OBUS_global_exn Invalid_value = "org.ocamlcore.forge.obus.ProgressBar.InvalidValue"
-OBUS_global_exn Closed = "org.ocamlcore.forge.obus.ProgressBar.Closed"
+OBUS_global_exception org.ocamlcore.forge.obus.ProgressBar.InvalidValue
+OBUS_global_exception org.ocamlcore.forge.obus.ProgressBar.Closed
 
-class bar bus client initial_value =
+class bar peer initial_value =
   let fdr, fdw = Lwt_unix.pipe_out () in
   (* Launch zenity *)
   let pid = Unix.create_process "zenity"
@@ -45,7 +45,7 @@ class bar bus client initial_value =
   let oc = Lwt_chan.out_channel_of_descr fdw in
 
 object(self)
-  inherit OBus_object.owned bus client as super
+  inherit OBus_object.owned peer as super
   inherit if_bar
 
   (* Progress bar position *)
@@ -117,13 +117,11 @@ let manager = object
 
   method server_version = return "1.0"
 
-  method create_progress_bar ctx x =
+  method create_progress_bar sender x =
     if x < 0 || x > 100 then
       fail (Invalid_value "position must be between 0 and 100")
     else
-      return (new bar (OBus_context.connection ctx) (match OBus_context.sender ctx with
-                                                       | Some s -> s
-                                                       | None -> assert false) x :> OBus_object.t)
+      return ((new bar sender x)#obus_path)
 end
 
 let _ = Lwt_unix.run
@@ -131,10 +129,10 @@ let _ = Lwt_unix.run
      bus <-- Lazy.force OBus_bus.session;
 
      (* export the object *)
-     let _ = manager#obus_export bus in
+     let _ = manager#obus_export (OBus_bus.connection bus) in
 
      (* ask for a well-know name *)
-     OBus_bus.request_name bus "org.ocamlcore.forge.obus.ProgressBar" [];
+     OBus_bus.request_name bus "org.ocamlcore.forge.obus.ProgressBar";
 
      (* Wait for the message bus to exit *)
-     OBus_connection.watch bus)
+     OBus_bus.watch bus)
