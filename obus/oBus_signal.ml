@@ -71,8 +71,8 @@ let call member connection = function
 
 let enable (mr, connection, node) =
   match MSet.is_alone node with
-    | true -> return ()
-    | false ->
+    | false -> return ()
+    | true ->
         lwt_with_running
           (fun connection ->
              MSet.insert node connection.signal_receivers;
@@ -81,8 +81,8 @@ let enable (mr, connection, node) =
 
 let disable (mr, connection, node) =
   match MSet.is_alone node with
-    | false -> return ()
-    | true ->
+    | true -> return ()
+    | false ->
         lwt_with_running
           (fun connection ->
              MSet.remove node;
