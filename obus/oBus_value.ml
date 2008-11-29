@@ -132,18 +132,30 @@ module R = Make_reader(T)(Reader_params)
 module W = Make_writer(T)(Writer_params)
 
 let string_of_signature ts =
-  let len = W.signature_size ts in
+  let len = Trw.sequence_size ts in
   let str = String.create len in
-  W.write_sequence (str, ref 0) ts;
+  let ofs = ref 0 in
+  Trw.write_sequence (fun ch ->
+                        let n = !ofs in
+                        String.unsafe_set str n ch;
+                        ofs := n + 1) ts;
   str
 
 let signature_of_string str =
   try
-    R.read_sequence (str, ref 0)
+    let len = String.length str and ofs = ref 0 in
+    Trw.read_sequence (fun _ ->
+                         let n = !ofs in
+                         if n = len then
+                           None
+                         else begin
+                           ofs := n + 1;
+                           Some(String.unsafe_get str n)
+                         end)
   with
       Failure msg ->
         raise (Invalid_argument
-                 (sprintf "signature_of_string: invalid signature %S: %s" str msg))
+                 (sprintf "signature_of_string: invalid signature(%S): %s" str msg))
 
 type basic =
   | Byte of char

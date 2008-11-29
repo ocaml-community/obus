@@ -50,8 +50,8 @@ val map : ('a -> 'b) -> 'a t -> 'b t
 
 val make :
   ?broadcast:bool ->
-  interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  interface:OBus_name.interface ->
+  member:OBus_name.member ->
   [< 'a OBus_type.cl_sequence ] -> 'a t
   (** [make ?broadcast interface member typ] create a signal.
 
@@ -60,8 +60,8 @@ val make :
 
 val dmake :
   ?broadcast:bool ->
-  interface:OBus_name.Interface.t ->
-  member:OBus_name.Member.t ->
+  interface:OBus_name.interface ->
+  member:OBus_name.member ->
   OBus_message.body t
   (** Same thing but the value returned are dynamically typed and
       there is no constraint on the signal type *)

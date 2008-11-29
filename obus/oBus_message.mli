@@ -17,17 +17,17 @@ type body = OBus_value.sequence
     (** The body is a sequence of dynamically typed values *)
 
 type method_call_type =
-    [ `Method_call of OBus_path.t * OBus_name.Interface.t option * OBus_name.Member.t ]
+    [ `Method_call of OBus_path.t * OBus_name.interface option * OBus_name.member ]
 
 type method_return_type =
     [ `Method_return of serial
         (** Contains the serial for which this message is a reply *) ]
 
 type error_type =
-    [ `Error of serial * OBus_name.Error.t ]
+    [ `Error of serial * OBus_name.error ]
 
 type signal_type =
-    [ `Signal of OBus_path.t * OBus_name.Interface.t * OBus_name.Member.t ]
+    [ `Signal of OBus_path.t * OBus_name.interface * OBus_name.member ]
 
 type any_type =
     [ method_call_type
@@ -72,11 +72,11 @@ val typ : 'a t -> 'a
 val destination : 'a t -> OBus_name.connection option
 val sender : 'a t -> OBus_name.unique option
 val path : [< method_call_type | signal_type ] t -> OBus_path.t
-val interface : [< method_call_type | signal_type ] t -> OBus_name.Interface.t option
-val signal_interface : signal -> OBus_name.Interface.t
-val member : [< method_call_type | signal_type ] t -> OBus_name.Member.t
+val interface : [< method_call_type | signal_type ] t -> OBus_name.interface option
+val signal_interface : signal -> OBus_name.interface
+val member : [< method_call_type | signal_type ] t -> OBus_name.member
 val reply_serial : [< method_return_type | error_type ] t -> serial
-val error_name : error -> OBus_name.Error.t
+val error_name : error -> OBus_name.error
 
 (** {6 Creation of header} *)
 

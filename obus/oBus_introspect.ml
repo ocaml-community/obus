@@ -59,12 +59,12 @@ let arguments =
 let mk_aname typ test =
   ar "name" >>= fun name ->
     match test name with
-      | Some msg -> failwith "invalid %s name %S: %s" typ name msg
+      | Some error -> failwith (OBus_string.error_message error)
       | None -> return name
 
-let amember = mk_aname "member" OBus_name.Member.test
-let anode = mk_aname "node" OBus_path.test_element
-let ainterface = mk_aname "interface" OBus_name.Interface.test
+let amember = mk_aname OBus_name.test_member
+let anode = mk_aname OBus_path.test_element
+let ainterface = mk_aname OBus_name.test_interface
 
 let method_decl =
   elt "method"
@@ -99,7 +99,7 @@ let node =
                 name <-- anode;
                 match OBus_path.test_element name with
                   | None -> return name
-                  | Some msg -> failwith "invalid node name %S: %s" name msg)
+                  | Some error -> failwith (OBus_string.error_message { error with OBus_string.typ = "node name" }))
 
 let interface =
   elt "interface"

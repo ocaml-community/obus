@@ -16,9 +16,11 @@ let to_string ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
     Buffer.add_string buf "='";
     Buffer.add_string buf value;
     Buffer.add_char buf '\'' in
-  let add_opt key validator = function
+  let add_opt key test = function
     | None -> ()
-    | Some x -> validator x; add key x in
+    | Some x -> match test x with
+        | Some error -> raise (OBus_string.Invalid_string error)
+        | None -> add key x in
   begin match typ with
     | None -> ()
     | Some t ->
@@ -29,9 +31,9 @@ let to_string ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
              | `error -> "error"
              | `signal -> "signal")
   end;
-  add_opt "sender" OBus_name.Connection.validate sender;
-  add_opt "interface" OBus_name.Interface.validate interface;
-  add_opt "member" OBus_name.Member.validate member;
+  add_opt "sender" OBus_name.test_connection sender;
+  add_opt "interface" OBus_name.test_interface interface;
+  add_opt "member" OBus_name.test_member member;
   begin match path with
      | None -> ()
      | Some [] ->
@@ -42,12 +44,15 @@ let to_string ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
          Buffer.add_string buf "path='";
          List.iter
            (fun elt ->
-              OBus_path.validate_element elt;
-              Buffer.add_char buf '/';
-              Buffer.add_string buf elt)
+              match OBus_path.test_element elt with
+                | Some error ->
+                    raise (OBus_string.Invalid_string error)
+                | None ->
+                    Buffer.add_char buf '/';
+                    Buffer.add_string buf elt)
            p;
          Buffer.add_char buf '\''
   end;
-  add_opt "destination" OBus_name.Connection.validate destination;
+  add_opt "destination" OBus_name.test_connection destination;
   List.iter (fun (n, value) -> !coma (); Printf.bprintf buf "arg%d='%s'" n value) args;
   Buffer.contents buf

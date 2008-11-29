@@ -7,64 +7,53 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** DBus names construction/validation *)
+(** DBus names *)
 
 (** For specific restrictions on DBus names, see
-    @see <http://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names> the specification *)
+    @see <http://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names> the specification
 
-exception Invalid_name of string * string * string
-  (** [Invalid_name(typ, name, msg)] Exception raised when a name is
-      not a valid name. [typ] is the expected type of the name, [name]
-      is the string containing the name which fail to validate, and
-      [msg] explain why it is not a valid name *)
+    General restrisction include:
 
-(** Operation on names *)
-module type Name = sig
-  type t = string
+    - names must not be empty
+    - names must contains only ascii characters *)
 
-  val test : string -> string option
-    (** Verify that a string contain a valid name. Return [None] if it
-        is the case or [Some msg] where [msg] explain why the string
-        is not a valid name *)
+type unique = OBus_string.t
+    (** Unique connection names. These names are valid for the
+        lifetime of a message bus and are unique.
 
-  val validate : string -> unit
-    (** Validate the given string.
-        @raise Invalid_name if the string does not contain a valid
-        name *)
-end
+        example: ":1.1" *)
 
-module Unique : Name
-  (** Unique connection names. These names are valid for the lifetime
-      of a message bus and are unique.
+val test_unique : OBus_string.tester
 
-      example: ":1.1" *)
+type bus = OBus_string.t
+    (** Bus names
 
-module Bus : Name
-  (** Bus names
+        example: "org.freedesktop.DBus" *)
 
-      example: "org.freedesktop.DBus" *)
+val test_bus : OBus_string.tester
 
-module Connection : Name
-  (** Either a unique names or a bus names *)
+type connection = OBus_string.t
+    (** Either a unique name or a bus name *)
 
-module Interface : Name
-  (** Interface names
+val test_connection : OBus_string.tester
 
-      example: "org.freedesktop.DBus.Introspectable" *)
+type interface = OBus_string.t
+    (** Interface names
 
-module Member : Name
-  (** Methods/signals/properties names
+        example: "org.freedesktop.DBus.Introspectable" *)
 
-      example: "StartServiceByName" *)
+val test_interface : OBus_string.tester
 
-module Error : Name
-  (** Error names
+type member = OBus_string.t
+    (** Methods/signals/properties names
 
-      example: "org.freedesktop.Error.UnknownMethod" *)
+        example: "StartServiceByName" *)
 
-type unique = Unique.t
-type bus = Bus.t
-type connection = Connection.t
-type interface = Interface.t
-type member = Member.t
-type error = Error.t
+val test_member : OBus_string.tester
+
+type error = OBus_string.t
+    (** Error names
+
+        example: "org.freedesktop.Error.UnknownMethod" *)
+
+val test_error : OBus_string.tester

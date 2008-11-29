@@ -9,15 +9,13 @@
 
 open Printf
 open String
+open OBus_string
 
 type element = string
 type t = element list
 
 exception Invalid_path of string * string
 exception Invalid_element of string * string
-
-let invalid_char str i =
-  sprintf "at position %d: invalid character %C, must be one of \"[A-Z][a-z][0-9]_\"" i str.[i]
 
 let is_valid_char ch =
   (ch >= 'A' && ch <= 'Z') ||
@@ -26,53 +24,58 @@ let is_valid_char ch =
     ch = '_'
 
 let test str =
-  let len = length str in
+  let fail i msg = Some{ typ = "path"; str = str; ofs = i; msg = msg }
+  and len = length str in
+
   let rec aux_member_start i =
-    if i = len
-    then
-      (if str.[i-1] = '/'
-       then Some "trailing '/'"
-       else Some(sprintf "at position %d: empty member" i))
+    if i = len then
+      fail (i - 1) "trailing '/'"
     else
-      if is_valid_char (unsafe_get str i)
-      then aux_member (i + 1)
+      if is_valid_char (unsafe_get str i) then
+        aux_member (i + 1)
       else
-        if unsafe_get str i = '/'
-        then Some(sprintf "at position %d: empty member" i)
-        else Some(invalid_char str i)
+        if unsafe_get str i = '/' then
+          fail i "empty element"
+        else
+          fail i "invalid char"
+
   and aux_member i =
-    if i = len
-    then None
-    else match unsafe_get str i with
-      | '/' -> aux_member_start (i + 1)
-      | ch when is_valid_char ch -> aux_member (i + 1)
-      | ch -> Some(invalid_char str i)
+    if i = len then
+      None
+    else
+      let ch = unsafe_get str i in
+      if ch = '/' then
+        aux_member_start (i + 1)
+      else
+        if is_valid_char ch then
+          aux_member (i + 1)
+        else
+          fail i "invalid char"
   in
-  if len = 0
-  then Some "empty path"
-  else match unsafe_get str 0 with
-    | '/' -> if len = 1 then None else aux_member_start 1
-    | _ -> Some "must start with '/'"
+
+  if len = 0 then
+    fail (-1) "empty path"
+  else
+    if unsafe_get str 0 = '/' then
+      if len = 1 then None else aux_member_start 1
+    else
+      fail 0 "must start with '/'"
 
 let test_element = function
-  | "" -> Some("empty member")
+  | "" ->
+      Some{ typ = "path element"; str = ""; ofs = -1; msg = "empty element" }
   | str ->
-      let rec aux = function
-        | -1 -> None
-        | i ->
-            if is_valid_char (unsafe_get str i)
-            then aux (i - 1)
-            else Some(invalid_char str i)
+      let len = length str in
+      let rec aux i =
+        if i = len then
+          None
+        else
+          if is_valid_char (unsafe_get str i) then
+            aux (i + 1)
+          else
+            Some{ typ = "path element"; str = ""; ofs = i; msg = "invalid character" }
       in
-      aux (length str - 1)
-
-let validate str = match test str with
-  | None -> ()
-  | Some msg -> raise (Invalid_path(str, msg))
-
-let validate_element str = match test_element str with
-  | None -> ()
-  | Some msg -> raise (Invalid_element(str, msg))
+      aux 0
 
 let empty = []
 
@@ -90,23 +93,22 @@ let to_string = function
            0 path);
       str
 
-let of_string = function
-  | "" -> raise (Invalid_path("", "empty path"))
-  | "/" -> []
-  | str when unsafe_get str 0 = '/' ->
-      let rec aux acc = function
-        | -1 -> acc
-        | j ->
+let of_string str =
+  match test str with
+    | Some error ->
+        raise (OBus_string.Invalid_string error)
+    | None ->
+        let rec aux acc j =
+          if j <= 0 then
+            acc
+          else
             let i = rindex_from str j '/' in
             let len = j - i in
             let elt = create len in
             unsafe_blit str (i + 1) elt 0 len;
-            match test_element elt with
-              | Some _ -> validate str; assert false
-              | None -> aux (elt :: acc) (i - 1)
-      in
-      aux [] (length str - 1)
-  | s -> validate s; assert false
+            aux (elt :: acc) (i - 1)
+        in
+        aux [] (length str - 1)
 
 let escape s =
   let len = length s in

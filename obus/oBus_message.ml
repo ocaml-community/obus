@@ -29,13 +29,13 @@ let make_flags ?(no_reply_expected=false) ?(no_auto_start=false) () = {
 }
 
 type method_call_type =
-    [ `Method_call of OBus_path.t * OBus_name.Interface.t option * OBus_name.Member.t ]
+    [ `Method_call of OBus_path.t * OBus_name.interface option * OBus_name.member ]
 type method_return_type =
     [ `Method_return of serial ]
 type error_type =
-    [ `Error of serial * OBus_name.Error.t ]
+    [ `Error of serial * OBus_name.error ]
 type signal_type =
-    [ `Signal of OBus_path.t * OBus_name.Interface.t * OBus_name.Member.t ]
+    [ `Signal of OBus_path.t * OBus_name.interface * OBus_name.member ]
 
 type any_type =
     [ method_call_type
