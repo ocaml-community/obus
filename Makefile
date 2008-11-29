@@ -9,11 +9,11 @@ OC = ocamlbuild
 OF = ocamlfind
 
 # Targets
-SAMPLES = hello bus-functions eject notif monitor signals list-services \
-	  avahi-list-workstations ping pong progress progress-test
+SAMPLES = hello bus_functions eject notif monitor signals list_services \
+	  avahi_list_workstations ping pong progress progress_test
 LIB = obus
 BINDINGS = hal notify
-TOOLS = obus-introspect obus-binder obus-dump
+TOOLS = obus_introspect obus_binder obus_dump
 TEST = data dyn valid auth server errors logging
 
 .PHONY: tools samples bindings all test lib install prefix
@@ -95,7 +95,7 @@ dot:
 # +--------------------+
 
 prefix:
-	@if [ -z "${PREFIX}" ]; then \
+	@if [ -z "$(PREFIX)" ]; then \
 	  echo "please define PREFIX"; \
 	  exit 1; \
 	fi
@@ -110,7 +110,7 @@ install: prefix
 	 $(BINDINGS:%=_build/%.cmxa) \
 	 $(BINDINGS:%=_build/%.a)
 	for tool in $(TOOLS); do \
-	  install -vm 0755 _build/tools/$$tool.native $(PREFIX)/bin/$$tool; \
+	  install -vm 0755 _build/tools/$$tool.native $(PREFIX)/bin/`echo $$tool|sed s/_/-/`; \
 	done
 	mkdir -p $(PREFIX)/share/doc/obus/samples
 	mkdir -p $(PREFIX)/share/doc/obus/html
