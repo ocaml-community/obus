@@ -7,7 +7,6 @@
 
 OC = ocamlbuild
 OF = ocamlfind
-PREFIX = /usr/local
 
 # Targets
 SAMPLES = hello bus-functions eject notif monitor signals list-services \
@@ -17,11 +16,15 @@ BINDINGS = hal notify
 TOOLS = obus-introspect obus-binder obus-dump
 TEST = data dyn valid auth server errors logging
 
-.PHONY: tools samples bindings all test lib default install
+.PHONY: tools samples bindings all test lib install prefix
 
-default: samples-byte
-
-all: lib bindings tools samples doc META lib-dist
+all:
+	$(OC) \
+	  $(LIB:=.cma) $(LIB:=.cmxa) \
+	  $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) \
+	  $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native) \
+	  $(SAMPLES:%=samples/%.byte) $(SAMPLES:%=samples/%.native) \
+	  obus.docdir/index.html META lib-dist
 
 # List all package dependencies
 list-deps:
@@ -69,7 +72,7 @@ tools-native:
 	$(OC) $(TOOLS:%=tools/%.native)
 
 tools:
-	$(OC) $(TOOLS:%=tools/%.byte)  $(TOOLS:%=tools/%.native)
+	$(OC) $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native)
 
 test:
 	$(OC) $(TEST:%=test/%.d.byte)
@@ -91,9 +94,13 @@ dot:
 # | Installation stuff |
 # +--------------------+
 
-install: all just-install
+prefix:
+	@if [ -z "${PREFIX}" ]; then \
+	  echo "please define PREFIX"; \
+	  exit 1; \
+	fi
 
-just-install:
+install: prefix
 	$(OF) install obus _build/META `cat _build/lib-dist` \
 	 _build/syntax/pa_obus.cmo \
 	 $(LIB:%=_build/%.cma) \
@@ -111,7 +118,7 @@ just-install:
 	install -vm 0644 _build/obus.docdir/* $(PREFIX)/share/doc/obus/html
 	install -vm 0644 samples/*.ml $(PREFIX)/share/doc/obus/samples
 
-uninstall:
+uninstall: prefix
 	$(OF) remove obus
 	rm -vf $(TOOLS:%=$(PREFIX)/bin/%)
 	rm -rvf $(PREFIX)/share/doc/obus

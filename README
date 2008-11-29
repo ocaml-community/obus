@@ -12,16 +12,10 @@ url: https://forge.ocamlcore.org/projects/obus/
 
 * Installation:
 
-  To install OBus just type:
-
-  $ make PREFIX=<prefix> install
-
-  You call also do:
+  To compile and install OBus just type:
 
   $ make all
-  $ make PREFIX=<prefix> just-install
-
-  If you want to install files using a different user.
+  $ make PREFIX=<prefix> install
 
 * Using the library
 
