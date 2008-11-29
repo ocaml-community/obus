@@ -35,6 +35,7 @@ let _ =
   test test_connection ":er.1dsf";
   test test_connection ":er..dsf";
   test test_connection "erdsf.1ze";
+  test test_interface "toto";
   Lwt_unix.run
     (perform
        b <-- Lazy.force OBus_bus.session;

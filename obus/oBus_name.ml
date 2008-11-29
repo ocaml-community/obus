@@ -26,7 +26,7 @@ let underscore ch = ch = '-'
 let hyphen ch = ch = '-'
 let digit ch = ch >= '0' && ch <= '9'
 
-(*** Common names, which are of the form member1.member2.member3... ***)
+(*** Common names, which are of the form element1.element2.element3... ***)
 
 (* [test_from str i] test that the name in [str] starting at [i] is
    valid *)
@@ -34,28 +34,53 @@ let test_from typ valid_char str i =
   let fail i msg = Some{ typ = typ; str = str; ofs = i; msg = msg }
   and len = String.length str in
 
-  let rec aux_member_start i =
+  let rec aux_element_start i =
     if i = len then
-      fail i "empty member"
+      fail i "empty element"
     else
       if valid_char (unsafe_get str i) then
-        aux_member (i + 1)
+        aux_element (i + 1)
       else
         if unsafe_get str i = '.' then
-          fail i "empty member"
+          fail i "empty element"
         else
           fail i "invalid character"
 
-  and aux_member i =
+  and aux_element i =
     if i = len then
       None
     else
       let ch = unsafe_get str i in
       if ch = '.' then
-        aux_member_start (i + 1)
+        aux_element_start (i + 1)
       else
         if valid_char ch || digit ch then
-          aux_member (i + 1)
+          aux_element (i + 1)
+        else
+          fail i "invalid character"
+
+  and aux_first_element_start i =
+    if i = len then
+      fail i "empty element"
+    else
+      if valid_char (unsafe_get str i) then
+        aux_first_element (i + 1)
+      else
+        if unsafe_get str i = '.' then
+          fail i "empty element"
+        else
+          fail i "invalid character"
+
+  and aux_first_element i =
+    if i = len then
+      fail (-1) "must contains at least two elements"
+    else
+      let ch = unsafe_get str i in
+      if ch = '.' then
+        aux_element_start (i + 1)
+      else
+        if valid_char ch || digit ch then
+          aux_first_element (i + 1)
         else
           fail i "invalid character"
 
@@ -64,7 +89,7 @@ let test_from typ valid_char str i =
   if len > OBus_info.max_name_length then
     fail (-1) "name too long"
   else
-    aux_member_start i
+    aux_first_element_start i
 
 let test typ valid_char = function
   | "" -> Some{ typ = typ; str = ""; ofs = -1; msg = "empty name" }

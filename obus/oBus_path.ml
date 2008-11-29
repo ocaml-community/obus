@@ -27,28 +27,28 @@ let test str =
   let fail i msg = Some{ typ = "path"; str = str; ofs = i; msg = msg }
   and len = length str in
 
-  let rec aux_member_start i =
+  let rec aux_element_start i =
     if i = len then
       fail (i - 1) "trailing '/'"
     else
       if is_valid_char (unsafe_get str i) then
-        aux_member (i + 1)
+        aux_element (i + 1)
       else
         if unsafe_get str i = '/' then
           fail i "empty element"
         else
           fail i "invalid char"
 
-  and aux_member i =
+  and aux_element i =
     if i = len then
       None
     else
       let ch = unsafe_get str i in
       if ch = '/' then
-        aux_member_start (i + 1)
+        aux_element_start (i + 1)
       else
         if is_valid_char ch then
-          aux_member (i + 1)
+          aux_element (i + 1)
         else
           fail i "invalid char"
   in
@@ -57,7 +57,7 @@ let test str =
     fail (-1) "empty path"
   else
     if unsafe_get str 0 = '/' then
-      if len = 1 then None else aux_member_start 1
+      if len = 1 then None else aux_element_start 1
     else
       fail 0 "must start with '/'"
 
