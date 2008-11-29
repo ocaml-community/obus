@@ -27,8 +27,7 @@ let rec loop pp action what_bus a b =
        Format.fprintf pp "-----@\n@[<hv 2>%s on %s bus:@\n%a@]@." action what_bus
          OBus_message.print message
      in
-     f <-- OBus_lowlevel.send b message;
-     f ();
+     OBus_lowlevel.send b message;
      loop pp action what_bus a b)
 
 let launch pp what_bus laddresses =

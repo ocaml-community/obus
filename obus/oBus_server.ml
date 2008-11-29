@@ -23,10 +23,11 @@ type t = {
 exception Shutdown
 
 let socket fd (ic, oc) = OBus_lowlevel.make_transport
-  ~recv:(fun _ -> OBus_lowlevel.get_message ic)
-  ~send:(fun msg -> perform
-           f <-- OBus_lowlevel.put_message msg;
-           return (fun () -> f oc))
+  ~recv:(fun _ -> OBus_lowlevel.Lwt_wire.get_message (OBus_lowlevel.lwt_input_of_channel ic))
+  ~send:(fun msg ->
+           perform
+             snd (OBus_lowlevel.Lwt_wire.put_message msg) (OBus_lowlevel.lwt_output_of_channel oc);
+             Lwt_chan.flush oc)
   ~shutdown:(fun _ ->
                Lwt_unix.shutdown fd SHUTDOWN_ALL;
                Lwt_unix.close fd)

@@ -52,7 +52,7 @@ let read () =
                   String.blit buffer !i str pos sz;
                   i := !i + sz;
                   return sz) in
-             Lwt_unix.run (get_message ic)).OBus_message.body))
+             Lwt_unix.run (Lwt_wire.get_message (lwt_input_of_channel ic))).OBus_message.body))
 
 let write bo x =
   let i = ref 0 in
@@ -63,8 +63,8 @@ let write bo x =
        i := !i + sz;
        return sz) in
   Lwt_unix.run (perform
-                  f <-- put_message ~byte_order:bo (make_msg x :> OBus_message.any);
-                  f oc)
+                  snd (Lwt_wire.put_message ~byte_order:bo (make_msg x :> OBus_message.any)) (lwt_output_of_channel oc);
+                  Lwt_chan.flush oc)
 
 let test bo =
   write bo [data_val];

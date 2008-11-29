@@ -127,26 +127,27 @@ let send_message_backend reply_waiter return_thread connection message =
               Format.eprintf "-----@\n@[<hv 2>sending message:@\n%a@]@."
                 OBus_message.print message;
 
-            (perform
-               writer <-- catch
-                 (fun _ -> OBus_lowlevel.send connection.transport message)
-                 (function
-                    | Failure msg ->
-                        wakeup w serial;
-                        fail (Failure ("can not send message: " ^ msg))
-                    | exn ->
-                        wakeup w serial;
-                        fail exn (* This should not happen *));
-               catch writer
-                 (fun exn ->
-                    (* Any error is fatal here, because this is possible
-                       that a message has been partially sent on the
-                       connection, so the message stream is broken *)
-                    let exn = set_crash connection (Transport_error exn) in
-                    wakeup_exn w exn;
-                    fail exn);
-               let _ = wakeup w (Int32.succ serial) in
-               return_thread)
+            try_bind
+              (fun _ -> OBus_lowlevel.send connection.transport message)
+              (fun _ ->
+                 (* Everything went OK, continue with a new serial *)
+                 wakeup w (Int32.succ serial);
+                 return_thread)
+              (function
+                 | OBus_lowlevel.Data_error _ as exn ->
+                     (* The message can not be marshaled for some
+                        reason. This is not a fatal error. *)
+                     wakeup w serial;
+                     fail exn
+
+                 | exn ->
+                     (* All other errors are considered as fatal. They
+                        are fatal because it is possible that a
+                        message has been partially sent on the
+                        connection, so the message stream is broken *)
+                     let exn = set_crash connection (Transport_error exn) in
+                     wakeup_exn w exn;
+                     fail exn)
   end connection
 
 
