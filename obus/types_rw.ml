@@ -31,28 +31,33 @@ module type Types = sig
   and telement =
     | Tdict_entry of tbasic * tsingle
     | Tsingle of tsingle
+  type tsequence = tsingle list
 end
 
-module type Reader_params =
-sig
-  type 'a t
-  val bind : 'a t -> ('a -> 'b t) -> 'b t
-  val return : 'a -> 'a t
-  val failwith : ('b, unit, string, 'a t) format4 -> 'b
+module Make(Types : Types)(Monad : OBus_monad.S) : sig
+  val single_size : Types.tsingle -> int
+  val sequence_size : Types.tsequence -> int
+    (** Returns the marshaled length of a signature *)
 
-  type input
-  val get : input -> char t
-    (* get must fail on end-of-input *)
-  val get_opt : input -> char option t
-    (* get_opt must not fail on end-of-input *)
-end
+  val read_single : (unit -> char option Monad.t) -> Types.tsingle Monad.t
+  val read_sequence : (unit -> char option Monad.t) -> Types.tsequence Monad.t
+    (** Parse a signature using the given get_char function *)
 
-module Make_reader(Types : Types)(Params : Reader_params) =
-struct
+  val write_single : (char -> unit Monad.t) -> Types.tsingle -> unit Monad.t
+  val write_sequence : (char -> unit Monad.t) -> Types.tsequence -> unit Monad.t
+    (** Marshal a signature using the given put_char function *)
+
+  val char_of_basic : Types.tbasic -> char
+    (** Returns the type code of a basic type *)
+end = struct
   open Types
-  open Params
+  open Monad
 
-  let (>>=) = bind
+  let ( >>= ) = bind
+
+  let read_char get_char = get_char () >>= function
+    | Some ch -> return ch
+    | None -> failwith "premature end of signature"
 
   let parse_basic msg = function
     | 'y' -> return Tbyte
@@ -67,16 +72,16 @@ struct
     | 's' -> return Tstring
     | 'o' -> return Tobject_path
     | 'g' -> return Tsignature
-    | chr -> failwith msg chr
+    | chr -> Printf.ksprintf failwith msg chr
 
-  let rec parse_single ic = function
+  let rec parse_single get_char = function
     | 'a' ->
         (perform
-           t <-- read_element ic;
+           t <-- read_element get_char;
            return (Tarray t))
     | '(' ->
         (perform
-           t <-- read_struct ic;
+           t <-- read_struct get_char;
            return (Tstruct t))
     | ')' ->
         failwith "')' without '('"
@@ -87,65 +92,51 @@ struct
            t <-- parse_basic "invalid type code: %c" ch;
            return (Tbasic t))
 
-  and read_struct ic = get ic >>= function
+  and read_single get_char = read_char get_char >>= parse_single get_char
+
+  and read_struct get_char = read_char get_char >>= function
     | ')' ->
         return []
     | ch ->
         (perform
-           t <-- parse_single ic ch;
-           l <-- read_struct ic;
+           t <-- parse_single get_char ch;
+           l <-- read_struct get_char;
            return (t :: l))
 
-  and read_element ic = get ic >>= function
+  and read_element get_char = read_char get_char >>= function
     | '{' ->
         (perform
-           ch <-- get ic;
+           ch <-- read_char get_char;
            tk <-- parse_basic "invalid basic type code: %c" ch;
-           tv <-- get ic >>= parse_single ic;
-           get ic >>= function
+           tv <-- read_char get_char >>= parse_single get_char;
+           read_char get_char >>= function
              | '}' -> return (Tdict_entry(tk, tv))
              | _ -> failwith "'}' missing")
     | ch ->
         (perform
-           t <-- parse_single ic ch;
+           t <-- parse_single get_char ch;
            return (Tsingle t))
 
-  and read_sequence ic = get_opt ic >>= function
+  and read_sequence get_char = get_char () >>= function
     | None ->
         return []
     | Some ch ->
         (perform
-           t <-- parse_single ic ch;
-           l <-- read_sequence ic;
+           t <-- parse_single get_char ch;
+           l <-- read_sequence get_char;
            return (t :: l))
-end
 
-module type Writer_params =
-sig
-  type 'a t
-  val bind : 'a t -> ('a -> 'b t) -> 'b t
-  val return : 'a -> 'a t
-
-  type output
-  val put : output -> char -> unit t
-end
-
-module Make_writer(Types : Types)(Params : Writer_params) =
-struct
-  open Types
-  open Params
-
-  let rec single_signature_size_aux acc = function
+  let rec single_size_aux acc = function
     | Tarray t -> begin match t with
-        | Tdict_entry(_, t) -> single_signature_size_aux (acc + 4) t
-        | Tsingle t -> single_signature_size_aux (acc + 1) t
+        | Tdict_entry(_, t) -> single_size_aux (acc + 4) t
+        | Tsingle t -> single_size_aux (acc + 1) t
       end
-    | Tstruct tl -> List.fold_left single_signature_size_aux (acc + 2) tl
+    | Tstruct tl -> List.fold_left single_size_aux (acc + 2) tl
     | _ -> acc + 1
 
-  let single_signature_size = single_signature_size_aux 0
+  let single_size = single_size_aux 0
 
-  let signature_size = List.fold_left single_signature_size_aux 0
+  let sequence_size = List.fold_left single_size_aux 0
 
   let char_of_basic = function
     | Tbyte -> 'y'
@@ -161,36 +152,36 @@ struct
     | Tobject_path -> 'o'
     | Tsignature -> 'g'
 
-  let rec write_single oc = function
+  let rec write_single put_char = function
     | Tbasic t ->
-        put oc (char_of_basic t);
+        put_char (char_of_basic t);
     | Tarray t ->
         (perform
-           put oc 'a';
-           write_element oc t)
+           put_char 'a';
+           write_element put_char t)
     | Tstruct ts ->
         (perform
-           put oc '(';
-           write_sequence oc ts;
-           put oc ')')
+           put_char '(';
+           write_sequence put_char ts;
+           put_char ')')
     | Tvariant ->
-        put oc 'v';
+        put_char 'v';
 
-  and write_element oc = function
+  and write_element put_char = function
     | Tdict_entry(tk, tv) ->
         (perform
-           put oc '{';
-           put oc (char_of_basic tk);
-           write_single oc tv;
-           put oc '}')
+           put_char '{';
+           put_char (char_of_basic tk);
+           write_single put_char tv;
+           put_char '}')
     | Tsingle t ->
-        write_single oc t
+        write_single put_char t
 
-  and write_sequence oc = function
+  and write_sequence put_char = function
     | [] ->
         return ()
     | x :: l ->
         (perform
-           write_single oc x;
-           write_sequence oc l)
+           write_single put_char x;
+           write_sequence put_char l)
 end

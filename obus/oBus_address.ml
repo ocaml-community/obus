@@ -107,10 +107,11 @@ let to_string l =
                     [(if host <> "" then Some("host", host) else None);
                      (if bind <> "" && bind <> "*" then Some("bind", bind) else None);
                      (if port <> "0" then Some("port", port) else None);
-                     (Util.Maybe.bind family
-                        (fun f -> Some("family", match f with
-                                         | `Ipv4 -> "ipv4"
-                                         | `Ipv6 -> "ipv6")))])
+                     (Util.wrap_option family
+                        (fun f -> ("family", match f with
+                                     | `Ipv4 -> "ipv4"
+                                     | `Ipv6 -> "ipv6")))])
+
       | Autolaunch ->
           "autolaunch", []
       | Unknown(name, params) ->

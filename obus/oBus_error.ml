@@ -49,8 +49,6 @@ let make name msg =
 let unmake = function
   | DBus(name, msg) -> Some(name, msg)
   | exn -> Util.find_map (fun (name, (maker, unmaker)) ->
-                            Util.Maybe.bind
-                              (unmaker exn)
-                              (fun msg -> Some(name, msg))) !errors
+                            Util.wrap_option (unmaker exn) (fun msg -> (name, msg))) !errors
 
 let register name maker unmaker = errors := (name, (maker, unmaker)) :: !errors

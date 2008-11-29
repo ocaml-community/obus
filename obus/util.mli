@@ -35,6 +35,8 @@ type ('a, 'b) either =
 val split : ('a -> ('b, 'c) either) -> 'a list -> 'b list * 'c list
   (** Split a list *)
 
+val wrap_option : 'a option -> ('a -> 'b) -> 'b option
+
 val sha_1 : string -> string
   (** Compute the sha1 of a string *)
 
@@ -81,25 +83,3 @@ val random_string : int -> string
 val random_int : unit -> int
 val random_int32 : unit -> int32
 val random_int64 : unit -> int64
-
-(** {6 Monads} *)
-
-module type Monad = sig
-  type 'a t
-  val bind : 'a t -> ('a -> 'b t) -> 'b t
-  val return : 'a -> 'a t
-end
-
-module Maybe : sig
-  include Monad with type 'a t = 'a option
-  val failwith : string -> 'a t
-  val wrap : ('a -> 'b) -> 'a t -> 'b t
-  val fold : ('a -> 'a t) -> 'a list -> 'a list t
-end
-
-module MaybeT(M : Monad) : sig
-  include Monad with type 'a t = 'a option M.t
-  val failwith : string -> 'a t
-  val wrap : ('a -> 'b) -> 'a t -> 'b t
-  val fold : ('a -> 'a t) -> 'a list -> 'a list t
-end

@@ -51,6 +51,10 @@ let rec split f l =
                      | Left x -> (x :: a, b)
                      | Right x -> (a, x :: b)) l ([], [])
 
+let wrap_option x f = match x with
+  | Some x -> Some(f x)
+  | None -> None
+
 let encode_char n =
   if n < 10 then
     char_of_int (n + Char.code '0')
@@ -149,47 +153,6 @@ let with_process_out cmd args f =
      finalize
        (fun _ -> f oc)
        (fun _ -> Lwt_chan.close_out oc))
-
-module type Monad = sig
-  type 'a t
-  val bind : 'a t -> ('a -> 'b t) -> 'b t
-  val return : 'a -> 'a t
-end
-
-module Maybe =
-struct
-  type 'a t = 'a option
-  let bind m f = match m with
-    | Some v -> f v
-    | None -> None
-  let return v = Some v
-  let failwith _ = None
-  let wrap f m = bind m (fun x -> return (f x))
-  let rec fold f l =
-    List.fold_right (fun x acc ->
-                       perform
-                         x <-- f x;
-                         l <-- acc;
-                         return (x :: l)) l (return [])
-end
-
-module MaybeT(M : Monad) =
-struct
-  type 'a t = 'a option M.t
-  let bind m f =
-    M.bind m (function
-                | Some v -> f v
-                | None -> M.return None)
-  let return v = M.return (Some v)
-  let failwith _ = M.return None
-  let wrap f m = bind m (fun x -> return (f x))
-  let rec fold f l =
-    List.fold_right (fun x acc ->
-                       perform
-                         x <-- f x;
-                         l <-- acc;
-                         return (x :: l)) l (return [])
-end
 
 let homedir = lazy((Unix.getpwuid (Unix.getuid ())).Unix.pw_dir)
 

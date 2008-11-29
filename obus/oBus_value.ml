@@ -32,11 +32,11 @@ struct
   and telement =
     | Tdict_entry of tbasic * tsingle
     | Tsingle of tsingle
+  type tsequence = tsingle list
 end
 
 include T
 
-type tsequence = tsingle list
 type signature = tsequence
 
 let string_of printer x =
@@ -82,54 +82,7 @@ and print_telement pp = function
 
 and print_tsequence pp tl = fprintf pp "[%a]" (print_seq "; " print_tsingle) tl
 
-open Types_rw
-
-module Id =
-struct
-  type 'a t = 'a
-  let bind m f = f m
-  let return x = x
-end
-
-module Reader_params =
-struct
-  include Id
-
-  let failwith fmt = ksprintf (fun msg -> raise (Failure ("invalid signature: " ^ msg))) fmt
-
-  type input = string * int ref
-
-  let get (str, i) =
-    let p = !i in
-    if p >= String.length str then
-      failwith "unterminated signature"
-    else begin
-      i := p + 1;
-      String.unsafe_get str p
-    end
-
-  let get_opt (str, i) =
-    let p = !i in
-    if p >= String.length str then
-      None
-    else begin
-      i := p + 1;
-      Some (String.unsafe_get str p)
-    end
-end
-
-module Writer_params =
-struct
-  include Id
-  type output = string * int ref
-
-  let put (str, i) ch =
-    String.unsafe_set str !i ch;
-    incr i
-end
-
-module R = Make_reader(T)(Reader_params)
-module W = Make_writer(T)(Writer_params)
+module Trw = Types_rw.Make(T)(OBus_monad.Id)
 
 let string_of_signature ts =
   let len = Trw.sequence_size ts in

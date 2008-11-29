@@ -46,7 +46,7 @@ let atype =
     (fun signature -> match OBus_value.signature_of_string signature with
        | [] -> failwith "empty signature"
        | [t] -> return t
-       | _ -> failwith "this signature contains more than one single type: %S" signature)
+       | _ -> Printf.ksprintf failwith "this signature contains more than one single type: %S" signature)
 
 let arguments =
   any (elt "arg"
@@ -56,7 +56,7 @@ let arguments =
             typ <-- atype;
             return (dir, (name, typ))))
 
-let mk_aname typ test =
+let mk_aname test =
   ar "name" >>= fun name ->
     match test name with
       | Some error -> failwith (OBus_string.error_message error)

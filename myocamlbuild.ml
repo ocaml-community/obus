@@ -30,6 +30,8 @@ struct
       "Addr_lexer";
       "Util";
       "MSet";
+      "OBus_monad";
+      "OBus_string";
       "OBus_info";
       "Types_rw";
       "OBus_path";
