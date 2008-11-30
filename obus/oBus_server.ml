@@ -118,9 +118,7 @@ let fds_of_address addr = match addr with
   | Unknown(name, params) ->
       fail (Failure ("listening on " ^ name ^ " addresses is not implemented"))
 
-let tmpdir = try Unix.getenv "TMPDIR" with _ -> "/tmp"
-
-let make_lowlevel ?mechanisms ?(addresses=[Unix_tmpdir tmpdir]) on_connection =
+let make_lowlevel ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) on_connection =
   match addresses with
     | [] -> fail (Invalid_argument "OBus_server.make: no addresses given")
     | addresses ->
