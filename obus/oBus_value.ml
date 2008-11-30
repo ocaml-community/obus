@@ -82,29 +82,51 @@ and print_telement pp = function
 
 and print_tsequence pp tl = fprintf pp "[%a]" (print_seq "; " print_tsingle) tl
 
-module Trw = Types_rw.Make(T)(OBus_monad.Id)
+
+type ptr = { buffer : string; mutable offset : int }
+
+module Ptr =
+struct
+  type 'a t = ptr -> 'a
+  let bind m f ptr = f (m ptr) ptr
+  let return x _ = x
+end
+
+module TR = Types_rw.Make_reader(T)
+  (struct
+     include Ptr
+     let failwith msg _ = Pervasives.failwith msg
+     let get_char ptr =
+       let n = ptr.offset in
+       if n = String.length ptr.buffer then
+         Pervasives.failwith "premature end of signature"
+       else begin
+         ptr.offset <- n + 1;
+         String.unsafe_get ptr.buffer n
+       end
+     let eof ptr = ptr.offset = String.length ptr.buffer
+   end)
+
+module TW = Types_rw.Make_writer(T)
+  (struct
+     include Ptr
+     let put_char ch ptr =
+       let n = ptr.offset in
+       (* The size of the signature is computed before so there is
+          always enough room *)
+       String.unsafe_set ptr.buffer n ch;
+       ptr.offset <- n + 1
+   end)
 
 let string_of_signature ts =
-  let len = Trw.sequence_size ts in
+  let len, writer = TW.write_sequence ts in
   let str = String.create len in
-  let ofs = ref 0 in
-  Trw.write_sequence (fun ch ->
-                        let n = !ofs in
-                        String.unsafe_set str n ch;
-                        ofs := n + 1) ts;
+  writer { buffer = str; offset = 0 };
   str
 
 let signature_of_string str =
   try
-    let len = String.length str and ofs = ref 0 in
-    Trw.read_sequence (fun _ ->
-                         let n = !ofs in
-                         if n = len then
-                           None
-                         else begin
-                           ofs := n + 1;
-                           Some(String.unsafe_get str n)
-                         end)
+    TR.read_sequence { buffer = str; offset = 0 }
   with
       Failure msg ->
         raise (Invalid_argument

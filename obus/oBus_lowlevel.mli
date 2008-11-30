@@ -28,59 +28,56 @@ exception Protocol_error of string
 
 (** {6 Message serialization/deserialization} *)
 
-module type Wire = sig
-  type 'a monad
-
-  type input = {
-    (** Needed functions for deserialization *)
-
-    get_char : unit -> char monad;
-    (** Read one character *)
-
-    get_string : int -> string monad;
-    (** [get_string len] read a string of length [len] *)
-  }
-
-  type output = {
-    (** Needed functions for serialization *)
-
-    put_char : char -> unit monad;
-    (** Write one character *)
-
-    put_string : string -> unit monad;
-    (** Write a whole string *)
-  }
-
-  val get_message : input -> OBus_message.any monad
-    (** [get_message input] deserialize one message from [input].
-
-        @raise Protocol_error if the message is invalid. This is
-        basically a fatal error and this means that the associated
-        connection should be closed. *)
-
-  val put_message : ?byte_order:OBus_info.byte_order -> OBus_message.any -> int * (output -> unit monad)
-    (** [put_message ?byte_order message] create a message serializer.
-
-        - if it fail, this means that the message can not be marshaled
-        for some reason (for example in contains incorrect or too big
-        data). This kind of error can be ignored. Only {!Data_error}
-        may be raised.
-
-        - if it succeed, it returns the size of the serialized message
-        and a serializer. The serializer take an output and serialize
-        the message on it. Errors raised at this stage are only io
-        errors and are probably fatals (message partially sent). *)
+(** Needed monadic operation *)
+module type Monad = sig
+  type 'a t
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val return : 'a -> 'a t
+  val fail : exn -> 'a t
 end
 
-module Make_wire(Monad : OBus_monad.S) : Wire with type 'a monad = 'a Monad.t
-  (** Create wire functions with the given monad *)
+(** Needed functions for deserialization *)
+module type Reader = sig
+  include Monad
 
-module Lwt_wire : Wire with type 'a monad = 'a Lwt.t
-  (** Lwt operations *)
+  val get_char : char t
+  val get_string : int -> string t
+end
 
-val lwt_input_of_channel : Lwt_chan.in_channel -> Lwt_wire.input
-val lwt_output_of_channel : Lwt_chan.out_channel -> Lwt_wire.output
-  (** Create an input/output from a lwt in/out-channel *)
+(** Needed functions for serialization *)
+module type Writer = sig
+  include Monad
+
+  val put_char : char -> unit t
+  val put_string : string -> unit t
+end
+
+module Make_reader(Reader : Reader) : sig
+  val get_message : OBus_message.any Reader.t
+    (** [get_message] read one message.
+
+        It fail with {!Protocol_error} if the message is invalid. *)
+end
+
+module Make_writer(Writer : Writer) : sig
+  val put_message : ?byte_order:OBus_info.byte_order -> OBus_message.any -> int * unit Writer.t
+    (** [put_message ?byte_order message] returns [(size, writer)]
+        where [size] is the size of the marshaled message and [writer]
+        is the message writer.
+
+        It raises {!Data_error} if the message can not be marshaled
+        for some reason.
+
+        [writer] will not fail, unless [Writer.put_char] or
+        [Writer.put_string] does. Moreover it is guaranted to write
+        exactly [size] bytes. *)
+end
+
+val get_message : Lwt_chan.in_channel -> OBus_message.any Lwt.t
+  (** Deserialize a message from a lwt channel *)
+
+val put_message : ?byte_order:OBus_info.byte_order -> Lwt_chan.out_channel -> OBus_message.any -> unit Lwt.t
+  (** Serialize a message to a lwt channel *)
 
 val get_message_size : string -> int -> int
   (** [get_message_size buf ofs] extract the size of a message from

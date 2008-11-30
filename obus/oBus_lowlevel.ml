@@ -15,18 +15,21 @@ open OBus_message
 exception Data_error of string
 exception Protocol_error of string
 
-module type Wire = sig
-  type 'a monad
-  type input = {
-    get_char : unit -> char monad;
-    get_string : int -> string monad;
-  }
-  type output = {
-    put_char : char -> unit monad;
-    put_string : string -> unit monad;
-  }
-  val get_message : input -> OBus_message.any monad
-  val put_message : ?byte_order:OBus_info.byte_order -> OBus_message.any -> int * (output -> unit monad)
+module type Monad = sig
+  type 'a t
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val return : 'a -> 'a t
+  val fail : exn -> 'a t
+end
+module type Reader = sig
+  include Monad
+  val get_char : char t
+  val get_string : int -> string t
+end
+module type Writer = sig
+  include Monad
+  val put_char : char -> unit t
+  val put_string : string -> unit t
 end
 
 let pad2 i = i land 1
@@ -107,270 +110,144 @@ let signal_of_raw fields =
             req interface fields,
             req member fields)
 
-module Make_wire(Monad : OBus_monad.S) : Wire with type 'a monad = 'a Monad.t =
+module Make_writer(Writer : Writer) =
 struct
-  open Monad
+  open Writer
 
-  type 'a monad = 'a Monad.t
+  let failwith msg = raise (Data_error msg)
   let ( >>= ) = bind
-
-  module T = Types_rw.Make(OBus_value)(Monad)
-
-  type input = {
-    get_char : unit -> char monad;
-    get_string : int -> string monad;
-  }
-
-  type output = {
-    put_char : char -> unit monad;
-    put_string : string -> unit monad;
-  }
 
   (***** Writing of integers *****)
 
   module type Int_writers = sig
-    val output_int16 : output -> int -> unit monad
-    val output_int32 : output -> int32 -> unit monad
-    val output_int64 : output -> int64 -> unit monad
-    val output_uint16 : output -> int -> unit monad
-    val output_uint32 : output -> int32 -> unit monad
-    val output_uint64 : output -> int64 -> unit monad
+    val byte_order_char : char
 
-    val output_uint : output -> int -> unit monad
+    val put_int16 : int -> unit Writer.t
+    val put_int32 : int32 -> unit Writer.t
+    val put_int64 : int64 -> unit Writer.t
+    val put_uint16 : int -> unit Writer.t
+    val put_uint32 : int32 -> unit Writer.t
+    val put_uint64 : int64 -> unit Writer.t
+
+    val put_uint : int -> unit Writer.t
       (* Output an int as an uint32 *)
   end
 
-  let output_uint8 oc x = oc.put_char (Char.unsafe_chr x)
+  let put_uint8 x = put_char (Char.unsafe_chr x)
 
   module LE_int_writers : Int_writers =
   struct
-    let output_int16 oc v =
-      (perform
-         oc.put_char (Char.unsafe_chr v);
-         oc.put_char (Char.unsafe_chr (v lsr 8)))
-    let output_uint16 = output_int16
+    let byte_order_char = 'l'
 
-    let output_int32 oc v =
+    let put_int16 v =
       (perform
-         oc.put_char (Char.unsafe_chr (Int32.to_int v));
-         oc.put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
-         oc.put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
-         oc.put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24))))
-    let output_uint32 = output_int32
+         put_char (Char.unsafe_chr v);
+         put_char (Char.unsafe_chr (v lsr 8)))
+    let put_uint16 = put_int16
 
-    let output_int64 oc v =
+    let put_int32 v =
       (perform
-         oc.put_char (Char.unsafe_chr (Int64.to_int v));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 8)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 16)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 24)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 32)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 40)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 48)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 56))))
-    let output_uint64 = output_int64
+         put_char (Char.unsafe_chr (Int32.to_int v));
+         put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
+         put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
+         put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24))))
+    let put_uint32 = put_int32
 
-    let output_uint oc v =
+    let put_int64 v =
       (perform
-         oc.put_char (Char.unsafe_chr v);
-         oc.put_char (Char.unsafe_chr (v lsr 8));
-         oc.put_char (Char.unsafe_chr (v lsr 16));
-         oc.put_char (Char.unsafe_chr (v asr 24)))
+         put_char (Char.unsafe_chr (Int64.to_int v));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 8)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 16)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 24)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 32)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 40)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 48)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 56))))
+    let put_uint64 = put_int64
+
+    let put_uint v =
+      (perform
+         put_char (Char.unsafe_chr v);
+         put_char (Char.unsafe_chr (v lsr 8));
+         put_char (Char.unsafe_chr (v lsr 16));
+         put_char (Char.unsafe_chr (v asr 24)))
   end
 
   module BE_int_writers : Int_writers =
   struct
-    let output_int16 oc v =
-      (perform
-         oc.put_char (Char.unsafe_chr (v lsr 8));
-         oc.put_char (Char.unsafe_chr v))
-    let output_uint16 = output_int16
+    let byte_order_char = 'B'
 
-    let output_int32 oc v =
+    let put_int16 v =
       (perform
-         oc.put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24)));
-         oc.put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
-         oc.put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
-         oc.put_char (Char.unsafe_chr (Int32.to_int v)))
-    let output_uint32 = output_int32
+         put_char (Char.unsafe_chr (v lsr 8));
+         put_char (Char.unsafe_chr v))
+    let put_uint16 = put_int16
 
-    let output_int64 oc v =
+    let put_int32 v =
       (perform
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 56)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 48)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 40)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 32)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 24)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 16)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 8)));
-         oc.put_char (Char.unsafe_chr (Int64.to_int v)))
-    let output_uint64 = output_int64
+         put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24)));
+         put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
+         put_char (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
+         put_char (Char.unsafe_chr (Int32.to_int v)))
+    let put_uint32 = put_int32
 
-    let output_uint oc v =
+    let put_int64 v =
       (perform
-         oc.put_char (Char.unsafe_chr (v asr 24));
-         oc.put_char (Char.unsafe_chr (v lsr 16));
-         oc.put_char (Char.unsafe_chr (v lsr 8));
-         oc.put_char (Char.unsafe_chr v))
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 56)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 48)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 40)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 32)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 24)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 16)));
+         put_char (Char.unsafe_chr (Int64.to_int (Int64.shift_right v 8)));
+         put_char (Char.unsafe_chr (Int64.to_int v)))
+    let put_uint64 = put_int64
+
+    let put_uint v =
+      (perform
+         put_char (Char.unsafe_chr (v asr 24));
+         put_char (Char.unsafe_chr (v lsr 16));
+         put_char (Char.unsafe_chr (v lsr 8));
+         put_char (Char.unsafe_chr v))
   end
 
-  (***** Reading of integers *****)
+  (***** Padding *****)
 
-  module type Int_readers = sig
-    val input_int16 : input -> int monad
-    val input_int32 : input -> int32 monad
-    val input_int64 : input -> int64 monad
-    val input_uint16 : input -> int monad
-    val input_uint32 : input -> int32 monad
-    val input_uint64 : input -> int64 monad
+  let put_null = put_char '\000'
 
-    val input_uint : input -> int monad
-      (* Input an uint32 as an int *)
-  end
+  (* Precalculation of padding monads *)
+  let put_null0 = return ()
+  let put_null1 = put_null
+  let put_null2 = put_null >>= fun _ -> put_null1
+  let put_null3 = put_null >>= fun _ -> put_null2
+  let put_null4 = put_null >>= fun _ -> put_null3
+  let put_null5 = put_null >>= fun _ -> put_null4
+  let put_null6 = put_null >>= fun _ -> put_null5
+  let put_null7 = put_null >>= fun _ -> put_null6
 
-  let input_uint8 ic = ic.get_char () >>= (fun n -> return (Char.code n))
+  let wpad2 i = match i land 1 with
+    | 0 -> i + 0, put_null0
+    | _ -> i + 1, put_null1
 
-  module LE_int_readers : Int_readers =
-  struct
-    let input_int16 ic =
-      (perform
-         v0 <-- ic.get_char ();
-         v1 <-- ic.get_char ();
-         let v = (Char.code v0) land (Char.code v1 lsl 8) in
-         if v land (1 lsl 15) = 0 then
-           return v
-         else
-           return ((-1 land (lnot 0x7fff)) lor v))
+  let wpad4 i = match i land 3 with
+    | 0 -> i + 0, put_null0
+    | 1 -> i + 3, put_null3
+    | 2 -> i + 2, put_null2
+    | _ -> i + 1, put_null1
 
-    let input_uint16 ic =
-      (perform
-         v0 <-- ic.get_char ();
-         v1 <-- ic.get_char ();
-         return (Char.code v0 land (Char.code v1 lsl 8)))
-
-    let input_int32 ic =
-      (perform
-         v0 <-- ic.get_char ();
-         v1 <-- ic.get_char ();
-         v2 <-- ic.get_char ();
-         v3 <-- ic.get_char ();
-         return (Int32.logor
-                   (Int32.logor
-                      (Int32.of_int (Char.code v0))
-                      (Int32.shift_left (Int32.of_int (Char.code v1)) 8))
-                   (Int32.logor
-                      (Int32.shift_left (Int32.of_int (Char.code v2)) 16)
-                      (Int32.shift_left (Int32.of_int (Char.code v3)) 24))))
-    let input_uint32 = input_int32
-
-    let input_int64 ic =
-      (perform
-         v0 <-- ic.get_char ();
-         v1 <-- ic.get_char ();
-         v2 <-- ic.get_char ();
-         v3 <-- ic.get_char ();
-         v4 <-- ic.get_char ();
-         v5 <-- ic.get_char ();
-         v6 <-- ic.get_char ();
-         v7 <-- ic.get_char ();
-         return (Int64.logor
-                   (Int64.logor
-                      (Int64.logor
-                         (Int64.of_int (Char.code v0))
-                         (Int64.shift_left (Int64.of_int (Char.code v1)) 8))
-                      (Int64.logor
-                         (Int64.shift_left (Int64.of_int (Char.code v2)) 16)
-                         (Int64.shift_left (Int64.of_int (Char.code v3)) 24)))
-                   (Int64.logor
-                      (Int64.logor
-                         (Int64.shift_left (Int64.of_int (Char.code v4)) 32)
-                         (Int64.shift_left (Int64.of_int (Char.code v5)) 40))
-                      (Int64.logor
-                         (Int64.shift_left (Int64.of_int (Char.code v6)) 48)
-                         (Int64.shift_left (Int64.of_int (Char.code v7)) 56)))))
-    let input_uint64 = input_int64
-
-    let input_uint ic =
-      (perform
-         v0 <-- ic.get_char ();
-         v1 <-- ic.get_char ();
-         v2 <-- ic.get_char ();
-         v3 <-- ic.get_char ();
-         return (Char.code v0 lor (Char.code v1 lsl 8) lor (Char.code v2 lsl 16) lor (Char.code v3 lsl 24)))
-  end
-
-  module BE_int_readers : Int_readers =
-  struct
-    let input_int16 ic =
-      (perform
-         v1 <-- ic.get_char ();
-         v0 <-- ic.get_char ();
-         let v = Char.code v0 land (Char.code v1 lsl 8) in
-         if v land (1 lsl 15) = 0 then
-           return v
-         else
-           return ((-1 land (lnot 0x7fff)) lor v))
-
-    let input_uint16 ic =
-      (perform
-         v1 <-- ic.get_char ();
-         v0 <-- ic.get_char ();
-         return (Char.code v0 land (Char.code v1 lsl 8)))
-
-    let input_int32 ic =
-      (perform
-         v3 <-- ic.get_char ();
-         v2 <-- ic.get_char ();
-         v1 <-- ic.get_char ();
-         v0 <-- ic.get_char ();
-         return (Int32.logor
-                   (Int32.logor
-                      (Int32.of_int (Char.code v0))
-                      (Int32.shift_left (Int32.of_int (Char.code v1)) 8))
-                   (Int32.logor
-                      (Int32.shift_left (Int32.of_int (Char.code v2)) 16)
-                      (Int32.shift_left (Int32.of_int (Char.code v3)) 24))))
-    let input_uint32 = input_int32
-
-    let input_int64 ic =
-      (perform
-         v7 <-- ic.get_char ();
-         v6 <-- ic.get_char ();
-         v5 <-- ic.get_char ();
-         v4 <-- ic.get_char ();
-         v3 <-- ic.get_char ();
-         v2 <-- ic.get_char ();
-         v1 <-- ic.get_char ();
-         v0 <-- ic.get_char ();
-         return (Int64.logor
-                   (Int64.logor
-                      (Int64.logor
-                         (Int64.of_int (Char.code v0))
-                         (Int64.shift_left (Int64.of_int (Char.code v1)) 8))
-                      (Int64.logor
-                         (Int64.shift_left (Int64.of_int (Char.code v2)) 16)
-                         (Int64.shift_left (Int64.of_int (Char.code v3)) 24)))
-                   (Int64.logor
-                      (Int64.logor
-                         (Int64.shift_left (Int64.of_int (Char.code v4)) 32)
-                         (Int64.shift_left (Int64.of_int (Char.code v5)) 40))
-                      (Int64.logor
-                         (Int64.shift_left (Int64.of_int (Char.code v6)) 48)
-                         (Int64.shift_left (Int64.of_int (Char.code v7)) 56)))))
-    let input_uint64 = input_int64
-
-    let input_uint ic =
-      (perform
-         v3 <-- ic.get_char ();
-         v2 <-- ic.get_char ();
-         v1 <-- ic.get_char ();
-         v0 <-- ic.get_char ();
-         return (Char.code v0 lor (Char.code v1 lsl 8) lor (Char.code v2 lsl 16) lor (Char.code v3 lsl 24)))
-  end
+  let wpad8 i = match i land 7 with
+    | 0 -> i + 0, put_null0
+    | 1 -> i + 7, put_null7
+    | 2 -> i + 6, put_null6
+    | 3 -> i + 5, put_null5
+    | 4 -> i + 4, put_null4
+    | 5 -> i + 3, put_null3
+    | 6 -> i + 2, put_null2
+    | _ -> i + 1, put_null1
 
   (***** Message writing *****)
 
-  let failwith msg = raise (Data_error msg)
+  module T = Types_rw.Make_writer(OBus_value)(Writer)
 
   type offset = int
 
@@ -385,104 +262,82 @@ struct
 
      then it compute the the length taken by the serialized value, the
      needed padding, add it to the current offset and return the
-     result and a function which should be used to effectively
-     serialize the value with maybe some padding before.
+     result and a writer for the padding and the value. *)
 
-     So, basically, here is the type of a function which serialize
-     values of type ['a]: *)
+  type 'a serializer = offset -> 'a -> offset * unit Writer.t
 
-  type 'a serializer = offset -> 'a -> offset * (output -> unit monad)
-
-  let rec output_padding oc = function
-    | 0 -> return ()
-    | n -> (perform oc.put_char '\000'; output_padding oc (n - 1))
-
-  (* write an integer with the needed padding *)
-  let write
-      (size : int)
-      (* size of the integer *)
-
-      (f : output -> 'a -> unit monad)
-      (* output function *)
-
-      : 'a serializer =
-
-    fun i v ->
-      (* Compuitation of the needed padding: integers are always
-         aligned to a block of their size *)
-      let padding = (size - i) land (size - 1) in
-
-      (* Offset after the output of the padding and the integer
-         itself: *)
-      (i + padding + size,
-
-       (* Effective serialization function: *)
-       (fun oc -> perform
-          output_padding oc padding;
-          f oc v))
+  let write2 f i v =
+    let i, put_padding = wpad2 i in
+    (i + 2, perform put_padding; f v)
+  let write4 f i v =
+    let i, put_padding = wpad4 i in
+    (i + 4, perform put_padding; f v)
+  let write8 f i v =
+    let i, put_padding = wpad8 i in
+    (i + 8, perform put_padding; f v)
 
   module Make_writer(Int_writers : Int_writers) =
   struct
     open Int_writers
 
     (* Serialize one string, without verifying it *)
-    let wstring : string serializer = fun i str ->
-      let padding = pad4 i and len = String.length str in
-      (i + padding + 4 + len + 1,
-       fun oc -> perform
-         output_padding oc padding;
-         output_uint32 oc (Int32.of_int len);
-         oc.put_string str;
-         oc.put_char '\000')
+    let wstring i str =
+      let i, put_padding = wpad4 i and len = String.length str in
+      (i + 4 + len + 1,
+       perform
+         put_padding;
+         put_uint32 (Int32.of_int len);
+         put_string str;
+         put_null)
 
     (* Serialize a signature.
 
        TODO: verify deepth limit of the signature *)
-    let wsignature : OBus_value.signature serializer = fun i s ->
-      let len = T.sequence_size s in
+    let wsignature i s =
+      let len, put_signature = T.write_sequence s in
       if len > 255 then
         failwith (signature_too_long s len)
       else
         (i + 1 + len + 1,
-         fun oc -> perform
-           output_uint8 oc len;
-           T.write_sequence oc.put_char s;
-           oc.put_char '\000')
+         perform
+           put_uint8 len;
+           put_signature;
+           put_null)
 
-    let wobject_path : OBus_path.t serializer = fun i -> function
+    let wobject_path i = function
       | [] ->
-          let padding = pad4 i in
-          (i + padding + 4 + 1 + 1,
-           fun oc -> perform
-             output_padding oc padding;
-             output_uint32 oc 1l;
-             oc.put_char '/';
-             oc.put_char '\000')
+          let i, put_padding = wpad4 i in
+          (i + 4 + 1 + 1,
+           perform
+             put_padding;
+             put_uint32 1l;
+             put_char '/';
+             put_null)
       | path ->
-          let padding = pad4 i
+          let i, put_padding = wpad4 i
           and len = List.fold_left (fun acc elt ->
                                       match OBus_path.test_element elt with
                                         | Some error ->
                                             failwith (OBus_string.error_message error)
                                         | None ->
                                             1 + acc + String.length elt) 0 path in
-          (i + padding + 4 + len + 1,
-           fun oc -> perform
-             output_padding oc padding;
-             output_uint32 oc (Int32.of_int len);
+          (i + 4 + len + 1,
+           perform
+             put_padding;
+             put_uint32 (Int32.of_int len);
              List.fold_left (fun m elt -> perform
                                m;
-                               oc.put_char '/';
-                               oc.put_string elt) (return ()) path;
-             oc.put_char '\000')
+                               put_char '/';
+                               put_string elt) (return ()) path;
+             put_null)
 
     (* The following function serialize DBus values. Actually this
        need a lot a redundant matching. With GADT it would be:
 
        {[
          let wbasic : 'a type_basic -> 'a serializer = function
-           | Tbyte -> (fun i v -> (i + 1, oc.put_char v))
-           | Tint16 -> (fun i v -> write 2 output_int16 i v)
+           | Tbyte -> (fun i v -> (i + 1, put_char v))
+           | Tint16 -> (fun i v -> write 2 put_int16 i v)
            ...
 
          let wsingle : 'a type_single -> 'a serializer = ...
@@ -490,16 +345,16 @@ struct
        ]}
     *)
 
-    let wbasic : OBus_value.basic serializer = fun i ->function
-      | Byte x -> (i + 1, fun oc -> oc.put_char x)
-      | Boolean x -> write 4 output_uint i (match x with true -> 1 | false -> 0)
-      | Int16 x -> write 2 output_int16 i x
-      | Int32 x -> write 4 output_int32 i x
-      | Int64 x -> write 8 output_int64 i x
-      | Uint16 x -> write 2 output_uint16 i x
-      | Uint32 x -> write 4 output_uint32 i x
-      | Uint64 x -> write 8 output_uint64 i x
-      | Double x -> write 8 output_uint64 i (Int64.bits_of_float x)
+    let wbasic i = function
+      | Byte x -> (i + 1, put_char x)
+      | Boolean x -> write4 put_uint i (match x with true -> 1 | false -> 0)
+      | Int16 x -> write2 put_int16 i x
+      | Int32 x -> write4 put_int32 i x
+      | Int64 x -> write8 put_int64 i x
+      | Uint16 x -> write2 put_uint16 i x
+      | Uint32 x -> write4 put_uint32 i x
+      | Uint64 x -> write8 put_uint64 i x
+      | Double x -> write8 put_uint64 i (Int64.bits_of_float x)
       | String x -> begin match OBus_string.test x with
           | Some error ->
               failwith (OBus_string.error_message error)
@@ -521,57 +376,51 @@ struct
 
              The array size (2) is the size of serialized elements (4) *)
 
-          let padding = pad4 i in
-          let i = i + padding + 4 in
+          let i, put_padding = wpad4 i in
+          let i = i + 4 in
           (* After the size we are always padded on 4, so we only need
              to add padding if elements padding is 8 *)
-          let initial_padding = if pad8_p t then pad8 i else 0 in
-          let i = i + initial_padding in
-          let j, output_array = List.fold_left (fun (i, f) x ->
-                                                  let i, g = welement i x in
-                                                  (i, fun oc ->
-                                                     perform
-                                                       f oc;
-                                                       g oc))
-            (i, fun oc -> return ()) x in
+          let i, put_initial_padding = if pad8_p t then wpad8 i else i, return () in
+          let j, put_array = List.fold_left (fun (i, f) x ->
+                                               let i, g = welement i x in
+                                               (i, perform f; g))
+            (i, return ()) x in
           let len = j - i in
           if len < 0 || len > max_array_size then
             failwith (array_too_big len)
           else
             (j,
-             fun oc -> perform
-               output_padding oc padding;
-               output_uint32 oc (Int32.of_int len);
-               output_padding oc initial_padding;
-               output_array oc)
+             perform
+               put_padding;
+               put_uint32 (Int32.of_int len);
+               put_initial_padding;
+               put_array)
       | Struct x ->
           (* Structure are serialized as follow:
 
              (1) alignement to an 8-block
              (2) serialized contents *)
-          let padding = pad8 i in
-          let i, output_sequence = wsequence (i + padding) x in
-          (i, fun oc -> perform
-             output_padding oc padding;
-             output_sequence oc)
+          let i, put_padding = wpad8 i in
+          let i, put_sequence = wsequence i x in
+          (i, perform put_padding; put_sequence)
       | Variant x ->
           (* Variant are serialized as follow:
 
              (1) marshaled variant signature
              (2) serialized contents *)
           let t = OBus_value.type_of_single x in
-          let len = T.single_size t in
+          let len, put_signature = T.write_single t in
           if len > 255 then
             failwith (variant_signature_too_long t len)
           else
             let i = i + 1 + len + 1 in
-            let i, output_variant = wsingle i x in
+            let i, put_variant = wsingle i x in
             (i,
-             fun oc -> perform
-               output_uint8 oc len;
-               T.write_single oc.put_char t;
-               oc.put_char '\000';
-               output_variant oc)
+             perform
+               put_uint8 len;
+               put_signature;
+               put_null;
+               put_variant)
 
     and welement i = function
       | Dict_entry(k, v) ->
@@ -580,24 +429,24 @@ struct
              (1) alignement on a 8-block
              (2) serialized key
              (3) serialized value *)
-          let padding = pad8 i in
-          let i, output_key = wbasic (i + padding) k in
-          let i, output_val = wsingle i v in
-          (i, fun oc -> perform
-             output_padding oc padding;
-             output_key oc;
-             output_val oc)
+          let i, put_padding = wpad8 i in
+          let i, put_key = wbasic i k in
+          let i, put_val = wsingle i v in
+          (i, perform
+             put_padding;
+             put_key;
+             put_val)
       | Single x -> wsingle i x
 
     and wsequence i = function
-      | [] -> (i, fun oc -> return ())
+      | [] -> (i, return ())
       | x :: l ->
-          let i, output_head = wsingle i x in
-          let i, output_tail = wsequence i l in
-          (i, fun oc ->
-             perform
-               output_head oc;
-               output_tail oc)
+          let i, put_head = wsingle i x in
+          let i, put_tail = wsequence i l in
+          (i,
+           perform
+             put_head;
+             put_tail)
 
     (* Serialize one complete message. The starting offset is always
        0. *)
@@ -650,18 +499,22 @@ struct
       let wfield_real code typ f v (i, wacc) =
         (* Each header field is a structure, so we need to be aligned
            on 8 *)
-        let padding = pad8 i in
-        let i = i + padding + 4 in
-        let i, writer = f i v in
+        let i, put_padding = wpad8 i in
+        (* Add 4 to i for:
+           - the field code
+           - the signature length (=1)
+           - the signature (of length 1)
+           - the null byte *)
+        let i, writer = f (i + 4) v in
         (i,
-         fun oc -> perform
-           wacc oc;
-           output_padding oc padding;
-           output_uint8 oc code;
-           output_uint8 oc 1;
-           oc.put_char (T.char_of_basic typ);
-           oc.put_char '\000';
-           writer oc) in
+         perform
+           wacc;
+           put_padding;
+           put_uint8 code;
+           put_uint8 1;
+           put_char (T.char_of_basic typ);
+           put_null;
+           writer) in
 
       (* Write a field if defined *)
       let wfield code typ f field acc = match field with
@@ -677,298 +530,489 @@ struct
             | None ->
                 wfield_real code Tstring wstring v acc in
 
-      let acc = 0, (fun oc -> return ()) in
+      let acc = 0, return () in
       let acc = wfield 1 Tobject_path wobject_path fields._path acc in
       let acc = wfield_test 2 OBus_name.test_interface fields._interface acc in
       let acc = wfield_test 3 OBus_name.test_member fields._member acc in
       let acc = wfield_test 4 OBus_name.test_error fields._error_name acc in
-      let acc = wfield 5 Tuint32 (write 4 output_uint32) fields._reply_serial acc in
+      let acc = wfield 5 Tuint32 (write4 put_uint32) fields._reply_serial acc in
       let acc = wfield_test 6 OBus_name.test_connection fields._destination acc in
       let acc = wfield_test 7 OBus_name.test_unique fields._sender acc in
-      let fields_length, fields_writer = wfield_real 8 Tsignature wsignature fields._signature acc in
+      let fields_length, put_fields = wfield_real 8 Tsignature wsignature fields._signature acc in
 
       if fields_length > max_array_size then
         failwith (array_too_big fields_length);
 
-      let body_length, body_writer = wsequence 0 msg.body in
+      let body_length, put_body = wsequence 0 msg.body in
 
       (* The message start aligned on an 8-boundary after the header,
          and header fields start at offset #16, so: *)
-      let padding_before_message = pad8 fields_length in
+      let padded_fields_length, put_padding_before_body = wpad8 fields_length in
 
       (* and the total message size is: *)
-      let total_length = 16 + fields_length + padding_before_message + body_length in
+      let total_length = 16 + padded_fields_length + body_length in
 
       if total_length > max_message_size then
         failwith (message_too_big total_length);
 
       (total_length,
-       fun oc -> perform
-         (* byte #0 : byte-order, written by [put_message] *)
+       perform
+         (* byte #0 : byte-order *)
+         put_char byte_order_char;
          (* byte #1 : message type code *)
-         oc.put_char code;
+         put_char code;
          (* byte #2 : message flags *)
-         output_uint8 oc
+         put_uint8
            ((if msg.flags.no_reply_expected then 1 else 0) lor
               (if msg.flags.no_auto_start then 2 else 0));
          (* byte #3 : protocol version *)
-         output_uint8 oc protocol_version;
+         put_uint8 protocol_version;
          (* byte #4-7 : body length *)
-         output_uint oc body_length;
+         put_uint body_length;
          (* byte #8-11 : serial *)
-         output_uint32 oc msg.serial;
+         put_uint32 msg.serial;
          (* byte #12-15 : fields length *)
-         output_uint oc fields_length;
+         put_uint fields_length;
          (* header fields *)
-         fields_writer oc;
+         put_fields;
          (* padding between header and body *)
-         output_padding oc padding_before_message;
+         put_padding_before_body;
          (* message body *)
-         body_writer oc)
+         put_body)
   end
 
   module LEWriter = Make_writer(LE_int_writers)
   module BEWriter = Make_writer(BE_int_writers)
 
   let put_message ?(byte_order=native_byte_order) (msg : OBus_message.any) =
-    let bo_char, (size, writer) = match byte_order with
+    match byte_order with
       | Little_endian ->
-          'l', LEWriter.wmessage msg
+          LEWriter.wmessage msg
       | Big_endian ->
-          'B', BEWriter.wmessage msg
-    in
-    (size,
-     fun oc ->
-       perform
-         (* byte #0 : byte order *)
-         oc.put_char bo_char;
-         writer oc)
+          BEWriter.wmessage msg
+end
+
+module Make_reader(Reader : Reader) =
+struct
+  open Reader
+
+  let failwith msg = Reader.fail (Protocol_error msg)
+  let out_of_bounds () = failwith "out of bounds"
+  let ( >>= ) = bind
+
+  (***** Reading of integers *****)
+
+  module type Int_readers = sig
+    val get_int16 : int Reader.t
+    val get_int32 : int32 Reader.t
+    val get_int64 : int64 Reader.t
+    val get_uint16 : int Reader.t
+    val get_uint32 : int32 Reader.t
+    val get_uint64 : int64 Reader.t
+
+    val get_uint : int Reader.t
+      (* Input an uint32 as an int *)
+  end
+
+  let get_uint8 = get_char >>= (fun n -> return (Char.code n))
+
+  module LE_int_readers : Int_readers =
+  struct
+    let get_int16 =
+      (perform
+         v0 <-- get_char;
+         v1 <-- get_char;
+         let v = (Char.code v0) land (Char.code v1 lsl 8) in
+         if v land (1 lsl 15) = 0 then
+           return v
+         else
+           return ((-1 land (lnot 0x7fff)) lor v))
+
+    let get_uint16 =
+      (perform
+         v0 <-- get_char;
+         v1 <-- get_char;
+         return (Char.code v0 land (Char.code v1 lsl 8)))
+
+    let get_int32 =
+      (perform
+         v0 <-- get_char;
+         v1 <-- get_char;
+         v2 <-- get_char;
+         v3 <-- get_char;
+         return (Int32.logor
+                   (Int32.logor
+                      (Int32.of_int (Char.code v0))
+                      (Int32.shift_left (Int32.of_int (Char.code v1)) 8))
+                   (Int32.logor
+                      (Int32.shift_left (Int32.of_int (Char.code v2)) 16)
+                      (Int32.shift_left (Int32.of_int (Char.code v3)) 24))))
+    let get_uint32 = get_int32
+
+    let get_int64 =
+      (perform
+         v0 <-- get_char;
+         v1 <-- get_char;
+         v2 <-- get_char;
+         v3 <-- get_char;
+         v4 <-- get_char;
+         v5 <-- get_char;
+         v6 <-- get_char;
+         v7 <-- get_char;
+         return (Int64.logor
+                   (Int64.logor
+                      (Int64.logor
+                         (Int64.of_int (Char.code v0))
+                         (Int64.shift_left (Int64.of_int (Char.code v1)) 8))
+                      (Int64.logor
+                         (Int64.shift_left (Int64.of_int (Char.code v2)) 16)
+                         (Int64.shift_left (Int64.of_int (Char.code v3)) 24)))
+                   (Int64.logor
+                      (Int64.logor
+                         (Int64.shift_left (Int64.of_int (Char.code v4)) 32)
+                         (Int64.shift_left (Int64.of_int (Char.code v5)) 40))
+                      (Int64.logor
+                         (Int64.shift_left (Int64.of_int (Char.code v6)) 48)
+                         (Int64.shift_left (Int64.of_int (Char.code v7)) 56)))))
+    let get_uint64 = get_int64
+
+    let get_uint =
+      (perform
+         v0 <-- get_char;
+         v1 <-- get_char;
+         v2 <-- get_char;
+         v3 <-- get_char;
+         return (Char.code v0 lor (Char.code v1 lsl 8) lor (Char.code v2 lsl 16) lor (Char.code v3 lsl 24)))
+  end
+
+  module BE_int_readers : Int_readers =
+  struct
+    let get_int16 =
+      (perform
+         v1 <-- get_char;
+         v0 <-- get_char;
+         let v = Char.code v0 land (Char.code v1 lsl 8) in
+         if v land (1 lsl 15) = 0 then
+           return v
+         else
+           return ((-1 land (lnot 0x7fff)) lor v))
+
+    let get_uint16 =
+      (perform
+         v1 <-- get_char;
+         v0 <-- get_char;
+         return (Char.code v0 land (Char.code v1 lsl 8)))
+
+    let get_int32 =
+      (perform
+         v3 <-- get_char;
+         v2 <-- get_char;
+         v1 <-- get_char;
+         v0 <-- get_char;
+         return (Int32.logor
+                   (Int32.logor
+                      (Int32.of_int (Char.code v0))
+                      (Int32.shift_left (Int32.of_int (Char.code v1)) 8))
+                   (Int32.logor
+                      (Int32.shift_left (Int32.of_int (Char.code v2)) 16)
+                      (Int32.shift_left (Int32.of_int (Char.code v3)) 24))))
+    let get_uint32 = get_int32
+
+    let get_int64 =
+      (perform
+         v7 <-- get_char;
+         v6 <-- get_char;
+         v5 <-- get_char;
+         v4 <-- get_char;
+         v3 <-- get_char;
+         v2 <-- get_char;
+         v1 <-- get_char;
+         v0 <-- get_char;
+         return (Int64.logor
+                   (Int64.logor
+                      (Int64.logor
+                         (Int64.of_int (Char.code v0))
+                         (Int64.shift_left (Int64.of_int (Char.code v1)) 8))
+                      (Int64.logor
+                         (Int64.shift_left (Int64.of_int (Char.code v2)) 16)
+                         (Int64.shift_left (Int64.of_int (Char.code v3)) 24)))
+                   (Int64.logor
+                      (Int64.logor
+                         (Int64.shift_left (Int64.of_int (Char.code v4)) 32)
+                         (Int64.shift_left (Int64.of_int (Char.code v5)) 40))
+                      (Int64.logor
+                         (Int64.shift_left (Int64.of_int (Char.code v6)) 48)
+                         (Int64.shift_left (Int64.of_int (Char.code v7)) 56)))))
+    let get_uint64 = get_int64
+
+    let get_uint =
+      (perform
+         v3 <-- get_char;
+         v2 <-- get_char;
+         v1 <-- get_char;
+         v0 <-- get_char;
+         return (Char.code v0 lor (Char.code v1 lsl 8) lor (Char.code v2 lsl 16) lor (Char.code v3 lsl 24)))
+  end
+
+  (***** Padding *****)
+
+  let get_null cont =
+    get_char >>= function
+      | '\000' -> cont
+      | _ -> failwith "uninitialized padding"
+
+  let get_null0 = return ()
+  let get_null1 = get_null get_null0
+  let get_null2 = get_null get_null1
+  let get_null3 = get_null get_null2
+  let get_null4 = get_null get_null3
+  let get_null5 = get_null get_null4
+  let get_null6 = get_null get_null5
+  let get_null7 = get_null get_null6
+
+  let rpad2 i = match i land 1 with
+    | 0 -> i + 0, get_null0
+    | _ -> i + 1, get_null1
+
+  let rpad4 i = match i land 3 with
+    | 0 -> i + 0, get_null0
+    | 1 -> i + 3, get_null3
+    | 2 -> i + 2, get_null2
+    | _ -> i + 1, get_null1
+
+  let rpad8 i = match i land 7 with
+    | 0 -> i + 0, get_null0
+    | 1 -> i + 7, get_null7
+    | 2 -> i + 6, get_null6
+    | 3 -> i + 5, get_null5
+    | 4 -> i + 4, get_null4
+    | 5 -> i + 3, get_null3
+    | 6 -> i + 2, get_null2
+    | _ -> i + 1, get_null1
 
   (***** Message reading *****)
 
-  let failwith msg = Monad.fail (Protocol_error msg)
+  module T = Types_rw.Make_reader(OBus_value)
+    (struct
+       type 'a t = int ref -> 'a Reader.t
+       let bind m f remaining = Reader.bind (m remaining) (fun x -> f x remaining)
+       let return x _ = Reader.return x
+       let failwith msg _ = Reader.fail (Protocol_error msg)
+       let get_char remaining = match !remaining with
+         | 0 -> Reader.fail (Protocol_error "premature end of signature")
+         | n -> remaining := n - 1; Reader.get_char
+       let eof remaining = Reader.return (!remaining = 0)
+     end)
 
   (* Each reading function act as follow:
 
-     it takes an input, the current offset, the limit and return a
-     monad which read a value and return the new offset with the
-     value *)
+     it takes the current offset, the limit and return a monad which
+     read a value and return the new offset with the value *)
 
-  let rec input_padding ic = function
-    | 0 -> return ()
-    | n -> ic.get_char () >>= function
-        | '\000' -> input_padding ic (n - 1)
-        | _ -> failwith "uninitialized padding"
+  let read1 f = (); fun i limit ->
+    let i = i + 1 in
+    if i > limit then
+      out_of_bounds ()
+    else
+      f >>= fun x -> return (i, x)
 
-  let out_of_bounds () = failwith "out of bounds"
-
-  (* Read an integer with the needed padding *)
-  let read size f g = (); fun ic i limit ->
-    let padding = (size - i) land (size - 1) in
-    let i = i + padding + size in
+  let read2 f = (); fun i limit ->
+    let i, get_padding = rpad2 i in
+    let i = i + 2 in
     if i > limit then
       out_of_bounds ()
     else
       (perform
-         input_padding ic padding;
-         v <-- f ic;
-         return (i, g v))
+         get_padding;
+         v <-- f;
+         return (i, v))
+
+  let read4 f = (); fun i limit ->
+    let i, get_padding = rpad4 i in
+    let i = i + 4 in
+    if i > limit then
+      out_of_bounds ()
+    else
+      (perform
+         get_padding;
+         v <-- f;
+         return (i, v))
+
+  let read8 f = (); fun i limit ->
+    let i, get_padding = rpad8 i in
+    let i = i + 8 in
+    if i > limit then
+      out_of_bounds ()
+    else
+      (perform
+         get_padding;
+         v <-- f;
+         return (i, v))
 
   module Make_reader(Int_readers : Int_readers) =
   struct
     open Int_readers
 
-    let ruint8 ic i size =
-      if i + 1 > size then
-        out_of_bounds ()
-      else
-        (perform
-           x <-- ic.get_char ();
-           return (i + 1, Char.code x))
-    let ruint ic i size =
-      let padding = pad4 i in
-      let i = i + padding + 4 in
-      if i > size then
-        out_of_bounds ()
-      else
-        (perform
-           input_padding ic padding;
-           x <-- input_uint ic;
-           return (i, x))
-    let ruint32 ic i size =
-      let padding = pad4 i in
-      let i = i + padding + 4 in
-      if i > size then
-        out_of_bounds ()
-      else
-        (perform
-           input_padding ic padding;
-           x <-- input_uint32 ic;
-           return (i, x))
-    let rstring ic i size =
+    let ruint8 = read1 get_uint8
+    let ruint = read4 get_uint
+    let ruint32 = read4 get_uint32
+    let rstring i size =
       (perform
-         (i, len) <-- ruint ic i size;
+         (i, len) <-- ruint i size;
          let i = i + len + 1 in
          if len < 0 || i > size then
            out_of_bounds ()
          else
-         perform
-           str <-- ic.get_string len;
-           ic.get_char () >>= function
-             | '\000' -> return (i, str)
-             | _ -> failwith "string terminal null byte missing")
-    let rsignature ic i size =
+           perform
+             str <-- get_string len;
+             get_char >>= function
+               | '\000' -> return (i, str)
+               | _ -> failwith "string terminal null byte missing")
+    let rsignature i size =
       (perform
-         (i, len) <-- ruint8 ic i size;
+         (i, len) <-- ruint8 i size;
          let i = i + len + 1 in
-         if i > size then
+         if len < 0 || i > size then
            out_of_bounds ()
-         else let remaining = ref len in
-         perform
-           s <-- T.read_sequence (fun _ -> match !remaining with
-                                    | 0 -> return None
-                                    | n -> remaining := n - 1;
-                                        ic.get_char () >>= fun ch -> return (Some ch));
-           ic.get_char () >>= function
-             | '\000' -> return (i, s)
-             | _ -> failwith "signature terminal null byte missing")
-    let rtype ic i size =
-      (perform
-         (i, s) <-- rsignature ic i size;
-         match s with
-           | [t] -> return (i, t)
-           | [] -> failwith "empty variant signature"
-           | _ -> failwith (sprintf
-                          "variant signature contains more than one single type: %s"
-                          (string_of_signature s)))
-    let robject_path ic i size =
-      rstring ic i size >>= fun (i, str) -> return (i, OBus_path.of_string str)
+         else
+           perform
+             s <-- T.read_sequence (ref len);
+             get_char >>= function
+               | '\000' -> return (i, s)
+               | _ -> failwith "signature terminal null byte missing")
+    let rtype i size =
+      rsignature i size >>= fun (i, s) -> match s with
+        | [t] -> return (i, t)
+        | [] -> failwith "empty variant signature"
+        | _ -> failwith (sprintf
+                           "variant signature contains more than one single type: %s"
+                           (string_of_signature s))
+    let robject_path i size =
+      rstring i size >>= fun (i, str) ->
+        try
+          return (i, OBus_path.of_string str)
+        with
+            OBus_string.Invalid_string error -> failwith (OBus_string.error_message error)
+
+    (* Get a fixed-size value and box it, without padding and size
+       checking *)
+    let get_vbyte = get_char >>= fun ch -> return (Byte ch)
+    let get_vboolean = get_uint >>= function
+      | 0 -> return (Boolean false)
+      | 1 -> return (Boolean true)
+      | n -> failwith (sprintf "invalid boolean value: %d" n)
+    let get_vint16 = get_int16 >>= fun x -> return (Int16 x)
+    let get_vint32 = get_int32 >>= fun x -> return (Int32 x)
+    let get_vint64 = get_int64 >>= fun x -> return (Int64 x)
+    let get_vuint16 = get_uint16 >>= fun x -> return (Uint16 x)
+    let get_vuint32 = get_uint32 >>= fun x -> return (Uint32 x)
+    let get_vuint64 = get_uint64 >>= fun x -> return (Uint64 x)
+    let get_vdouble = get_uint64 >>= fun x -> return (Double(Int64.float_of_bits x))
 
     let rbasic = function
-      | Tbyte ->
-          (fun ic i size ->
-             if i + 1 > size then
-               out_of_bounds ()
-             else perform
-               x <-- ic.get_char ();
-               return (i + 1, Byte x))
-      | Tboolean ->
-          (fun ic i size ->
-             perform
-               (i, x) <-- ruint ic i size;
-               match x with
-                 | 0 -> return (i, Boolean false)
-                 | 1 -> return (i, Boolean true)
-                 | n -> failwith (sprintf "invalid boolean value: %d" n))
-      | Tint16 -> read 2 input_int16 vint16
-      | Tint32 -> read 4 input_int32 vint32
-      | Tint64 -> read 8 input_int64 vint64
-      | Tuint16 -> read 2 input_uint16 vuint16
-      | Tuint32 -> read 4 input_uint32 vuint32
-      | Tuint64 -> read 8 input_uint64 vuint64
-      | Tdouble -> read 8 input_uint64 (fun x -> Double(Int64.float_of_bits x))
+      | Tbyte -> read1 get_vbyte
+      | Tboolean -> read4 get_vboolean
+      | Tint16 -> read2 get_vint16
+      | Tint32 -> read4 get_vint32
+      | Tint64 -> read8 get_vint64
+      | Tuint16 -> read2 get_vuint16
+      | Tuint32 -> read4 get_vuint32
+      | Tuint64 -> read8 get_vuint64
+      | Tdouble -> read8 get_vdouble
       | Tstring ->
-          (fun ic i size ->
-             rstring ic i size >>= fun (i, str) -> match OBus_string.test str with
+          (fun i size ->
+             rstring i size >>= fun (i, str) -> match OBus_string.test str with
                | Some error ->
                    failwith (OBus_string.error_message error)
                | None ->
                    return (i, String str));
       | Tsignature ->
-          (fun ic i size -> perform
-             (i, s) <-- rsignature ic i size;
+          (fun i size -> perform
+             (i, s) <-- rsignature i size;
              return (i, Signature s))
-      | Tobject_path ->
-          (fun ic i size ->
-             rstring ic i size >>= fun (i, str) ->
-               try
-                 return (i, Object_path (OBus_path.of_string str))
-               with
-                   OBus_string.Invalid_string error -> failwith (OBus_string.error_message error))
+      | Tobject_path -> (fun i size -> robject_path i size >>= fun (i, v) -> return (i, Object_path v))
+
+    (* Read elememts of an array *)
+    let rec rarray_elements i limit reader =
+      if i = limit then
+        return []
+      else
+        (perform
+           (i, x) <-- reader i limit;
+           l <-- rarray_elements i limit reader;
+           return (x :: l))
 
     let rec rsingle = function
       | Tbasic t ->
           let reader = rbasic t in
-          (fun ic i size -> reader ic i size >>= fun (i, x) -> return (i, vbasic x))
+          (fun i size -> reader i size >>= fun (i, x) -> return (i, vbasic x))
       | Tarray t ->
           let reader = relement t in
-          (fun ic i size -> perform
-             (i, len) <-- ruint ic i size;
-             let padding = if pad8_p t then pad8 i else 0 in
-             let i = i + padding in
+          (fun i size -> perform
+             (i, len) <-- ruint i size;
+             let i, get_padding = if pad8_p t then rpad8 i else (i, return ()) in
              let limit = i + len in
              if len < 0 || len > max_array_size then
                failwith (array_too_big len)
-             else
-               let rec aux i =
-                 if i < limit then
-                   (perform
-                      (i, x) <-- reader ic i size;
-                      l <-- aux i;
-                      return (x :: l))
-                 else if i > limit then
-                   failwith "invalid array size"
-                 else
-                   return []
-               in perform
-                 input_padding ic padding;
-                 l <-- aux i;
-                 return (limit, varray t l))
+             else if limit > size then
+               out_of_bounds ()
+             else perform
+               get_padding;
+               l <-- rarray_elements i limit reader;
+               return (limit, varray t l))
       | Tstruct tl ->
           let reader = rsequence tl in
-          (fun ic i size ->
-             let padding = pad8 i in
-             let i = i + padding in
+          (fun i size ->
+             let i, get_padding = rpad8 i in
              if i > size then
                out_of_bounds ()
              else perform
-               input_padding ic padding;
-               (i, l) <-- reader ic i size;
+               get_padding;
+               (i, l) <-- reader i size;
                return (i, vstruct l))
       | Tvariant ->
-          (fun ic i size -> perform
-             (i, t) <-- rtype ic i size;
-             (i, v) <-- rsingle t ic i size;
+          (fun i size -> perform
+             (i, t) <-- rtype i size;
+             (i, v) <-- rsingle t i size;
              return (i, vvariant v))
 
     and relement = function
       | Tdict_entry(tk, tv) ->
           let kreader = rbasic tk
           and vreader = rsingle tv in
-          (fun ic i size ->
-             let padding = pad8 i in
-             let i = i + padding in
+          (fun i size ->
+             let i, get_padding = rpad8 i in
              if i > size then
                out_of_bounds ()
              else perform
-               input_padding ic padding;
-               (i, k) <-- kreader ic i size;
-               (i, v) <-- vreader ic i size;
+               get_padding;
+               (i, k) <-- kreader i size;
+               (i, v) <-- vreader i size;
                return (i, Dict_entry(k, v)))
       | Tsingle t ->
           let reader = rsingle t in
-          (fun ic i size -> perform
-             (i, x) <-- reader ic i size;
+          (fun i size -> perform
+             (i, x) <-- reader i size;
              return (i, Single x))
 
     and rsequence = function
-      | [] -> (fun ic i size -> return (i, []))
+      | [] -> (fun i size -> return (i, []))
       | t :: tl ->
           let head_reader = rsingle t
           and tail_reader = rsequence tl in
-          (fun ic i size -> perform
-             (i, x) <-- head_reader ic i size;
-             (i, l) <-- tail_reader ic i size;
+          (fun i size -> perform
+             (i, x) <-- head_reader i size;
+             (i, l) <-- tail_reader i size;
              return (i, x :: l))
 
-    let rfields ic limit =
+    let rfields limit =
       let rfield code typ reader i =
-        rtype ic i limit >>= fun (i, t) -> match t with
+        rtype i limit >>= fun (i, t) -> match t with
           | Tbasic t' when t' = typ ->
-              reader ic i limit;
+              reader i limit;
           | _ ->
               failwith (sprintf "invalid header field signature for code %d: %S, should be %S"
-                      code (string_of_signature [t]) (string_of_signature [Tbasic typ]))
+                          code (string_of_signature [t]) (string_of_signature [Tbasic typ]))
       in
       let rfield_test code test i =
         rfield code Tstring rstring i >>= fun ((_, name) as x) ->
@@ -983,11 +1027,11 @@ struct
         if i = limit then
           return acc
         else
-          let padding = pad8 i in
-          let i = i + padding + 1 in
+          let i, get_padding = rpad8 i in
+          let i = i + 1 in
           (perform
-             input_padding ic padding;
-             input_uint8 ic >>=
+             get_padding;
+             get_uint8 >>=
                (function
                   | 1 -> rfield 1 Tobject_path robject_path i >>= (fun (i, x) -> aux (i, { acc with _path = Some x }))
                   | 2 -> rfield_test 2 OBus_name.test_interface i >>= (fun (i, x) -> aux (i, { acc with _interface = Some x }))
@@ -999,15 +1043,15 @@ struct
                   | 8 -> rfield 8 Tsignature rsignature i >>= (fun (i, x) -> aux (i, { acc with _signature = x }))
                   | n ->
                       (perform
-                         (i, t) <-- rtype ic i limit;
-                         (i, _) <-- rsingle t ic i limit;
+                         (i, t) <-- rtype i limit;
+                         (i, _) <-- rsingle t i limit;
                          aux (i, acc))))
       in
       aux (0, empty_fields)
 
-    let rmessage ic =
+    let rmessage =
       (perform
-         message_maker <-- ic.get_char () >>=
+         message_maker <-- get_char >>=
            (function
               | '\001' -> return method_call_of_raw
               | '\002' -> return method_return_of_raw
@@ -1015,35 +1059,38 @@ struct
               | '\004' -> return signal_of_raw
               | c -> failwith (sprintf "unknown message type: %d" (Char.code c)));
 
-         n <-- input_uint8 ic;
+         n <-- get_uint8;
          let flags = { no_reply_expected = n land 1 = 1;
                        no_auto_start = n land 2 = 2 } in
 
-         protocol_version <-- input_uint8 ic;
+         protocol_version <-- get_uint8;
 
          (* Check the protocol version first, since we can not do
             anything if it is not the same as our *)
          if protocol_version <> protocol_version then
            failwith (invalid_protocol_version protocol_version)
+
          else perform
-           body_length <-- input_uint ic;
-           serial <-- input_uint32 ic;
-           fields_length <-- input_uint ic;
+           body_length <-- get_uint;
+           serial <-- get_uint32;
+           fields_length <-- get_uint;
 
            (* Header fields array start on byte #16 and message start
               aligned on a 8-boundary after it, so we have: *)
-           let padding_before_message = pad8 fields_length in
-           let total_length = 16 + fields_length + padding_before_message + body_length in
+           let padded_fields_length, get_padding_before_body = rpad8 fields_length in
+           let total_length = 16 + padded_fields_length + body_length in
 
            (* Safety checking *)
            if fields_length < 0 || fields_length > max_array_size then
              failwith (array_too_big fields_length)
+
            else if body_length < 0 || total_length > max_message_size then
              failwith (message_too_big total_length)
+
            else perform
-             fields <-- rfields ic fields_length;
-             input_padding ic padding_before_message;
-             (i, body) <-- rsequence fields._signature ic 0 body_length;
+             fields <-- rfields fields_length;
+             get_padding_before_body;
+             (i, body) <-- rsequence fields._signature 0 body_length;
              if i = body_length then
                try
                  return { flags = flags;
@@ -1056,20 +1103,42 @@ struct
                    (* If fields are invalid *)
                    Failure msg -> failwith msg
              else
-               failwith "junk after message")
+               failwith "junk bytes after message")
   end
 
   module LEReader = Make_reader(LE_int_readers)
   module BEReader = Make_reader(BE_int_readers)
 
-  let get_message ic : OBus_message.any monad =
-    ic.get_char () >>= function
-      | 'l' -> LEReader.rmessage ic
-      | 'B' -> BEReader.rmessage ic
+  let get_message : OBus_message.any Reader.t =
+    get_char >>= function
+      | 'l' -> LEReader.rmessage
+      | 'B' -> BEReader.rmessage
       | ch -> failwith (invalid_byte_order ch)
 end
 
-module Lwt_wire = Make_wire(Lwt)
+module Lwt_writer = Make_writer(struct
+                                  type 'a t = Lwt_chan.out_channel -> 'a Lwt.t
+                                  let bind m f oc = Lwt.bind (m oc) (fun x -> f x oc)
+                                  let return x  _ = Lwt.return x
+                                  let fail exn _ = Lwt.fail exn
+                                  let put_char ch oc = Lwt_chan.output_char oc ch
+                                  let put_string str oc = Lwt_chan.output_string oc str
+                                end)
+module Lwt_reader = Make_reader(struct
+                                  type 'a t = Lwt_chan.in_channel -> 'a Lwt.t
+                                  let bind m f ic = Lwt.bind (m ic) (fun x -> f x ic)
+                                  let return x _ = Lwt.return x
+                                  let fail exn _ = Lwt.fail exn
+                                  let get_char ic = Lwt_chan.input_char ic
+                                  let get_string len ic =
+                                    let str = String.create len in
+                                    Lwt.bind
+                                      (Lwt_chan.really_input ic str 0 len)
+                                      (fun _ -> Lwt.return str)
+                                end)
+
+let put_message ?byte_order oc msg = snd (Lwt_writer.put_message ?byte_order msg) oc
+let get_message ic = Lwt_reader.get_message ic
 
 let get_message_size buf ofs =
 
@@ -1131,20 +1200,11 @@ let shutdown { shutdown = shutdown } = shutdown ()
 let chans_of_fd fd = (Lwt_chan.in_channel_of_descr fd,
                        Lwt_chan.out_channel_of_descr fd)
 
-let lwt_input_of_channel ic = { Lwt_wire.get_char = (fun _ -> Lwt_chan.input_char ic);
-                                Lwt_wire.get_string = (fun len ->
-                                                         let str = String.create len in
-                                                         perform
-                                                           Lwt_chan.really_input ic str 0 len;
-                                                           return str) }
-let lwt_output_of_channel oc = { Lwt_wire.put_char = (fun ch -> Lwt_chan.output_char oc ch);
-                                 Lwt_wire.put_string = (fun str -> Lwt_chan.output_string oc str) }
-
 let socket fd (ic, oc) =
-  { recv = (fun _ -> Lwt_wire.get_message (lwt_input_of_channel ic));
+  { recv = (fun _ -> get_message ic);
     send = (fun msg ->
               perform
-                snd (Lwt_wire.put_message msg) (lwt_output_of_channel oc);
+                put_message oc msg;
                 Lwt_chan.flush oc);
     shutdown = (fun _ ->
                   Lwt_unix.shutdown fd SHUTDOWN_ALL;

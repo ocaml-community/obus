@@ -406,6 +406,7 @@ let read_dispatch connection =
        fail (set_crash connection
                (match exn with
                   | End_of_file -> Connection_lost
+                  | OBus_lowlevel.Protocol_error _ as exn -> exn
                   | exn -> Transport_error exn)))
   >>= fun message ->
 

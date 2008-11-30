@@ -34,30 +34,34 @@ module type Types = sig
   type tsequence = tsingle list
 end
 
-module Make(Types : Types)(Monad : OBus_monad.S) : sig
-  val single_size : Types.tsingle -> int
-  val sequence_size : Types.tsequence -> int
-    (** Returns the marshaled length of a signature *)
+module type Char_reader = sig
+  type 'a t
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val return : 'a -> 'a t
+  val failwith : string -> 'a t
 
-  val read_single : (unit -> char option Monad.t) -> Types.tsingle Monad.t
-  val read_sequence : (unit -> char option Monad.t) -> Types.tsequence Monad.t
-    (** Parse a signature using the given get_char function *)
+  val get_char : char t
+  val eof : bool t
+end
 
-  val write_single : (char -> unit Monad.t) -> Types.tsingle -> unit Monad.t
-  val write_sequence : (char -> unit Monad.t) -> Types.tsequence -> unit Monad.t
-    (** Marshal a signature using the given put_char function *)
+module type Char_writer = sig
+  type 'a t
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val return : 'a -> 'a t
 
-  val char_of_basic : Types.tbasic -> char
-    (** Returns the type code of a basic type *)
+  val put_char : char -> unit t
+end
+
+module Make_reader(Types : Types)(Reader : Char_reader) : sig
+
+  val read_sequence : Types.tsequence Reader.t
+    (** Parse a signature *)
+
 end = struct
   open Types
-  open Monad
+  open Reader
 
   let ( >>= ) = bind
-
-  let read_char get_char = get_char () >>= function
-    | Some ch -> return ch
-    | None -> failwith "premature end of signature"
 
   let parse_basic msg = function
     | 'y' -> return Tbyte
@@ -74,14 +78,14 @@ end = struct
     | 'g' -> return Tsignature
     | chr -> Printf.ksprintf failwith msg chr
 
-  let rec parse_single get_char = function
+  let rec parse_single = function
     | 'a' ->
         (perform
-           t <-- read_element get_char;
+           t <-- get_char >>= parse_element;
            return (Tarray t))
     | '(' ->
         (perform
-           t <-- read_struct get_char;
+           t <-- get_char >>= parse_struct;
            return (Tstruct t))
     | ')' ->
         failwith "')' without '('"
@@ -92,39 +96,52 @@ end = struct
            t <-- parse_basic "invalid type code: %c" ch;
            return (Tbasic t))
 
-  and read_single get_char = read_char get_char >>= parse_single get_char
-
-  and read_struct get_char = read_char get_char >>= function
+  and parse_struct = function
     | ')' ->
         return []
     | ch ->
         (perform
-           t <-- parse_single get_char ch;
-           l <-- read_struct get_char;
+           t <-- parse_single ch;
+           l <-- get_char >>= parse_struct;
            return (t :: l))
 
-  and read_element get_char = read_char get_char >>= function
+  and parse_element = function
     | '{' ->
         (perform
-           ch <-- read_char get_char;
-           tk <-- parse_basic "invalid basic type code: %c" ch;
-           tv <-- read_char get_char >>= parse_single get_char;
-           read_char get_char >>= function
+           tk <-- get_char >>= parse_basic "invalid basic type code: %c";
+           tv <-- get_char >>= parse_single;
+           get_char >>= function
              | '}' -> return (Tdict_entry(tk, tv))
              | _ -> failwith "'}' missing")
     | ch ->
         (perform
-           t <-- parse_single get_char ch;
+           t <-- parse_single ch;
            return (Tsingle t))
 
-  and read_sequence get_char = get_char () >>= function
-    | None ->
+  let rec parse_sequence = function
+    | true ->
         return []
-    | Some ch ->
+    | false ->
         (perform
-           t <-- parse_single get_char ch;
-           l <-- read_sequence get_char;
+           t <-- get_char >>= parse_single;
+           l <-- eof >>= parse_sequence;
            return (t :: l))
+
+  let read_sequence = eof >>= parse_sequence
+end
+
+module Make_writer(Types : Types)(Writer : Char_writer) : sig
+  val char_of_basic : Types.tbasic -> char
+    (** Returns the type code of a basic type *)
+
+  val write_single : Types.tsingle -> int * unit Writer.t
+  val write_sequence : Types.tsequence -> int * unit Writer.t
+    (** Returns the length of a marshaled signatures and a writer *)
+end = struct
+  open Types
+  open Writer
+
+  let ( >>= ) = bind
 
   let rec single_size_aux acc = function
     | Tarray t -> begin match t with
@@ -152,36 +169,35 @@ end = struct
     | Tobject_path -> 'o'
     | Tsignature -> 'g'
 
-  let rec write_single put_char = function
+  let rec write_single = function
     | Tbasic t ->
-        put_char (char_of_basic t);
+        (1, put_char (char_of_basic t))
     | Tarray t ->
-        (perform
-           put_char 'a';
-           write_element put_char t)
+        let sz, wr = write_element t in
+        (sz + 1, perform put_char 'a'; wr)
     | Tstruct ts ->
-        (perform
-           put_char '(';
-           write_sequence put_char ts;
-           put_char ')')
+        let sz, wr = write_sequence ts in
+        (sz + 2, perform put_char '('; wr; put_char ')')
     | Tvariant ->
-        put_char 'v';
+        (1, put_char 'v')
 
-  and write_element put_char = function
+  and write_element = function
     | Tdict_entry(tk, tv) ->
-        (perform
+        let sz, wr = write_single tv in
+        (sz + 3,
+         perform
            put_char '{';
            put_char (char_of_basic tk);
-           write_single put_char tv;
+           wr;
            put_char '}')
     | Tsingle t ->
-        write_single put_char t
+        write_single t
 
-  and write_sequence put_char = function
+  and write_sequence = function
     | [] ->
-        return ()
+        0, return ()
     | x :: l ->
-        (perform
-           write_single put_char x;
-           write_sequence put_char l)
+        let shd, whd = write_single x
+        and stl, wtl = write_sequence l in
+        (shd + stl, perform whd; wtl)
 end

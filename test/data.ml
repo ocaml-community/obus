@@ -25,8 +25,6 @@ let data_val = make_single typ data
 
 let make_msg x = OBus_message.method_call ~path:["plop"; "plip"] ~member:"truc" x
 
-let buffer = String.make 300 '\x00'
-
 let pipe_to_cmd cmd f =
   let ic, oc = Unix.open_process cmd in
   f oc;
@@ -39,42 +37,59 @@ let pipe_to_cmd cmd f =
       End_of_file ->
         ignore (Unix.close_process (ic, oc))
 
-let read () =
+type ptr = { buffer : string; mutable offset : int }
+
+module Ptr =
+struct
+  type 'a t = ptr -> 'a
+  let bind m f ptr = f (m ptr) ptr
+  let return x _ = x
+  let fail exn ptr = Printf.eprintf "failure at byte %x\n%!" (ptr.offset - 1); raise exn
+end
+
+module Reader = Make_reader
+  (struct
+     include Ptr
+     let get_char ptr =
+       let n = ptr.offset in
+       ptr.offset <- n + 1;
+       ptr.buffer.[n]
+     let get_string len ptr =
+       let n = ptr.offset in
+       ptr.offset <- n + len;
+       String.sub ptr.buffer n len
+   end)
+
+module Writer = Make_writer
+  (struct
+     include Ptr
+     let put_char ch ptr =
+       let n = ptr.offset in
+       String.unsafe_set ptr.buffer n ch;
+       ptr.offset <- n + 1
+     let put_string str ptr =
+       let n = ptr.offset and len = String.length str in
+       String.unsafe_blit str 0 ptr.buffer n len;
+       ptr.offset <- n + len
+   end)
+
+let read buffer =
   pipe_to_cmd "xxd" (fun oc -> output_string oc buffer);
   pipe_to_cmd "camlp4o -impl /dev/stdin -printer Camlp4Printers/Camlp4OCamlPrinter.cmo"
     (fun oc ->
        Printf.fprintf oc "let result = %s"
          (string_of_sequence
-            (let i = ref 0 in
-             let ic = Lwt_chan.make_in_channel
-               (fun str pos sz ->
-                  let sz = min sz (String.length buffer - !i) in
-                  String.blit buffer !i str pos sz;
-                  i := !i + sz;
-                  return sz) in
-             Lwt_unix.run (Lwt_wire.get_message (lwt_input_of_channel ic))).OBus_message.body))
+            (Reader.get_message { buffer = buffer; offset = 0 }).OBus_message.body))
 
 let write bo x =
-  let i = ref 0 in
-  let oc = Lwt_chan.make_out_channel
-    (fun str pos sz ->
-       let sz = min sz (String.length buffer - !i) in
-       String.blit str pos buffer !i sz;
-       i := !i + sz;
-       return sz) in
-  Lwt_unix.run (perform
-                  snd (Lwt_wire.put_message ~byte_order:bo (make_msg x :> OBus_message.any)) (lwt_output_of_channel oc);
-                  Lwt_chan.flush oc)
+  let len, writer = Writer.put_message ~byte_order:bo (make_msg x :> OBus_message.any) in
+  let buffer = String.create len in
+  writer { buffer = buffer; offset = 0 };
+  buffer
 
-let test bo =
-  write bo [data_val];
-  read ()
+let test bo = read (write bo [data_val])
 
-let testc typ =
-  make_func typ
-    (fun s ->
-       write OBus_info.Little_endian s;
-       read ())
+let testc typ = make_func typ (fun s -> read (write OBus_info.Little_endian s))
 
 let _ =
   test OBus_info.Little_endian;
