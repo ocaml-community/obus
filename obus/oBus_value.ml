@@ -42,17 +42,25 @@ type signature = tsequence
 let string_of printer x =
   let buf = Buffer.create 42 in
   let pp = formatter_of_buffer buf in
+  pp_set_margin pp max_int;
   printer pp x;
   pp_print_flush pp ();
   Buffer.contents buf
 
-let rec print_seq sep f pp = function
-  | [] -> ()
-  | [x] -> f pp x
-  | x :: l ->
-      f pp x;
-      pp_print_string pp sep;
-      print_seq sep f pp l
+let rec print_seq left right sep f pp l =
+  pp_print_string pp left;
+  begin match l with
+    | [] -> ()
+    | x :: l ->
+        pp_open_box pp 0;
+        f pp x;
+        List.iter (fprintf pp "%s@ %a" sep f) l;
+        pp_close_box pp ()
+  end;
+  pp_print_string pp right
+
+let print_list f = print_seq "[" "]" ";" f
+let print_tuple f = print_seq "(" ")" "," f
 
 let string_of_tbasic = function
   | Tbyte -> "Tbyte"
@@ -71,17 +79,17 @@ let string_of_tbasic = function
 let print_tbasic pp t = pp_print_string pp (string_of_tbasic t)
 
 let rec print_tsingle pp = function
-  | Tbasic t -> fprintf pp "Tbasic %a" print_tbasic t
-  | Tarray t -> fprintf pp "Tarray(%a)" print_telement t
-  | Tstruct tl -> fprintf pp "Tstruct %a" print_tsequence tl
+  | Tbasic t -> fprintf pp "@[<2>Tbasic@ %a@]" print_tbasic t
+  | Tarray t -> fprintf pp "@[<2>Tarray@,(%a)@]" print_telement t
+  | Tstruct tl -> fprintf pp "@[<2>Tstruct@ %a@]" print_tsequence tl
   | Tvariant -> fprintf pp "Tvariant"
 
 and print_telement pp = function
-  | Tdict_entry(tk, tv) -> fprintf pp "Tdict_entry(%a, %a)" print_tbasic tk print_tsingle tv
-  | Tsingle t -> fprintf pp "Tsingle(%a)" print_tsingle t
+  | Tdict_entry(tk, tv) -> fprintf pp "@[<2>Tdict_entry@,(@[<hv>%a,@ %a@])@]" print_tbasic tk print_tsingle tv
+  | Tsingle Tvariant -> fprintf pp "@[<2>Tsingle@ Tvariant@]"
+  | Tsingle t -> fprintf pp "@[<2>Tsingle@,(%a)@]" print_tsingle t
 
-and print_tsequence pp tl = fprintf pp "[%a]" (print_seq "; " print_tsingle) tl
-
+and print_tsequence pp = print_list print_tsingle pp
 
 type ptr = { buffer : string; mutable offset : int }
 
@@ -220,19 +228,19 @@ let print_basic pp = function
   | Double x -> fprintf pp "%f" x
   | String x -> fprintf pp "%S" x
   | Signature x -> print_tsequence pp x
-  | Object_path x -> fprintf pp "[%a]" (print_seq "; " (fun pp elt -> fprintf pp "%S" elt)) x
+  | Object_path x -> print_list (fun pp elt -> fprintf pp "%S" elt) pp x
 
 let rec print_single pp = function
   | Basic v -> print_basic pp v
-  | Array(t, l) -> fprintf pp "[%a]" (print_seq "; "  print_element) l
+  | Array(t, l) -> print_list print_element pp l
   | Struct l -> print_sequence pp l
-  | Variant x -> fprintf pp "Variant(%a, %a)" print_tsingle (type_of_single x) print_single x
+  | Variant x -> fprintf pp "@[<2>Variant@,(@[<hv>%a,@ %a@])@]" print_tsingle (type_of_single x) print_single x
 
 and print_element pp = function
-  | Dict_entry(k, v) -> fprintf pp "(%a, %a)" print_basic k print_single v
+  | Dict_entry(k, v) -> fprintf pp "(@[%a,@ %a@])" print_basic k print_single v
   | Single x -> print_single pp x
 
-and print_sequence pp l = fprintf pp "(%a)" (print_seq ", " print_single) l
+and print_sequence pp l = print_tuple print_single pp l
 
 let string_of_tsingle = string_of print_tsingle
 let string_of_telement = string_of print_telement
