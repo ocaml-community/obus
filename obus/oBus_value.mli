@@ -49,6 +49,11 @@ val signature_of_string : string -> signature
   (** Parse a signature, return an [Failure] if the signature is not
       correct *)
 
+val validate_signature : signature -> string option
+  (** Not all signatures are valid. [validate] returns [None] if the
+      given signature is a valid one, or [Some reason] if it is
+      not. *)
+
 (** {6 DBus values} *)
 
 type basic =

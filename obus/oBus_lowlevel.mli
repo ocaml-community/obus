@@ -28,6 +28,12 @@ exception Protocol_error of string
 
 (** {6 Message serialization/deserialization} *)
 
+type byte_order = Little_endian | Big_endian
+
+val native_byte_order : byte_order
+  (** Byte order of the current architecture. It is used as default
+      for sending messages. *)
+
 (** Needed monadic operation *)
 module type Monad = sig
   type 'a t
@@ -60,7 +66,7 @@ module Make_reader(Reader : Reader) : sig
 end
 
 module Make_writer(Writer : Writer) : sig
-  val put_message : ?byte_order:OBus_info.byte_order -> OBus_message.any -> int * unit Writer.t
+  val put_message : ?byte_order:byte_order -> OBus_message.any -> int * unit Writer.t
     (** [put_message ?byte_order message] returns [(size, writer)]
         where [size] is the size of the marshaled message and [writer]
         is the message writer.
@@ -76,7 +82,7 @@ end
 val get_message : Lwt_chan.in_channel -> OBus_message.any Lwt.t
   (** Deserialize a message from a lwt channel *)
 
-val put_message : ?byte_order:OBus_info.byte_order -> Lwt_chan.out_channel -> OBus_message.any -> unit Lwt.t
+val put_message : ?byte_order:byte_order -> Lwt_chan.out_channel -> OBus_message.any -> unit Lwt.t
   (** Serialize a message to a lwt channel *)
 
 val get_message_size : string -> int -> int

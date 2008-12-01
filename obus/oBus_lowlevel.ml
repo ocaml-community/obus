@@ -8,12 +8,15 @@
  *)
 
 open Printf
+open Constant
 open OBus_value
-open OBus_info
 open OBus_message
 
 exception Data_error of string
 exception Protocol_error of string
+
+type byte_order = Little_endian | Big_endian
+let native_byte_order = Little_endian
 
 module type Monad = sig
   type 'a t
@@ -48,8 +51,8 @@ let pad8_p = function
 (* Common error message *)
 let array_too_big len = sprintf "array size exceed the limit: %d" len
 let message_too_big len = sprintf "message size exceed the limit: %d" len
-let signature_too_long s len = sprintf "too long signature: %S, with len %d" (string_of_signature s) len
-let variant_signature_too_long s len = sprintf "too long variant signature: %S, with len %d" (string_of_signature [s]) len
+let signature_too_long s len = sprintf "too long signature: '%s', with len %d" (string_of_signature s) len
+let invalid_signature s reason = sprintf "invalid signature('%s'): %s" (string_of_signature s) reason
 let invalid_protocol_version ver = sprintf "invalid protocol version: %d (obus implement protocol version %d)" ver OBus_info.protocol_version
 let invalid_byte_order ch = sprintf "invalid byte order(%C)" ch
 
@@ -177,11 +180,15 @@ struct
   struct
     let byte_order_char = 'B'
 
-    let put_int16 v =
+    let put_uint16 v =
       (perform
          put_char (Char.unsafe_chr (v lsr 8));
          put_char (Char.unsafe_chr v))
-    let put_uint16 = put_int16
+    let put_int16 v =
+      if v < 0 then
+        put_uint16 (v lor 0x8000)
+      else
+        put_uint16 v
 
     let put_int32 v =
       (perform
@@ -290,19 +297,20 @@ struct
          put_string str;
          put_null)
 
-    (* Serialize a signature.
-
-       TODO: verify deepth limit of the signature *)
-    let wsignature i s =
-      let len, put_signature = T.write_sequence s in
-      if len > 255 then
-        failwith (signature_too_long s len)
-      else
-        (i + 1 + len + 1,
-         perform
-           put_uint8 len;
-           put_signature;
-           put_null)
+    (* Serialize a signature. *)
+    let wsignature i s = match OBus_value.validate_signature s with
+      | Some reason ->
+          failwith (invalid_signature s reason)
+      | None ->
+          let len, put_signature = T.write s in
+          if len > 255 then
+            failwith (signature_too_long s len)
+          else
+            (i + 1 + len + 1,
+             perform
+               put_uint8 len;
+               put_signature;
+               put_null)
 
     let wobject_path i = function
       | [] ->
@@ -408,19 +416,12 @@ struct
 
              (1) marshaled variant signature
              (2) serialized contents *)
-          let t = OBus_value.type_of_single x in
-          let len, put_signature = T.write_single t in
-          if len > 255 then
-            failwith (variant_signature_too_long t len)
-          else
-            let i = i + 1 + len + 1 in
-            let i, put_variant = wsingle i x in
-            (i,
-             perform
-               put_uint8 len;
-               put_signature;
-               put_null;
-               put_variant)
+          let i, put_signature = wsignature i [OBus_value.type_of_single x] in
+          let i, put_variant = wsingle i x in
+          (i,
+           perform
+             put_signature;
+             put_variant)
 
     and welement i = function
       | Dict_entry(k, v) ->
@@ -566,7 +567,7 @@ struct
            ((if msg.flags.no_reply_expected then 1 else 0) lor
               (if msg.flags.no_auto_start then 2 else 0));
          (* byte #3 : protocol version *)
-         put_uint8 protocol_version;
+         put_uint8 OBus_info.protocol_version;
          (* byte #4-7 : body length *)
          put_uint body_length;
          (* byte #8-11 : serial *)
@@ -622,7 +623,7 @@ struct
       (perform
          v0 <-- get_char;
          v1 <-- get_char;
-         let v = (Char.code v0) land (Char.code v1 lsl 8) in
+         let v = (Char.code v0) lor (Char.code v1 lsl 8) in
          if v land (1 lsl 15) = 0 then
            return v
          else
@@ -632,7 +633,7 @@ struct
       (perform
          v0 <-- get_char;
          v1 <-- get_char;
-         return (Char.code v0 land (Char.code v1 lsl 8)))
+         return (Char.code v0 lor (Char.code v1 lsl 8)))
 
     let get_int32 =
       (perform
@@ -691,7 +692,7 @@ struct
       (perform
          v1 <-- get_char;
          v0 <-- get_char;
-         let v = Char.code v0 land (Char.code v1 lsl 8) in
+         let v = Char.code v0 lor (Char.code v1 lsl 8) in
          if v land (1 lsl 15) = 0 then
            return v
          else
@@ -701,7 +702,7 @@ struct
       (perform
          v1 <-- get_char;
          v0 <-- get_char;
-         return (Char.code v0 land (Char.code v1 lsl 8)))
+         return (Char.code v0 lor (Char.code v1 lsl 8)))
 
     let get_int32 =
       (perform
@@ -875,11 +876,14 @@ struct
          if len < 0 || i > size then
            out_of_bounds ()
          else
-           perform
-             s <-- T.read_sequence (ref len);
-             get_char >>= function
-               | '\000' -> return (i, s)
-               | _ -> failwith "signature terminal null byte missing")
+           T.read (ref len) >>= fun s ->
+             match OBus_value.validate_signature s with
+               | Some reason ->
+                   failwith (invalid_signature s reason)
+               | None ->
+                   get_char >>= function
+                     | '\000' -> return (i, s)
+                     | _ -> failwith "signature terminal null byte missing")
     let rtype i size =
       rsignature i size >>= fun (i, s) -> match s with
         | [t] -> return (i, t)

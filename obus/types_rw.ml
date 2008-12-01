@@ -54,7 +54,7 @@ end
 
 module Make_reader(Types : Types)(Reader : Char_reader) : sig
 
-  val read_sequence : Types.tsequence Reader.t
+  val read : Types.tsequence Reader.t
     (** Parse a signature *)
 
 end = struct
@@ -127,16 +127,15 @@ end = struct
            l <-- eof >>= parse_sequence;
            return (t :: l))
 
-  let read_sequence = eof >>= parse_sequence
+  let read = eof >>= parse_sequence
 end
 
 module Make_writer(Types : Types)(Writer : Char_writer) : sig
   val char_of_basic : Types.tbasic -> char
     (** Returns the type code of a basic type *)
 
-  val write_single : Types.tsingle -> int * unit Writer.t
-  val write_sequence : Types.tsequence -> int * unit Writer.t
-    (** Returns the length of a marshaled signatures and a writer *)
+  val write : Types.tsequence -> int * unit Writer.t
+    (** Returns the length of a marshaled signature and a writer *)
 end = struct
   open Types
   open Writer
@@ -200,4 +199,6 @@ end = struct
         let shd, whd = write_single x
         and stl, wtl = write_sequence l in
         (shd + stl, perform whd; wtl)
+
+  let write = write_sequence
 end

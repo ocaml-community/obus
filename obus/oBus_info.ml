@@ -9,16 +9,11 @@
 
 open Lwt
 
-type byte_order = Little_endian | Big_endian
-let native_byte_order = Little_endian
-
 let version = OBUS_VERSION
 
-let max_name_length = 255
-
-let max_array_size = 1 lsl 26
-let max_message_size = 1 lsl 27
 let protocol_version = 1
+let max_name_length = Constant.max_name_length
+let max_message_size = Constant.max_message_size
 
 let verbose = Log.verbose_enable
 let debug = Log.debug_enable

@@ -91,6 +91,50 @@ and print_telement pp = function
 
 and print_tsequence pp = print_list print_tsingle pp
 
+type depth = {
+  d_struct : int;
+  d_array : int;
+  d_dict_entry : int;
+}
+
+let validate_signature =
+  let rec aux_single depth_struct depth_array depth_dict_entry = function
+    | Tbasic _ | Tvariant ->
+        None
+    | Tarray t ->
+        if depth_array > Constant.max_type_recursion_depth then
+          Some "too many nested array"
+        else
+          aux_element depth_struct (depth_array + 1) depth_dict_entry t
+    | Tstruct [] ->
+        Some "empty structure"
+    | Tstruct tl ->
+        if depth_struct > Constant.max_type_recursion_depth then
+          Some "too many nested structure"
+        else
+          aux_sequence (depth_struct + 1) depth_array depth_dict_entry tl
+
+  and aux_element depth_struct depth_array depth_dict_entry = function
+    | Tsingle t ->
+        aux_single depth_struct depth_array depth_dict_entry t
+    | Tdict_entry(tk, tv) ->
+        if depth_dict_entry > Constant.max_type_recursion_depth then
+          Some "too many nested dict-entry"
+        else
+          aux_single depth_struct depth_array (depth_dict_entry + 1) tv
+
+  and aux_sequence depth_struct depth_array depth_dict_entry = function
+    | [] ->
+        None
+    | t :: tl ->
+        match aux_single depth_struct depth_array depth_dict_entry t with
+          | None ->
+              aux_sequence depth_struct depth_array depth_dict_entry tl
+          | error ->
+              error
+  in
+  aux_sequence 0 0 0
+
 type ptr = { buffer : string; mutable offset : int }
 
 module Ptr =
@@ -127,14 +171,14 @@ module TW = Types_rw.Make_writer(T)
    end)
 
 let string_of_signature ts =
-  let len, writer = TW.write_sequence ts in
+  let len, writer = TW.write ts in
   let str = String.create len in
   writer { buffer = str; offset = 0 };
   str
 
 let signature_of_string str =
   try
-    TR.read_sequence { buffer = str; offset = 0 }
+    TR.read { buffer = str; offset = 0 }
   with
       Failure msg ->
         raise (Invalid_argument
