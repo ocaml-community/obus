@@ -14,7 +14,7 @@ SAMPLES = hello bus_functions eject notif monitor signals list_services \
 LIB = obus
 BINDINGS = hal notify
 TOOLS = obus_introspect obus_binder obus_dump
-TEST = test_serialization test_printing valid auth server errors logging
+TEST = test_serialization test_printing test_communication valid auth server errors logging
 
 .PHONY: tools samples bindings all test lib install prefix
 

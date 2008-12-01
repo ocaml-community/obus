@@ -458,7 +458,11 @@ let of_transport ?guid ?(up=true) transport =
                 | true -> None
                 | false -> Some(wait ()));
       abort = abort;
-      watch = abort >>= (fun _ -> return ());
+      watch = try_bind (fun _ -> abort)
+        (fun _ -> return ())
+        (function
+           | Connection_closed -> return ()
+           | exn -> fail exn);
       shutdown_transport_on_close = ref true;
     } in
     ignore (dispatch_forever connection);
