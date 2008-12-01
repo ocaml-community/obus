@@ -78,7 +78,7 @@ val transport : t -> OBus_lowlevel.transport
   (** [transport connection] get the transport associated with a
       connection *)
 
-val name : t -> OBus_name.unique option
+val name : t -> OBus_name.bus option
   (** Unique name of the connection. This is only relevant if the
       other side of the connection is a message bus.
 
@@ -108,8 +108,8 @@ exception Context of t * OBus_message.any
 
 val method_call : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
@@ -118,8 +118,8 @@ val method_call : t ->
 
 val method_call_no_reply : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
@@ -129,8 +129,8 @@ val method_call_no_reply : t ->
 
 val method_call' : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
@@ -141,8 +141,8 @@ val method_call' : t ->
 
 val dmethod_call : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
@@ -153,8 +153,8 @@ val dmethod_call : t ->
 
 val dmethod_call_no_reply : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
@@ -162,8 +162,8 @@ val dmethod_call_no_reply : t ->
 
 val emit_signal : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->
@@ -172,8 +172,8 @@ val emit_signal : t ->
 
 val demit_signal : t ->
   ?flags:OBus_message.flags ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->

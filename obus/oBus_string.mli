@@ -32,7 +32,7 @@ type error = {
 val error_message : error -> string
   (** [error_message error] return a human-readabe error message *)
 
-type tester = string -> error option
+type validator = string -> error option
   (** Function which test if a string is correct.
 
       - if it is, returns [None]
@@ -40,11 +40,12 @@ type tester = string -> error option
 
 exception Invalid_string of error
 
-val validate : tester -> string -> unit
-  (** Raises [Invalid_string] if the given string failed to validate *)
+val assert_validate : validator -> string -> unit
+  (** Raises {!Invalid_string} if the given string failed to
+      validate *)
 
-val lwt_validate : tester -> string -> unit Lwt.t
-  (** Lwt-version of [validate] *)
+val lwt_assert_validate : validator -> string -> unit Lwt.t
+  (** Lwt-version of {!assert_validate} *)
 
 (** {6 Common strings} *)
 
@@ -54,5 +55,5 @@ type t = string
         - a string must be encoded in valid UTF-8
         - a string must not contains the null byte *)
 
-val test : tester
-  (** Testing function for commong strings *)
+val validate : validator
+  (** Validatition function for commong strings *)

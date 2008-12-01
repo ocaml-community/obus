@@ -66,12 +66,12 @@ val watch : t -> unit Lwt.t
 
 (** {6 Peer/proxy} *)
 
-val make_peer : t -> OBus_name.connection -> OBus_peer.t
+val make_peer : t -> OBus_name.bus -> OBus_peer.t
   (** Short-hand for:
 
       [OBus_peer.make (OBus_bus.connection bus) name] *)
 
-val make_proxy : t -> OBus_name.connection -> OBus_path.t -> OBus_proxy.t
+val make_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t
   (** Short-hand for:
 
       [OBus_proxy.make (OBus_bus.make_peer bus name) path] *)
@@ -131,11 +131,11 @@ type start_service_by_name_result =
 val start_service_by_name : t -> OBus_name.bus -> start_service_by_name_result Lwt.t
   (** Start a service on the given bus by its name *)
 
-val name_has_owner : t -> OBus_name.connection -> bool Lwt.t
+val name_has_owner : t -> OBus_name.bus -> bool Lwt.t
   (** Return [true] if the service is currently running, i.e. some
       application offer it on the message bus *)
 
-val list_names : t -> OBus_name.connection list Lwt.t
+val list_names : t -> OBus_name.bus list Lwt.t
   (** List names currently running on the message bus *)
 
 val list_activatable_names : t -> OBus_name.bus list Lwt.t
@@ -145,11 +145,11 @@ val list_activatable_names : t -> OBus_name.bus list Lwt.t
 
 exception Name_has_no_owner of string
 
-val get_name_owner : t -> OBus_name.connection -> OBus_name.unique Lwt.t
+val get_name_owner : t -> OBus_name.bus -> OBus_name.bus Lwt.t
   (** Return the connection unique name of the given service. Raise a
       [Name_has_no_owner] if the given name does not have an owner. *)
 
-val list_queued_owners : t -> OBus_name.bus -> OBus_name.unique list Lwt.t
+val list_queued_owners : t -> OBus_name.bus -> OBus_name.bus list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
@@ -164,11 +164,11 @@ type match_rule
 
 val match_rule :
   ?typ:[ `method_call | `method_return | `error | `signal ] ->
-  ?sender:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
   ?interface:OBus_name.interface ->
   ?member:OBus_name.member ->
   ?path:OBus_path.t ->
-  ?destination:OBus_name.connection ->
+  ?destination:OBus_name.bus ->
   ?args:(int * string) list ->
   unit -> match_rule
   (** Create a matching rule. Matching the argument [n] with string
@@ -200,7 +200,7 @@ val get_id : t -> OBus_uuid.t Lwt.t
 
 (** {6 Signals} *)
 
-val name_owner_changed : (OBus_name.connection * OBus_name.unique option * OBus_name.unique option) OBus_signal.t
+val name_owner_changed : (OBus_name.bus * OBus_name.bus option * OBus_name.bus option) OBus_signal.t
   (** This signal is emited each the owner of a name (unique
       connection name or service name) change.
 
@@ -208,8 +208,8 @@ val name_owner_changed : (OBus_name.connection * OBus_name.unique option * OBus_
       disconnection message looks like: [(name, Some name, None)]
       where is a connection unique name. *)
 
-val name_lost : OBus_name.connection OBus_signal.t
-val name_acquired : OBus_name.connection OBus_signal.t
+val name_lost : OBus_name.bus OBus_signal.t
+val name_acquired : OBus_name.bus OBus_signal.t
 
 (** {6 Service monotiring} *)
 

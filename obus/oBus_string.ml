@@ -16,7 +16,7 @@ type error = {
   msg : string;
 }
 
-type tester = string -> error option
+type validator = string -> error option
 
 exception Invalid_string of error
 
@@ -26,7 +26,7 @@ let error_message error =
   else
     Printf.sprintf "invalid DBus %s(%S), at position %d: %s" error.typ error.str error.ofs error.msg
 
-let test s =
+let validate s =
   let fail i msg = Some{ typ = "string"; str = s; ofs = i; msg = msg } in
 
   let rec trail minimum acc count i =
@@ -68,9 +68,9 @@ let test s =
 
   main 0
 
-let validate tester str = match tester str with
+let assert_validate validator str = match validator str with
   | Some error -> raise (Invalid_string error)
   | None -> ()
-let lwt_validate tester str = match tester str with
+let lwt_assert_validate validator str = match validator str with
   | Some error -> Lwt.fail (Invalid_string error)
   | None -> Lwt.return ()

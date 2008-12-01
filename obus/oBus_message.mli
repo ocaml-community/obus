@@ -54,8 +54,8 @@ type 'typ t = {
   flags : flags;
   serial : serial;
   typ : 'typ;
-  destination : OBus_name.connection option;
-  sender : OBus_name.unique option;
+  destination : OBus_name.bus option;
+  sender : OBus_name.bus option;
   body : body;
 }
 
@@ -69,8 +69,8 @@ val body : 'a t -> body
 val flags : 'a t -> flags
 val serial : 'a t -> serial
 val typ : 'a t -> 'a
-val destination : 'a t -> OBus_name.connection option
-val sender : 'a t -> OBus_name.unique option
+val destination : 'a t -> OBus_name.bus option
+val sender : 'a t -> OBus_name.bus option
 val path : [< method_call_type | signal_type ] t -> OBus_path.t
 val interface : [< method_call_type | signal_type ] t -> OBus_name.interface option
 val signal_interface : signal -> OBus_name.interface
@@ -86,16 +86,16 @@ val error_name : error -> OBus_name.error
 val make :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   typ:'a ->
   body -> 'a t
 
 val method_call :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
@@ -104,16 +104,16 @@ val method_call :
 val method_return :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   reply_serial:serial ->
   body -> method_return
 
 val error :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   reply_serial:serial ->
   error_name:OBus_name.error ->
   body -> error
@@ -121,8 +121,8 @@ val error :
 val signal :
   ?flags:flags ->
   ?serial:serial ->
-  ?sender:OBus_name.unique ->
-  ?destination:OBus_name.connection ->
+  ?sender:OBus_name.bus ->
+  ?destination:OBus_name.bus ->
   path:OBus_path.t ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->

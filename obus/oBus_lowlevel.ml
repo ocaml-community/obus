@@ -61,8 +61,8 @@ type raw_fields = {
   _interface : OBus_name.interface option;
   _error_name : OBus_name.error option;
   _reply_serial : serial option;
-  _destination : OBus_name.connection option;
-  _sender : OBus_name.unique option;
+  _destination : OBus_name.bus option;
+  _sender : OBus_name.bus option;
   _signature : signature;
 }
 
@@ -316,7 +316,7 @@ struct
       | path ->
           let i, put_padding = wpad4 i
           and len = List.fold_left (fun acc elt ->
-                                      match OBus_path.test_element elt with
+                                      match OBus_path.validate_element elt with
                                         | Some error ->
                                             failwith (OBus_string.error_message error)
                                         | None ->
@@ -355,7 +355,7 @@ struct
       | Uint32 x -> write4 put_uint32 i x
       | Uint64 x -> write8 put_uint64 i x
       | Double x -> write8 put_uint64 i (Int64.bits_of_float x)
-      | String x -> begin match OBus_string.test x with
+      | String x -> begin match OBus_string.validate x with
           | Some error ->
               failwith (OBus_string.error_message error)
           | None ->
@@ -532,12 +532,12 @@ struct
 
       let acc = 0, return () in
       let acc = wfield 1 Tobject_path wobject_path fields._path acc in
-      let acc = wfield_test 2 OBus_name.test_interface fields._interface acc in
-      let acc = wfield_test 3 OBus_name.test_member fields._member acc in
-      let acc = wfield_test 4 OBus_name.test_error fields._error_name acc in
+      let acc = wfield_test 2 OBus_name.validate_interface fields._interface acc in
+      let acc = wfield_test 3 OBus_name.validate_member fields._member acc in
+      let acc = wfield_test 4 OBus_name.validate_error fields._error_name acc in
       let acc = wfield 5 Tuint32 (write4 put_uint32) fields._reply_serial acc in
-      let acc = wfield_test 6 OBus_name.test_connection fields._destination acc in
-      let acc = wfield_test 7 OBus_name.test_unique fields._sender acc in
+      let acc = wfield_test 6 OBus_name.validate_bus fields._destination acc in
+      let acc = wfield_test 7 OBus_name.validate_bus fields._sender acc in
       let fields_length, put_fields = wfield_real 8 Tsignature wsignature fields._signature acc in
 
       if fields_length > max_array_size then
@@ -921,7 +921,7 @@ struct
       | Tdouble -> read8 get_vdouble
       | Tstring ->
           (fun i size ->
-             rstring i size >>= fun (i, str) -> match OBus_string.test str with
+             rstring i size >>= fun (i, str) -> match OBus_string.validate str with
                | Some error ->
                    failwith (OBus_string.error_message error)
                | None ->
@@ -1034,12 +1034,12 @@ struct
              get_uint8 >>=
                (function
                   | 1 -> rfield 1 Tobject_path robject_path i >>= (fun (i, x) -> aux (i, { acc with _path = Some x }))
-                  | 2 -> rfield_test 2 OBus_name.test_interface i >>= (fun (i, x) -> aux (i, { acc with _interface = Some x }))
-                  | 3 -> rfield_test 3 OBus_name.test_member i >>= (fun (i, x) -> aux (i, { acc with _member = Some x }))
-                  | 4 -> rfield_test 4 OBus_name.test_error i >>= (fun (i, x) -> aux (i, { acc with _error_name = Some x }))
+                  | 2 -> rfield_test 2 OBus_name.validate_interface i >>= (fun (i, x) -> aux (i, { acc with _interface = Some x }))
+                  | 3 -> rfield_test 3 OBus_name.validate_member i >>= (fun (i, x) -> aux (i, { acc with _member = Some x }))
+                  | 4 -> rfield_test 4 OBus_name.validate_error i >>= (fun (i, x) -> aux (i, { acc with _error_name = Some x }))
                   | 5 -> rfield 5 Tuint32 ruint32 i >>= (fun (i, x) -> aux (i, { acc with _reply_serial = Some x }))
-                  | 6 -> rfield_test 6 OBus_name.test_connection i >>= (fun (i, x) -> aux (i, { acc with _destination = Some x }))
-                  | 7 -> rfield_test 7 OBus_name.test_unique i >>= (fun (i, x) -> aux (i, { acc with _sender = Some x }))
+                  | 6 -> rfield_test 6 OBus_name.validate_bus i >>= (fun (i, x) -> aux (i, { acc with _destination = Some x }))
+                  | 7 -> rfield_test 7 OBus_name.validate_bus i >>= (fun (i, x) -> aux (i, { acc with _sender = Some x }))
                   | 8 -> rfield 8 Tsignature rsignature i >>= (fun (i, x) -> aux (i, { acc with _signature = x }))
                   | n ->
                       (perform

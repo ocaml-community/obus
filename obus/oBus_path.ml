@@ -23,21 +23,19 @@ let is_valid_char ch =
     (ch >= '0' && ch <= '9') ||
     ch = '_'
 
-let test str =
+let validate str =
   let fail i msg = Some{ typ = "path"; str = str; ofs = i; msg = msg }
   and len = length str in
 
   let rec aux_element_start i =
     if i = len then
       fail (i - 1) "trailing '/'"
+    else if is_valid_char (unsafe_get str i) then
+      aux_element (i + 1)
+    else if unsafe_get str i = '/' then
+      fail i "empty element"
     else
-      if is_valid_char (unsafe_get str i) then
-        aux_element (i + 1)
-      else
-        if unsafe_get str i = '/' then
-          fail i "empty element"
-        else
-          fail i "invalid char"
+      fail i "invalid char"
 
   and aux_element i =
     if i = len then
@@ -46,22 +44,20 @@ let test str =
       let ch = unsafe_get str i in
       if ch = '/' then
         aux_element_start (i + 1)
+      else if is_valid_char ch then
+        aux_element (i + 1)
       else
-        if is_valid_char ch then
-          aux_element (i + 1)
-        else
-          fail i "invalid char"
+        fail i "invalid char"
   in
 
   if len = 0 then
     fail (-1) "empty path"
+  else if unsafe_get str 0 = '/' then
+    if len = 1 then None else aux_element_start 1
   else
-    if unsafe_get str 0 = '/' then
-      if len = 1 then None else aux_element_start 1
-    else
-      fail 0 "must start with '/'"
+    fail 0 "must start with '/'"
 
-let test_element = function
+let validate_element = function
   | "" ->
       Some{ typ = "path element"; str = ""; ofs = -1; msg = "empty element" }
   | str ->
@@ -69,11 +65,10 @@ let test_element = function
       let rec aux i =
         if i = len then
           None
+        else if is_valid_char (unsafe_get str i) then
+          aux (i + 1)
         else
-          if is_valid_char (unsafe_get str i) then
-            aux (i + 1)
-          else
-            Some{ typ = "path element"; str = ""; ofs = i; msg = "invalid character" }
+          Some{ typ = "path element"; str = ""; ofs = i; msg = "invalid character" }
       in
       aux 0
 
@@ -94,7 +89,7 @@ let to_string = function
       str
 
 let of_string str =
-  match test str with
+  match validate str with
     | Some error ->
         raise (OBus_string.Invalid_string error)
     | None ->

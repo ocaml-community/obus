@@ -40,5 +40,5 @@ val unescape : element -> string
 
 (** {6 Validation} *)
 
-val test : OBus_string.tester
-val test_element : OBus_string.tester
+val validate : OBus_string.validator
+val validate_element : OBus_string.validator

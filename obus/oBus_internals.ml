@@ -87,7 +87,7 @@ type connection = {
 
   (* Unique name of the connection. If set this means that the other
      side is a message bus. *)
-  mutable name : OBus_name.unique option;
+  mutable name : OBus_name.bus option;
 
   (* The ougoing thread.
 
@@ -117,7 +117,7 @@ and dbus_object = connection _dbus_object
 
 and signal_receiver = {
   (* Matching rules *)
-  sr_sender : OBus_name.unique option;
+  sr_sender : OBus_name.bus option;
   sr_path : OBus_path.t option;
   sr_interface : OBus_name.interface;
   sr_member : OBus_name.member;

@@ -62,9 +62,9 @@ let mk_aname test =
       | Some error -> failwith (OBus_string.error_message error)
       | None -> return name
 
-let amember = mk_aname OBus_name.test_member
-let anode = mk_aname OBus_path.test_element
-let ainterface = mk_aname OBus_name.test_interface
+let amember = mk_aname OBus_name.validate_member
+let anode = mk_aname OBus_path.validate_element
+let ainterface = mk_aname OBus_name.validate_interface
 
 let method_decl =
   elt "method"
@@ -97,7 +97,7 @@ let property_decl =
 let node =
   elt "node" (perform
                 name <-- anode;
-                match OBus_path.test_element name with
+                match OBus_path.validate_element name with
                   | None -> return name
                   | Some error -> failwith (OBus_string.error_message { error with OBus_string.typ = "node name" }))
 

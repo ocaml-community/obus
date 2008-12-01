@@ -31,9 +31,9 @@ let to_string ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
              | `error -> "error"
              | `signal -> "signal")
   end;
-  add_opt "sender" OBus_name.test_connection sender;
-  add_opt "interface" OBus_name.test_interface interface;
-  add_opt "member" OBus_name.test_member member;
+  add_opt "sender" OBus_name.validate_bus sender;
+  add_opt "interface" OBus_name.validate_interface interface;
+  add_opt "member" OBus_name.validate_member member;
   begin match path with
      | None -> ()
      | Some [] ->
@@ -44,7 +44,7 @@ let to_string ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
          Buffer.add_string buf "path='";
          List.iter
            (fun elt ->
-              match OBus_path.test_element elt with
+              match OBus_path.validate_element elt with
                 | Some error ->
                     raise (OBus_string.Invalid_string error)
                 | None ->
@@ -53,6 +53,6 @@ let to_string ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
            p;
          Buffer.add_char buf '\''
   end;
-  add_opt "destination" OBus_name.test_connection destination;
+  add_opt "destination" OBus_name.validate_bus destination;
   List.iter (fun (n, value) -> !coma (); Printf.bprintf buf "arg%d='%s'" n value) args;
   Buffer.contents buf

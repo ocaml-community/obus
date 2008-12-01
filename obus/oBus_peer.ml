@@ -11,7 +11,7 @@ open OBus_type
 
 type t = {
   connection : OBus_connection.t;
-  name : OBus_name.connection option;
+  name : OBus_name.bus option;
 }
 
 let tt = wrap_sequence_ctx tunit

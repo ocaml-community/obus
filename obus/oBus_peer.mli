@@ -18,7 +18,7 @@ type t = {
   connection : OBus_connection.t;
   (** Connection used to reach the peer. *)
 
-  name : OBus_name.connection option;
+  name : OBus_name.bus option;
   (** Name of the peer. This only make sense if the connection is a
       connection to a message bus. *)
 }
@@ -68,7 +68,7 @@ val tt : t OBus_type.ty_sequence
       ]}
   *)
 
-val make : OBus_connection.t -> OBus_name.connection -> t
+val make : OBus_connection.t -> OBus_name.bus -> t
   (** [make connection name] make a named peer *)
 
 val anonymous : OBus_connection.t -> t
@@ -77,7 +77,7 @@ val anonymous : OBus_connection.t -> t
 val connection : t -> OBus_connection.t
   (** [connection peer] return the connection part of a peer *)
 
-val name : t -> OBus_name.connection option
+val name : t -> OBus_name.bus option
   (** [name peer] return the name part of a peer *)
 
 val ping : t -> t Lwt.t

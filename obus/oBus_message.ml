@@ -47,8 +47,8 @@ type 'typ t = {
   flags : flags;
   serial : serial;
   typ : 'typ;
-  destination : OBus_name.connection option;
-  sender : OBus_name.unique option;
+  destination : OBus_name.bus option;
+  sender : OBus_name.bus option;
   body : body;
 }
 
