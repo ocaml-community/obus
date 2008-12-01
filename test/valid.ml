@@ -27,15 +27,15 @@ let testc b s =
     (fun exn -> prerr_endline (Printexc.to_string exn); return ())
 
 let _ =
-  test OBus_path.test "";
-  test OBus_path.test "/";
-  test OBus_path.test "/dd//dd";
-  test OBus_path.test "/dd//";
-  test OBus_path.test "/dd/";
-  test test_connection ":er.1dsf";
-  test test_connection ":er..dsf";
-  test test_connection "erdsf.1ze";
-  test test_interface "toto";
+  test OBus_path.validate "";
+  test OBus_path.validate "/";
+  test OBus_path.validate "/dd//dd";
+  test OBus_path.validate "/dd//";
+  test OBus_path.validate "/dd/";
+  test validate_bus ":er.1dsf";
+  test validate_bus ":er..dsf";
+  test validate_bus "erdsf.1ze";
+  test validate_bus "toto";
   Lwt_unix.run
     (perform
        b <-- Lazy.force OBus_bus.session;

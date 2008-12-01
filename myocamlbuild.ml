@@ -25,7 +25,8 @@ struct
 
   (* All the modules of the obus library *)
   let all_modules =
-    [ "MQueue";
+    [ "Constant";
+      "MQueue";
       "Log";
       "Addr_lexer";
       "Util";
