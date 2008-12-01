@@ -16,7 +16,7 @@ type member = string
 type error = string
 
 let alpha ch = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
-let underscore ch = ch = '-'
+let underscore ch = ch = '_'
 let hyphen ch = ch = '-'
 let digit ch = ch >= '0' && ch <= '9'
 
