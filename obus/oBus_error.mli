@@ -44,10 +44,8 @@ exception No_reply of message
   (** Raised when a method did not receive a reply, for example
       because of a timeout *)
 
-val failwith : ('b, unit, string, 'a Lwt.t) format4 -> 'b
-  (** [failwith fmt ...] short-hand for:
-
-      [Lwt.fail (OBus_error.Failed (Printf.sprintf fmt ...)] *)
+val failwith : message -> 'a Lwt.t
+  (** [failwith msg = Lwt.fail (OBus_error.Failed msg)] *)
 
 (** {6 Exception registration} *)
 

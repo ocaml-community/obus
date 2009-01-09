@@ -15,7 +15,7 @@ exception Unknown_method of message
 exception Out_of_memory of message
 exception No_reply of message
 
-let failwith fmt = Printf.ksprintf (fun msg -> Lwt.fail (Failed msg)) fmt
+let failwith msg = Lwt.fail (Failed msg)
 
 open Printf
 

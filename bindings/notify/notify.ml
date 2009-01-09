@@ -104,8 +104,10 @@ let init =
                 | Some id ->
                     id.id_deleted <- true;
                     ids := List.remove_assoc n !ids;
-                    id.id_on_closed ()
-                | None -> ());
+                    id.id_on_closed ();
+                    return ()
+                | None ->
+                    return ());
 
          (* Handle signals for actions *)
          OBus_signal.connect daemon action_invoked
@@ -114,8 +116,10 @@ let init =
                 | Some id ->
                     id.id_deleted <- true;
                     ids := List.remove_assoc n !ids;
-                    id.id_on_action key
-                | None -> ());
+                    id.id_on_action key;
+                    return ()
+                | None ->
+                    return ());
 
          return daemon)
 

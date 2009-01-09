@@ -24,6 +24,9 @@ type bus = OBus_string.t
 
 val validate_bus : OBus_string.validator
 
+val is_unique : bus -> bool
+  (** Tell wether a bus name is a unique connection name or not. *)
+
 type interface = OBus_string.t
     (** Interface names
 

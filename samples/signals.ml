@@ -18,7 +18,8 @@ let handle_multimedia_keys device =
   OBus_signal.connect device Hal.Device.condition
     (fun (action, key) ->
        printf "from Hal: action %S on key %S!\n" action key;
-       printf "          the signal come from the device %S\n%!" (OBus_path.to_string (Hal.Device.udi device)))
+       printf "          the signal come from the device %S\n%!" (OBus_path.to_string (Hal.Device.udi device));
+       return ())
   >>= fun _ -> return ()
 
 let main : unit Lwt.t =
@@ -34,13 +35,18 @@ let main : unit Lwt.t =
            | None -> ""
          in
          printf "from DBus: the owner of the name %S changed: \"%s\" -> \"%s\"\n%!"
-           name (opt old_owner) (opt new_owner));
+           name (opt old_owner) (opt new_owner);
+         return ());
 
     OBus_signal.connect session OBus_bus.name_lost
-      (printf "from DBus: i lost the name %S!\n%!");
+      (fun name ->
+         printf "from DBus: i lost the name %S!\n%!" name;
+         return ());
 
     OBus_signal.connect session OBus_bus.name_acquired
-      (printf "from DBus: i got the name '%S!\n%!");
+      (fun name ->
+         printf "from DBus: i got the name '%S!\n%!" name;
+         return ());
 
     (*** Some hal signals ***)
 
@@ -51,11 +57,10 @@ let main : unit Lwt.t =
          printf "from Hal: device added: %S\n%!" (OBus_path.to_string (OBus_proxy.path device));
 
          (* Handle the adding of keyboards *)
-         ignore_result
-           (Hal.Device.query_capability device "input.keyboard"
-            >>= function
-              | true -> handle_multimedia_keys device
-              | false -> return ()));
+         Hal.Device.query_capability device "input.keyboard"
+         >>= function
+           | true -> handle_multimedia_keys device
+           | false -> return ());
 
     (* Find all keyboards and handle events on them *)
     keyboards <-- Hal.Manager.find_device_by_capability hal "input.keyboard";

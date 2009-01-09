@@ -304,3 +304,14 @@ let sha_1 s =
   i2s h 12 !h3;
   i2s h 16 !h4;
   h
+
+module Make_map(T : sig type t end) =
+struct
+  include Map.Make(struct type t = T.t let compare = compare end)
+
+  let lookup key map =
+    try
+      Some(find key map)
+    with
+        Not_found -> None
+end

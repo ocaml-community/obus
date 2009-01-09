@@ -1,13 +1,17 @@
 (*
- * rules.ml
- * --------
+ * match_rule.ml
+ * -------------
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-let to_string ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
+open OBus_type
+
+OBUS_type t = string
+
+let make ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =
   let buf = Buffer.create 42 in
   let rec coma = ref (fun _ -> coma := fun _ -> Buffer.add_char buf ',') in
   let add key value =

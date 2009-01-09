@@ -224,10 +224,9 @@ val add_outgoing_filter : t -> filter -> filter_id
   (** Add a filter to the given connection. It will be called before
       all previously defined filters *)
 
-val enable_filter : filter_id -> unit
-val disable_filter : filter_id -> unit
-val filter_enabled : filter_id -> bool
-  (** Manipulation of registred filters *)
+val remove_filter : filter_id -> unit
+  (** Remove a previously added filter. Do nothing if the filter was
+      already removed. *)
 
 (** {6 Errors handling} *)
 

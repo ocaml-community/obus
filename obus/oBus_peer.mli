@@ -91,3 +91,8 @@ val ping : t -> t Lwt.t
 
 val get_machine_id : t -> OBus_uuid.t Lwt.t
   (** Return the id of the machine the peer is running on *)
+
+val wait_for_exit : t -> unit Lwt.t
+  (** [wait_for_exit peer] wait until [peer] exit. If [peer] is not
+      running then it returns immediatly. Raises [Invalid_argument] if
+      the peer has no name. *)

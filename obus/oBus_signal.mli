@@ -17,31 +17,40 @@ type 'a t
 type receiver
   (** Id of a function which receive signals *)
 
-val connect : OBus_proxy.t -> 'a t -> ?args:(int * string) list -> ('a -> unit) -> receiver Lwt.t
-  (** [connect obj signal ?args func] connect [func] to signals
-      [signal] emitted by [obj].
+val connect : OBus_proxy.t -> 'a t -> ?serial:bool -> ?args:(int * string) list -> ('a -> unit Lwt.t) -> receiver Lwt.t
+  (** [connect proxy signal ?serial ?args func] connect [func] to signals
+      [signal] emitted by [proxy].
 
       [args] is a pattern for string argument of signals. For example
       [(0, "a"); (2, "b")] will match signals for which argument 0 is
       [Basic(String "a")] and argument 2 is [Basic(String "b")].
 
       The filtering with [args] is also done by the message bus so
-      this may reduce the number of wakup. *)
+      this may reduce the number of wakup.
 
-val connect_any : OBus_peer.t -> 'a t -> ?args:(int * string) list -> (OBus_proxy.t -> 'a -> unit) -> receiver Lwt.t
-  (** [connect_any peer signal ?args func] same as connect but [func]
-      will receive signals emited by any objects of [peer]. *)
+      If [serial] is [true] then calls to [func] are serialized. It
+      default to [false]. *)
 
-val disable : receiver -> unit Lwt.t
+val connect_any : OBus_peer.t -> 'a t -> ?serial:bool -> ?args:(int * string) list -> (OBus_proxy.t -> 'a -> unit Lwt.t) -> receiver Lwt.t
+  (** [connect_any peer signal ?serial ?args func] same as connect but
+      [func] will receive signals emited by any objects of [peer]. *)
+
+val disconnect : receiver -> unit
   (** Disable a receiver. Do nothing if the receiver is already
       disabled *)
 
-val enable : receiver -> unit Lwt.t
-  (** Enable a receiver. Do nothing if the receiver is already
-      enabled *)
+(** Notes:
 
-val enabled : receiver -> bool
-  (** Tell weather the given receiver is currently active *)
+    - if the name of the peer is a unique name, then when the peer
+    exit the receiver is automatically disabled. Especially if the
+    name is not owned, it is supposed that the peer already exited
+
+    - it is guaranted that when {!connect}, {!connect_any} or
+    {!enable} returns, signals will be immediatly catched.
+
+    - it is guaranted that when {!disable} returns, signals will be
+    immediatly discared. *)
+
 
 (** {6 Signal creation} *)
 

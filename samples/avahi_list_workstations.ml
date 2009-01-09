@@ -25,23 +25,30 @@ let main : unit Lwt.t =
        (fun (interface, protocol, name, service, domain, flags) ->
           printf "new workstation found:\n  name = %S\n  domain = %S\n\n%!" name domain;
 
-          ignore_result
-            (perform
-               resolver <-- Server.service_resolver_new avahi interface protocol name service domain (-1) 0;
+          perform
+            resolver <-- Server.service_resolver_new avahi interface protocol name service domain (-1) 0;
 
-               OBus_signal.connect resolver Service_resolver.found
-                 (fun (interface, protocol, name, typ, domain, host, aprotocol, address, port, txt, flags) ->
-                    printf "the resolver found:\n  name = %S\n  host = %S\n  address = %S\n\n%!" name host address);
+            OBus_signal.connect resolver Service_resolver.found
+              (fun (interface, protocol, name, typ, domain, host, aprotocol, address, port, txt, flags) ->
+                 printf "the resolver found:\n  name = %S\n  host = %S\n  address = %S\n\n%!" name host address;
+                 return ());
 
-               OBus_signal.connect resolver Service_resolver.failure
-                 (printf "failure of the service resolver: %S\n\n%!")));
+            OBus_signal.connect resolver Service_resolver.failure
+              (fun msg ->
+                 printf "failure of the service resolver: %S\n\n%!" msg;
+                 return ());
+
+            return ());
 
      OBus_signal.connect service_browser Service_browser.item_remove
        (fun (interface, protocol, name, service, domain, flags) ->
-          printf "workstation removed:  name = %S\n  domain = %S\n\n%!" name domain);
+          printf "workstation removed:  name = %S\n  domain = %S\n\n%!" name domain;
+          return ());
 
      OBus_signal.connect service_browser Service_browser.failure
-       (printf "failure of the service browser: %S\n\n%!");
+       (fun msg ->
+          printf "failure of the service browser: %S\n\n%!" msg;
+          return ());
 
      let _ = printf "type Ctrl+C to stop\n%!" in
      wait ())

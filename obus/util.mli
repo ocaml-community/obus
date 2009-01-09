@@ -83,3 +83,11 @@ val random_string : int -> string
 val random_int : unit -> int
 val random_int32 : unit -> int32
 val random_int64 : unit -> int64
+
+module Make_map(Key : sig type t end) : sig
+  include Map.S with type key = Key.t
+
+  val lookup : Key.t -> 'a t -> 'a option
+    (** [lookup key map] same as [Map.S.find] but return an option
+        instead of failing *)
+end

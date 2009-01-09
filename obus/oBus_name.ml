@@ -92,7 +92,7 @@ let validate_bus = function
   | str when unsafe_get str 0 = ':' ->
       validate_from "unique connection name" (fun ch -> alpha ch || underscore ch || hyphen ch || digit ch) str 1
   | str ->
-      validate_from "bus name" (fun ch -> alpha ch || underscore ch || hyphen ch || digit ch) str 0
+      validate_from "bus name" (fun ch -> alpha ch || underscore ch || hyphen ch) str 0
 
 let validate_member str =
   let fail i msg = Some{ typ = "member name"; str = str; ofs = i; msg = msg }
@@ -119,3 +119,5 @@ let validate_member str =
       aux 1
     else
       fail 0 "invalid character"
+
+let is_unique name = length name > 0 && unsafe_get name 0 = ':'

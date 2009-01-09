@@ -210,8 +210,3 @@ val name_owner_changed : (OBus_name.bus * OBus_name.bus option * OBus_name.bus o
 
 val name_lost : OBus_name.bus OBus_signal.t
 val name_acquired : OBus_name.bus OBus_signal.t
-
-(** {6 Service monotiring} *)
-
-val wait_for_exit : OBus_peer.t -> unit Lwt.t
-  (** [wait_for_exit bus peer] wait for [peer] to exit, then return *)

@@ -26,10 +26,10 @@ exception Transport_error of exn
 type t = connection
 
 type filter = OBus_internals.filter
-type filter_id = filter MSet.node * filter MSet.t
+type filter_id = filter MSet.node
 
 (* Mapping from server guid to connection. *)
-module Guid_map = My_map(struct type t = guid end)
+module Guid_map = Util.Make_map(struct type t = guid end)
 let guid_connection_map = ref Guid_map.empty
 
 let remove_connection_of_guid_map = function
@@ -263,7 +263,18 @@ let signal_match r
     { sender = sender;
       typ = `Signal(path, interface, member);
       body = body } =
-  (r.sr_sender = sender) &&
+  (match r.sr_sender, sender with
+     | None, _ -> true
+
+     (* this normally never happen because with a message bus, all
+        messages have a sender field *)
+     | _, None -> false
+
+     (* This case is when the name the rule filter on do not currently
+        have an owner *)
+     | Some { contents = None }, _ -> false
+
+     | Some { contents = Some owner }, Some sender -> owner = sender) &&
     (match r.sr_path with
        | Some p -> p = path
        | None -> true) &&
@@ -282,13 +293,11 @@ let signal_match_ignore_sender r
     (tst_args r.sr_args body)
 
 let add_incoming_filter connection filter =
-  with_running (fun connection -> (MSet.add connection.incoming_filters filter, connection.incoming_filters)) connection
+  with_running (fun connection -> MSet.add connection.incoming_filters filter) connection
 let add_outgoing_filter connection filter =
-  with_running (fun connection -> (MSet.add connection.outgoing_filters filter, connection.outgoing_filters)) connection
+  with_running (fun connection -> MSet.add connection.outgoing_filters filter) connection
 
-let filter_enabled (node, set) = not (MSet.is_alone node)
-let enable_filter (node, set) = MSet.insert node set
-let disable_filter (node, set) = MSet.remove node
+let remove_filter = MSet.remove
 
 (***** Reading/dispatching *****)
 
@@ -332,18 +341,31 @@ let dispatch_message connection = function
             MSet.iter
               (fun receiver ->
                  if signal_match_ignore_sender receiver message
-                 then receiver.sr_handler connection message)
+                 then callback_apply "signal callback" receiver.sr_callback (connection, message))
               connection.signal_receivers
 
-        | Some _, Some _ ->
+        | Some _, Some sender ->
+            (* Internal handling of "NameOwnerChange" messages for
+               name resolving. *)
+            begin match sender, message with
+              | "org.freedesktop.DBus",
+                { typ = `Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
+                  body = [Basic(String name); Basic(String old_owner); Basic(String new_owner)] } ->
+
+                  update_resolver connection name (if new_owner = "" then None else Some new_owner)
+
+              | _ ->
+                  ()
+            end;
+
             MSet.iter
               (fun receiver ->
                  if signal_match receiver message
-                 then receiver.sr_handler connection message)
+                 then callback_apply "signal callback" receiver.sr_callback (connection, message))
               connection.signal_receivers
       end
 
-  (* Hacks for the special "org.freedesktop.DBus.Peer" interface *)
+  (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
   | { typ = `Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } as message -> begin
       match member, body with
         | "Ping", [] ->
@@ -464,6 +486,8 @@ let of_transport ?guid ?(up=true) transport =
            | Connection_closed -> return ()
            | exn -> fail exn);
       shutdown_transport_on_close = ref true;
+      name_mapping = Name_map.empty;
+      exited_peers = Cache.create 100;
     } in
     ignore (dispatch_forever connection);
     connection

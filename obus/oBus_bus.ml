@@ -56,9 +56,9 @@ let session = lazy(of_laddresses OBus_address.session)
 let system = lazy(of_laddresses OBus_address.system)
 
 OBUS_exception Error.ServiceUnknown
-OBUS_exception Error.NameHasNoOwner
 OBUS_exception Error.MatchRuleNotFound
 OBUS_exception Error.ServiceUnknown
+OBUS_exception Error.NameHasNoOwner
 
 OBUS_bitwise request_name_flag : uint =
   [ 1 -> `allow_replacement
@@ -93,9 +93,9 @@ OBUS_method ListActivatableNames : string list
 OBUS_method GetNameOwner : string -> string
 OBUS_method ListQueuedOwners : string -> string list
 
-OBUS_type match_rule = string
+OBUS_type match_rule = Match_rule.t
 
-let match_rule = Rules.to_string
+let match_rule = Match_rule.make
 
 OBUS_method AddMatch : match_rule -> unit
 OBUS_method RemoveMatch : match_rule -> unit
@@ -117,18 +117,6 @@ let tname_opt = wrap_basic tstring
 OBUS_signal NameOwnerChanged : string * name_opt * name_opt
 OBUS_signal NameLost : string
 OBUS_signal NameAcquired : string
-
-let wait_for_exit peer =
-  let w = wait ()
-  and bus = make (OBus_peer.connection peer)
-  and args = match OBus_peer.name peer with
-    | Some name -> [(0, name); (1, name); (2, "")]
-    | None -> [(2, "")] in
-  (perform
-     id <-- OBus_signal.connect bus ~args name_owner_changed
-       (fun _ -> wakeup w ());
-     w;
-     OBus_signal.disable id)
 
 let get_peer bus name =
   let connection = connection bus in

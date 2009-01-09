@@ -91,8 +91,8 @@ class virtual properties = OBUS_interface "org.freedesktop.DBus.Properties"
   OBUS_method GetAll : string -> {string, variant} list
 end
 
-module Method_map = My_map(struct type t = OBus_name.interface option * OBus_name.member * tsequence end)
-module Property_map = My_map(struct type t = OBus_name.interface * OBus_name.member end)
+module Method_map = Util.Make_map(struct type t = OBus_name.interface option * OBus_name.member * tsequence end)
+module Property_map = Util.Make_map(struct type t = OBus_name.interface * OBus_name.member end)
 
 class t = object(self)
   val mutable exports = []
@@ -226,6 +226,7 @@ class owned owner = object(self)
       interface member typ x
 
   initializer
-    ignore (OBus_bus.wait_for_exit owner >>= fun _ -> self#obus_destroy; return ());
+    if owner.OBus_peer.name <> None then
+      ignore (OBus_peer.wait_for_exit owner >>= fun _ -> self#obus_destroy; return ());
     self#obus_export (OBus_peer.connection owner)
 end

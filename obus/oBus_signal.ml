@@ -20,14 +20,14 @@ type 'a t = {
   broadcast : bool;
   interface : OBus_name.interface;
   member : OBus_name.member;
-  cast : OBus_connection.t -> OBus_message.signal -> 'a;
+  cast : OBus_connection.t * OBus_message.signal -> 'a;
 }
 
 let make ?(broadcast=true) ~interface ~member ty = {
   broadcast = broadcast;
   interface = interface;
   member = member;
-  cast = fun connection message -> cast_sequence ty
+  cast = fun (connection, message) -> cast_sequence ty
     ~context:(Context(connection, (message :> OBus_message.any)))
     (OBus_message.body message);
 }
@@ -36,14 +36,20 @@ let dmake ?(broadcast=true) ~interface ~member = {
   broadcast = broadcast;
   interface = interface;
   member = member;
-  cast = fun connection message -> OBus_message.body message;
+  cast = fun (connection, message) -> OBus_message.body message;
 }
 
-let map f s = { s with cast = fun connection message -> f (s.cast connection message) }
+let map f s = { s with cast = fun x -> f (s.cast x) }
 
-type receiver = match_rule option * OBus_connection.t * signal_receiver MSet.node
+type receiver = (unit -> unit) ref
+    (* A receiver is just a disable function *)
 
-(* Compute the argument filters *)
+let disconnect r =
+  let f = !r in
+  r := (fun _ -> ());
+  f ()
+
+(* Compute the arguments filter *)
 let make_args_filter l =
   let rec aux prev = function
     | [] -> []
@@ -55,85 +61,97 @@ let make_args_filter l =
   in
   aux (-1) (List.sort (fun (x, _) (y, _) -> x - y) l)
 
-let call member connection = function
-  | None -> return ()
-  | Some m ->
-      if is_bus connection then
-        method_call connection
-          ~destination:"org.freedesktop.DBus"
-          ~path:["org"; "freedesktop"; "DBus"]
-          ~interface:"org.freedesktop.DBus"
-          ~member
-          (<< match_rule -> unit >>)
-          m
-      else
-        return ()
+let safe_cast cast x =
+  try
+    Some(cast x)
+  with
+    | Cast_failure ->
+        None
+    | exn ->
+        Log.failure exn "message cast fail with";
+        None
 
-let enable (mr, connection, node) =
-  match MSet.is_alone node with
-    | false -> return ()
-    | true ->
-        lwt_with_running
-          (fun connection ->
-             MSet.insert node connection.signal_receivers;
-             call "AddMatch" connection mr)
-          connection
+let connect_backend callback_func peer path_mask signal ?(serial=false) ?(args=[]) func =
+  lwt_with_running begin fun connection ->
 
-let disable (mr, connection, node) =
-  match MSet.is_alone node with
-    | true -> return ()
-    | false ->
-        lwt_with_running
-          (fun connection ->
-             MSet.remove node;
-             call "RemoveMatch" connection mr)
-          connection
+    let make_signal_receiver sender_opt = {
+      sr_sender = sender_opt;
+      sr_path = path_mask;
+      sr_interface = signal.interface;
+      sr_member = signal.member;
+      sr_args = make_args_filter args;
+      sr_callback = make_callback serial callback_func;
+    } in
 
-let enabled (mr, connection, node) = not (MSet.is_alone node)
+    if not (is_bus connection) then
+      (* If the connection is a peer-to-peer connection the only thing
+         to do is to locally add the receiver *)
+      let node = MSet.add connection.signal_receivers (make_signal_receiver None) in
+      return (ref (fun _ -> MSet.remove node))
 
-let connect proxy signal ?(args=[]) func =
-  let id = ((match signal.broadcast with
-               | true -> Some(Rules.to_string ~typ:`signal
-                                ?sender:proxy.peer.name
-                                ~path:proxy.path
-                                ~interface:signal.interface
-                                ~member:signal.member
-                                ~args ())
-               | false -> None),
-            proxy.peer.connection,
-            MSet.node { sr_sender = proxy.peer.name;
-                        sr_path = Some proxy.path;
-                        sr_interface = signal.interface;
-                        sr_member = signal.member;
-                        sr_args = make_args_filter args;
-                        sr_handler = fun connection message ->
-                          try
-                            func (signal.cast connection message)
-                          with
-                            | Cast_failure -> ()
-                            | exn -> Log.failure exn "signal handler fail with" }) in
-  enable id >>= fun _ -> return id
+    else begin
 
-let connect_any peer signal ?(args=[]) func =
-  let id = ((match signal.broadcast with
-               | true -> Some(Rules.to_string ~typ:`signal
-                                ?sender:peer.name
-                                ~interface:signal.interface
-                                ~member:signal.member
-                                ~args ())
-               | false -> None),
-            peer.connection,
-            MSet.node { sr_sender = peer.name;
-                        sr_path = None;
-                        sr_interface = signal.interface;
-                        sr_member = signal.member;
-                        sr_args = make_args_filter args;
-                        sr_handler = fun connection message ->
-                          try
-                            func { peer = { connection = connection; name = OBus_message.sender message };
-                                   path = OBus_message.path message }
-                              (signal.cast connection message)
-                          with
-                            | Cast_failure -> ()
-                            | exn -> Log.failure exn "signal handler fail with" }) in
-  enable id >>= fun _ -> return id
+      let cont monitor resolver_opt signal_receiver =
+        let match_rule = Match_rule.make
+          ~typ:`signal
+          ?sender:peer.name
+          ?path:path_mask
+          ~interface:signal.interface
+          ~member:signal.member
+          ~args ()
+        and node = MSet.add connection.signal_receivers signal_receiver in
+        let receiver = ref (fun _ ->
+                              MSet.remove node;
+                              begin match resolver_opt with
+                                | Some resolver ->
+                                    OBus_resolver.disable resolver
+                                | None ->
+                                    ()
+                              end;
+                              ignore (Bus.remove_match connection match_rule)) in
+        if monitor then
+          (* If the peer has a unique name, then remove the receiver
+             when the peer exit *)
+          ignore (OBus_peer.wait_for_exit peer >>= fun _ -> disconnect receiver; return ());
+        if signal.broadcast then
+          Bus.add_match connection match_rule >>= fun _ -> return receiver
+        else
+          return receiver
+      in
+
+      match peer.name with
+        | None ->
+            cont false None (make_signal_receiver None)
+
+        | Some name ->
+            OBus_resolver.make connection name >>= fun resolver ->
+              if OBus_name.is_unique name then begin
+                if not (OBus_resolver.owned resolver) then begin
+                  OBus_resolver.disable resolver;
+                  return (ref (fun _ -> ()))
+                end else
+                  cont true (Some resolver) (make_signal_receiver (Some (OBus_resolver.internal_resolver resolver)))
+              end else
+                cont false (Some resolver) (make_signal_receiver (Some (OBus_resolver.internal_resolver resolver)))
+    end
+  end peer.connection
+
+let connect proxy signal ?serial ?args func =
+  connect_backend
+    (fun (connection, message) ->
+       match safe_cast signal.cast (connection, message) with
+         | Some x -> func x
+         | None -> return ())
+    proxy.peer (Some proxy.path) signal ?serial ?args func
+
+let connect_any peer signal ?serial ?args func =
+  connect_backend
+    (fun (connection, message) ->
+       match safe_cast signal.cast (connection, message) with
+         | Some x ->
+             let `Signal(path, _, _) = message.OBus_message.typ in
+             func { OBus_proxy.peer = { OBus_peer.connection = connection;
+                                        OBus_peer.name = message.OBus_message.sender };
+                    OBus_proxy.path = path } x
+         | None -> return ())
+    peer None signal ?serial ?args func

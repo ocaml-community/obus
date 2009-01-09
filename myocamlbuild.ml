@@ -31,6 +31,7 @@ struct
       "Addr_lexer";
       "Util";
       "MSet";
+      "Cache";
       "OBus_string";
       "OBus_info";
       "Types_rw";
@@ -39,7 +40,7 @@ struct
       "OBus_type";
       "OBus_name";
       "OBus_uuid";
-      "Rules";
+      "Match_rule";
       "Xparser";
       "OBus_address";
       "OBus_lowlevel";
@@ -49,8 +50,10 @@ struct
       "OBus_error";
       "OBus_introspect";
       "OBus_connection";
+      "Bus";
       "OBus_peer";
       "OBus_proxy";
+      "OBus_resolver";
       "OBus_signal";
       "OBus_property";
       "OBus_interface";
