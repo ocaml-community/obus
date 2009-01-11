@@ -10,7 +10,6 @@
 (* Very simple service with one object have a ping method *)
 
 open Lwt
-open OBus_type
 
 class virtual pong = OBUS_interface "org.plop.foo"
   OBUS_method ping : string -> string

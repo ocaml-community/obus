@@ -151,61 +151,66 @@ val wrap_array_ctx : [< 'a cl_element ] ->
 
 (** {6 Default type combinators} *)
 
-val tbyte : char ty_basic
-val tchar : char ty_basic
-val tboolean : bool ty_basic
-val tbool : bool ty_basic
-val tint8 : int ty_basic
-val tint16 : int ty_basic
-val tint : int ty_basic
-val tint32 : int32 ty_basic
-val tint64 : int64 ty_basic
-val tuint8 : int ty_basic
-val tuint16 : int ty_basic
-val tuint : int ty_basic
-val tuint32 : int32 ty_basic
-val tuint64 : int64 ty_basic
-val tdouble : float ty_basic
-val tfloat : float ty_basic
-val tstring : string ty_basic
-val tsignature : signature ty_basic
-val tobject_path : OBus_path.t ty_basic
-val tpath : OBus_path.t ty_basic
+module Pervasives : sig
 
-val tlist : [< 'a cl_element ] -> 'a list ty_single
-val tdict_entry : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) ty_element
-val tassoc : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) list ty_single
-  (** [tassoc tk tv] is equivalent to [tlist (tdict_entry tk tv)] *)
-val tstructure : [< 'a cl_sequence ] -> 'a ty_single
-val tvariant : single ty_single
+  (** This module is automatically opened by the syntax extension *)
 
-val tbyte_array : string ty_single
-  (** Array of bytes seen as string *)
+  val tbyte : char ty_basic
+  val tchar : char ty_basic
+  val tboolean : bool ty_basic
+  val tbool : bool ty_basic
+  val tint8 : int ty_basic
+  val tint16 : int ty_basic
+  val tint : int ty_basic
+  val tint32 : int32 ty_basic
+  val tint64 : int64 ty_basic
+  val tuint8 : int ty_basic
+  val tuint16 : int ty_basic
+  val tuint : int ty_basic
+  val tuint32 : int32 ty_basic
+  val tuint64 : int64 ty_basic
+  val tdouble : float ty_basic
+  val tfloat : float ty_basic
+  val tstring : string ty_basic
+  val tsignature : signature ty_basic
+  val tobject_path : OBus_path.t ty_basic
+  val tpath : OBus_path.t ty_basic
 
-val tpair : [< 'a cl_sequence ] -> [< 'b cl_sequence ] -> ('a * 'b) ty_sequence
-val tunit : unit ty_sequence
+  val tlist : [< 'a cl_element ] -> 'a list ty_single
+  val tdict_entry : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) ty_element
+  val tassoc : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) list ty_single
+    (** [tassoc tk tv] is equivalent to [tlist (tdict_entry tk tv)] *)
+  val tstructure : [< 'a cl_sequence ] -> 'a ty_single
+  val tvariant : single ty_single
 
-type byte = char
-type boolean = bool
-type int8 = int
-type uint8 = int
-type int16 = int
-type uint16 = int
-type uint32 = int32
-type uint64 = int64
-type uint = int
-type double = float
-type signature = OBus_value.signature
-type object_path = OBus_path.t
-type path = OBus_path.t
-type ('a, 'b) dict_entry = 'a * 'b
-type ('a, 'b) assoc = ('a, 'b) dict_entry list
-type 'a structure = 'a
-type variant = single
-type byte_array = string
-    (** Dummy type definition, they should be used in combination with
-        the syntax extension, to define the dbus type and the caml
-        type at the same time *)
+  val tbyte_array : string ty_single
+    (** Array of bytes seen as string *)
+
+  val tunit : unit ty_sequence
+
+  type byte = char
+  type boolean = bool
+  type int8 = int
+  type uint8 = int
+  type int16 = int
+  type uint16 = int
+  type uint32 = int32
+  type uint64 = int64
+  type uint = int
+  type double = float
+  type signature = OBus_value.signature
+  type object_path = OBus_path.t
+  type path = OBus_path.t
+  type ('a, 'b) dict_entry = 'a * 'b
+  type ('a, 'b) assoc = ('a, 'b) dict_entry list
+  type 'a structure = 'a
+  type variant = single
+  type byte_array = string
+      (** Dummy type definition, they should be used in combination with
+          the syntax extension, to define the dbus type and the caml
+          type at the same time *)
+
+end
 
 (** {6 map and set with obus type} *)
 

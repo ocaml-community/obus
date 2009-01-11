@@ -128,7 +128,7 @@ let to_string l =
   end l;
   Buffer.contents buf
 
-let tlist = OBus_type.wrap_basic OBus_type.tstring of_string to_string
+let tlist = OBus_type.wrap_basic OBus_type.Pervasives.tstring of_string to_string
 
 let system_bus_variable = "DBUS_SYSTEM_BUS_ADDRESS"
 let session_bus_variable = "DBUS_SESSION_BUS_ADDRESS"

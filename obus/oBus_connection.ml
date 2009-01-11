@@ -12,7 +12,6 @@ module Log = Log.Make(struct let section = "connection" end)
 open Printf
 open OBus_message
 open OBus_internals
-open OBus_type
 open OBus_value
 open Lwt
 
@@ -35,10 +34,10 @@ module Name_map = Util.Make_map(struct type t = OBus_name.bus end)
 exception Context of connection * OBus_message.any
 let mk_context connection msg = Context(connection, (msg :> OBus_message.any))
 
-let tt = wrap_sequence_ctx tunit
+let tt = OBus_type.wrap_sequence_ctx tunit
   (fun context () -> match context with
      | Context(connection, msg) -> connection
-     | _ -> raise Cast_failure)
+     | _ -> raise OBus_type.Cast_failure)
   (fun _ -> ())
 
 (* Mapping from server guid to connection. *)
@@ -70,17 +69,17 @@ let method_call' connection ?flags ?sender ?destination ~path ?interface ~member
   send_message_with_reply connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
   >>= fun msg ->
     try
-      return (cast_sequence ~context:(mk_context connection msg) ty_reply msg.body)
+      return (OBus_type.cast_sequence ~context:(mk_context connection msg) ty_reply msg.body)
     with
-      | Cast_failure ->
+      | OBus_type.Cast_failure ->
           (* If not, check why the cast fail *)
-          let expected_sig = type_sequence ty_reply
+          let expected_sig = OBus_type.type_sequence ty_reply
           and got_sig = type_of_sequence msg.body in
           if expected_sig = got_sig
           then
             (* If the signature match, this means that the user
                defined a combinator raising a Cast_failure *)
-            fail Cast_failure
+            fail OBus_type.Cast_failure
           else
             (* In other case this means that the expected signature is
                wrong *)
@@ -91,7 +90,7 @@ let method_call' connection ?flags ?sender ?destination ~path ?interface ~member
                           (string_of_signature got_sig)))
 
 let method_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member ty =
-  make_func ty begin fun body ->
+  OBus_type.make_func ty begin fun body ->
     send_message connection (method_call ~flags:{ flags with no_reply_expected = true }
                                ?sender ?destination ~path ?interface ~member body)
   end
@@ -107,12 +106,12 @@ let dmethod_call_no_reply connection ?(flags=default_flags) ?sender ?destination
        ?sender ?destination ~path ?interface ~member body)
 
 let method_call connection ?flags ?sender ?destination ~path ?interface ~member ty =
-  make_func ty begin fun body ->
-    method_call' connection ?flags ?sender ?destination ~path ?interface ~member body (func_reply ty)
+  OBus_type.make_func ty begin fun body ->
+    method_call' connection ?flags ?sender ?destination ~path ?interface ~member body (OBus_type.func_reply ty)
   end
 
 let emit_signal connection ?flags ?sender ?destination ~path ~interface ~member ty x =
-  send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member (make_sequence ty x))
+  send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member (OBus_type.make_sequence ty x))
 
 let demit_signal connection ?flags ?sender ?destination ~path ~interface ~member body =
   send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member body)
@@ -126,7 +125,7 @@ let dsend_reply connection { sender = sender; serial = serial } body =
                             body = body }
 
 let send_reply connection mc typ v =
-  dsend_reply connection mc (make_sequence typ v)
+  dsend_reply connection mc (OBus_type.make_sequence typ v)
 
 let send_error connection { sender = sender; serial = serial } name msg =
   send_message connection { destination = sender;

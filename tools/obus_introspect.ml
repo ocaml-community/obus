@@ -8,7 +8,6 @@
  *)
 
 open Common
-open OBus_type
 open OBus_interface
 
 let recursive = ref false

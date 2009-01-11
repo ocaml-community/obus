@@ -179,113 +179,6 @@ let wrap_sequence_ctx (`sequence t) f g = `sequence
     make = (fun x -> t.make (g x));
     cast = (fun context l -> let v, rest = t.cast context l in (f context v, rest)) }
 
-(***** Predefined types *****)
-
-let tbyte = `basic
-  { dtype = Tbyte;
-    make = vbyte;
-    cast = (fun context -> function
-              | Byte x -> x
-              | _ -> raise Cast_failure) }
-
-let tchar = tbyte
-
-let tint8 = wrap_basic tbyte
-  (fun x -> let x = int_of_char x in
-   if x >= 128 then x - 256 else x)
-  (fun x -> Char.unsafe_chr (x land 0xff))
-
-let tuint8 = wrap_basic tbyte
-  int_of_char
-  (fun x -> Char.unsafe_chr (x land 0xff))
-
-let tboolean = `basic
-  { dtype = Tboolean;
-    make = vboolean;
-    cast = (fun context -> function
-              | Boolean x -> x
-              | _ -> raise Cast_failure) }
-
-let tbool = tboolean
-
-let tint16 = `basic
-  { dtype = Tint16;
-    make = vint16;
-    cast = (fun context -> function
-              | Int16 x -> x
-              | _ -> raise Cast_failure) }
-
-let tint32 = `basic
-  { dtype = Tint32;
-    make = vint32;
-    cast = (fun context -> function
-              | Int32 x -> x
-              | _ -> raise Cast_failure) }
-
-let tint = wrap_basic tint32 Int32.to_int Int32.of_int
-
-let tint64 = `basic
-  { dtype = Tint64;
-    make = vint64;
-    cast = (fun context -> function
-              | Int64 x -> x
-              | _ -> raise Cast_failure) }
-
-let tuint16 = `basic
-  { dtype = Tuint16;
-    make = vuint16;
-    cast = (fun context -> function
-              | Uint16 x -> x
-              | _ -> raise Cast_failure) }
-
-let tuint32 = `basic
-  { dtype = Tuint32;
-    make = vuint32;
-    cast = (fun context -> function
-              | Uint32 x -> x
-              | _ -> raise Cast_failure) }
-
-let tuint = wrap_basic tuint32 Int32.to_int Int32.of_int
-
-let tuint64 = `basic
-  { dtype = Tuint64;
-    make = vuint64;
-    cast = (fun context -> function
-              | Uint64 x -> x
-              | _ -> raise Cast_failure) }
-
-let tdouble = `basic
-  { dtype = Tdouble;
-    make = vdouble;
-    cast = (fun context -> function
-              | Double x -> x
-              | _ -> raise Cast_failure) }
-
-let tfloat = tdouble
-
-let tstring = `basic
-  { dtype = Tstring;
-    make = vstring;
-    cast = (fun context -> function
-              | String x -> x
-              | _ -> raise Cast_failure) }
-
-let tsignature = `basic
-  { dtype = Tsignature;
-    make = vsignature;
-    cast = (fun context -> function
-              | Signature x -> x
-              | _ -> raise Cast_failure) }
-
-let tobject_path = `basic
-  { dtype = Tobject_path;
-    make = vobject_path;
-    cast = (fun context -> function
-              | Object_path x -> x
-              | _ -> raise Cast_failure) }
-
-let tpath = tobject_path
-
 let wrap_array elt ~make ~cast =
   let typ = type_element elt in
   `single
@@ -308,58 +201,191 @@ let wrap_array_ctx elt ~make ~cast =
                 | Array(t, l) when t = typ -> cast context (f context) l
                 | _ -> raise Cast_failure) }
 
-let tlist elt = wrap_array elt List.map List.map
+(***** Predefined types *****)
 
-let tbyte_array = wrap_array tbyte
-  (fun f str ->
-     let rec aux i acc =
-       if i = 0
-       then acc
-       else aux (i - 1) (f str.[i] :: acc)
-     in
-     aux (String.length str) [])
-  (fun f l ->
-     let len = List.length l in
-     let str = String.create len in
-     ignore (List.fold_left (fun i x -> String.unsafe_set str i (f x); i + 1) 0 l);
-     str)
+module Pervasives =
+struct
 
-let tdict_entry tyk tyv =
-  let ktyp = type_basic tyk
-  and vtyp = type_single tyv in
-  `element
-    { dtype = Tdict_entry(ktyp, vtyp);
-      make = (let f = make_basic tyk
-              and g = make_single tyv in
-              fun (k, v) -> Dict_entry(f k, g v));
-      cast = (let f = _cast_basic tyk
-              and g = _cast_single tyv in
-              fun context -> function
-                | Dict_entry(k, v) -> (f context k, g context v)
+  let tbyte = `basic
+    { dtype = Tbyte;
+      make = vbyte;
+      cast = (fun context -> function
+                | Byte x -> x
                 | _ -> raise Cast_failure) }
 
-let tassoc tyk tyv = tlist (tdict_entry tyk tyv)
+  let tchar = tbyte
 
-let tstructure ty = `single
-  { dtype = Tstruct(type_sequence ty);
-    make = (let f = make_sequence ty in
-            fun x -> vstruct (f x));
-    cast = (let f = _cast_sequence ty in
-            fun context -> function
-              | Struct l -> f context l
-              | _ -> raise Cast_failure) }
+  let tint8 = wrap_basic tbyte
+    (fun x -> let x = int_of_char x in
+     if x >= 128 then x - 256 else x)
+    (fun x -> Char.unsafe_chr (x land 0xff))
 
-let tvariant = `single
-  { dtype = Tvariant;
-    make = vvariant;
-    cast = (fun context -> function
-              | Variant v -> v
-              | _ -> raise Cast_failure) }
+  let tuint8 = wrap_basic tbyte
+    int_of_char
+    (fun x -> Char.unsafe_chr (x land 0xff))
 
-let tunit = `sequence
-  { dtype = Tnil;
-    make = (fun () -> Tnil);
-    cast = (fun context l -> ((), l)) }
+  let tboolean = `basic
+    { dtype = Tboolean;
+      make = vboolean;
+      cast = (fun context -> function
+                | Boolean x -> x
+                | _ -> raise Cast_failure) }
+
+  let tbool = tboolean
+
+  let tint16 = `basic
+    { dtype = Tint16;
+      make = vint16;
+      cast = (fun context -> function
+                | Int16 x -> x
+                | _ -> raise Cast_failure) }
+
+  let tint32 = `basic
+    { dtype = Tint32;
+      make = vint32;
+      cast = (fun context -> function
+                | Int32 x -> x
+                | _ -> raise Cast_failure) }
+
+  let tint = wrap_basic tint32 Int32.to_int Int32.of_int
+
+  let tint64 = `basic
+    { dtype = Tint64;
+      make = vint64;
+      cast = (fun context -> function
+                | Int64 x -> x
+                | _ -> raise Cast_failure) }
+
+  let tuint16 = `basic
+    { dtype = Tuint16;
+      make = vuint16;
+      cast = (fun context -> function
+                | Uint16 x -> x
+                | _ -> raise Cast_failure) }
+
+  let tuint32 = `basic
+    { dtype = Tuint32;
+      make = vuint32;
+      cast = (fun context -> function
+                | Uint32 x -> x
+                | _ -> raise Cast_failure) }
+
+  let tuint = wrap_basic tuint32 Int32.to_int Int32.of_int
+
+  let tuint64 = `basic
+    { dtype = Tuint64;
+      make = vuint64;
+      cast = (fun context -> function
+                | Uint64 x -> x
+                | _ -> raise Cast_failure) }
+
+  let tdouble = `basic
+    { dtype = Tdouble;
+      make = vdouble;
+      cast = (fun context -> function
+                | Double x -> x
+                | _ -> raise Cast_failure) }
+
+  let tfloat = tdouble
+
+  let tstring = `basic
+    { dtype = Tstring;
+      make = vstring;
+      cast = (fun context -> function
+                | String x -> x
+                | _ -> raise Cast_failure) }
+
+  let tsignature = `basic
+    { dtype = Tsignature;
+      make = vsignature;
+      cast = (fun context -> function
+                | Signature x -> x
+                | _ -> raise Cast_failure) }
+
+  let tobject_path = `basic
+    { dtype = Tobject_path;
+      make = vobject_path;
+      cast = (fun context -> function
+                | Object_path x -> x
+                | _ -> raise Cast_failure) }
+
+  let tpath = tobject_path
+
+  let tlist elt = wrap_array elt List.map List.map
+
+  let tbyte_array = wrap_array tbyte
+    (fun f str ->
+       let rec aux i acc =
+         if i = 0
+         then acc
+         else aux (i - 1) (f str.[i] :: acc)
+       in
+       aux (String.length str) [])
+    (fun f l ->
+       let len = List.length l in
+       let str = String.create len in
+       ignore (List.fold_left (fun i x -> String.unsafe_set str i (f x); i + 1) 0 l);
+       str)
+
+  let tdict_entry tyk tyv =
+    let ktyp = type_basic tyk
+    and vtyp = type_single tyv in
+    `element
+      { dtype = Tdict_entry(ktyp, vtyp);
+        make = (let f = make_basic tyk
+                and g = make_single tyv in
+                fun (k, v) -> Dict_entry(f k, g v));
+        cast = (let f = _cast_basic tyk
+                and g = _cast_single tyv in
+                fun context -> function
+                  | Dict_entry(k, v) -> (f context k, g context v)
+                  | _ -> raise Cast_failure) }
+
+  let tassoc tyk tyv = tlist (tdict_entry tyk tyv)
+
+  let tstructure ty = `single
+    { dtype = Tstruct(type_sequence ty);
+      make = (let f = make_sequence ty in
+              fun x -> vstruct (f x));
+      cast = (let f = _cast_sequence ty in
+              fun context -> function
+                | Struct l -> f context l
+                | _ -> raise Cast_failure) }
+
+  let tvariant = `single
+    { dtype = Tvariant;
+      make = vvariant;
+      cast = (fun context -> function
+                | Variant v -> v
+                | _ -> raise Cast_failure) }
+
+  let tunit = `sequence
+    { dtype = Tnil;
+      make = (fun () -> Tnil);
+      cast = (fun context l -> ((), l)) }
+
+  type byte = char
+  type boolean = bool
+  type int8 = int
+  type uint8 = int
+  type int16 = int
+  type uint16 = int
+  type uint32 = int32
+  type uint64 = int64
+  type uint = int
+  type double = float
+  type signature = OBus_value.signature
+  type object_path = OBus_path.t
+  type path = OBus_path.t
+  type 'a set = 'a list
+  type ('a, 'b) dict_entry = 'a * 'b
+  type ('a, 'b) assoc = ('a, 'b) dict_entry set
+  type 'a structure = 'a
+  type variant = single
+  type byte_array = string
+end
+
+open Pervasives
 
 module type Ordered_element_type = sig
   type t
@@ -425,7 +451,7 @@ let abstract ty fty =
 
 let (-->) = abstract
 
-let tpair ty1 ty2 = `sequence
+let tup2 ty1 ty2 = `sequence
   { dtype = typ ty1 @ typ ty2;
     make = (fun (x1, x2) ->
               make ty1 x1
@@ -434,8 +460,6 @@ let tpair ty1 ty2 = `sequence
               let v1, l = cast ty1 context l in
               let v2, l = cast ty2 context l in
               ((v1, v2), l)) }
-
-let tup2 = tpair
 
 let tup3 ty1 ty2 ty3 = `sequence
   { dtype = typ ty1 @ typ ty2 @ typ ty3;
@@ -642,24 +666,4 @@ and with_ty_sequence w = function
       { with_ty_single = fun tx ->
           with_ty_sequence
             { with_ty_sequence = fun tl -> w.with_ty_sequence
-                (tpair (tx :> _ cl_sequence) (tl :> _ cl_sequence)) } tl } tx
-
-type byte = char
-type boolean = bool
-type int8 = int
-type uint8 = int
-type int16 = int
-type uint16 = int
-type uint32 = int32
-type uint64 = int64
-type uint = int
-type double = float
-type signature = OBus_value.signature
-type object_path = OBus_path.t
-type path = OBus_path.t
-type 'a set = 'a list
-type ('a, 'b) dict_entry = 'a * 'b
-type ('a, 'b) assoc = ('a, 'b) dict_entry set
-type 'a structure = 'a
-type variant = single
-type byte_array = string
+                (tup2 (tx :> _ cl_sequence) (tl :> _ cl_sequence)) } tl } tx

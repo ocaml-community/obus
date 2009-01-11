@@ -242,6 +242,5 @@ let _ =
 
   with_pp (output_file_prefix ^ ".ml")
     (fun pp ->
-       Format.fprintf pp "open OBus_type\n";
        if !service_mode && !no_sugar then Format.fprintf pp "open OBus_object\n";
        Interf_set.iter (printer pp) interfaces)

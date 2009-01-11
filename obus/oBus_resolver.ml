@@ -9,7 +9,6 @@
 
 open Lwt
 open OBus_internals
-open OBus_type
 
 type desc = {
   resolver_name : OBus_name.bus;

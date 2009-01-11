@@ -9,7 +9,6 @@
 
 open Lwt
 open OBus_internals
-open OBus_type
 
 include OBus_interface.Make(struct let name = "org.freedesktop.DBus" end)
 
@@ -106,7 +105,7 @@ OBUS_method GetConnectionSelinuxSecurityContext : string -> byte_array
 OBUS_method ReloadConfig : unit
 OBUS_method GetId : OBus_uuid.t
 
-let tname_opt = wrap_basic tstring
+let tname_opt = OBus_type.wrap_basic tstring
   (function
      | "" -> None
      | str -> Some str)

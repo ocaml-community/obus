@@ -8,7 +8,6 @@
  *)
 
 open OBus_name
-open OBus_type
 open Lwt
 
 let test f s =

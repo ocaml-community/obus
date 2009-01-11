@@ -8,7 +8,6 @@
  *)
 
 open Xml
-open OBus_type
 open Xparser
 
 type name = string
@@ -159,7 +158,7 @@ let to_xml (ifaces, nodes) =
                               @ pannots annots)) ifaces
           @ List.map (fun n -> Element("node", [("name", n)], [])) nodes)
 
-let tdocument = wrap_basic tstring
+let tdocument = OBus_type.wrap_basic OBus_type.Pervasives.tstring
   (fun x ->
      let p = XmlParser.make () in
      XmlParser.prove p false;

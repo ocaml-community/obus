@@ -4,7 +4,10 @@
 <**/*.ml{,i}>: syntax_camlp4o, pkg_camlp4, pkg_camlp4.macro
 
 # Use pa_obus for all files except pa_obus itself
-<{obus,tools,test,samples,bindings/*}/*.ml{,i}>: pkg_monad, pa_obus
+<{tools,test,samples,bindings/*}/*.ml{,i}>: pkg_monad, pa_obus
+<obus/*.ml{,i}>: pkg_monad
+<obus/{bus,match_rule}.ml{,i}>: pa_obus
+<obus/oBus_{connection,bus,peer,proxy,property,object,signal}.ml{,i}>: pa_obus
 
 # Syntax extensions
 <syntax/*>: pkg_camlp4.lib, pkg_camlp4.quotations.o, pkg_camlp4.extend

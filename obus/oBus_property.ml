@@ -9,6 +9,7 @@
 
 open Lwt
 open OBus_type
+open OBus_type.Pervasives
 open OBus_value
 
 type access = [ `readable | `writable ]
@@ -25,9 +26,9 @@ type ('a, 'access) t = {
 let make  ~interface ~member ~access typ = {
   interface = interface;
   member = member;
-  ty = wrap_single_ctx tvariant
-    (fun context v -> cast_single ~context typ v)
-    (fun v -> make_single typ v)
+  ty = OBus_type.wrap_single_ctx tvariant
+    (fun context v -> OBus_type.cast_single ~context typ v)
+    (fun v -> OBus_type.make_single typ v)
 }
 
 let dmake  ~interface ~member ~access = {

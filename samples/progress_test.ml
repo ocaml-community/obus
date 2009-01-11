@@ -8,7 +8,6 @@
  *)
 
 open Lwt
-open OBus_type
 
 OBUS_flag closed_reason : uint =
     | 0 -> Cancel

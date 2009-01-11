@@ -12,7 +12,6 @@ open Lwt
 open OBus_message
 open OBus_introspect
 open OBus_value
-open OBus_type
 open OBus_internals
 open OBus_connection
 
@@ -32,33 +31,33 @@ struct
   let args = List.map (fun x -> (None, x))
 
   let md_method name typ f =
-    let isig = isignature typ in
-    (Method(name, args isig, args (osignature typ), []),
+    let isig = OBus_type.isignature typ in
+    (Method(name, args isig, args (OBus_type.osignature typ), []),
      MI_method(name, isig,
                fun connection message ->
                  ignore_result
                    (try_bind
-                      (fun _ -> cast_func (tunit --> typ) ~context:(Context(connection, (message :> OBus_message.any))) message.body f)
-                      (send_reply connection message (func_reply typ))
+                      (fun _ -> OBus_type.cast_func (OBus_type.abstract tunit typ) ~context:(Context(connection, (message :> OBus_message.any))) message.body f)
+                      (send_reply connection message (OBus_type.func_reply typ))
                       (send_exn connection message))))
 
-  let md_signal name typ = (Signal(name, args (type_sequence typ), []), MI_signal)
+  let md_signal name typ = (Signal(name, args (OBus_type.type_sequence typ), []), MI_signal)
 
   let md_property_r name typ reader =
-    let ty = type_single typ in
+    let ty = OBus_type.type_single typ in
     (Property(name, ty, Read, []),
      MI_property(name,
                  Some(fun _ -> perform
                         x <-- reader ();
-                        return (make_single typ x)),
+                        return (OBus_type.make_single typ x)),
                  None))
 
   let md_property_w name typ writer =
-    let ty = type_single typ in
+    let ty = OBus_type.type_single typ in
     (Property(name, ty, Write, []),
      MI_property(name,
                  None,
-                 Some(fun x -> match opt_cast_single typ x with
+                 Some(fun x -> match OBus_type.opt_cast_single typ x with
                         | Some x -> writer x
                         | None -> fail (OBus_error.Failed (sprintf "invalid type for property %S: %s, should be %s"
                                                              name
@@ -66,13 +65,13 @@ struct
                                                              (string_of_signature [ty]))))))
 
   let md_property_rw name typ reader writer =
-    let ty = type_single typ in
+    let ty = OBus_type.type_single typ in
     (Property(name, ty, Read_write, []),
      MI_property(name,
                  Some(fun _ -> perform
                         x <-- reader ();
-                        return (make_single typ x)),
-                 Some(fun x -> match opt_cast_single typ x with
+                        return (OBus_type.make_single typ x)),
+                 Some(fun x -> match OBus_type.opt_cast_single typ x with
                         | Some x -> writer x
                         | None -> fail (OBus_error.Failed (sprintf "invalid type for property %S: %s, should be %s"
                                                              name
@@ -158,7 +157,7 @@ class t = object(self)
       | None -> ignore_result (send_exn connection message (unknown_method_exn message))
 
   method obus_emit_signal ?peer interface member typ x =
-    let body = make_sequence typ x
+    let body = OBus_type.make_sequence typ x
     and path = self#obus_path in
     match peer with
       | Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
@@ -200,7 +199,7 @@ let get_by_path connection path = match connection#find_object path with
 
 let opt_get_by_path connection path = connection#find_object path
 
-let tt = wrap_basic_ctx tpath
+let tt = OBus_type.wrap_basic_ctx tpath
   (fun context path -> match context with
      | Context(connection, _) ->
          (* Note that this will never fail because:
@@ -211,7 +210,7 @@ let tt = wrap_basic_ctx tpath
             - since dispatching, no lwt operation has been performed
             so the connection is still running *)
          get_by_path connection path
-     | _ -> raise Cast_failure)
+     | _ -> raise OBus_type.Cast_failure)
   (fun obj -> obj#obus_path)
 
 class owned owner = object(self)

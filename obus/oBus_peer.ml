@@ -8,17 +8,16 @@
  *)
 
 open Lwt
-open OBus_type
 
 type t = {
   connection : OBus_connection.t;
   name : OBus_name.bus option;
 }
 
-let tt = wrap_sequence_ctx tunit
+let tt = OBus_type.wrap_sequence_ctx <:obus_type< unit >>
   (fun context () -> match context with
      | OBus_connection.Context(connection, msg) -> { connection = connection; name = OBus_message.sender msg }
-     | _ -> raise Cast_failure)
+     | _ -> raise OBus_type.Cast_failure)
   (fun _ -> ())
 
 let make c n = { connection = c; name = Some n }

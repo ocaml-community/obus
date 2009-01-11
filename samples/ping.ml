@@ -10,7 +10,6 @@
 (* Ping the pong service *)
 
 open Lwt
-open OBus_type
 
 let _ = Lwt_unix.run
   (perform

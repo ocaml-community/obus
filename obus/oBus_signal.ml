@@ -10,7 +10,6 @@
 open Lwt
 open OBus_internals
 open OBus_connection
-open OBus_type
 open OBus_peer
 open OBus_proxy
 
@@ -27,7 +26,7 @@ let make ?(broadcast=true) ~interface ~member ty = {
   broadcast = broadcast;
   interface = interface;
   member = member;
-  cast = fun (connection, message) -> cast_sequence ty
+  cast = fun (connection, message) -> OBus_type.cast_sequence ty
     ~context:(Context(connection, (message :> OBus_message.any)))
     (OBus_message.body message);
 }
@@ -65,7 +64,7 @@ let safe_cast cast x =
   try
     Some(cast x)
   with
-    | Cast_failure ->
+    | OBus_type.Cast_failure ->
         None
     | exn ->
         Log.failure exn "message cast fail with";

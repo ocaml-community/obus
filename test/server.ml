@@ -8,7 +8,6 @@
  *)
 
 open Lwt
-open OBus_type
 
 let _ =
   Lwt_unix.run

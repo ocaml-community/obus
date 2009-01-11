@@ -146,8 +146,8 @@ struct
   let make_tuple_type _loc l =
     List.fold_right (fun typ acc ->
                        let _loc = Ast.loc_of_expr typ in
-                       <:expr< OBus_type.tpair $typ$ $acc$ >>)
-      l <:expr< OBus_type.tunit >>
+                       <:expr< OBus_type.tup2 $typ$ $acc$ >>)
+      l <:expr< OBus_type.Pervasives.tunit >>
 
   let make_tuple_of_seq _loc l =
     let vars = gen_vars Ast.loc_of_expr l in
@@ -166,7 +166,7 @@ struct
         let count = List.length l in
         if count <= 10
           (* if there is less than 10 type, use a predefined tuple combinator *)
-        then List.fold_left (fun acc e -> <:expr< $acc$ $e$ >>) <:expr< $lid:"tup" ^ string_of_int count$ >> l
+        then List.fold_left (fun acc e -> <:expr< $acc$ $e$ >>) <:expr< OBus_type.$lid:"tup" ^ string_of_int count$ >> l
           (* if there is more, create on a new specific one *)
         else <:expr< OBus_type.wrap_sequence
           $make_tuple_type _loc l$
@@ -180,9 +180,9 @@ struct
         (try <:expr< $id:Ast.ident_of_expr (expr_of_ty a)$.$id:Ast.ident_of_expr (expr_of_ty b)$ >>
          with Invalid_argument s -> raise (Stream.Error s))
     | Tapp(_loc, a, b) -> <:expr< $expr_of_ty a$ $expr_of_ty b$ >>
-    | Tstruct(_loc, t) -> <:expr< OBus_type.tstructure $expr_of_ty t$ >>
+    | Tstruct(_loc, t) -> <:expr< OBus_type.Pervasives.tstructure $expr_of_ty t$ >>
     | Tuple(_loc, l) -> make_tuple _loc (List.map expr_of_ty l)
-    | Tdict_entry(_loc, a, b) -> <:expr< OBus_type.tdict_entry $expr_of_ty a$ $expr_of_ty b$ >>
+    | Tdict_entry(_loc, a, b) -> <:expr< OBus_type.Pervasives.tdict_entry $expr_of_ty a$ $expr_of_ty b$ >>
     | Tvar(_loc, v) -> <:expr< $lid:v$ >>
 
   let rec expr_of_fty reply = function
@@ -480,7 +480,7 @@ struct
         | "OBUS_struct"; (n, tpl, l) = obus_record ->
             <:str_item<
                 type $make_record_decl _loc n tpl l$
-                $make_ty_def _loc n tpl <:expr< OBus_type.tstructure $make_record_expr _loc l$ >>$
+                $make_ty_def _loc n tpl <:expr< OBus_type.Pervasives.tstructure $make_record_expr _loc l$ >>$
             >>
 
         | "OBUS_type"; (n, tpl) = type_ident_and_parameters; "="; t = typ ->
@@ -571,3 +571,20 @@ struct
 end
 
 let module M = Register.OCamlSyntaxExtension(Id)(Make) in ()
+
+let _ =
+  AstFilters.register_sig_item_filter
+    (fun sg ->
+       let _loc = Ast.loc_of_sig_item sg in
+       <:sig_item<
+         open OBus_type.Pervasives
+         $sg$
+       >>);
+
+  AstFilters.register_str_item_filter
+    (fun st ->
+       let _loc = Ast.loc_of_str_item st in
+       <:str_item<
+         open OBus_type.Pervasives
+         $st$
+       >>);

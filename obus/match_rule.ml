@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open OBus_type
-
 OBUS_type t = string
 
 let make ?typ ?sender ?interface ?member ?path ?destination ?(args=[]) () =

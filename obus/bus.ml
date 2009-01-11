@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open OBus_type
-
 let destination = "org.freedesktop.DBus"
 let path = ["org"; "freedesktop"; "DBus"]
 let interface = "org.freedesktop.DBus"

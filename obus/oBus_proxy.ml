@@ -8,7 +8,6 @@
  *)
 
 open Lwt
-open OBus_type
 open OBus_peer
 open OBus_connection
 
@@ -25,13 +24,13 @@ let make peer path = {
 let peer p = p.peer
 let path p = p.path
 
-let tt = OBus_type.wrap_basic_ctx OBus_type.tobject_path
+let tt = OBus_type.wrap_basic_ctx <:obus_type< object_path >>
   (fun context path -> match context with
      | Context(connection, msg) ->
          { peer = { connection = connection;
                     name = OBus_message.sender msg };
            path = path }
-     | _ -> raise Cast_failure)
+     | _ -> raise OBus_type.Cast_failure)
   path
 
 let call proxy ?interface ~member typ =
