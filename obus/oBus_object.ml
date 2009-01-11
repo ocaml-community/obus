@@ -16,7 +16,7 @@ open OBus_type
 open OBus_internals
 open OBus_connection
 
-type member_desc = connection OBus_internals.member_desc
+type member_desc = OBus_internals.member_desc
 
 (* We use a module here to make [pa_obus] happy *)
 module OBus_object =
@@ -105,7 +105,7 @@ class t = object(self)
 
   method obus_path = ["ocaml_object"; string_of_int (Oo.id self)]
 
-  method introspect connection = return (interfaces, children connection (self#obus_path))
+  method introspect connection = return (interfaces, connection#children (self#obus_path))
 
   method get iface name =
     match Property_map.lookup (iface, name) properties with
@@ -169,25 +169,23 @@ class t = object(self)
                demit_signal connection ~interface ~member ~path body)
             exports
 
-  method obus_export =
-    with_running
-      (fun connection ->
-         connection.exported_objects <- Object_map.add (self#obus_path) (self :> dbus_object) connection.exported_objects;
-         exports <- connection :: exports)
+  method obus_export connection =
+    connection#export_object (self#obus_path) (self :> dbus_object);
+    exports <- connection :: exports
 
-  method obus_remove connection = match List.memq connection exports with
-    | true -> begin
+  method obus_remove connection = match List.mem connection exports with
+    | true ->
         exports <- List.filter ((!=) connection) exports;
-        with_running
-          (fun running ->
-             let path = self#obus_path in
-             match Object_map.lookup path connection.exported_objects with
-               | Some obj' when (self :> dbus_object) = obj' ->
-                   connection.exported_objects <- Object_map.remove path connection.exported_objects
-               | _ -> ())
-          connection
-      end
-    | false -> ()
+        let path = self#obus_path in
+        begin match connection#find_object path with
+          | Some obj' when (self :> dbus_object) = obj' ->
+              connection#remove_object path
+          | _ ->
+              ()
+        end
+
+    | false ->
+        ()
 
   method obus_destroy =
     List.iter (fun c -> self#obus_remove c) exports
@@ -196,11 +194,11 @@ class t = object(self)
     exports <- List.filter ((!=) connection) exports
 end
 
-let get_by_path connection path =
-  with_running (fun running -> Object_map.find path connection.exported_objects) connection
+let get_by_path connection path = match connection#find_object path with
+  | Some obj -> obj
+  | None -> raise Not_found
 
-let opt_get_by_path connection path =
-  with_running (fun running -> Object_map.lookup path connection.exported_objects) connection
+let opt_get_by_path connection path = connection#find_object path
 
 let tt = wrap_basic_ctx tpath
   (fun context path -> match context with

@@ -35,17 +35,17 @@ let error_handler = function
       Log.failure exn "the DBus connection with the message bus has been closed due to this uncaught exception";
       exit 1
 
-let of_connection = lwt_with_running
-  (fun connection -> match connection.name with
-     | Some _ ->
-         (* Do not call two times the Hello method *)
-         return (make connection)
-     | None ->
-         connection.on_disconnect := error_handler;
-         let bus = make connection in
-         hello bus >>= fun name ->
-           connection.name <- Some name;
-           return bus)
+let of_connection connection = match connection#name with
+  | Some _ ->
+      (* Do not call two times the Hello method *)
+      return (make connection)
+
+  | None ->
+      connection#on_disconnect := error_handler;
+      let bus = make connection in
+      hello bus >>= fun name ->
+        connection#set_name name;
+        return bus
 
 let of_addresses addresses =
   OBus_connection.of_addresses addresses ~shared:true >>= of_connection
