@@ -11,8 +11,8 @@ open Lwt
 open OBus_type
 open OBus_value
 
-let name = "org.freedesktop.Notifications"
-let path = ["org"; "freedesktop"; "Notifications"]
+let server_name = "org.freedesktop.Notifications"
+let server_path = ["org"; "freedesktop"; "Notifications"]
 
 include OBus_interface.Make(struct let name = "org.freedesktop.Notifications" end)
 
@@ -44,16 +44,57 @@ OBUS_flag closed_reason : uint =
     | 3 -> `closed_explicitly
     | 4 -> `undefined ]
 
-type id_desc = {
-  id_id : int32;
-  mutable id_deleted : bool;
-  id_on_action : string -> unit;
-  id_on_closed : unit -> unit;
+OBUS_type notification_server_id = uint32
+    (* An notification id as returned by the server *)
+
+OBUS_type notification_id = OBus_peer.t * notification_server_id
+    (* We consider that an id is the pair of the id given by the
+       daemon plus the peer of the daemon. This is to avoid the
+       following problem:
+
+       1 - the notification daemon start
+       2 - we open a notification -> id = 1
+       3 - a new notification daemon starts and replaces the first one
+       4 - we open a notification -> id = 1 (ARGL!!)
+    *)
+
+type notification = {
+  (* All information about an opened notification *)
+
+  notif_id : notification_id;
+  (* Id of the notification *)
+
+  mutable notif_deleted : bool;
+  (* Wether the notification as already been closed *)
+
+  notif_action : string -> unit;
+  (* Wakeup the waiting thread when an action is received *)
+
+  notif_closed : unit -> unit;
+  (* Wakeup the waiting thread with [`closed] when a notification is
+     closed *)
 }
 
-type 'a id = id_desc * 'a Lwt.t
+type 'a id = notification * 'a Lwt.t
+    (* The id given to the user: the notification description plus a
+       thread waiting for the notification to be closed/clicked *)
 
-let ids = ref []
+let notifications : notification list ref = ref []
+  (* All opened notifications *)
+
+let default_action = "default"
+  (* Default action for notifications *)
+
+let find_notification id =
+  let rec aux = function
+    | [] -> None
+    | n :: l ->
+        if n.notif_id = id then
+          Some n
+        else
+          aux l
+  in
+  aux !notifications
 
 type hint =
   | Hint_image of image
@@ -79,49 +120,67 @@ open Lwt
 OBUS_method GetServerInformation : server_info
 OBUS_method GetCapabilities : string list
 
-OBUS_method Notify : string -> uint32 -> string -> string -> string -> string list -> hint list -> int -> uint32
-OBUS_method CloseNotification : uint32 -> unit
+OBUS_method Notify : string -> uint32 -> string -> string -> string -> string list -> hint list -> int -> notification_id
+OBUS_method CloseNotification : notification_server_id -> unit
 
-(* Signals sent by the notification daemon are not braodcasted and it is an
-   error to match on the bus for them because there is no way to distinguish
-   between signals destined to us and signals destined to other application *)
-OBUS_signal! NotificationClosed : uint32
-OBUS_signal! ActionInvoked : uint32 * string
-
-let assoc x l =
-  try Some(List.assoc x l) with
-      Not_found -> None
+OBUS_signal NotificationClosed : notification_id
+OBUS_signal ActionInvoked : notification_id * string
 
 let init =
   lazy(perform
          bus <-- Lazy.force OBus_bus.session;
-         let daemon = OBus_bus.make_proxy bus name path in
+
+         OBus_resolver.make (OBus_bus.connection bus) server_name
+           ~on_change:begin function
+             | Some name ->
+                 let daemon = OBus_bus.make_peer bus name in
+
+                 OBus_peer.wait_for_exit daemon >>= fun _ ->
+                   (* Cancel all opened notification opened on this peer when it exit *)
+                   notifications := List.filter
+                     (fun notif ->
+                        if fst notif.notif_id = daemon then begin
+                          notif.notif_closed ();
+                          false
+                        end else
+                          true) !notifications;
+                   return ()
+
+                 | None ->
+                     return ()
+           end;
+
+         (* Create an anymous proxy for connecting signals, so we will
+            receive signals comming from any daemon *)
+         let anonymous_proxy = { OBus_proxy.peer = { OBus_peer.connection = OBus_bus.connection bus;
+                                                     OBus_peer.name = None };
+                                 OBus_proxy.path = server_path } in
 
          (* Handle signals for closed notifications *)
-         OBus_signal.connect daemon notification_closed
-           (fun n ->
-              match assoc n !ids with
-                | Some id ->
-                    id.id_deleted <- true;
-                    ids := List.remove_assoc n !ids;
-                    id.id_on_closed ();
+         OBus_signal.connect anonymous_proxy notification_closed
+           (fun id ->
+              match find_notification id with
+                | Some notif ->
+                    notif.notif_deleted <- true;
+                    notifications := List.filter (fun n -> n.notif_id <> id) !notifications;
+                    notif.notif_closed ();
                     return ()
                 | None ->
                     return ());
 
          (* Handle signals for actions *)
-         OBus_signal.connect daemon action_invoked
-           (fun (n, key) ->
-              match assoc n !ids with
-                | Some id ->
-                    id.id_deleted <- true;
-                    ids := List.remove_assoc n !ids;
-                    id.id_on_action key;
+         OBus_signal.connect anonymous_proxy action_invoked
+           (fun (id, action) ->
+              match find_notification id with
+                | Some notif ->
+                    notif.notif_deleted <- true;
+                    notifications := List.filter (fun n -> n.notif_id <> id) !notifications;
+                    notif.notif_action action;
                     return ()
                 | None ->
                     return ());
 
-         return daemon)
+         return (OBus_bus.make_proxy bus server_name server_path))
 
 let get_server_information _ =
   Lazy.force init >>= get_server_information
@@ -129,25 +188,15 @@ let get_server_information _ =
 let get_capabilities _ =
   Lazy.force init >>= get_capabilities
 
-let close_notification (id, w) =
-  if not id.id_deleted then begin
-    id.id_deleted <- true;
-    ids := List.remove_assoc id.id_id !ids;
-    id.id_on_closed ();
-    Lazy.force init >>= fun p -> close_notification p id.id_id
+let close_notification (notif, w) =
+  if not notif.notif_deleted then begin
+    notif.notif_deleted <- true;
+    notifications := List.filter (fun n -> n.notif_id <> notif.notif_id) !notifications;
+    notif.notif_closed ();
+    Lazy.force init >>= fun p -> close_notification p (snd notif.notif_id)
   end else return ()
 
 let de = desktop_entry
-
-(* Survive to replacement/crash of the notification daemon *)
-(*let setup_monitor_daemon =
-  lazy(perform
-         bus <-- Lazy.force OBus_bus.session;
-         OBus_bus.on_service_status_change bus "org.freedesktop.Notifications"
-           (fun _ ->
-              List.iter (fun (_, id) -> id.id_on_closed ()) !ids;
-              ids := []);
-         return ())*)
 
 let result (id, w) = w
 
@@ -184,26 +233,29 @@ let notify ?(app_name= !app_name) ?desktop_entry
          let key = Printf.sprintf "key%d" acc in
          (acc + 1, key :: text :: al, (key, user_key) :: am))
       actions (0, [], []) in
+  let actions_map = (default_action, `default) :: actions_map in
 
   perform
     (* Retreive the daemon *)
     daemon <-- Lazy.force init;
 
     (* Create the notification *)
-    n <-- notify daemon
+    id <-- notify daemon
       app_name (match replace with
-                  | Some (id, w) -> id.id_id
+                  | Some (notif, w) -> snd notif.notif_id
                   | None -> 0l)
       icon summary body actions_list hints timeout;
 
     let w = wait () in
-    let id = { id_id = n;
-               id_deleted = false;
-               id_on_action = (fun action -> match assoc action actions_map with
-                                 | Some k -> wakeup w k
-                                 | None -> wakeup w `Closed);
-               id_on_closed = (fun _ -> wakeup w `Closed) } in
+    let notif = { notif_id = id;
+                  notif_deleted = false;
+                  notif_action = (fun action ->
+                                    wakeup w (try
+                                                List.assoc action actions_map
+                                              with
+                                                  Not_found -> `default));
+                  notif_closed = (fun _ -> wakeup w `closed) } in
 
-    let _ = ids := (n, id) :: !ids in
+    let _ = notifications := notif :: !notifications in
 
-    return (id, w)
+    return (notif, w)

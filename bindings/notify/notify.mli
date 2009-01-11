@@ -53,7 +53,7 @@ val notify :
   ?image:image ->
   summary:string ->
   ?body:string ->
-  ?actions:(string * ([> `Closed ] as 'a)) list ->
+  ?actions:(string * ([> `default | `closed ] as 'a)) list ->
   ?urgency:urgency ->
   ?category:string ->
   ?sound_file:string ->
@@ -85,10 +85,20 @@ val notify :
       - [suppress_sound] tell the daemon to suppress sounds
       - [pos] is a screen position
       - [hints] is a list of additionnal hints
-      - [timeout] is a timeout in millisecond *)
+      - [timeout] is a timeout in millisecond
+  *)
 
 val result : 'a id -> 'a Lwt.t
-  (** Return the reason why a notification has been closed *)
+  (** Wait for a notification to be closed then return:
+
+      - [`closed] if the user clicked on the cross, timeout was
+      reached or the notification daemon exited
+
+      - [`default] if the default action was invoked, i.e. the user
+      clicked on the notification, but not on a buttons
+
+      - the corresponding action if the user clicked on a button other
+      than the cross *)
 
 val close_notification : 'a id -> unit Lwt.t
   (** Close a previously opened popup *)

@@ -16,15 +16,16 @@ let main =
 
      id <-- Notify.notify ~summary:"Actions test" ~body:"click on something!"
        ~category:"network"
-       ~actions:[("coucou", `Coucou);
-                 ("plop", `Plop)] ();
+       ~actions:[("coucou", `coucou);
+                 ("plop", `plop)] ();
 
      result <-- Notify.result id;
 
      let _ = match result with
-       | `Coucou -> print_endline "You pressed coucou!"
-       | `Plop -> print_endline "You pressed plop!"
-       | `Closed -> print_endline "notification closed"
+       | `coucou -> print_endline "You pressed coucou!"
+       | `plop -> print_endline "You pressed plop!"
+       | `default -> print_endline "default action invoked"
+       | `closed -> print_endline "notification closed"
      in
 
      return ())
