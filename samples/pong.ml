@@ -32,7 +32,7 @@ let _ = Lwt_unix.run
      OBus_bus.request_name bus "org.plop";
 
      (* Export the object on the connection *)
-     let _ = obj#obus_export (OBus_bus.connection bus) in
+     let _ = obj#obus_export bus in
 
      (* Wait forever *)
      wait ())

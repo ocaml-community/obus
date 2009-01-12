@@ -128,10 +128,10 @@ let _ = Lwt_unix.run
      bus <-- Lazy.force OBus_bus.session;
 
      (* export the object *)
-     let _ = manager#obus_export (OBus_bus.connection bus) in
+     let _ = manager#obus_export bus in
 
      (* ask for a well-know name *)
      OBus_bus.request_name bus "org.ocamlcore.forge.obus.ProgressBar";
 
      (* Wait for the message bus to exit *)
-     OBus_bus.watch bus)
+     OBus_connection.watch bus)

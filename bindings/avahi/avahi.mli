@@ -13,18 +13,18 @@
 module Address_resolver : sig
   type t = OBus_proxy.t
   val free : t -> unit Lwt.t
-  val found : (int * int * int * string * string * int) OBus_signal.t
-  val failure : string OBus_signal.t
+  val found : t -> (int * int * int * string * string * int) OBus_signal.t
+  val failure : t -> string OBus_signal.t
 end
 
 module Domain_browser : sig
   type t = OBus_proxy.t
   val free : t -> unit Lwt.t
-  val item_new : (int * int * string * int) OBus_signal.t
-  val item_remove : (int * int * string * int) OBus_signal.t
-  val failure : string OBus_signal.t
-  val all_for_now : unit OBus_signal.t
-  val cache_exhausted : unit OBus_signal.t
+  val item_new : t -> (int * int * string * int) OBus_signal.t
+  val item_remove : t -> (int * int * string * int) OBus_signal.t
+  val failure : t -> string OBus_signal.t
+  val all_for_now : t -> unit OBus_signal.t
+  val cache_exhausted : t -> unit OBus_signal.t
 end
 
 module Entry_group : sig
@@ -33,7 +33,7 @@ module Entry_group : sig
   val commit : t -> unit Lwt.t
   val reset : t -> unit Lwt.t
   val get_state : t -> int Lwt.t
-  val state_changed : (int * string) OBus_signal.t
+  val state_changed : t -> (int * string) OBus_signal.t
   val is_empty : t -> bool Lwt.t
   val add_service : t -> int -> int -> int -> string -> string -> string -> string -> int -> char list list -> unit Lwt.t
   val add_service_subtype : t -> int -> int -> int -> string -> string -> string -> string -> unit Lwt.t
@@ -45,45 +45,45 @@ end
 module Host_name_resolver : sig
   type t = OBus_proxy.t
   val free : t -> unit Lwt.t
-  val found : (int * int * string * int * string * int) OBus_signal.t
-  val failure : string OBus_signal.t
+  val found : t -> (int * int * string * int * string * int) OBus_signal.t
+  val failure : t -> string OBus_signal.t
 end
 
 module Record_browser : sig
   type t = OBus_proxy.t
   val free : t -> unit Lwt.t
-  val item_new : (int * int * string * int * int * char list * int) OBus_signal.t
-  val item_remove : (int * int * string * int * int * char list * int) OBus_signal.t
-  val failure : string OBus_signal.t
-  val all_for_now : unit OBus_signal.t
-  val cache_exhausted : unit OBus_signal.t
+  val item_new : t -> (int * int * string * int * int * char list * int) OBus_signal.t
+  val item_remove : t -> (int * int * string * int * int * char list * int) OBus_signal.t
+  val failure : t -> string OBus_signal.t
+  val all_for_now : t -> unit OBus_signal.t
+  val cache_exhausted : t -> unit OBus_signal.t
 end
 
 module Service_browser : sig
   type t = OBus_proxy.t
   val free : t -> unit Lwt.t
-  val item_new : (int * int * string * string * string * int) OBus_signal.t
-  val item_remove : (int * int * string * string * string * int) OBus_signal.t
-  val failure : string OBus_signal.t
-  val all_for_now : unit OBus_signal.t
-  val cache_exhausted : unit OBus_signal.t
+  val item_new : t -> (int * int * string * string * string * int) OBus_signal.t
+  val item_remove : t -> (int * int * string * string * string * int) OBus_signal.t
+  val failure : t -> string OBus_signal.t
+  val all_for_now : t -> unit OBus_signal.t
+  val cache_exhausted : t -> unit OBus_signal.t
 end
 
 module Service_resolver : sig
   type t = OBus_proxy.t
   val free : t -> unit Lwt.t
-  val found : (int * int * string * string * string * string * int * string * int * char list list * int) OBus_signal.t
-  val failure : string OBus_signal.t
+  val found : t -> (int * int * string * string * string * string * int * string * int * char list list * int) OBus_signal.t
+  val failure : t -> string OBus_signal.t
 end
 
 module Service_type_browser : sig
   type t = OBus_proxy.t
   val free : t -> unit Lwt.t
-  val item_new : (int * int * string * string * int) OBus_signal.t
-  val item_remove : (int * int * string * string * int) OBus_signal.t
-  val failure : string OBus_signal.t
-  val all_for_now : unit OBus_signal.t
-  val cache_exhausted : unit OBus_signal.t
+  val item_new : t -> (int * int * string * string * int) OBus_signal.t
+  val item_remove : t -> (int * int * string * string * int) OBus_signal.t
+  val failure : t -> string OBus_signal.t
+  val all_for_now : t -> unit OBus_signal.t
+  val cache_exhausted : t -> unit OBus_signal.t
 end
 
 module Server : sig
@@ -97,7 +97,7 @@ module Server : sig
   val get_domain_name : t -> string Lwt.t
   val is_nsssupport_available : t -> bool Lwt.t
   val get_state : t -> int Lwt.t
-  val state_changed : (int * string) OBus_signal.t
+  val state_changed : t -> (int * string) OBus_signal.t
   val get_local_service_cookie : t -> int Lwt.t
   val get_alternative_host_name : t -> string -> string Lwt.t
   val get_alternative_service_name : t -> string -> string Lwt.t

@@ -16,7 +16,7 @@ let _ = Lwt_unix.run
      bus <-- Lazy.force OBus_bus.session;
 
      (* Create a proxy for the remote object *)
-     let proxy = OBus_bus.make_proxy bus "org.plop" ["plip"] in
+     let proxy = OBus_proxy.make (OBus_peer.make bus "org.plop") ["plip"] in
 
      (* Send a ping *)
      let _ = print_endline "trying to ping the pong service..." in

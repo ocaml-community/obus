@@ -31,7 +31,7 @@ struct
   let path = ["org"; "ocamlcore"; "forge"; "obus"; "ProgressBar"; "Manager"]
 
   OBUS_method ServerVersion : string
-  OBUS_method CreateProgressBar : int -> Bar.t
+  OBUS_method CreateProgressBar : int -> OBus_proxy.t
 end
 
 let _ = Random.self_init ()
@@ -40,22 +40,22 @@ let rec test bar = function
   | 0 -> return ()
   | n ->
       (perform
-         p <-- OBus_property.get bar Bar.position;
+         p <-- OBus_property.get (Bar.position bar);
          let _ = Printf.printf "position: %d\n%!" p in
-         OBus_property.set bar Bar.position (Random.int 101);
+         OBus_property.set (Bar.position bar) (Random.int 101);
          Lwt_unix.sleep 0.5;
          test bar (n - 1))
 
 let _ = Lwt_unix.run
   (perform
      bus <-- Lazy.force OBus_bus.session;
-     let manager = OBus_bus.make_proxy bus service Manager.path in
+     let manager = OBus_proxy.make (OBus_peer.make bus service) Manager.path in
 
      ver <-- Manager.server_version manager;
      let _ = Printf.printf "server version: %s\n" ver in
 
      bar <-- Manager.create_progress_bar manager 10;
-     OBus_signal.connect bar Bar.closed
+     OBus_signal.connect (Bar.closed bar)
        (fun reason ->
           begin match reason with
             | Cancel -> print_endline "canceled"

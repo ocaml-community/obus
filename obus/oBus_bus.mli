@@ -9,7 +9,7 @@
 
 (** Interface to DBus message bus *)
 
-type t = OBus_proxy.t
+type t = OBus_connection.t
 
 (** {6 Well-known instances} *)
 
@@ -22,25 +22,19 @@ val system : t Lwt.t Lazy.t
 
 (** {6 Creation} *)
 
-val make : OBus_connection.t -> t
-  (** [make connection] return the bus object for [connection] *)
-
-val peer : OBus_connection.t -> OBus_peer.t
-  (** [peer connection] return the message bus peer for
-      [connection] *)
-
 val of_addresses : OBus_address.t list -> t Lwt.t
   (** Establish a connection with a message bus. The bus must be
       accessible with at least one of the given addresses *)
 
-val of_connection : OBus_connection.t -> t Lwt.t
-  (** Make a bus object from the given connection. It has the side
+val register_connection : OBus_connection.t -> unit Lwt.t
+  (** Register the given connection to a message bus. It has the side
       effect of requesting a name to the message bus if not already
       done.
 
       If the connection is a connection to a message bus, created with
-      one of the function of {!OBus_connection} then {!of_connection}
-      must be called on it before any other.
+      one of the function of {!OBus_connection} then
+      {!register_connection} must be called on it before any other
+      function.
 
       If this is not the case, it will (probably) raise an
       {!OBus_error.Unknown_method} *)
@@ -57,24 +51,7 @@ val of_connection : OBus_connection.t -> t Lwt.t
     This can be changed by overriding
     {!OBus_connection.on_disconnect} *)
 
-val connection : t -> OBus_connection.t
-  (** Return the connection used by a bus object *)
-
-val watch : t -> unit Lwt.t
-  (** Short-hand for [OBus_connection.watch (OBus_bus.connection
-      bus)] *)
-
 (** {6 Peer/proxy} *)
-
-val make_peer : t -> OBus_name.bus -> OBus_peer.t
-  (** Short-hand for:
-
-      [OBus_peer.make (OBus_bus.connection bus) name] *)
-
-val make_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t
-  (** Short-hand for:
-
-      [OBus_proxy.make (OBus_bus.make_peer bus name) path] *)
 
 val get_peer : t -> OBus_name.bus -> OBus_peer.t Lwt.t
   (** [get_peer bus name] return the peer owning the bus name
@@ -203,7 +180,7 @@ val get_id : t -> OBus_uuid.t Lwt.t
 
 (** {6 Signals} *)
 
-val name_owner_changed : (OBus_name.bus * OBus_name.bus option * OBus_name.bus option) OBus_signal.t
+val name_owner_changed : t -> (OBus_name.bus * OBus_name.bus option * OBus_name.bus option) OBus_signal.t
   (** This signal is emited each the owner of a name (unique
       connection name or service name) change.
 
@@ -211,5 +188,5 @@ val name_owner_changed : (OBus_name.bus * OBus_name.bus option * OBus_name.bus o
       disconnection message looks like: [(name, Some name, None)]
       where is a connection unique name. *)
 
-val name_lost : OBus_name.bus OBus_signal.t
-val name_acquired : OBus_name.bus OBus_signal.t
+val name_lost : t -> OBus_name.bus OBus_signal.t
+val name_acquired : t -> OBus_name.bus OBus_signal.t

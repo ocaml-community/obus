@@ -15,10 +15,10 @@ open Printf
 (* Add an handler on keyboard event which print the multimedia key
    pressed *)
 let handle_multimedia_keys device =
-  OBus_signal.connect device Hal.Device.condition
+  OBus_signal.connect (Hal_device.condition device)
     (fun (action, key) ->
        printf "from Hal: action %S on key %S!\n" action key;
-       printf "          the signal come from the device %S\n%!" (OBus_path.to_string (Hal.Device.udi device));
+       printf "          the signal come from the device %S\n%!" (OBus_path.to_string device);
        return ())
   >>= fun _ -> return ()
 
@@ -28,7 +28,7 @@ let main : unit Lwt.t =
 
     (*** Signals from Message bus ***)
 
-    OBus_signal.connect session OBus_bus.name_owner_changed
+    OBus_signal.connect (OBus_bus.name_owner_changed session)
       (fun (name, old_owner, new_owner) ->
          let opt = function
            | Some s -> s
@@ -38,35 +38,33 @@ let main : unit Lwt.t =
            name (opt old_owner) (opt new_owner);
          return ());
 
-    OBus_signal.connect session OBus_bus.name_lost
+    OBus_signal.connect (OBus_bus.name_lost session)
       (fun name ->
          printf "from DBus: i lost the name %S!\n%!" name;
          return ());
 
-    OBus_signal.connect session OBus_bus.name_acquired
+    OBus_signal.connect (OBus_bus.name_acquired session)
       (fun name ->
          printf "from DBus: i got the name '%S!\n%!" name;
          return ());
 
     (*** Some hal signals ***)
 
-    hal <-- Lazy.force Hal.manager;
-
-    OBus_signal.connect hal Hal.Manager.device_added
+    OBus_signal.connect Hal_manager.device_added
       (fun device ->
-         printf "from Hal: device added: %S\n%!" (OBus_path.to_string (OBus_proxy.path device));
+         printf "from Hal: device added: %S\n%!" (OBus_path.to_string device);
 
          (* Handle the adding of keyboards *)
-         Hal.Device.query_capability device "input.keyboard"
+         Hal_device.query_capability device "input.keyboard"
          >>= function
            | true -> handle_multimedia_keys device
            | false -> return ());
 
     (* Find all keyboards and handle events on them *)
-    keyboards <-- Hal.Manager.find_device_by_capability hal "input.keyboard";
+    keyboards <-- Hal_manager.find_device_by_capability "input.keyboard";
     let _ =
       printf "keyboard founds: %d\n" (List.length keyboards);
-      List.iter (fun p -> printf "  %s\n" (OBus_path.to_string (OBus_proxy.path p))) keyboards
+      List.iter (fun udi -> printf "  %s\n" (OBus_path.to_string udi)) keyboards
     in
     Lwt_util.iter handle_multimedia_keys keyboards;
 

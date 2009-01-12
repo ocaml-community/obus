@@ -159,12 +159,12 @@ let init_callbacks =
 
          (* Create an anymous proxy for connecting signals, so we will
             receive signals comming from any daemon *)
-         let anonymous_proxy = { OBus_proxy.peer = { OBus_peer.connection = OBus_bus.connection bus;
+         let anonymous_proxy = { OBus_proxy.peer = { OBus_peer.connection = bus;
                                                      OBus_peer.name = None };
                                  OBus_proxy.path = server_path } in
 
          (* Handle signals for closed notifications *)
-         OBus_signal.connect anonymous_proxy notification_closed
+         OBus_signal.connect (notification_closed anonymous_proxy)
            (fun id ->
               match find_notification id with
                 | Some notif ->
@@ -177,7 +177,7 @@ let init_callbacks =
                     return ());
 
          (* Handle signals for actions *)
-         OBus_signal.connect anonymous_proxy action_invoked
+         OBus_signal.connect (action_invoked anonymous_proxy)
            (fun (id, action) ->
               match find_notification id with
                 | Some notif ->
@@ -193,7 +193,7 @@ let init_callbacks =
 let get_proxy =
   lazy(perform
          bus <-- Lazy.force OBus_bus.session;
-         return (OBus_bus.make_proxy bus server_name server_path))
+         return (OBus_proxy.make (OBus_peer.make bus server_name) server_path))
 
 let get_server_information _ =
   Lazy.force get_proxy >>= get_server_information

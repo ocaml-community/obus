@@ -62,6 +62,7 @@ val call' : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OB
                        path = [ "some"; "well"; "known"; "path" ] }
                  ~interface:"some.well.known.interface"
                  ~member
+                 body
                  (OBus_type.func_reply ty))
       ]}
   *)

@@ -10,13 +10,17 @@
 open Lwt
 open OBus_internals
 
-include OBus_interface.Make(struct let name = "org.freedesktop.DBus" end)
-
-let peer connection = OBus_peer.make connection "org.freedesktop.DBus"
-let make connection = OBus_proxy.make (peer connection) ["org"; "freedesktop"; "DBus"]
-let connection bus = OBus_peer.connection (OBus_proxy.peer bus)
-let make_peer bus name = OBus_peer.make (connection bus) name
-let make_proxy bus name path = OBus_proxy.make (make_peer bus name) path
+include OBus_interface.Make_custom
+  (struct
+     type t = OBus_connection.t
+     let make_proxy connection =
+       return { OBus_proxy.peer = { OBus_peer.connection = connection;
+                                    OBus_peer.name = Some "org.freedesktop.DBus" };
+                OBus_proxy.path = ["org"; "freedesktop"; "DBus"] }
+   end)
+  (struct
+     let name = "org.freedesktop.DBus"
+   end)
 
 OBUS_method Hello : string
 
@@ -34,20 +38,22 @@ let error_handler = function
       Log.failure exn "the DBus connection with the message bus has been closed due to this uncaught exception";
       exit 1
 
-let of_connection connection = match connection#name with
+let register_connection connection = match connection#name with
   | Some _ ->
       (* Do not call two times the Hello method *)
-      return (make connection)
+      return ()
 
   | None ->
       connection#on_disconnect := error_handler;
-      let bus = make connection in
-      hello bus >>= fun name ->
+      hello connection >>= fun name ->
         connection#set_name name;
-        return bus
+        return ()
 
 let of_addresses addresses =
-  OBus_connection.of_addresses addresses ~shared:true >>= of_connection
+  OBus_connection.of_addresses addresses ~shared:true >>= fun bus ->
+    perform
+      register_connection bus;
+      return bus
 
 let of_laddresses laddr = Lazy.force laddr >>= of_addresses
 
@@ -59,7 +65,7 @@ OBUS_exception Error.MatchRuleNotFound
 OBUS_exception Error.ServiceUnknown
 OBUS_exception Error.NameHasNoOwner
 
-let acquired_names bus = (connection bus)#acquired_names
+let acquired_names bus = bus#acquired_names
 
 OBUS_bitwise request_name_flag : uint =
   [ 1 -> `allow_replacement
@@ -120,21 +126,18 @@ OBUS_signal NameLost : string
 OBUS_signal NameAcquired : string
 
 let get_peer bus name =
-  let connection = connection bus in
   try_bind
     (fun _ -> get_name_owner bus name)
-    (fun n -> return (OBus_peer.make connection n))
+    (fun n -> return (OBus_peer.make bus n))
     (function
        | Name_has_no_owner _ ->
            (perform
               start_service_by_name bus name;
               n <-- get_name_owner bus name;
-              return (OBus_peer.make connection n))
+              return (OBus_peer.make bus n))
        | exn -> fail exn)
 
 let get_proxy bus name path =
   (perform
      peer <-- get_peer bus name;
      return (OBus_proxy.make peer path))
-
-let watch bus = OBus_connection.watch (connection bus)

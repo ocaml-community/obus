@@ -20,17 +20,17 @@ type ('a, 'access) t
   (** A property of type ['a] with allowed operations ['access]. *)
 
 val make :  interface:OBus_name.interface -> member:OBus_name.member ->
-  access:([< access ] as 'access) -> [< 'a OBus_type.cl_single ] -> ('a, 'access) t
+  access:([< access ] as 'access) -> [< 'a OBus_type.cl_single ] -> (unit -> OBus_proxy.t Lwt.t) -> ('a, 'access) t
   (** Create a property *)
 
 val dmake :  interface:OBus_name.interface -> member:OBus_name.member ->
-  access:([< access ] as 'access) -> (OBus_value.single, 'access) t
+  access:([< access ] as 'access) -> (unit -> OBus_proxy.t Lwt.t) -> (OBus_value.single, 'access) t
   (** Create a dynamically typed property *)
 
-val set : OBus_proxy.t -> ('a, [> `writable ]) t -> 'a -> unit Lwt.t
+val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
   (** Set the value of a property *)
 
-val get : OBus_proxy.t -> ('a, [> `readable ]) t -> 'a Lwt.t
+val get : ('a, [> `readable ]) t -> 'a Lwt.t
   (** Get the value of a property.
 
       @rase OBus_type.Cast_failure if the property do not have the

@@ -14,8 +14,7 @@
     Note that interface contained in XML introspection files can be
     automatically converted with [obus-binder] *)
 module type S = sig
-  type t = OBus_proxy.t
-  val tt : t OBus_type.ty_basic
+  type t
 
   val interface : OBus_name.interface
     (** Name of the interface *)
@@ -36,8 +35,8 @@ module type S = sig
         ]}
     *)
 
-  val signal : ?broadcast:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> 'a OBus_signal.t
-    (** [signal ?broadcast member typ] define a signal.
+  val signal : ?broadcast:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> t -> 'a OBus_signal.t
+    (** [signal ?broadcast member typ proxy] define a signal.
 
         A signal defintion looks like:
 
@@ -54,8 +53,8 @@ module type S = sig
         ]}
     *)
 
-  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> ('a, 'b) OBus_property.t
-    (** [property member access typ] define a property.
+  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> t -> ('a, 'b) OBus_property.t
+    (** [property member access typ proxy] define a property.
 
         A property definition looks like:
 
@@ -95,4 +94,32 @@ module type S = sig
     *)
 end
 
-module Make(Name : sig val name : OBus_name.interface end) : S
+(** Name of an interface *)
+module type Name = sig
+  val name : OBus_name.interface
+end
+
+module Make(Name : Name) : S with type t = OBus_proxy.t
+
+(** {6 Interface using a custom proxy type} *)
+
+module type Custom_proxy = sig
+  type t
+  val make_proxy : t -> OBus_proxy.t Lwt.t
+end
+
+module Make_custom(Proxy : Custom_proxy)(Name : Name) : S with type t = Proxy.t
+
+(** {6 Interface for a single object} *)
+
+module type Single_proxy = sig
+  val proxy : OBus_proxy.t Lwt.t Lazy.t
+end
+
+module Make_single(Proxy : Single_proxy)(Name : Name) : sig
+  val interface : OBus_name.interface
+  val call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+  val signal : ?broadcast:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> 'a OBus_signal.t
+  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> ('a, 'b) OBus_property.t
+  val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
+end

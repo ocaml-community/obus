@@ -11,16 +11,14 @@
 
 open Lwt
 open Printf
-open Hal
 
 let main =
   (perform
-     manager <-- Lazy.force manager;
-     cdroms <-- Manager.find_device_by_capability manager "storage.cdrom";
+     cdroms <-- Hal_manager.find_device_by_capability "storage.cdrom";
      let _ = printf "cdrom(s) found: %d\n" (List.length cdroms) in
      Lwt_util.iter begin function cdrom ->
-       Printf.printf "eject on device %s\n" (OBus_path.to_string (Device.udi cdrom));
-       Device.Storage.eject cdrom [] >>= fun _ -> return ();
+       Printf.printf "eject on device %s\n" (OBus_path.to_string cdrom);
+       Hal_device.Storage.eject cdrom [] >>= fun _ -> return ();
      end cdroms)
 
 let _ = Lwt_unix.run main

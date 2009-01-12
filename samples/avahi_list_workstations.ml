@@ -21,31 +21,31 @@ let main : unit Lwt.t =
 
      service_browser <-- Server.service_browser_new avahi (-1) (-1) "_workstation._tcp" "" 0;
 
-     OBus_signal.connect service_browser Service_browser.item_new
+     OBus_signal.connect (Service_browser.item_new service_browser)
        (fun (interface, protocol, name, service, domain, flags) ->
           printf "new workstation found:\n  name = %S\n  domain = %S\n\n%!" name domain;
 
           perform
             resolver <-- Server.service_resolver_new avahi interface protocol name service domain (-1) 0;
 
-            OBus_signal.connect resolver Service_resolver.found
+            OBus_signal.connect (Service_resolver.found resolver)
               (fun (interface, protocol, name, typ, domain, host, aprotocol, address, port, txt, flags) ->
                  printf "the resolver found:\n  name = %S\n  host = %S\n  address = %S\n\n%!" name host address;
                  return ());
 
-            OBus_signal.connect resolver Service_resolver.failure
+            OBus_signal.connect (Service_resolver.failure resolver)
               (fun msg ->
                  printf "failure of the service resolver: %S\n\n%!" msg;
                  return ());
 
             return ());
 
-     OBus_signal.connect service_browser Service_browser.item_remove
+     OBus_signal.connect (Service_browser.item_remove service_browser)
        (fun (interface, protocol, name, service, domain, flags) ->
           printf "workstation removed:  name = %S\n  domain = %S\n\n%!" name domain;
           return ());
 
-     OBus_signal.connect service_browser Service_browser.failure
+     OBus_signal.connect (Service_browser.failure service_browser)
        (fun msg ->
           printf "failure of the service browser: %S\n\n%!" msg;
           return ());

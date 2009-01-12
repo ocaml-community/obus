@@ -114,7 +114,7 @@ let name = "org.freedesktop.Avahi"
 
 let peer = lazy(perform
                   bus <-- Lazy.force OBus_bus.system;
-                  return (OBus_bus.make_peer bus name))
+                  return (OBus_peer.make bus name))
 
 let server = lazy(perform
                     peer <-- Lazy.force peer;

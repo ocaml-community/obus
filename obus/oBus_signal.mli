@@ -17,9 +17,9 @@ type 'a t
 type receiver
   (** Id of a function which receive signals *)
 
-val connect : OBus_proxy.t -> 'a t -> ?serial:bool -> ?args:(int * string) list -> ('a -> unit Lwt.t) -> receiver Lwt.t
-  (** [connect proxy signal ?serial ?args func] connect [func] to signals
-      [signal] emitted by [proxy].
+val connect : 'a t -> ?serial:bool -> ?args:(int * string) list -> ('a -> unit Lwt.t) -> receiver Lwt.t
+  (** [connect signal ?serial ?args func] connect [func] to signals
+      [signal].
 
       [args] is a pattern for string argument of signals. For example
       [(0, "a"); (2, "b")] will match signals for which argument 0 is
@@ -30,10 +30,6 @@ val connect : OBus_proxy.t -> 'a t -> ?serial:bool -> ?args:(int * string) list 
 
       If [serial] is [true] then calls to [func] are serialized. It
       default to [false]. *)
-
-val connect_any : OBus_peer.t -> 'a t -> ?serial:bool -> ?args:(int * string) list -> (OBus_proxy.t -> 'a -> unit Lwt.t) -> receiver Lwt.t
-  (** [connect_any peer signal ?serial ?args func] same as connect but
-      [func] will receive signals emited by any objects of [peer]. *)
 
 val disconnect : receiver -> unit
   (** Disable a receiver. Do nothing if the receiver is already
@@ -61,8 +57,9 @@ val make :
   ?broadcast:bool ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->
-  [< 'a OBus_type.cl_sequence ] -> 'a t
-  (** [make ?broadcast interface member typ] create a signal.
+  [< 'a OBus_type.cl_sequence ] ->
+  (unit -> OBus_proxy.t Lwt.t) -> 'a t
+  (** [make ?broadcast interface member typ proxy] create a signal.
 
       [broadcast] tell weather the signal is broadcasted or not. It
       default to [true]. *)
@@ -71,7 +68,7 @@ val dmake :
   ?broadcast:bool ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->
-  OBus_message.body t
+  (unit -> OBus_proxy.t Lwt.t) -> OBus_message.body t
   (** Same thing but the value returned are dynamically typed and
       there is no constraint on the signal type *)
 

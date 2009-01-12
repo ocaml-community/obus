@@ -69,7 +69,7 @@ struct
   let bindings =
     [ { name = "hal";
         desc = "Hal service binding";
-        modules = ["Hal"] };
+        modules = ["Hal_manager"; "Hal_device"] };
       { name = "notification";
         desc = "Notifications service binding";
         modules = ["Notification"] };

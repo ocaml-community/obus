@@ -24,7 +24,7 @@ let filter what_bus message =
 let add_filter what_bus lbus =
   (perform
      bus <-- Lazy.force lbus;
-     let _ = OBus_connection.add_incoming_filter (OBus_bus.connection bus) (filter what_bus) in
+     let _ = OBus_connection.add_incoming_filter bus (filter what_bus) in
      Lwt_util.iter (fun typ -> OBus_bus.add_match bus (OBus_bus.match_rule ~typ ()))
        [ `method_call; `method_return; `error; `signal ])
 

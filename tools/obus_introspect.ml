@@ -57,7 +57,7 @@ let main service path =
        | true, false -> OBus_bus.session
        | false, true -> OBus_bus.system
      end;
-     (nodes, map) <-- get ([], Interf_map.empty) (OBus_bus.make_proxy bus service path);
+     (nodes, map) <-- get ([], Interf_map.empty) (OBus_proxy.make (OBus_peer.make bus service) path);
      let _ = match !obj_mode with
        | false ->
            begin match !mli with

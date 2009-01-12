@@ -16,7 +16,7 @@ let main =
   (perform
      bus <-- Lazy.force OBus_bus.session;
      let _ = Printf.printf "My unique connection name is: %s\n"
-       (match OBus_connection.name (OBus_bus.connection bus) with
+       (match OBus_connection.name bus with
           | Some x -> x
           | None -> "") in
      return ())
