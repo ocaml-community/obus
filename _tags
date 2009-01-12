@@ -1,5 +1,8 @@
 # -*- conf -*-
 
+# For shared libraries
+<**/*.cmxs>: plugin
+
 # Use camlp4 for all files
 <**/*.ml{,i}>: syntax_camlp4o, pkg_camlp4
 <syntax/pa_obus.ml>: pkg_camlp4.macro

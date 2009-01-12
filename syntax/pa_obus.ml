@@ -11,7 +11,7 @@ open Camlp4
 open Camlp4.PreCast
 open Printf
 
-INCLUDE "../name_translator.ml"
+INCLUDE "name_translator.ml"
 
 module Id : Sig.Id = struct
   let name = "Syntactic sugar for obus types"

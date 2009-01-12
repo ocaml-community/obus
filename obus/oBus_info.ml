@@ -9,7 +9,7 @@
 
 open Lwt
 
-let version = OBUS_VERSION
+INCLUDE "version.ml"
 
 let protocol_version = 1
 let max_name_length = Constant.max_name_length
