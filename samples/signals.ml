@@ -18,7 +18,7 @@ let handle_multimedia_keys device =
   OBus_signal.connect (Hal_device.condition device)
     (fun (action, key) ->
        printf "from Hal: action %S on key %S!\n" action key;
-       printf "          the signal come from the device %S\n%!" (OBus_path.to_string device);
+       printf "          the signal come from the device %S\n%!" (OBus_path.to_string (device :> OBus_path.t));
        return ())
   >>= fun _ -> return ()
 
@@ -52,7 +52,7 @@ let main : unit Lwt.t =
 
     OBus_signal.connect Hal_manager.device_added
       (fun device ->
-         printf "from Hal: device added: %S\n%!" (OBus_path.to_string device);
+         printf "from Hal: device added: %S\n%!" (OBus_path.to_string (device :> OBus_path.t));
 
          (* Handle the adding of keyboards *)
          Hal_device.query_capability device "input.keyboard"
@@ -64,7 +64,7 @@ let main : unit Lwt.t =
     keyboards <-- Hal_manager.find_device_by_capability "input.keyboard";
     let _ =
       printf "keyboard founds: %d\n" (List.length keyboards);
-      List.iter (fun udi -> printf "  %s\n" (OBus_path.to_string udi)) keyboards
+      List.iter (fun udi -> printf "  %s\n" (OBus_path.to_string (Hal_device.path udi))) keyboards
     in
     Lwt_util.iter handle_multimedia_keys keyboards;
 

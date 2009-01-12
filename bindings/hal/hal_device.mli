@@ -7,10 +7,16 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-type udi = OBus_path.t
+type udi = private OBus_path.t
     (** Unique Device Identifier *)
 
 val tudi : udi OBus_type.ty_basic
+
+external make : OBus_path.t -> udi = "%identity"
+  (** Create an udi from an object path *)
+
+external path : udi -> OBus_path.t = "%identity"
+  (** Return the object path of a device *)
 
 val computer : udi
   (** The computer device *)

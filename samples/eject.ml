@@ -17,7 +17,7 @@ let main =
      cdroms <-- Hal_manager.find_device_by_capability "storage.cdrom";
      let _ = printf "cdrom(s) found: %d\n" (List.length cdroms) in
      Lwt_util.iter begin function cdrom ->
-       Printf.printf "eject on device %s\n" (OBus_path.to_string cdrom);
+       Printf.printf "eject on device %s\n" (OBus_path.to_string (Hal_device.path cdrom));
        Hal_device.Storage.eject cdrom [] >>= fun _ -> return ();
      end cdroms)
 

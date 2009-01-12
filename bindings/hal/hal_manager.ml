@@ -29,14 +29,16 @@ OBUS_method GetAllDevicesWithProperties : unit -> [Hal_device.udi * {string, Hal
 OBUS_method DeviceExists : Hal_device.udi -> bool
 OBUS_method FindDeviceStringMatch : string -> string -> Hal_device.udi list
 
-let tbroken_udi = OBus_type.wrap_basic tstring OBus_path.of_string OBus_path.to_string
+let tbroken_udi = OBus_type.wrap_basic tstring
+  (fun x -> Hal_device.make (OBus_path.of_string x))
+  (fun x -> OBus_path.to_string (x :> OBus_path.t))
 
 (* Signature from introsection seems to be wrong for this method. So
    we temporary use this ugly hack: *)
 let find_device_by_capability capability =
   Lazy.force get_manager >>= fun proxy ->
     OBus_proxy.dcall proxy ~interface ~member:"FindDeviceByCapability" [vbasic (String capability)] >>= fun v ->
-      match OBus_type.opt_cast_sequence <:obus_type< path list >> v with
+      match OBus_type.opt_cast_sequence <:obus_type< Hal_device.udi list >> v with
         | Some x -> return x
         | None ->
             match OBus_type.opt_cast_sequence <:obus_type< broken_udi list >> v with
