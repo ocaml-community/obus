@@ -74,12 +74,10 @@ struct
       | "" -> print "failure: %s"
       | _ -> print "failure: %s: %s" msg
     end (Printexc.to_string exn);
-    IFDEF HAVE_BACKTRACE THEN
-      if Printexc.backtrace_status () then begin
-        print "backtrace:";
-        List.iter (print "  %s") (split (Printexc.get_backtrace ()) 0)
-      end;
-    ENDIF
+    if Printexc.backtrace_status () then begin
+      print "backtrace:";
+      List.iter (print "  %s") (split (Printexc.get_backtrace ()) 0)
+    end;
   end fmt
 end
 

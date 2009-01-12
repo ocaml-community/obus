@@ -222,11 +222,5 @@ let _ =
 
         (* Set the obus version number with pa_macro *)
         flag_all_stages_except_link "file:obus/oBus_info.ml" & S[A"-ppopt"; A(sprintf "-D OBUS_VERSION=%S" Config.obus_version)];
-
-        (* Enable backtrace support if we have ocaml>=3.11 *)
-        Scanf.sscanf Sys.ocaml_version "%d.%d" begin fun major minor ->
-          if (major, minor) >= (3, 11) then
-            flag_all_stages_except_link "pkg_camlp4.macro" & S[A"-ppopt"; A"-D HAVE_BACKTRACE"]
-        end
     | _ -> ()
   end

@@ -16,9 +16,7 @@ let handler x = failwith "plop"
 let _ =
   OBus_info.verbose := true;
   OBus_info.debug := true;
-  IFDEF HAVE_BACKTRACE THEN
-    Printexc.record_backtrace true;
-  END;
+  Printexc.record_backtrace true;
   ignore (add_incoming_filter loopback filter);
   ignore (OBus_signal.connect (OBus_proxy.make (OBus_peer.anonymous loopback) [])
             (OBus_signal.dmake "aa" "plop")
