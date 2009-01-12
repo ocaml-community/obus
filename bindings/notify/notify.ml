@@ -200,6 +200,12 @@ let de = desktop_entry
 
 let result (id, w) = w
 
+let rec filter_map f = function
+  | [] -> []
+  | x :: l -> match f x with
+      | Some x -> x :: filter_map f l
+      | None -> filter_map f l
+
 let notify ?(app_name= !app_name) ?desktop_entry
     ?replace ?(icon="") ?image ~summary ?(body="") ?(actions=[])
     ?urgency ?category ?sound_file ?suppress_sound ?pos ?(hints=[]) ?(timeout= -1) () =
@@ -213,7 +219,7 @@ let notify ?(app_name= !app_name) ?desktop_entry
     | None -> None in
   let mkvariant v name f = mkhint v (fun x -> Hint_variant(name, f x)) in
   let mkstring v name = mkvariant v name (make_single tstring) in
-  let hints = Util.filter_map (fun x -> x)
+  let hints = filter_map (fun x -> x)
     [mkstring desktop_entry "desktop_entry";
      mkhint image (fun img -> Hint_image img);
      mkvariant urgency "urgency" (make_single turgency);

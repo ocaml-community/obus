@@ -25,32 +25,32 @@ struct
 
   (* All the modules of the obus library *)
   let all_modules =
-    [ "Constant";
-      "MQueue";
-      "Log";
-      "Addr_lexer";
-      "Util";
-      "MSet";
-      "Cache";
+    [ "internals/Constant";
+      "internals/MQueue";
+      "internals/Log";
+      "internals/Addr_lexer";
+      "internals/Util";
+      "internals/MSet";
+      "internals/Cache";
       "OBus_string";
       "OBus_info";
-      "Types_rw";
+      "internals/Types_rw";
       "OBus_path";
       "OBus_value";
       "OBus_type";
       "OBus_name";
       "OBus_uuid";
-      "Match_rule";
-      "Xparser";
+      "internals/Match_rule";
+      "internals/Xparser";
       "OBus_address";
       "OBus_lowlevel";
       "OBus_auth";
       "OBus_message";
-      "OBus_internals";
+      "internals/OBus_internals";
       "OBus_error";
       "OBus_introspect";
       "OBus_connection";
-      "Bus";
+      "internals/Bus";
       "OBus_peer";
       "OBus_proxy";
       "OBus_resolver";
@@ -62,8 +62,7 @@ struct
       "OBus_server"]
 
   (* Modules of the API *)
-  let modules = List.filter (fun s -> s <> "OBus_internals" &&
-                               (String.is_prefix "OBus_" s)) all_modules
+  let modules = List.filter (fun s -> not (String.is_prefix "internals/" s)) all_modules
 
   (***** Bindings *****)
 
@@ -144,8 +143,6 @@ let flag_all_stages tag f =
   flag_all_stages_except_link tag f;
   flag ["ocaml"; "link"; tag] f
 
-let mk_mods_path p = List.map (fun s -> p ^ "/" ^ String.uncapitalize s)
-
 let _ =
   dispatch begin function
     | Before_options ->
@@ -157,7 +154,13 @@ let _ =
         Options.ocamldoc := ocamlfind & A"ocamldoc"
 
     | After_rules ->
+        (* Tests must see everything *)
         Pathname.define_context "test" [ "obus" ];
+        Pathname.define_context "test" [ "obus/internals" ];
+
+        (* The library and internal modules can see each other *)
+        Pathname.define_context "obus" [ "obus/internals" ];
+        Pathname.define_context "obus/internals" [ "obus" ];
 
         (***** Dependencies checking *****)
 
@@ -188,15 +191,6 @@ let _ =
 
         rule "obus_doc" ~prod:"obus.odocl"
           (fun _ _ -> Echo(List.map (sprintf "obus/%s\n") Config.modules, "obus.odocl"));
-
-        rule "mli_to_install" ~prod:"lib-dist"
-          (fun _ _ -> Echo(List.map (fun s -> sprintf "%s.mli\n_build/%s.cmi\n" s s)
-                             (mk_mods_path "obus" Config.modules
-                              @ List.flatten
-                              (List.map (fun { name = name; modules = modules } ->
-                                           mk_mods_path ("bindings/" ^ name) modules)
-                                 Config.bindings)),
-                           "lib-dist"));
 
         (***** Ocamlfind stuff *****)
 

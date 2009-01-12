@@ -24,7 +24,7 @@ all:
 	  $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) \
 	  $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native) \
 	  $(SAMPLES:%=samples/%.byte) $(SAMPLES:%=samples/%.native) \
-	  obus.docdir/index.html META lib-dist
+	  obus.docdir/index.html META
 
 # List all package dependencies
 list-deps:
@@ -101,11 +101,15 @@ prefix:
 	fi
 
 install: prefix
-	$(OF) install obus _build/META `cat _build/lib-dist` \
+	$(OF) install obus _build/META \
 	 _build/syntax/pa_obus.cmo \
+	 $(LIB:%=%/*.mli) \
+	 $(LIB:%=_build/%/*.cmi) \
 	 $(LIB:%=_build/%.cma) \
 	 $(LIB:%=_build/%.cmxa) \
 	 $(LIB:%=_build/%.a) \
+	 $(BINDINGS:%=bindings/%/*.mli) \
+	 $(BINDINGS:%=_build/bindings/%/*.cmi) \
 	 $(BINDINGS:%=_build/%.cma) \
 	 $(BINDINGS:%=_build/%.cmxa) \
 	 $(BINDINGS:%=_build/%.a)
