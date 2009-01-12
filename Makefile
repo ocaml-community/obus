@@ -12,7 +12,7 @@ VERSION = $(shell head -n 1 VERSION)
 
 # Targets
 SAMPLES = hello bus_functions eject notify monitor signals list_services \
-	  ping pong progress progress_test
+	  ping pong progress_server progress_client
 LIB = obus
 BINDINGS = hal notification
 TOOLS = obus_introspect obus_binder obus_dump
