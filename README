@@ -27,11 +27,11 @@ url: https://forge.ocamlcore.org/projects/obus/
   - obus.syntax:
       Some syntactic sugars meant to be used with obus.
 
-  - obus.notification, obus.hal, obus.avahi:
-      These are bindings to some services. They try to wrap the raw
-      DBus calls into more suitable functions. The most advanced is
-      obus.notification which implement an interface for pop-up
-      notifications.
+  - obus.notification:
+      Interface to the freedesktop notification service.
+
+  - obus.hal:
+      Interface to the freedesktop hal service.
 
 * Syntactic sugars:
 

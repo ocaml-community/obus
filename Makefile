@@ -10,7 +10,7 @@ OF = ocamlfind
 
 # Targets
 SAMPLES = hello bus_functions eject notify monitor signals list_services \
-	  avahi_list_workstations ping pong progress progress_test
+	  ping pong progress progress_test
 LIB = obus
 BINDINGS = hal notification
 TOOLS = obus_introspect obus_binder obus_dump
