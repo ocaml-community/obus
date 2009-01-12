@@ -1,0 +1,16 @@
+#!/usr/bin/env ocamlscript
+(*
+ * cpufreq-powersave
+ * -----------------
+ * Copyright : (c) 2009, Jeremie Dimino <jeremie@dimino.org>
+ * Licence   : BSD3
+ *
+ * This file is a part of obus, an ocaml implemtation of dbus.
+ *)
+
+Ocaml.packs := ["obus.hal"]
+--
+
+(* Set the cpufreq governor to powersave on all cpus *)
+
+let _ = Lwt_unix.run (Hal_device.Cpufreq.set_cpufreq_governor Hal_device.computer "powersave")

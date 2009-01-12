@@ -1,0 +1,61 @@
+#!/usr/bin/env ocamlscript
+(*
+ * multimedia-keys
+ * ---------------
+ * Copyright : (c) 2009, Jeremie Dimino <jeremie@dimino.org>
+ * Licence   : BSD3
+ *
+ * This file is a part of obus, an ocaml implemtation of dbus.
+ *)
+
+Ocaml.packs := ["obus.syntax"; "monad"; "obus"]
+--
+
+(* Simple script which listen keyboard events emited by hal and run
+   commands *)
+
+open Lwt
+open OBus_value
+
+(* Configuration *)
+let commands = [
+  ("volume-up", "amixer -q set Master 5%+");
+  ("volume-down", "amixer -q set Master 5%-");
+]
+
+let _ = Lwt_unix.run
+  (perform
+     bus <-- Lazy.force OBus_bus.system;
+
+     (* Tell the message bus we want to receive ButtonPressed events
+        from hal. *)
+     OBus_bus.add_match bus (OBus_bus.match_rule
+                               ~sender:"org.freedesktop.Hal"
+                               ~interface:"org.freedesktop.Hal.Device"
+                               ~member:"Condition"
+                               ~args:[(0, "ButtonPressed")] ());
+
+     (* Add a message filter. We use that instead of adding a signal
+        receiver because we do not care about which object send the
+        event. *)
+     let _ = OBus_connection.add_incoming_filter bus
+       (function
+          | { OBus_message.typ = `Signal(_, "org.freedesktop.Hal.Device", "Condition");
+              OBus_message.body = [Basic(String "ButtonPressed"); Basic(String button)] } ->
+
+              begin
+                try
+                  ignore (Lwt_unix.system (List.assoc button commands))
+                with
+                    _ -> ()
+              end;
+
+              (* Drop the message *)
+              None
+
+          | msg ->
+              Some msg) in
+
+     (* Wait forever, the program will exit when the connection is
+        closed *)
+     wait ())
