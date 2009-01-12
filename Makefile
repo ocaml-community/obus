@@ -9,10 +9,10 @@ OC = ocamlbuild
 OF = ocamlfind
 
 # Targets
-SAMPLES = hello bus_functions eject notif monitor signals list_services \
+SAMPLES = hello bus_functions eject notify monitor signals list_services \
 	  avahi_list_workstations ping pong progress progress_test
 LIB = obus
-BINDINGS = hal notify
+BINDINGS = hal notification
 TOOLS = obus_introspect obus_binder obus_dump
 TEST = test_serialization test_printing test_communication valid auth server errors logging
 

@@ -70,9 +70,9 @@ struct
     [ { name = "hal";
         desc = "Hal service binding";
         modules = ["Hal"] };
-      { name = "notify";
+      { name = "notification";
         desc = "Notifications service binding";
-        modules = ["Notify"] };
+        modules = ["Notification"] };
       { name = "avahi";
         desc = "Avahi binding";
         modules = ["Avahi"] } ]
