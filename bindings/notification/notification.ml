@@ -126,29 +126,36 @@ OBUS_method CloseNotification : notification_server_id -> unit
 OBUS_signal NotificationClosed : notification_id
 OBUS_signal ActionInvoked : notification_id * string
 
-let init =
+let monitored_peers : OBus_peer.t list ref = ref []
+  (* List of daemon which are monitored *)
+
+let monitor_peer peer =
+  if List.mem peer !monitored_peers then
+    ()
+
+  else begin
+    monitored_peers := peer :: !monitored_peers;
+
+    ignore begin
+      OBus_peer.wait_for_exit peer >>= fun _ ->
+        monitored_peers := List.filter (fun p -> p <> peer) !monitored_peers;
+
+        (* Cancel all opened notification opened on this peer when it exit *)
+        notifications := List.filter
+          (fun notif ->
+             if fst notif.notif_id = peer then begin
+               notif.notif_closed ();
+               false
+             end else
+               true) !notifications;
+
+        return ()
+    end
+  end
+
+let init_callbacks =
   lazy(perform
          bus <-- Lazy.force OBus_bus.session;
-
-         OBus_resolver.make (OBus_bus.connection bus) server_name
-           ~on_change:begin function
-             | Some name ->
-                 let daemon = OBus_bus.make_peer bus name in
-
-                 OBus_peer.wait_for_exit daemon >>= fun _ ->
-                   (* Cancel all opened notification opened on this peer when it exit *)
-                   notifications := List.filter
-                     (fun notif ->
-                        if fst notif.notif_id = daemon then begin
-                          notif.notif_closed ();
-                          false
-                        end else
-                          true) !notifications;
-                   return ()
-
-                 | None ->
-                     return ()
-           end;
 
          (* Create an anymous proxy for connecting signals, so we will
             receive signals comming from any daemon *)
@@ -164,6 +171,7 @@ let init =
                     notif.notif_deleted <- true;
                     notifications := List.filter (fun n -> n.notif_id <> id) !notifications;
                     notif.notif_closed ();
+
                     return ()
                 | None ->
                     return ());
@@ -180,21 +188,29 @@ let init =
                 | None ->
                     return ());
 
+         return ())
+
+let get_proxy =
+  lazy(perform
+         bus <-- Lazy.force OBus_bus.session;
          return (OBus_bus.make_proxy bus server_name server_path))
 
 let get_server_information _ =
-  Lazy.force init >>= get_server_information
+  Lazy.force get_proxy >>= get_server_information
 
 let get_capabilities _ =
-  Lazy.force init >>= get_capabilities
+  Lazy.force get_proxy >>= get_capabilities
 
 let close_notification (notif, w) =
   if not notif.notif_deleted then begin
     notif.notif_deleted <- true;
     notifications := List.filter (fun n -> n.notif_id <> notif.notif_id) !notifications;
     notif.notif_closed ();
-    Lazy.force init >>= fun p -> close_notification p (snd notif.notif_id)
-  end else return ()
+    (* Call the method on the peer which have opened the
+       notification *)
+    close_notification (OBus_proxy.make (fst notif.notif_id) server_path) (snd notif.notif_id)
+  end else
+    return ()
 
 let de = desktop_entry
 
@@ -242,8 +258,11 @@ let notify ?(app_name= !app_name) ?desktop_entry
   let actions_map = (default_action, `default) :: actions_map in
 
   perform
-    (* Retreive the daemon *)
-    daemon <-- Lazy.force init;
+    (* Setup callbacks *)
+    Lazy.force init_callbacks;
+
+    (* Get the proxy *)
+    daemon <-- Lazy.force get_proxy;
 
     (* Create the notification *)
     id <-- notify daemon
@@ -263,5 +282,9 @@ let notify ?(app_name= !app_name) ?desktop_entry
                   notif_closed = (fun _ -> wakeup w `closed) } in
 
     let _ = notifications := notif :: !notifications in
+
+    (* Monitor the peer to be sure the notification is closed when the
+       peer exit *)
+    let _ = monitor_peer (fst id) in
 
     return (notif, w)
