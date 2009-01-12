@@ -52,6 +52,9 @@ let main =
           | `exists -> "the name already exists"
           | `already_owner -> "i already own the name")
      in
+
+     let _ = printf "my names are: %s\n%!" (String.concat ", " (OBus_bus.acquired_names bus)) in
+
      return ())
 
 let _ = Lwt_unix.run main

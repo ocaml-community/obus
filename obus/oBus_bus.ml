@@ -59,6 +59,8 @@ OBUS_exception Error.MatchRuleNotFound
 OBUS_exception Error.ServiceUnknown
 OBUS_exception Error.NameHasNoOwner
 
+let acquired_names bus = (connection bus)#acquired_names
+
 OBUS_bitwise request_name_flag : uint =
   [ 1 -> `allow_replacement
   | 2 -> `replace_existing

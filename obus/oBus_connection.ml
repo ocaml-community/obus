@@ -252,6 +252,13 @@ object(self)
     | Some exn -> raise exn
     | None -> name <- Some n
 
+  val mutable acquired_names : OBus_name.bus list = []
+    (* List of names we currently own *)
+
+  method acquired_names = match crashed with
+    | Some exn -> raise exn
+    | None -> acquired_names
+
   val on_disconnect : (exn -> unit) ref = ref (fun _ -> ())
     (* [on_disconnect] is called when the connection is
        disconnect. This can happen is receiving a message on the
@@ -501,9 +508,10 @@ object(self)
                 signal_receivers
 
           | Some _, Some sender ->
-              (* Internal handling of "NameOwnerChange" messages for
-                 name resolving. *)
               begin match sender, message with
+
+                (* Internal handling of "NameOwnerChange" messages for
+                   name resolving. *)
                 | "org.freedesktop.DBus",
                   { typ = `Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
                     body = [Basic(String name); Basic(String old_owner); Basic(String new_owner)] } ->
@@ -544,15 +552,37 @@ object(self)
                           ()
                     end
 
+                (* Internal handling of "NameAcquired" signals *)
+                | "org.freedesktop.DBus",
+                    { typ = `Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
+                      body = [Basic(String name')] }
+
+                      (* Only handle signals destined to us *)
+                      when message.destination = name ->
+
+                    acquired_names <- name' :: acquired_names
+
+                (* Internal handling of "NameLost" signals *)
+                | "org.freedesktop.DBus",
+                    { typ = `Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
+                      body = [Basic(String name')] }
+
+                      (* Only handle signals destined to us *)
+                      when message.destination = name ->
+
+                    acquired_names <- List.filter ((<>) name') acquired_names
+
                 | _ ->
                     ()
               end;
 
-              MSet.iter
-                (fun receiver ->
-                   if signal_match receiver message
-                   then callback_apply "signal callback" receiver.sr_callback ((self :> connection), message))
-                signal_receivers
+              (* Only handle signals broadcasted destined to us *)
+              if message.destination = None || message.destination = name then
+                MSet.iter
+                  (fun receiver ->
+                     if signal_match receiver message
+                     then callback_apply "signal callback" receiver.sr_callback ((self :> connection), message))
+                  signal_receivers
         end
 
     (* Handling of the special "org.freedesktop.DBus.Peer" interface *)

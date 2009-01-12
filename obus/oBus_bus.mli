@@ -88,6 +88,9 @@ val get_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t Lwt.t
 
 (** {6 Bus names acquiring} *)
 
+val acquired_names : t -> OBus_name.bus list
+  (** Returns the list of names we currently own *)
+
 type request_name_flag =
     [ `allow_replacement
         (** Allow other application to steal you the name *)

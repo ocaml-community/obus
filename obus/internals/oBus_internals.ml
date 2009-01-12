@@ -155,6 +155,7 @@ and connection = <
   find_name_resolver : OBus_name.bus -> name_resolver option;
   name : OBus_name.bus option;
   set_name : OBus_name.bus -> unit;
+  acquired_names : OBus_name.bus list;
   peer_has_exited : OBus_name.bus -> bool;
   add_exited_peer : OBus_name.bus -> unit;
   export_object : OBus_path.t -> dbus_object -> unit;
