@@ -59,8 +59,8 @@ type member_desc
   (** Describe an interface member *)
 
 class virtual interface : object
-  method virtual obus_emit_signal : 'a 'b. ?peer:OBus_peer.t -> OBus_name.interface -> OBus_name.member ->
-    ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
+  method virtual obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->
+    ([< 'a OBus_type.cl_sequence ] as 'b) -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
     (** Emit a signal *)
 
   method virtual obus_add_interface : OBus_name.interface -> member_desc list -> unit
@@ -91,8 +91,8 @@ class t : object
   method get_all : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
     (** Object properties *)
 
-  method obus_emit_signal : 'a 'b. ?peer:OBus_peer.t -> OBus_name.interface -> OBus_name.member ->
-    ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
+  method obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->
+    ([< 'a OBus_type.cl_sequence ] as 'b) -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
     (** Emit a signal.
 
         If [peer] is specified it will be sent to this peer only,

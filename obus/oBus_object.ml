@@ -22,9 +22,8 @@ module OBus_object =
 struct
   class virtual interface = object
     method virtual obus_emit_signal : 'a 'b.
-      ?peer:OBus_peer.t ->
       OBus_name.interface -> OBus_name.member ->
-      ([< 'a OBus_type.cl_sequence ] as 'b) -> 'a -> unit Lwt.t
+      ([< 'a OBus_type.cl_sequence ] as 'b) -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
     method virtual obus_add_interface : OBus_name.interface -> member_desc list -> unit
   end
 
@@ -156,7 +155,7 @@ class t = object(self)
       | Some f -> f connection message
       | None -> ignore_result (send_exn connection message (unknown_method_exn message))
 
-  method obus_emit_signal ?peer interface member typ x =
+  method obus_emit_signal interface member typ ?peer x =
     let body = OBus_type.make_sequence typ x
     and path = self#obus_path in
     match peer with
@@ -216,11 +215,11 @@ let tt = OBus_type.wrap_basic_ctx tpath
 class owned owner = object(self)
   inherit t as super
 
-  method obus_emit_signal ?peer interface member typ x =
-    super#obus_emit_signal ~peer:(match peer with
-                                    | Some peer -> peer
-                                    | None -> owner)
-      interface member typ x
+  method obus_emit_signal interface member typ ?peer x =
+    super#obus_emit_signal interface member typ
+      ~peer:(match peer with
+               | Some peer -> peer
+               | None -> owner) x
 
   initializer
     if owner.OBus_peer.name <> None then
