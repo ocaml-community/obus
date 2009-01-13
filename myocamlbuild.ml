@@ -55,6 +55,17 @@ let define_lib ?dir name =
   dep ["ocaml"; "byte"; "use_" ^ name] [name ^ ".cma"];
   dep ["ocaml"; "native"; "use_" ^ name] [name ^ ".cmxa"]
 
+let substitute env text =
+  List.fold_left (fun text (patt, repl) -> String.subst patt repl text) text env
+
+let get_public_modules _ =
+  List.filter (fun s -> not (String.is_prefix "obus/internals/" s)) (string_list_of_file "obus.mllib")
+
+let get_version _ =
+  match string_list_of_file "VERSION" with
+    | version :: _ -> version
+    | _ -> failwith "invalid VERSION file"
+
 let _ =
   dispatch begin function
     | Before_options ->
@@ -140,16 +151,21 @@ let _ =
 
         (* Generation of the version.ml file *)
         rule "version" ~prod:"version.ml" ~dep:"VERSION"
-          (fun _ _ -> match string_list_of_file "VERSION" with
-             | version :: _ -> Echo(["let version = \"" ^ version ^ "\"\n"], "version.ml")
-             | _ -> failwith "invalid VERSION file");
+          (fun _ _ -> Echo(["let version = \"" ^ get_version () ^ "\"\n"], "version.ml"));
 
         (* Generation of the obus.odocl file *)
         rule "obus_doc" ~prod:"obus.odocl" ~dep:"obus.mllib"
-          (fun _ _ -> Echo(List.map (fun s -> s ^ "\n")
-                             (List.filter (fun s -> not (String.is_prefix "obus/internals/" s))
-                                (string_list_of_file "obus.mllib")),
-                           "obus.odocl"))
+          (fun _ _ -> Echo(List.map (fun s -> s ^ "\n") (get_public_modules ()), "obus.odocl"));
+
+        (* Generation of "META" *)
+        rule "META" ~deps:["META.in"; "obus.mllib"; "VERSION"] ~prod:"META"
+          (fun _ _ ->
+             Echo([substitute [("@VERSION@", get_version ());
+                               ("@MODULES@", String.concat " "
+                                  (List.map
+                                     (fun s -> String.after s (String.length "obus/"))
+                                     (get_public_modules ())))]
+                     (read_file "META.in")], "META"))
 
     | _ -> ()
   end

@@ -8,8 +8,6 @@
 OC = ocamlbuild
 OF = ocamlfind
 
-VERSION = $(shell head -n 1 VERSION)
-
 # Targets
 SAMPLES = hello bus_functions eject notify monitor signals list_services \
 	  ping pong progress_server progress_client
@@ -19,25 +17,21 @@ TOOLS = obus_introspect obus_binder obus_dump
 TEST = test_serialization test_printing test_communication valid auth server errors logging
 
 .PHONY: all
-all: META
+all:
 	$(OC) \
 	  $(LIB:=.cma) $(LIB:=.cmxa) $(LIB:=.cmxs) \
 	  $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) $(BINDINGS:=.cmxs) \
 	  $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native) \
 	  $(SAMPLES:%=samples/%.byte) $(SAMPLES:%=samples/%.native) \
-	  obus.docdir/index.html
-
-META: META.in VERSION obus.mllib
-	sed -e 's/@VERSION@/$(VERSION)/;s/@MODULES@/$(shell grep -v "^obus/internals/" obus.mllib | cut -d/ -f2)/' META.in > META
+	  obus.docdir/index.html META
 
 .PHONY: dist
 dist:
-	DARCS_REPO=$(PWD) darcs dist --dist-name obus-$(VERSION)
+	DARCS_REPO=$(PWD) darcs dist --dist-name obus-`head -n 1 VERSION`
 
 .PHONY: clean
 clean:
 	$(OC) -clean
-	rm -f META obus-*.tar.gz
 
 # List all package dependencies
 .PHONY: list-deps
@@ -114,7 +108,8 @@ test:
 	$(OC) $(TEST:%=test/%.d.byte)
 
 .PHONY: test-syntax
-test-syntax: syntax/pa_obus.cmo
+test-syntax:
+	$(OC) syntax/pa_obus.ml
 	camlp4o _build/syntax/pa_obus.cmo test/syntax_extension.ml
 
 # +---------------+
@@ -139,7 +134,7 @@ prefix:
 	fi
 
 .PHONY: install
-install: META prefix
+install: prefix
 	$(OF) install obus META \
 	 _build/syntax/pa_obus.cmo \
 	 $(LIB:%=%/*.mli) \
