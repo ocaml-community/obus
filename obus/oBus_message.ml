@@ -43,6 +43,8 @@ type any_type =
     | error_type
     | signal_type ]
 
+type reply_type = [ method_return_type | error_type ]
+
 type 'typ t = {
   flags : flags;
   serial : serial;
@@ -78,6 +80,7 @@ type method_return = method_return_type t
 type signal = signal_type t
 type error = error_type t
 type any = any_type t
+type reply = reply_type t
 
 let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ body =
   { flags = flags;

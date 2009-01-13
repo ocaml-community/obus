@@ -162,7 +162,7 @@ and connection = <
   remove_object : OBus_path.t -> unit;
   find_object : OBus_path.t -> dbus_object option;
   send_message : 'a. 'a any_message -> unit Lwt.t;
-  send_message_with_reply : OBus_message.method_call -> OBus_message.method_return Lwt.t;
+  send_message_with_reply : OBus_message.method_call -> OBus_message.reply Lwt.t;
   children : OBus_path.t -> OBus_introspect.node list;
   close : unit;
   is_bus : bool;

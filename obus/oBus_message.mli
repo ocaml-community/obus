@@ -35,6 +35,9 @@ type any_type =
     | error_type
     | signal_type ]
 
+type reply_type = [ method_return_type | error_type ]
+    (** Type for a reply: either a successful return or an error *)
+
 (** flags *)
 type flags = {
   no_reply_expected : bool;
@@ -64,6 +67,7 @@ type method_return = method_return_type t
 type signal = signal_type t
 type error = error_type t
 type any = any_type t
+type reply = reply_type t
 
 val body : 'a t -> body
 val flags : 'a t -> flags

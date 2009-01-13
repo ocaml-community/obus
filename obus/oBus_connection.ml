@@ -67,27 +67,32 @@ let send_message_with_reply (connection : connection) message = connection#send_
 
 let method_call' connection ?flags ?sender ?destination ~path ?interface ~member body ty_reply =
   send_message_with_reply connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
-  >>= fun msg ->
-    try
-      return (OBus_type.cast_sequence ~context:(mk_context connection msg) ty_reply msg.body)
-    with
-      | OBus_type.Cast_failure ->
-          (* If not, check why the cast fail *)
-          let expected_sig = OBus_type.type_sequence ty_reply
-          and got_sig = type_of_sequence msg.body in
-          if expected_sig = got_sig
-          then
-            (* If the signature match, this means that the user
-               defined a combinator raising a Cast_failure *)
-            fail OBus_type.Cast_failure
-          else
-            (* In other case this means that the expected signature is
-               wrong *)
-            fail
-              (Failure (sprintf "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
-                          member (match interface with Some i -> i | None -> "")
-                          (string_of_signature expected_sig)
-                          (string_of_signature got_sig)))
+  >>= function
+    | { typ = `Method_return _ } as msg ->
+        begin try
+          return (OBus_type.cast_sequence ~context:(mk_context connection msg) ty_reply msg.body)
+        with
+          | OBus_type.Cast_failure ->
+              (* If not, check why the cast fail *)
+              let expected_sig = OBus_type.type_sequence ty_reply
+              and got_sig = type_of_sequence msg.body in
+              if expected_sig = got_sig
+              then
+                (* If the signature match, this means that the user
+                   defined a combinator raising a Cast_failure *)
+                fail OBus_type.Cast_failure
+              else
+                (* In other case this means that the expected
+                   signature is wrong *)
+                fail
+                  (Failure (sprintf "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
+                              member (match interface with Some i -> i | None -> "")
+                              (string_of_signature expected_sig)
+                              (string_of_signature got_sig)))
+        end
+
+    | { typ = `Error(_, error_name) } as msg ->
+        fail (OBus_error.make error_name (get_error msg))
 
 let method_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member ty =
   OBus_type.make_func ty begin fun body ->
@@ -337,12 +342,12 @@ object(self)
        wakeup when the message is sent. It return the current
        serial. *)
 
-  val mutable reply_waiters : OBus_message.method_return Lwt.t Serial_map.t = Serial_map.empty
+  val mutable reply_waiters : OBus_message.reply Lwt.t Serial_map.t = Serial_map.empty
     (* Mapping serial -> thread waiting for a reply *)
 
   (* Send a message, maybe adding a reply waiter and return
      [return_thread] *)
-  method private send_message_backend : 'a 'b. OBus_message.method_return Lwt.t option -> 'a Lwt.t -> ([< OBus_message.any_type ] as 'b) OBus_message.t -> 'a Lwt.t =
+  method private send_message_backend : 'a 'b. OBus_message.reply Lwt.t option -> 'a Lwt.t -> ([< OBus_message.any_type ] as 'b) OBus_message.t -> 'a Lwt.t =
     fun reply_waiter_opt return_thread message ->
       let current_outgoing = outgoing in
       let w = wait () in
@@ -458,15 +463,6 @@ object(self)
     | Some exn -> raise exn
     | None -> Object_map.lookup path exported_objects
 
-  (* Find the handler for a reply and remove it. *)
-  method private find_reply_waiter serial f g =
-    match Serial_map.lookup serial reply_waiters with
-      | Some x ->
-          reply_waiters <- Serial_map.remove serial reply_waiters;
-          f x
-      | None ->
-          g ()
-
   method children path = match crashed with
     | Some exn ->
         raise exn
@@ -482,18 +478,22 @@ object(self)
       (* For method return and errors, we lookup at the reply
          waiters. If one is find then it get the reply, if none, then
          the reply is dropped. *)
-    | { typ = `Method_return(reply_serial) } as message ->
-        self#find_reply_waiter reply_serial
-          (fun w -> wakeup w message)
-          (fun _ -> Log.debug "reply to message with serial %ld dropped" reply_serial);
+    | { typ = `Method_return(reply_serial) }
+    | { typ = `Error(reply_serial, _) } as message ->
+        begin match Serial_map.lookup reply_serial reply_waiters with
+          | Some w ->
+              reply_waiters <- Serial_map.remove reply_serial reply_waiters;
+              wakeup w message
 
-    | { typ = `Error(reply_serial, error_name) } as message ->
-        let msg = get_error message in
-        self#find_reply_waiter reply_serial
-          (fun w -> wakeup_exn w (OBus_error.make error_name msg))
-          (fun _ ->
-             Log.debug "error reply to message with serial %ld dropped because no reply was expected, \
-                        the error is: %S: %S" reply_serial error_name msg)
+          | None ->
+              Log.debug "reply to message with serial %ld dropped%s"
+                reply_serial (match message with
+                                | { typ = `Method_return _ } ->
+                                    ""
+                                | { typ = `Error(_, error_name) } as message ->
+                                    sprintf ", the reply is the error: %S: %S"
+                                      error_name (get_error message))
+        end
 
     | { typ = `Signal _ } as message ->
         begin match name, message.sender with

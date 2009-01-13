@@ -96,9 +96,10 @@ val send_message : t -> [< OBus_message.any_type ] OBus_message.t -> unit Lwt.t
   (** [send_message connection message] send a message without
       expecting a reply. *)
 
-val send_message_with_reply : t -> OBus_message.method_call -> OBus_message.method_return Lwt.t
+val send_message_with_reply : t -> OBus_message.method_call -> OBus_message.reply Lwt.t
   (** [send_message_with_reply connection message] Send a message and
-      return a thread which wait for the reply *)
+      return a thread which wait for the reply (which is a method
+      return or an error) *)
 
 (** {6 Helpers} *)
 
