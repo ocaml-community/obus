@@ -96,6 +96,14 @@ let _ =
         define_lib ~dir:"bindings/hal" "hal";
         define_lib ~dir:"bindings/notification" "notification";
 
+        (* +------------------+
+           | Shared libraries |
+           +------------------+ *)
+
+        rule "shared libraries (cmxs)"
+          ~dep:"%.cmxa" ~prod:"%.cmxs"
+          (fun env _ -> Cmd(S[!(Options.ocamlopt); A"-shared"; A"-linkall"; A(env "%.cmxa"); A"-o"; A(env "%.cmxs")]));
+
         (* +-----------------+
            | Ocamlfind stuff |
            +-----------------+ *)

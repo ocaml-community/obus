@@ -21,8 +21,8 @@ TEST = test_serialization test_printing test_communication valid auth server err
 .PHONY: all
 all: META
 	$(OC) \
-	  $(LIB:=.cma) $(LIB:=.cmxa) \
-	  $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) \
+	  $(LIB:=.cma) $(LIB:=.cmxa) $(LIB:=.cmxs) \
+	  $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) $(BINDINGS:=.cmxs) \
 	  $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native) \
 	  $(SAMPLES:%=samples/%.byte) $(SAMPLES:%=samples/%.native) \
 	  obus.docdir/index.html
@@ -61,9 +61,13 @@ lib-byte:
 lib-native:
 	$(OC) $(LIB:=.cmxa)
 
+.PHONY: lib-shared
+lib-shared:
+	$(OC) $(LIB:=.cmxs)
+
 .PHONY: lib
 lib:
-	$(OC) $(LIB:=.cma) $(LIB:=.cmxa)
+	$(OC) $(LIB:=.cma) $(LIB:=.cmxa) $(LIB:=.cmxs)
 
 .PHONY: bindings-byte
 bindings-byte:
@@ -73,9 +77,13 @@ bindings-byte:
 bindings-native:
 	$(OC) $(BINDINGS:=.cmxa)
 
+.PHONY: bindings-shared
+bindings-shared:
+	$(OC) $(BINDINGS:=.cmxs)
+
 .PHONY: bindings
 bindings:
-	$(OC) $(BINDINGS:=.cma) $(BINDINGS:=.cmxa)
+	$(OC) $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) $(BINDINGS:=.cmxs)
 
 .PHONY: samples-byte
 samples-byte:
@@ -138,11 +146,13 @@ install: META prefix
 	 $(LIB:%=_build/%/*.cmi) \
 	 $(LIB:%=_build/%.cma) \
 	 $(LIB:%=_build/%.cmxa) \
+	 $(LIB:%=_build/%.cmxs) \
 	 $(LIB:%=_build/%.a) \
 	 $(BINDINGS:%=bindings/%/*.mli) \
 	 $(BINDINGS:%=_build/bindings/%/*.cmi) \
 	 $(BINDINGS:%=_build/%.cma) \
 	 $(BINDINGS:%=_build/%.cmxa) \
+	 $(BINDINGS:%=_build/%.cmxs) \
 	 $(BINDINGS:%=_build/%.a)
 	for tool in $(TOOLS); do \
 	  install -vm 0755 _build/tools/$$tool.native $(PREFIX)/bin/`echo $$tool|sed s/_/-/`; \
