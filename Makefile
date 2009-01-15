@@ -33,15 +33,10 @@ dist:
 clean:
 	$(OC) -clean
 
-# List all package dependencies
+# List all needed packages
 .PHONY: list-deps
 list-deps:
-	@sh check-deps.sh list
-
-# Check that all dependencies are present
-.PHONY: check-deps
-check-deps:
-	@sh check-deps.sh
+	@grep -o 'pkg_[^ ,]*' _tags | cut -c 5- | sort | uniq
 
 # +------------------+
 # | Specific targets |

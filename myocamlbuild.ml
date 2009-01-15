@@ -27,12 +27,32 @@ let exec cmd =
     Lexing.from_string &
     run_and_read cmd
 
-(* this lists all supported packages *)
-let find_packages () = exec "ocamlfind list | cut -d' ' -f1"
+(* List of packages that must appears in a certain order. Sometimes
+   there are problems with syntax extensions... *)
+let packages_needing_ordering = [ "type-conv.syntax"; "camlp4.macro" ]
 
-(* this is supposed to list available syntaxes, but I don't know how
-   to do it. *)
-let find_syntaxes () = ["camlp4o"; "camlp4r"]
+(* Extract the list of used packages from "_tags" *)
+let get_packages () =
+  List.fold_left
+    (fun set word ->
+       if String.is_prefix "pkg_" word then begin
+         let start = String.length "pkg_"
+         and stop =
+           if String.is_suffix word "," then
+             String.length word - 1
+           else
+             String.length word
+         in
+         let pkg = String.sub word start (stop - start) in
+         if List.mem pkg packages_needing_ordering then
+           set
+         else
+           StringSet.add pkg set
+       end else
+         set) StringSet.empty (string_list_of_file "_tags")
+
+(* List of syntaxes *)
+let syntaxes = ["camlp4o"; "camlp4r"]
 
 (* ocamlfind command *)
 let ocamlfind x = S[A"ocamlfind"; x]
@@ -54,6 +74,12 @@ let define_lib ?dir name =
   ocaml_lib ?dir name;
   dep ["ocaml"; "byte"; "use_" ^ name] [name ^ ".cma"];
   dep ["ocaml"; "native"; "use_" ^ name] [name ^ ".cmxa"]
+
+(* For each ocamlfind package one inject the -package option when
+   compiling, computing dependencies, generating documentation and
+   linking. *)
+let define_package pkg =
+  flag_all_stages ("pkg_" ^ pkg) & S[A"-package"; A pkg]
 
 let substitute env text =
   List.fold_left (fun text (patt, repl) -> String.subst patt repl text) text env
@@ -85,13 +111,6 @@ let _ =
         Pathname.define_context "obus" [ "obus/internals" ];
         Pathname.define_context "obus/internals" [ "obus" ];
 
-        (* +-----------------------+
-           | Dependencies checking |
-           +-----------------------+ *)
-
-        if not (Pathname.exists "_build/dependencies-checked") then
-          execute ~quiet:true (Cmd(Sh"/bin/sh check-deps.sh > /dev/null"));
-
         (* +---------------------+
            | Manual dependencies |
            +---------------------+ *)
@@ -122,18 +141,17 @@ let _ =
         (* When one link an OCaml library/binary/package, one should use -linkpkg *)
         flag ["ocaml"; "link"] & A"-linkpkg";
 
-        (* For each ocamlfind package one inject the -package option
-           when compiling, computing dependencies, generating
-           documentation and linking. *)
-        List.iter
-          (fun pkg -> flag_all_stages ("pkg_" ^ pkg) (S[A"-package"; A pkg]))
-          (find_packages ());
+        (* Deals with packages needing ordering first *)
+        List.iter define_package packages_needing_ordering;
+
+        (* Add others in any order *)
+        StringSet.iter define_package (get_packages ());
 
         (* Like -package but for extensions syntax. Morover -syntax is
            useless when linking. *)
         List.iter
           (fun syntax -> flag_all_stages_except_link ("syntax_" ^ syntax) (S[A"-syntax"; A syntax]))
-          (find_syntaxes ());
+          syntaxes;
 
         (* +-------------------+
            | Internal syntaxes |
