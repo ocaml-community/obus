@@ -9,9 +9,6 @@
 
 open Lwt
 open OBus_internals
-open OBus_connection
-open OBus_peer
-open OBus_proxy
 
 OBUS_type match_rule = string
 
@@ -29,7 +26,7 @@ let make ?(broadcast=true) ~interface ~member ty get_proxy = {
   member = member;
   get_proxy = get_proxy;
   cast = fun (connection, message) -> OBus_type.cast_sequence ty
-    ~context:(Context(connection, (message :> OBus_message.any)))
+    ~context:(OBus_connection.Context(connection, (message :> OBus_message.any)))
     (OBus_message.body message);
 }
 
@@ -76,69 +73,72 @@ let safe_cast cast x =
 let connect signal ?(serial=false) ?(args=[]) func =
   signal.get_proxy () >>= fun proxy ->
 
-    let connection = proxy.peer.connection in
+    match (OBus_peer.connection (OBus_proxy.peer proxy))#get with
+      | Crashed exn ->
+          fail exn
 
-    let make_signal_receiver sender_opt = {
-      sr_sender = sender_opt;
-      sr_path = Some proxy.path;
-      sr_interface = signal.interface;
-      sr_member = signal.member;
-      sr_args = make_args_filter args;
-      sr_callback = make_callback serial
-        (fun (connection, message) ->
-           match safe_cast signal.cast (connection, message) with
-             | Some x -> func x
-             | None -> return ());
-    } in
+      | Running connection ->
+          let make_signal_receiver sender_opt = {
+            sr_sender = sender_opt;
+            sr_path = Some(OBus_proxy.path proxy);
+            sr_interface = signal.interface;
+            sr_member = signal.member;
+            sr_args = make_args_filter args;
+            sr_callback = make_callback serial
+              (fun (connection, message) ->
+                 match safe_cast signal.cast (connection, message) with
+                   | Some x -> func x
+                   | None -> return ());
+          } in
 
-    if not connection#is_bus then
-      (* If the connection is a peer-to-peer connection the only thing
-         to do is to locally add the receiver *)
-      let node = connection#add_signal_receiver (make_signal_receiver None) in
-      return (ref (fun _ -> MSet.remove node))
+          if connection.name = None then
+            (* If the connection is a peer-to-peer connection the only
+               thing to do is to locally add the receiver *)
+            let node = MSet.add connection.signal_receivers (make_signal_receiver None) in
+            return (ref (fun _ -> MSet.remove node))
 
-    else begin
+          else begin
 
-      let cont monitor resolver_opt signal_receiver =
-        let match_rule = Match_rule.make
-          ~typ:`signal
-          ?sender:proxy.peer.name
-          ~path:proxy.path
-          ~interface:signal.interface
-          ~member:signal.member
-          ~args ()
-        and node = connection#add_signal_receiver signal_receiver in
-        let receiver = ref (fun _ ->
-                              MSet.remove node;
-                              begin match resolver_opt with
-                                | Some resolver ->
-                                    OBus_resolver.disable resolver
-                                | None ->
-                                    ()
-                              end;
-                              ignore (Bus.remove_match connection match_rule)) in
-        if monitor then
-          (* If the peer has a unique name, then remove the receiver
-             when the peer exit *)
-          ignore (OBus_peer.wait_for_exit proxy.peer >>= fun _ -> disconnect receiver; return ());
-        if signal.broadcast then
-          Bus.add_match connection match_rule >>= fun _ -> return receiver
-        else
-          return receiver
-      in
+            let cont monitor resolver_opt signal_receiver =
+              let match_rule = Match_rule.make
+                ~typ:`signal
+                ?sender:(OBus_peer.name (OBus_proxy.peer proxy))
+                ~path:(OBus_proxy.path proxy)
+                ~interface:signal.interface
+                ~member:signal.member
+                ~args ()
+              and node = MSet.add connection.signal_receivers signal_receiver in
+              let receiver = ref (fun _ ->
+                                    MSet.remove node;
+                                    begin match resolver_opt with
+                                      | Some resolver ->
+                                          OBus_resolver.disable resolver
+                                      | None ->
+                                          ()
+                                    end;
+                                    ignore (Bus.remove_match connection.packed match_rule)) in
+              if monitor then
+                (* If the peer has a unique name, then remove the receiver
+                   when the peer exit *)
+                ignore (OBus_peer.wait_for_exit (OBus_proxy.peer proxy) >>= fun _ -> disconnect receiver; return ());
+              if signal.broadcast then
+                Bus.add_match connection.packed match_rule >>= fun _ -> return receiver
+              else
+                return receiver
+            in
 
-      match proxy.peer.name with
-        | None ->
-            cont false None (make_signal_receiver None)
+            match OBus_peer.name (OBus_proxy.peer proxy) with
+              | None ->
+                  cont false None (make_signal_receiver None)
 
-        | Some name ->
-            OBus_resolver.make connection name >>= fun resolver ->
-              if OBus_name.is_unique name then begin
-                if not (OBus_resolver.owned resolver) then begin
-                  OBus_resolver.disable resolver;
-                  return (ref (fun _ -> ()))
-                end else
-                  cont true (Some resolver) (make_signal_receiver (Some (OBus_resolver.internal_resolver resolver)))
-              end else
-                cont false (Some resolver) (make_signal_receiver (Some (OBus_resolver.internal_resolver resolver)))
-    end
+              | Some name ->
+                  OBus_resolver.make connection.packed name >>= fun resolver ->
+                    if OBus_name.is_unique name then begin
+                      if not (OBus_resolver.owned resolver) then begin
+                        OBus_resolver.disable resolver;
+                        return (ref (fun _ -> ()))
+                      end else
+                        cont true (Some resolver) (make_signal_receiver (Some (OBus_resolver.internal_resolver resolver)))
+                    end else
+                      cont false (Some resolver) (make_signal_receiver (Some (OBus_resolver.internal_resolver resolver)))
+          end

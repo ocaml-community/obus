@@ -43,8 +43,13 @@ let disable r = match !r with
       nr.nr_ref_count <- nr.nr_ref_count - 1;
       (* If nobody use the name resolver, just remove it *)
       if nr.nr_ref_count = 0 then begin
-        connection#remove_name_resolver name;
-        ignore (Bus.remove_match connection nr.nr_match_rule)
+        match connection#get with
+          | Running connection ->
+              connection.name_resolvers <- Name_map.remove name connection.name_resolvers;
+              ignore (Bus.remove_match connection.packed nr.nr_match_rule)
+
+          | Crashed _ ->
+              ()
       end
 
   | Fake ->
@@ -59,92 +64,97 @@ let opt_call_resolver_handler ?init ncc_opt owner =
     | None -> ()
 
 let make ?(serial=false) ?on_change connection name =
-  let ncc_opt = Util.wrap_option on_change (fun f -> { ncc_callback = make_callback serial f;
-                                                       ncc_initialized = false }) in
+  match connection#get with
+    | Crashed exn ->
+        fail exn
 
-  (* If the connection is a peer-to-peer connection, act as if they is
-     no owner *)
-  if (not connection#is_bus ||
+    | Running connection ->
+        let ncc_opt = Util.wrap_option on_change (fun f -> { ncc_callback = make_callback serial f;
+                                                             ncc_initialized = false }) in
 
-        (* If it is a unique name and the peer has already exited,
-           then there is nothing to do *)
-        (OBus_name.is_unique name && connection#peer_has_exited name)) then
-    begin
-      (* Immedialty call the name change handler *)
-      opt_call_resolver_handler ~init:true ncc_opt None;
+        (* If the connection is a peer-to-peer connection, act as if
+           they is no owner *)
+        if (connection.name = None ||
 
-      (* Return a fake resolver *)
-      return (ref Fake)
-    end
+            (* If it is a unique name and the peer has already exited,
+               then there is nothing to do *)
+            (OBus_name.is_unique name && Cache.mem connection.exited_peers name)) then
+          begin
+            (* Immedialty call the name change handler *)
+            opt_call_resolver_handler ~init:true ncc_opt None;
 
-  else
+            (* Return a fake resolver *)
+            return (ref Fake)
+          end
 
-    let nr =
-      match connection#find_name_resolver name with
-        | Some nr ->
-            nr
+        else
 
-        | None ->
-            let match_rule = Match_rule.make
-              ~typ:`signal
-              ~sender:"org.freedesktop.DBus"
-              ~interface:"org.freedesktop.DBus"
-              ~member:"NameOwnerChanged"
-              ~path:["org"; "freedesktop"; "DBus"]
-              ~args:[(0, name)] () in
+          let nr =
+            match Name_map.lookup name connection.name_resolvers with
+              | Some nr ->
+                  nr
 
-            (* Immediatly add the resolver to be sure no other
-               thread will do it *)
-            let nr = { nr_owner = ref None;
-                       nr_ref_count = 0;
-                       nr_match_rule = match_rule;
-                       nr_on_change = MSet.make ();
-                       nr_init = Lwt.wait ();
-                       nr_initialized = false } in
-            connection#add_name_resolver name nr;
+              | None ->
+                  let match_rule = Match_rule.make
+                    ~typ:`signal
+                    ~sender:"org.freedesktop.DBus"
+                    ~interface:"org.freedesktop.DBus"
+                    ~member:"NameOwnerChanged"
+                    ~path:["org"; "freedesktop"; "DBus"]
+                    ~args:[(0, name)] () in
 
-            ignore (catch
-                      (fun _ -> perform
-                         (* Add the rule for monitoring the name +
-                            ask for the current name owner. The calling
-                            order is important to avoid race conditions. *)
-                         Bus.add_match connection match_rule;
-                         owner <-- Bus.get_name_owner connection name;
-                         let _ =
-                           if not nr.nr_initialized then begin
-                             nr.nr_initialized <- true;
-                             nr.nr_owner := owner;
-                             Lwt.wakeup nr.nr_init ()
-                           end
-                         in
-                         return ())
-                      (fun exn ->
-                         Lwt.wakeup_exn nr.nr_init exn;
-                         return ()));
-            nr
-    in
+                  (* Immediatly add the resolver to be sure no other
+                     thread will do it *)
+                  let nr = { nr_owner = ref None;
+                             nr_ref_count = 0;
+                             nr_match_rule = match_rule;
+                             nr_on_change = MSet.make ();
+                             nr_init = Lwt.wait ();
+                             nr_initialized = false } in
+                  connection.name_resolvers <- Name_map.add name nr connection.name_resolvers;
 
-    let node_opt = Util.wrap_option ncc_opt (MSet.add nr.nr_on_change) in
+                  ignore (catch
+                            (fun _ -> perform
+                               (* Add the rule for monitoring the name +
+                                  ask for the current name owner. The calling
+                                  order is important to avoid race conditions. *)
+                               Bus.add_match connection.packed match_rule;
+                               owner <-- Bus.get_name_owner connection.packed name;
+                               let _ =
+                                 if not nr.nr_initialized then begin
+                                   nr.nr_initialized <- true;
+                                   nr.nr_owner := owner;
+                                   Lwt.wakeup nr.nr_init ()
+                                 end
+                               in
+                               return ())
+                            (fun exn ->
+                               Lwt.wakeup_exn nr.nr_init exn;
+                               return ()));
+                  nr
+          in
 
-    (* Wait for initialization *)
-    nr.nr_init >>= begin fun _ ->
+          let node_opt = Util.wrap_option ncc_opt (MSet.add nr.nr_on_change) in
 
-      (* Initialze the handler with the initial name resolving *)
-      opt_call_resolver_handler ~init:true ncc_opt !(nr.nr_owner);
+          (* Wait for initialization *)
+          nr.nr_init >>= begin fun _ ->
 
-      let resolver = ref (Enabled { resolver_name = name;
-                                    resolver_connection = connection;
-                                    resolver_name_resolver = nr;
-                                    resolver_on_change = node_opt }) in
+            (* Initialze the handler with the initial name resolving *)
+            opt_call_resolver_handler ~init:true ncc_opt !(nr.nr_owner);
 
-      (* There is now one new reference to the name resolver *)
-      nr.nr_ref_count <- nr.nr_ref_count + 1;
+            let resolver = ref (Enabled { resolver_name = name;
+                                          resolver_connection = connection.packed;
+                                          resolver_name_resolver = nr;
+                                          resolver_on_change = node_opt }) in
 
-      (* Disable resolver on garbage collection *)
-      Gc.finalise disable resolver;
+            (* There is now one new reference to the name resolver *)
+            nr.nr_ref_count <- nr.nr_ref_count + 1;
 
-      return resolver
-    end
+            (* Disable resolver on garbage collection *)
+            Gc.finalise disable resolver;
+
+            return resolver
+          end
 
 let owner r = match !r with
   | Disabled ->

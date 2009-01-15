@@ -83,12 +83,12 @@ class t : object
   method obus_handle_call : OBus_connection.t -> OBus_message.method_call -> unit
     (** Handle a method call *)
 
-  method introspect : OBus_connection.t -> OBus_introspect.document Lwt.t
+  method obus_introspect : OBus_connection.t -> OBus_introspect.document Lwt.t
     (** Self introspection *)
 
-  method get : OBus_name.interface -> OBus_name.member -> OBus_value.single Lwt.t
-  method set : OBus_name.interface -> OBus_name.member -> OBus_value.single -> unit Lwt.t
-  method get_all : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
+  method obus_get : OBus_name.interface -> OBus_name.member -> OBus_value.single Lwt.t
+  method obus_set : OBus_name.interface -> OBus_name.member -> OBus_value.single -> unit Lwt.t
+  method obus_get_all : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
     (** Object properties *)
 
   method obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->

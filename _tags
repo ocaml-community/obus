@@ -13,7 +13,7 @@
 <obus/internals/{bus,match_rule}.ml{,i}>: pa_obus
 <obus/{bus,match_rule}.ml{,i}>: pa_obus
 <obus/oBus_{connection,bus,peer,proxy,property,object,signal}.ml{,i}>: pa_obus
-<obus/oBus_info.ml>: pkg_camlp4.macro
+<obus/oBus_{connection,info}.ml>: pkg_camlp4.macro
 
 # Syntax extensions
 <syntax/*>: pkg_camlp4.lib, pkg_camlp4.quotations.o, pkg_camlp4.extend

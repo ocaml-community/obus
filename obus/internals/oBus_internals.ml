@@ -11,9 +11,10 @@
    different modules of OBus *)
 
 open Lwt
-open OBus_message
-open OBus_info
-open OBus_value
+
+module Serial_map = Util.Make_map(struct type t = OBus_message.serial end)
+module Object_map = Util.Make_map(struct type t = OBus_path.t end)
+module Name_map = Util.Make_map(struct type t = OBus_name.bus end)
 
 (* +--------------------+
    | Callback functions |
@@ -58,35 +59,30 @@ let callback_apply name cb x = match cb.cb_mode with
   | Callback_mode_parallel ->
       ignore (safe_call name cb.cb_func x)
 
-(* +------------+
-   | Connection |
-   +------------+ *)
-
-type 'a any_message = 'a OBus_message.t
-constraint 'a = [< OBus_message.any_type ]
+(* +--------------+
+   | DBus objects |
+   +--------------+ *)
 
 type member_info =
-  | MI_method of OBus_name.member * tsequence * (connection -> method_call -> unit)
+  | MI_method of OBus_name.member * OBus_value.tsequence * (packed_connection -> OBus_message.method_call -> unit)
   | MI_signal
-  | MI_property of OBus_name.member * (unit -> single Lwt.t) option * (single -> unit Lwt.t) option
+  | MI_property of OBus_name.member * (unit -> OBus_value.single Lwt.t) option * (OBus_value.single -> unit Lwt.t) option
 
 and member_desc = OBus_introspect.declaration * member_info
 
+(* Signature that [OBus_connection] need to known for handling
+   objects *)
 and dbus_object = <
-  obus_path : OBus_path.t;
-  obus_handle_call : connection -> method_call -> unit;
-  introspect : connection -> OBus_introspect.document Lwt.t;
-  get : OBus_name.interface -> OBus_name.member -> OBus_value.single Lwt.t;
-  set : OBus_name.interface -> OBus_name.member -> OBus_value.single -> unit Lwt.t;
-  get_all : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t;
-  obus_add_interface : OBus_name.interface -> member_desc list -> unit;
-  obus_export : connection -> unit;
-  obus_remove : connection -> unit;
-  obus_destroy : unit;
-  obus_connection_closed : connection -> unit;
+  obus_handle_call : packed_connection -> OBus_message.method_call -> unit;
+  (* Handle a method call *)
+
+  obus_connection_closed : packed_connection -> unit;
+  (* Do wathever needed when the connection is closed *)
 >
 
-and filter = OBus_message.any -> OBus_message.any option
+(* +----------------+
+   | Name resolvers |
+   +----------------+ *)
 
 (* We keep on each connection a mapping from names we are interested
    to their owner.
@@ -105,26 +101,26 @@ and filter = OBus_message.any -> OBus_message.any option
    can destroy all resources using this name
 *)
 and name_resolver = {
-  (* Owner of the name. This name is always a unique name *)
   nr_owner : name_resolver_internal;
+  (* Owner of the name. This name is always a unique name *)
 
-  (* Number of things using it *)
   mutable nr_ref_count : int;
+  (* Number of things using it *)
 
+  nr_match_rule : Match_rule.t;
   (* The matching rule, in case the end-point of the connection is a
      message bus *)
-  nr_match_rule : Match_rule.t;
 
-  (* Functions called when the name owner change *)
   nr_on_change : name_change_callback MSet.t;
+  (* Functions called when the name owner change *)
 
+  nr_init : unit Lwt.t;
   (* Sleeping thread which is wakeup after the initial resolution,
      even if it fails. *)
-  nr_init : unit Lwt.t;
 
+  mutable nr_initialized : bool;
   (* Tell wether the name resolver have been initialized. This is to
      avoid race conditions. *)
-  mutable nr_initialized : bool;
 }
 
 and name_resolver_internal = OBus_name.bus option ref
@@ -138,36 +134,9 @@ and name_change_callback = {
      resolution, to avoid race conditions. *)
 }
 
-and connection = <
-  transport : OBus_lowlevel.transport;
-  shutdown_transport_on_close : bool ref;
-  on_disconnect : (exn -> unit) ref;
-  guid : OBus_address.guid option;
-  is_up : bool;
-  set_up : unit;
-  set_down : unit;
-  watch : unit Lwt.t;
-  add_signal_receiver : signal_receiver -> signal_receiver MSet.node;
-  add_incoming_filter : filter -> filter MSet.node;
-  add_outgoing_filter : filter -> filter MSet.node;
-  add_name_resolver : OBus_name.bus -> name_resolver -> unit;
-  remove_name_resolver : OBus_name.bus -> unit;
-  find_name_resolver : OBus_name.bus -> name_resolver option;
-  name : OBus_name.bus option;
-  set_name : OBus_name.bus -> unit;
-  acquired_names : OBus_name.bus list;
-  peer_has_exited : OBus_name.bus -> bool;
-  add_exited_peer : OBus_name.bus -> unit;
-  export_object : OBus_path.t -> dbus_object -> unit;
-  remove_object : OBus_path.t -> unit;
-  find_object : OBus_path.t -> dbus_object option;
-  send_message : 'a. 'a any_message -> unit Lwt.t;
-  send_message_with_reply : OBus_message.method_call -> OBus_message.reply Lwt.t;
-  children : OBus_path.t -> OBus_introspect.node list;
-  close : unit;
-  is_bus : bool;
-  running : bool;
->
+(* +---------+
+   | Signals |
+   +---------+ *)
 
 and signal_receiver = {
   (* Matching rules *)
@@ -193,24 +162,111 @@ and signal_receiver = {
      - "c" for argument 3
   *)
 
-  sr_callback : (connection * signal) callback;
+  sr_callback : (packed_connection * OBus_message.signal) callback;
 }
+
+(* +------------+
+   | Connection |
+   +------------+ *)
+
+and filter = OBus_message.any -> OBus_message.any option
+
+and connection = {
+  mutable name : OBus_name.bus option;
+  (* Unique name of the connection. If set this means that the other
+     side is a message bus. *)
+
+  mutable acquired_names : OBus_name.bus list;
+  (* List of names we currently own *)
+
+  transport : OBus_lowlevel.transport;
+  (* The transport used for messages *)
+
+  shutdown_transport_on_close : bool ref;
+  (* This tell weather we must shutdown the transport when the
+     connection is closed by the programmer or by a crash *)
+
+  on_disconnect : (exn -> unit) ref;
+  (* [on_disconnect] is called the connection is closed
+     prematurely. This happen on transport errors. *)
+
+  guid : OBus_address.guid option;
+  (* Guid of the connection. It may is [Some guid] if this is the
+     client-side part of a peer-to-peer connection and the connection
+     is shared. *)
+
+  mutable down : unit Lwt.t option;
+  (* Waiting thread used to make the connection to stop dispatching
+     messages. *)
+
+  abort : OBus_message.any Lwt.t;
+  (* Waiting thread which is wakeup when the connection is closed or
+     aborted. It is used to make the dispatcher to exit. *)
+
+  watch : unit Lwt.t;
+  (* Thread returned by [OBus_connection.watch] *)
+
+  mutable name_resolvers : name_resolver Name_map.t;
+  (* Mapping bus-name <-> resolver *)
+
+  exited_peers : OBus_name.bus Cache.t;
+  (* Cache of bus names of exited peers. It is used by [OBus_resolver]
+     to minimize the number of request to the message bus *)
+
+  mutable outgoing : OBus_message.serial Lwt.t;
+  (* The ougoing thread.
+
+     If a message is being sent, it is a waiting thread which is
+     wakeup when the message is sent. It returns the current
+     serial. *)
+
+  mutable exported_objects : dbus_object Object_map.t;
+  (* Mapping path -> objects for all objects exported on the
+     connection *)
+
+  incoming_filters : filter MSet.t;
+  outgoing_filters : filter MSet.t;
+
+  mutable reply_waiters : OBus_message.reply Lwt.t Serial_map.t;
+  (* Mapping serial -> thread waiting for a reply *)
+
+  signal_receivers : signal_receiver MSet.t;
+
+  packed : packed_connection;
+  (* The pack containing the connection *)
+}
+
+and connection_state =
+  | Crashed of exn
+  | Running of connection
+
+(* Connections are packed into objects to make them comparable *)
+and packed_connection = <
+  get : connection_state;
+  (* Get the connection state *)
+
+  set_crash : exn -> exn;
+  (* Put the connection in a 'crashed' state if not already
+     done. Returns the exception to which the connection is set to. *)
+>
 
 (* +-------+
    | Utils |
    +-------+ *)
 
 let unknown_method_exn message =
-  let `Method_call(path, interface_opt, member) = message.typ in
+  let `Method_call(path, interface_opt, member) = OBus_message.typ message in
+  let signature = OBus_value.string_of_signature
+    (OBus_value.type_of_sequence (OBus_message.body message)) in
   match interface_opt with
     | Some interface ->
         OBus_error.Unknown_method
           (Printf.sprintf "Method %S with signature %S on interface %S doesn't exist"
-             member (string_of_signature (type_of_sequence message.body)) interface)
+             member signature interface)
     | None ->
         OBus_error.Unknown_method
           (Printf.sprintf "Method %S with signature %S doesn't exist"
-             member (string_of_signature (type_of_sequence message.body)))
+             member signature)
 
 (* Call the name owner change handler of a name resolver. [init] tell
    wether it is for initialization purpose or not. If it is and it has
@@ -222,3 +278,10 @@ let call_resolver_handler ?(init=false) name_change_callback owner =
 
     callback_apply "resolver callback" name_change_callback.ncc_callback owner
   end
+
+let children connection path =
+  Object_map.fold
+    (fun p obj acc -> match OBus_path.after path p with
+       | Some(elt :: _) -> if List.mem elt acc then acc else elt :: acc
+       | _ -> acc)
+    connection.exported_objects []

@@ -14,7 +14,7 @@
     implement the DBus protocol. It is used to exchange DBus
     messages. *)
 
-type t = OBus_internals.connection
+type t = OBus_internals.packed_connection
 
 val tt : t OBus_type.ty_sequence
   (** This return the connection from which a message come *)

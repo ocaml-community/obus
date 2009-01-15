@@ -38,16 +38,20 @@ let error_handler = function
       Log.failure exn "the DBus connection with the message bus has been closed due to this uncaught exception";
       exit 1
 
-let register_connection connection = match connection#name with
-  | Some _ ->
-      (* Do not call two times the Hello method *)
-      return ()
+let register_connection connection = match connection#get with
+  | Crashed exn ->
+      fail exn
 
-  | None ->
-      connection#on_disconnect := error_handler;
-      hello connection >>= fun name ->
-        connection#set_name name;
-        return ()
+  | Running connection -> match connection.name with
+      | Some _ ->
+          (* Do not call two times the Hello method *)
+          return ()
+
+      | None ->
+          connection.on_disconnect := error_handler;
+          hello connection.packed >>= fun name ->
+            connection.name <- Some name;
+            return ()
 
 let of_addresses addresses =
   OBus_connection.of_addresses addresses ~shared:true >>= fun bus ->
@@ -65,7 +69,9 @@ OBUS_exception Error.MatchRuleNotFound
 OBUS_exception Error.ServiceUnknown
 OBUS_exception Error.NameHasNoOwner
 
-let acquired_names bus = bus#acquired_names
+let acquired_names bus = match bus#get with
+  | Crashed exn -> raise exn
+  | Running connection -> connection.acquired_names
 
 OBUS_bitwise request_name_flag : uint =
   [ 1 -> `allow_replacement
