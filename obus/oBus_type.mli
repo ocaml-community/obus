@@ -38,7 +38,7 @@ type 'a cl_sequence = [ 'a cl_single | 'a ty_sequence ]
 type ('a, 'b, 'c) ty_function
   (** Functionnal types *)
 
-(** {6 Dbus types} *)
+(** {6 DBus types} *)
 
 val isignature : ('a, 'b, 'c) ty_function -> signature
   (** "in" signature, it describe types of the method/signal

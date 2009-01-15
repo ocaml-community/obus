@@ -40,7 +40,7 @@ let _ = Lwt_unix.run
         event. *)
      let _ = OBus_connection.add_incoming_filter bus
        (function
-          | { OBus_message.typ = `Signal(_, "org.freedesktop.Hal.Device", "Condition");
+          | { OBus_message.typ = OBus_message.Signal(_, "org.freedesktop.Hal.Device", "Condition");
               OBus_message.body = [Basic(String "ButtonPressed"); Basic(String button)] } ->
 
               begin

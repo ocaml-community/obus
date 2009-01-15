@@ -92,18 +92,18 @@ val name : t -> OBus_name.bus option
 (** These functions are the low-level functions for sending
     messages. They take and return a complete message description *)
 
-val send_message : t -> [< OBus_message.any_type ] OBus_message.t -> unit Lwt.t
+val send_message : t -> OBus_message.t -> unit Lwt.t
   (** [send_message connection message] send a message without
       expecting a reply. *)
 
-val send_message_with_reply : t -> OBus_message.method_call -> OBus_message.reply Lwt.t
+val send_message_with_reply : t -> OBus_message.t -> OBus_message.t Lwt.t
   (** [send_message_with_reply connection message] Send a message and
       return a thread which wait for the reply (which is a method
       return or an error) *)
 
 (** {6 Helpers} *)
 
-exception Context of t * OBus_message.any
+exception Context of t * OBus_message.t
   (** Context used to cast message body, see {!OBus_type.context} for
       a description *)
 
@@ -180,16 +180,16 @@ val demit_signal : t ->
   member:OBus_name.member ->
   OBus_message.body -> unit Lwt.t
 
-val send_reply : t -> OBus_message.method_call -> [< 'a OBus_type.cl_sequence ] -> 'a -> unit Lwt.t
+val send_reply : t -> OBus_message.t -> [< 'a OBus_type.cl_sequence ] -> 'a -> unit Lwt.t
   (** [send_reply connection method_call reply] Send a reply to a
       method call *)
 
-val dsend_reply : t -> OBus_message.method_call -> OBus_value.sequence -> unit Lwt.t
+val dsend_reply : t -> OBus_message.t -> OBus_value.sequence -> unit Lwt.t
 
-val send_error : t -> OBus_message.method_call -> OBus_error.name -> OBus_error.message -> unit Lwt.t
+val send_error : t -> OBus_message.t -> OBus_error.name -> OBus_error.message -> unit Lwt.t
   (** Send an error message in reply to a method call *)
 
-val send_exn : t -> OBus_message.method_call -> exn -> unit Lwt.t
+val send_exn : t -> OBus_message.t -> exn -> unit Lwt.t
   (** [send_exn connection method_call exn] is a short-hand for
       passing [exn] through [OBus_error.unmake] then calling
       [send_error].
@@ -208,7 +208,7 @@ val send_exn : t -> OBus_message.method_call -> exn -> unit Lwt.t
     outgoing, they are called just before being sent.
 *)
 
-type filter = OBus_message.any -> OBus_message.any option
+type filter = OBus_message.t -> OBus_message.t option
   (** The result of a filter must be:
 
       - [Some msg] where [msg] is the message given to the filter

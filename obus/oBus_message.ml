@@ -28,27 +28,16 @@ let make_flags ?(no_reply_expected=false) ?(no_auto_start=false) () = {
   no_auto_start = no_auto_start;
 }
 
-type method_call_type =
-    [ `Method_call of OBus_path.t * OBus_name.interface option * OBus_name.member ]
-type method_return_type =
-    [ `Method_return of serial ]
-type error_type =
-    [ `Error of serial * OBus_name.error ]
-type signal_type =
-    [ `Signal of OBus_path.t * OBus_name.interface * OBus_name.member ]
+type typ =
+  | Method_call of OBus_path.t * OBus_name.interface option * OBus_name.member
+  | Method_return of serial
+  | Error of serial * OBus_name.error
+  | Signal of OBus_path.t * OBus_name.interface * OBus_name.member
 
-type any_type =
-    [ method_call_type
-    | method_return_type
-    | error_type
-    | signal_type ]
-
-type reply_type = [ method_return_type | error_type ]
-
-type 'typ t = {
+type t = {
   flags : flags;
   serial : serial;
-  typ : 'typ;
+  typ : typ;
   destination : OBus_name.bus option;
   sender : OBus_name.bus option;
   body : body;
@@ -60,27 +49,6 @@ let serial message = message.serial
 let typ message = message.typ
 let destination message = message.destination
 let sender message = message.sender
-let path h = match h.typ with
-  | `Method_call(path, interface, member) -> path
-  | `Signal(path, interface, member) -> path
-let interface h = match h.typ with
-  | `Method_call(path, interface, member) -> interface
-  | `Signal(path, interface, member) -> Some(interface)
-let signal_interface { typ = `Signal(path, interface, member) } = interface
-let member h = match h.typ with
-  | `Method_call(path, interface, member) -> member
-  | `Signal(path, interface, member) -> member
-let reply_serial h = match h.typ with
-  | `Method_return serial -> serial
-  | `Error(serial, name) -> serial
-let error_name { typ = `Error(serial, name) } = name
-
-type method_call = method_call_type t
-type method_return = method_return_type t
-type signal = signal_type t
-type error = error_type t
-type any = any_type t
-type reply = reply_type t
 
 let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ body =
   { flags = flags;
@@ -91,16 +59,16 @@ let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ body =
     body = body }
 
 let method_call ?flags ?serial ?sender ?destination ~path ?interface ~member body =
-  make ?flags ?serial ?sender ?destination ~typ:(`Method_call(path, interface, member)) body
+  make ?flags ?serial ?sender ?destination ~typ:(Method_call(path, interface, member)) body
 
 let method_return ?flags ?serial ?sender ?destination ~reply_serial body =
-  make ?flags ?serial ?sender ?destination ~typ:(`Method_return(reply_serial)) body
+  make ?flags ?serial ?sender ?destination ~typ:(Method_return(reply_serial)) body
 
 let error ?flags ?serial ?sender ?destination ~reply_serial ~error_name body =
-  make ?flags ?serial ?sender ?destination ~typ:(`Error(reply_serial, error_name)) body
+  make ?flags ?serial ?sender ?destination ~typ:(Error(reply_serial, error_name)) body
 
 let signal ?flags ?serial ?sender ?destination ~path ~interface ~member body =
-  make ?flags ?serial ?sender ?destination ~typ:(`Signal(path, interface, member)) body
+  make ?flags ?serial ?sender ?destination ~typ:(Signal(path, interface, member)) body
 
 open Format
 open OBus_value
@@ -122,19 +90,19 @@ body_type = %a@
 body = %a@
 " message.flags.no_reply_expected message.flags.no_auto_start message.serial
     (fun pp -> function
-       | `Method_call(path, interface, member) ->
+       | Method_call(path, interface, member) ->
            fprintf pp "method_call@
 path = %S@
 interface = %a@
 member = %S" (OBus_path.to_string path) opt interface member
-       | `Method_return reply_serial ->
+       | Method_return reply_serial ->
            fprintf pp "method_return@
 reply_serial = %ld" reply_serial
-       | `Error(reply_serial, error_name) ->
+       | Error(reply_serial, error_name) ->
            fprintf pp "error@
 reply_serial = %ld@
 error_name = %S" reply_serial error_name
-       | `Signal(path, interface, member) ->
+       | Signal(path, interface, member) ->
            fprintf pp "signal@
 path = %S@
 interface = %S@

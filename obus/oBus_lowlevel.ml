@@ -94,24 +94,24 @@ let get_required message_type_name (field_name, get_field) fields =
 
 let method_call_of_raw fields =
   let req x = get_required "method_call" x in
-    `Method_call(req path fields,
-                 fields._interface,
-                 req member fields)
+  Method_call(req path fields,
+              fields._interface,
+              req member fields)
 
 let method_return_of_raw fields =
   let req x = get_required "method_return" x in
-    `Method_return(req reply_serial fields)
+  Method_return(req reply_serial fields)
 
 let error_of_raw fields =
   let req x = get_required "error" x in
-    `Error(req reply_serial fields,
-           req error_name fields)
+  Error(req reply_serial fields,
+        req error_name fields)
 
 let signal_of_raw fields =
   let req x = get_required "signal" x in
-    `Signal(req path fields,
-            req interface fields,
-            req member fields)
+  Signal(req path fields,
+         req interface fields,
+         req member fields)
 
 module Make_writer(Writer : Writer) =
 struct
@@ -454,7 +454,7 @@ struct
     let wmessage msg =
       (* Compute ``raw'' headers *)
       let code, fields = match msg.typ with
-        | `Method_call(path, interface, member) ->
+        | Method_call(path, interface, member) ->
             ('\001',
              { _path = Some path;
                _interface = interface;
@@ -464,7 +464,7 @@ struct
                _destination = msg.destination;
                _sender = msg.sender;
                _signature = type_of_sequence msg.body })
-        | `Method_return(reply_serial) ->
+        | Method_return(reply_serial) ->
             ('\002',
              { _path = None;
                _interface = None;
@@ -474,7 +474,7 @@ struct
                _destination = msg.destination;
                _sender = msg.sender;
                _signature = type_of_sequence msg.body })
-        | `Error(reply_serial, error_name) ->
+        | Error(reply_serial, error_name) ->
             ('\003',
              { _path = None;
                _interface = None;
@@ -484,7 +484,7 @@ struct
                _destination = msg.destination;
                _sender = msg.sender;
                _signature = type_of_sequence msg.body })
-        | `Signal(path, interface, member) ->
+        | Signal(path, interface, member) ->
             ('\004',
              { _path = Some path;
                _interface = Some interface;
@@ -585,7 +585,7 @@ struct
   module LEWriter = Make_writer(LE_int_writers)
   module BEWriter = Make_writer(BE_int_writers)
 
-  let put_message ?(byte_order=native_byte_order) (msg : OBus_message.any) =
+  let put_message ?(byte_order=native_byte_order) msg =
     match byte_order with
       | Little_endian ->
           LEWriter.wmessage msg
@@ -1113,7 +1113,7 @@ struct
   module LEReader = Make_reader(LE_int_readers)
   module BEReader = Make_reader(BE_int_readers)
 
-  let get_message : OBus_message.any Reader.t =
+  let get_message =
     get_char >>= function
       | 'l' -> LEReader.rmessage
       | 'B' -> BEReader.rmessage
@@ -1190,8 +1190,8 @@ open Lwt
 module Log = Log.Make(struct let section = "transport" end)
 
 type transport = {
-  recv : unit -> OBus_message.any Lwt.t;
-  send : OBus_message.any -> unit Lwt.t;
+  recv : unit -> OBus_message.t Lwt.t;
+  send : OBus_message.t -> unit Lwt.t;
   shutdown : unit -> unit;
 }
 

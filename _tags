@@ -11,7 +11,6 @@
 <{tools,test,samples,bindings/*}/*.ml{,i}>: pkg_monad, pa_obus
 <obus/**/*.ml{,i}>: pkg_monad
 <obus/internals/{bus,match_rule}.ml{,i}>: pa_obus
-<obus/{bus,match_rule}.ml{,i}>: pa_obus
 <obus/oBus_{connection,bus,peer,proxy,property,object,signal}.ml{,i}>: pa_obus
 <obus/oBus_{connection,info}.ml>: pkg_camlp4.macro
 

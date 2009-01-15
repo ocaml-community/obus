@@ -16,7 +16,7 @@ type 'a t = {
   broadcast : bool;
   interface : OBus_name.interface;
   member : OBus_name.member;
-  cast : OBus_connection.t * OBus_message.signal -> 'a;
+  cast : OBus_connection.t * OBus_message.t -> 'a;
   get_proxy : unit -> OBus_proxy.t Lwt.t;
 }
 
@@ -26,7 +26,7 @@ let make ?(broadcast=true) ~interface ~member ty get_proxy = {
   member = member;
   get_proxy = get_proxy;
   cast = fun (connection, message) -> OBus_type.cast_sequence ty
-    ~context:(OBus_connection.Context(connection, (message :> OBus_message.any)))
+    ~context:(OBus_connection.Context(connection, message))
     (OBus_message.body message);
 }
 

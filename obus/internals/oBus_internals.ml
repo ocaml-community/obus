@@ -64,7 +64,7 @@ let callback_apply name cb x = match cb.cb_mode with
    +--------------+ *)
 
 type member_info =
-  | MI_method of OBus_name.member * OBus_value.tsequence * (packed_connection -> OBus_message.method_call -> unit)
+  | MI_method of OBus_name.member * OBus_value.tsequence * (packed_connection -> OBus_message.t -> unit)
   | MI_signal
   | MI_property of OBus_name.member * (unit -> OBus_value.single Lwt.t) option * (OBus_value.single -> unit Lwt.t) option
 
@@ -73,12 +73,12 @@ and member_desc = OBus_introspect.declaration * member_info
 (* Signature that [OBus_connection] need to known for handling
    objects *)
 and dbus_object = <
-  obus_handle_call : packed_connection -> OBus_message.method_call -> unit;
+    obus_handle_call : packed_connection -> OBus_message.t -> unit;
   (* Handle a method call *)
 
   obus_connection_closed : packed_connection -> unit;
   (* Do wathever needed when the connection is closed *)
->
+  >
 
 (* +----------------+
    | Name resolvers |
@@ -162,14 +162,14 @@ and signal_receiver = {
      - "c" for argument 3
   *)
 
-  sr_callback : (packed_connection * OBus_message.signal) callback;
+  sr_callback : (packed_connection * OBus_message.t) callback;
 }
 
 (* +------------+
    | Connection |
    +------------+ *)
 
-and filter = OBus_message.any -> OBus_message.any option
+and filter = OBus_message.t -> OBus_message.t option
 
 and connection = {
   mutable name : OBus_name.bus option;
@@ -199,7 +199,7 @@ and connection = {
   (* Waiting thread used to make the connection to stop dispatching
      messages. *)
 
-  abort : OBus_message.any Lwt.t;
+  abort : OBus_message.t Lwt.t;
   (* Waiting thread which is wakeup when the connection is closed or
      aborted. It is used to make the dispatcher to exit. *)
 
@@ -227,7 +227,7 @@ and connection = {
   incoming_filters : filter MSet.t;
   outgoing_filters : filter MSet.t;
 
-  mutable reply_waiters : OBus_message.reply Lwt.t Serial_map.t;
+  mutable reply_waiters : OBus_message.t Lwt.t Serial_map.t;
   (* Mapping serial -> thread waiting for a reply *)
 
   signal_receivers : signal_receiver MSet.t;
@@ -242,31 +242,35 @@ and connection_state =
 
 (* Connections are packed into objects to make them comparable *)
 and packed_connection = <
-  get : connection_state;
+    get : connection_state;
   (* Get the connection state *)
 
   set_crash : exn -> exn;
   (* Put the connection in a 'crashed' state if not already
      done. Returns the exception to which the connection is set to. *)
->
+>;;
 
 (* +-------+
    | Utils |
    +-------+ *)
 
-let unknown_method_exn message =
-  let `Method_call(path, interface_opt, member) = OBus_message.typ message in
-  let signature = OBus_value.string_of_signature
-    (OBus_value.type_of_sequence (OBus_message.body message)) in
-  match interface_opt with
-    | Some interface ->
-        OBus_error.Unknown_method
-          (Printf.sprintf "Method %S with signature %S on interface %S doesn't exist"
-             member signature interface)
-    | None ->
-        OBus_error.Unknown_method
-          (Printf.sprintf "Method %S with signature %S doesn't exist"
-             member signature)
+let unknown_method_exn message = match message with
+  | { OBus_message.typ = OBus_message.Method_call(path, interface_opt, member) } ->
+      let signature = OBus_value.string_of_signature
+        (OBus_value.type_of_sequence (OBus_message.body message)) in
+      begin match interface_opt with
+        | Some interface ->
+            OBus_error.Unknown_method
+              (Printf.sprintf "Method %S with signature %S on interface %S doesn't exist"
+                 member signature interface)
+        | None ->
+            OBus_error.Unknown_method
+              (Printf.sprintf "Method %S with signature %S doesn't exist"
+                 member signature)
+      end
+
+  | _ ->
+      invalid_arg "OBus_internals.unknown_mehtod_exn"
 
 (* Call the name owner change handler of a name resolver. [init] tell
    wether it is for initialization purpose or not. If it is and it has

@@ -135,7 +135,7 @@ prefix:
 
 .PHONY: install
 install: prefix
-	$(OF) install obus META \
+	$(OF) install obus _build/META \
 	 _build/syntax/pa_obus.cmo \
 	 $(LIB:%=%/*.mli) \
 	 $(LIB:%=_build/%/*.cmi) \

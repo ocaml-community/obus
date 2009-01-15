@@ -15,9 +15,6 @@ open OBus_internals
 open OBus_value
 open Lwt
 
-type guid = OBus_address.guid
-type name = string
-
 exception Connection_closed
 exception Connection_lost
 exception Transport_error of exn
@@ -27,8 +24,7 @@ type t = OBus_internals.packed_connection
 type filter = OBus_internals.filter
 type filter_id = filter MSet.node
 
-exception Context of t * OBus_message.any
-let mk_context connection msg = Context(connection, (msg :> OBus_message.any))
+exception Context of t * OBus_message.t
 
 let tt = OBus_type.wrap_sequence_ctx tunit
   (fun context () -> match context with
@@ -37,7 +33,7 @@ let tt = OBus_type.wrap_sequence_ctx tunit
   (fun _ -> ())
 
 (* Mapping from server guid to connection. *)
-module Guid_map = Util.Make_map(struct type t = guid end)
+module Guid_map = Util.Make_map(struct type t = OBus_address.guid end)
 let guid_connection_map = ref Guid_map.empty
 
 (* Apply a list of filter on a message, logging failure *)
@@ -80,7 +76,7 @@ let send_message_backend connection reply_waiter_opt return_thread message =
        let w = wait () in
        connection.outgoing <- w;
        current_outgoing >>= fun serial ->
-         match apply_filters "outgoing" { (message :> any) with serial = serial } connection.outgoing_filters with
+         match apply_filters "outgoing" { message with serial = serial } connection.outgoing_filters with
            | None ->
                Log.debug "outgoing message dropped by filters";
                wakeup w serial;
@@ -125,14 +121,14 @@ let send_message connection message =
 
 let send_message_with_reply connection message =
   let w = wait () in
-  send_message_backend connection (Some w) w (message :> OBus_message.any)
+  send_message_backend connection (Some w) w message
 
 let method_call' connection ?flags ?sender ?destination ~path ?interface ~member body ty_reply =
   send_message_with_reply connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
-  >>= function
-    | { typ = `Method_return _ } as msg ->
+  >>= fun msg -> match msg with
+    | { typ = Method_return _ } ->
         begin try
-          return (OBus_type.cast_sequence ~context:(mk_context connection msg) ty_reply msg.body)
+          return (OBus_type.cast_sequence ~context:(Context(connection, msg)) ty_reply msg.body)
         with
           | OBus_type.Cast_failure ->
               (* If not, check why the cast fail *)
@@ -153,8 +149,11 @@ let method_call' connection ?flags ?sender ?destination ~path ?interface ~member
                               (string_of_signature got_sig)))
         end
 
-    | { typ = `Error(_, error_name) } as msg ->
+    | { typ = Error(_, error_name) } ->
         fail (OBus_error.make error_name (get_error msg))
+
+    | _ ->
+        assert false
 
 let method_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member ty =
   OBus_type.make_func ty begin fun body ->
@@ -188,7 +187,7 @@ let dsend_reply connection { sender = sender; serial = serial } body =
                             sender = None;
                             flags = { no_reply_expected = true; no_auto_start = true };
                             serial = 0l;
-                            typ = `Method_return(serial);
+                            typ = Method_return(serial);
                             body = body }
 
 let send_reply connection mc typ v =
@@ -199,7 +198,7 @@ let send_error connection { sender = sender; serial = serial } name msg =
                             sender = None;
                             flags = { no_reply_expected = true; no_auto_start = true };
                             serial = 0l;
-                            typ = `Error(serial, name);
+                            typ = Error(serial, name);
                             body = [vbasic(String msg)] }
 
 let send_exn connection method_call exn =
@@ -229,49 +228,53 @@ and tst_one_arg n p arest body = match n, body with
   | n, _ :: brest -> tst_one_arg (n - 1) p arest brest
   | _ -> false
 
-let signal_match r
-    { sender = sender;
-      typ = `Signal(path, interface, member);
-      body = body } =
-  (match r.sr_sender, sender with
-     | None, _ -> true
+let signal_match r = function
+  | { sender = sender; typ = Signal(path, interface, member); body = body } ->
+      (match r.sr_sender, sender with
+         | None, _ -> true
 
-     (* this normally never happen because with a message bus, all
-        messages have a sender field *)
-     | _, None -> false
+         (* this normally never happen because with a message bus, all
+            messages have a sender field *)
+         | _, None -> false
 
-     (* This case is when the name the rule filter on do not currently
-        have an owner *)
-     | Some { contents = None }, _ -> false
+         (* This case is when the name the rule filter on do not currently
+            have an owner *)
+         | Some { contents = None }, _ -> false
 
-     | Some { contents = Some owner }, Some sender -> owner = sender) &&
-    (match r.sr_path with
-       | Some p -> p = path
-       | None -> true) &&
-    (r.sr_interface = interface) &&
-    (r.sr_member = member) &&
-    (tst_args r.sr_args body)
+         | Some { contents = Some owner }, Some sender -> owner = sender) &&
+        (match r.sr_path with
+           | Some p -> p = path
+           | None -> true) &&
+        (r.sr_interface = interface) &&
+        (r.sr_member = member) &&
+        (tst_args r.sr_args body)
 
-let signal_match_ignore_sender r
-    { typ = `Signal(path, interface, member);
-      body = body } =
-  (match r.sr_path with
-     | Some p -> p = path
-     | None -> true) &&
-    (r.sr_interface = interface) &&
-    (r.sr_member = member) &&
-    (tst_args r.sr_args body)
+  | _ ->
+      false
+
+let signal_match_ignore_sender r = function
+  | { typ = Signal(path, interface, member); body = body } ->
+      (match r.sr_path with
+         | Some p -> p = path
+         | None -> true) &&
+        (r.sr_interface = interface) &&
+        (r.sr_member = member) &&
+        (tst_args r.sr_args body)
+
+  | _ ->
+      false
 
 (* +---------------------+
    | Reading/dispatching |
    +---------------------+ *)
 
-let dispatch_message connection = function
-    (* For method return and errors, we lookup at the reply
-       waiters. If one is find then it get the reply, if none, then
-       the reply is dropped. *)
-  | { typ = `Method_return(reply_serial) }
-  | { typ = `Error(reply_serial, _) } as message ->
+let dispatch_message connection message = match message with
+
+  (* For method return and errors, we lookup at the reply waiters. If
+     one is find then it get the reply, if none, then the reply is
+     dropped. *)
+  | { typ = Method_return(reply_serial) }
+  | { typ = Error(reply_serial, _) } ->
       begin match Serial_map.lookup reply_serial connection.reply_waiters with
         | Some w ->
             connection.reply_waiters <- Serial_map.remove reply_serial connection.reply_waiters;
@@ -280,14 +283,14 @@ let dispatch_message connection = function
         | None ->
             Log.debug "reply to message with serial %ld dropped%s"
               reply_serial (match message with
-                              | { typ = `Method_return _ } ->
-                                  ""
-                              | { typ = `Error(_, error_name) } as message ->
+                              | { typ = Error(_, error_name) } ->
                                   sprintf ", the reply is the error: %S: %S"
-                                    error_name (get_error message))
+                                    error_name (get_error message)
+                              | _ ->
+                                  "")
       end
 
-  | { typ = `Signal _ } as message ->
+  | { typ = Signal _ } ->
       begin match connection.name, message.sender with
         | None, _
         | _, None ->
@@ -305,7 +308,7 @@ let dispatch_message connection = function
               (* Internal handling of "NameOwnerChange" messages for
                  name resolving. *)
               | "org.freedesktop.DBus",
-                { typ = `Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
+                { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
                   body = [Basic(String name); Basic(String old_owner); Basic(String new_owner)] } ->
 
                   let owner = if new_owner = "" then None else Some new_owner in
@@ -346,7 +349,7 @@ let dispatch_message connection = function
 
               (* Internal handling of "NameAcquired" signals *)
               | ("org.freedesktop.DBus",
-                 { typ = `Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
+                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
                    body = [Basic(String name)] })
 
                   (* Only handle signals destined to us *)
@@ -356,7 +359,7 @@ let dispatch_message connection = function
 
               (* Internal handling of "NameLost" signals *)
               | ("org.freedesktop.DBus",
-                 { typ = `Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameLost");
+                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameLost");
                    body = [Basic(String name)] })
 
                   (* Only handle signals destined to us *)
@@ -378,7 +381,7 @@ let dispatch_message connection = function
       end
 
   (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
-  | { typ = `Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } as message -> begin
+  | { typ = Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } -> begin
       match member, body with
         | "Ping", [] ->
             (* Just pong *)
@@ -394,7 +397,7 @@ let dispatch_message connection = function
             unknown_method connection.packed message
     end
 
-  | { typ = `Method_call(path, interface_opt, member) } as message ->
+  | { typ = Method_call(path, interface_opt, member) } ->
       match Object_map.lookup path connection.exported_objects with
         | Some obj ->
             begin try

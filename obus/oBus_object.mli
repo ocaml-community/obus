@@ -80,7 +80,7 @@ class t : object
     (** Object path of the object. By default it is computed from its
         object id. *)
 
-  method obus_handle_call : OBus_connection.t -> OBus_message.method_call -> unit
+  method obus_handle_call : OBus_connection.t -> OBus_message.t -> unit
     (** Handle a method call *)
 
   method obus_introspect : OBus_connection.t -> OBus_introspect.document Lwt.t

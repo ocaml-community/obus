@@ -33,7 +33,7 @@ let md_method name typ f =
              fun connection message ->
                ignore_result
                  (try_bind
-                    (fun _ -> OBus_type.cast_func (OBus_type.abstract tunit typ) ~context:(Context(connection, (message :> OBus_message.any))) message.body f)
+                    (fun _ -> OBus_type.cast_func (OBus_type.abstract tunit typ) ~context:(Context(connection, message)) message.body f)
                     (send_reply connection message (OBus_type.func_reply typ))
                     (send_exn connection message))))
 
@@ -139,11 +139,15 @@ class t = object(self)
                                         Property_map.add (iface, member) (reader, writer) acc
                                     | _ -> acc) properties descs
 
-  method obus_handle_call connection message =
-    let `Method_call(path, interface, member) = message.typ in
-    match Method_map.lookup (interface, member, type_of_sequence message.body) methods with
-      | Some f -> f connection message
-      | None -> ignore_result (send_exn connection message (unknown_method_exn message))
+  method obus_handle_call connection message = match message with
+    | { typ = Method_call(path, interface, member) } ->
+        begin match Method_map.lookup (interface, member, type_of_sequence message.body) methods with
+          | Some f -> f connection message
+          | None -> ignore_result (send_exn connection message (unknown_method_exn message))
+        end
+
+    | _ ->
+        invalid_arg "#obus_handle_call"
 
   method obus_emit_signal interface member typ ?peer x =
     let body = OBus_type.make_sequence typ x

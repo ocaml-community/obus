@@ -59,14 +59,14 @@ module type Writer = sig
 end
 
 module Make_reader(Reader : Reader) : sig
-  val get_message : OBus_message.any Reader.t
+  val get_message : OBus_message.t Reader.t
     (** [get_message] read one message.
 
         It fail with {!Protocol_error} if the message is invalid. *)
 end
 
 module Make_writer(Writer : Writer) : sig
-  val put_message : ?byte_order:byte_order -> OBus_message.any -> int * unit Writer.t
+  val put_message : ?byte_order:byte_order -> OBus_message.t -> int * unit Writer.t
     (** [put_message ?byte_order message] returns [(size, writer)]
         where [size] is the size of the marshaled message and [writer]
         is the message writer.
@@ -79,10 +79,10 @@ module Make_writer(Writer : Writer) : sig
         exactly [size] bytes. *)
 end
 
-val get_message : Lwt_chan.in_channel -> OBus_message.any Lwt.t
+val get_message : Lwt_chan.in_channel -> OBus_message.t Lwt.t
   (** Deserialize a message from a lwt channel *)
 
-val put_message : ?byte_order:byte_order -> Lwt_chan.out_channel -> OBus_message.any -> unit Lwt.t
+val put_message : ?byte_order:byte_order -> Lwt_chan.out_channel -> OBus_message.t -> unit Lwt.t
   (** Serialize a message to a lwt channel *)
 
 val get_message_size : string -> int -> int
@@ -101,18 +101,18 @@ val get_message_size : string -> int -> int
 (** {6 Transport} *)
 
 type transport = {
-  recv : unit -> OBus_message.any Lwt.t;
-  send : OBus_message.any -> unit Lwt.t;
+  recv : unit -> OBus_message.t Lwt.t;
+  send : OBus_message.t -> unit Lwt.t;
   shutdown : unit -> unit;
 }
 
 val make_transport :
-  recv:(unit -> OBus_message.any Lwt.t) ->
-  send:(OBus_message.any -> unit Lwt.t) ->
+  recv:(unit -> OBus_message.t Lwt.t) ->
+  send:(OBus_message.t -> unit Lwt.t) ->
   shutdown:(unit -> unit) -> transport
 
-val recv : transport -> OBus_message.any Lwt.t
-val send : transport -> OBus_message.any -> unit Lwt.t
+val recv : transport -> OBus_message.t Lwt.t
+val send : transport -> OBus_message.t -> unit Lwt.t
 val shutdown : transport -> unit
 
 val loopback : unit -> transport
