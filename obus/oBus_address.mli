@@ -29,7 +29,7 @@ type tcp_params = {
 
   tcp_family : [ `Ipv4 | `Ipv6 ] option;
   (** Restrict to ipv4 or ipv6 *)
-}
+} with projection
 
 type desc =
   | Unix_path of string

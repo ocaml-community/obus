@@ -41,14 +41,7 @@ type t = {
   destination : OBus_name.bus option;
   sender : OBus_name.bus option;
   body : body;
-}
-
-let body message = message.body
-let flags message = message.flags
-let serial message = message.serial
-let typ message = message.typ
-let destination message = message.destination
-let sender message = message.sender
+} with projection
 
 let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ body =
   { flags = flags;

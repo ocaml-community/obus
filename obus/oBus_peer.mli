@@ -21,7 +21,7 @@ type t = {
   name : OBus_name.bus option;
   (** Name of the peer. This only make sense if the connection is a
       connection to a message bus. *)
-}
+} with projection
 
 (** Note that it is possible to use either a unique connection name or
     a bus name as peer name.
@@ -73,12 +73,6 @@ val make : OBus_connection.t -> OBus_name.bus -> t
 
 val anonymous : OBus_connection.t -> t
   (** [anonymous connection] make an anonymous peer *)
-
-val connection : t -> OBus_connection.t
-  (** [connection peer] return the connection part of a peer *)
-
-val name : t -> OBus_name.bus option
-  (** [name peer] return the name part of a peer *)
 
 val ping : t -> t Lwt.t
   (** Ping a peer, and return the peer which really respond to the

@@ -12,7 +12,7 @@ open Ocamlbuild_plugin
 open Command (* no longer needed for OCaml >= 3.10.2 *)
 
 (* Syntax extensions used internally *)
-let intern_syntaxes = ["trace"; "pa_obus"]
+let intern_syntaxes = ["trace"; "pa_obus"; "pa_projection"]
 
 (* +-----------------------------------+
    | Packages installed with ocamlfind |

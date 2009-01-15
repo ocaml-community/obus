@@ -14,15 +14,12 @@ open OBus_connection
 type t = {
   peer : OBus_peer.t;
   path : OBus_path.t;
-}
+} with projection
 
 let make peer path = {
   peer = peer;
   path = path;
 }
-
-let peer p = p.peer
-let path p = p.path
 
 let tt = OBus_type.wrap_basic_ctx <:obus_type< object_path >>
   (fun context path -> match context with

@@ -8,6 +8,7 @@ url: https://forge.ocamlcore.org/projects/obus/
 
   lwt:        http://www.ocsigen.org/install/lwt
   pa_monad:   http://www.cas.mcmaster.ca/~carette/pa_monad/
+  type-conv:  http://www.ocaml.info/home/ocaml_sources.html#type-conv
   xml-light:  http://tech.motion-twin.com/xmllight.html
 
 * Installation:

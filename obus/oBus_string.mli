@@ -27,7 +27,7 @@ type error = {
 
   msg : string;
   (** explain why the string failed to validate *)
-}
+} with projection
 
 val error_message : error -> string
   (** [error_message error] return a human-readabe error message *)

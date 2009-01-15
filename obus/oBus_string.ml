@@ -14,7 +14,7 @@ type error = {
   str : string;
   ofs : int;
   msg : string;
-}
+} with projection
 
 type validator = string -> error option
 

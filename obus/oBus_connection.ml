@@ -72,49 +72,49 @@ DEFINE LEXEC(code) = (match connection#get with
 (* Send a message, maybe adding a reply waiter and return
    [return_thread] *)
 let send_message_backend connection reply_waiter_opt return_thread message =
-  EXEC(let current_outgoing = connection.outgoing in
-       let w = wait () in
-       connection.outgoing <- w;
-       current_outgoing >>= fun serial ->
-         match apply_filters "outgoing" { message with serial = serial } connection.outgoing_filters with
-           | None ->
-               Log.debug "outgoing message dropped by filters";
-               wakeup w serial;
-               fail (Failure "message dropped by filters")
+  LEXEC(let current_outgoing = connection.outgoing in
+        let w = wait () in
+        connection.outgoing <- w;
+        current_outgoing >>= fun serial ->
+          match apply_filters "outgoing" { message with serial = serial } connection.outgoing_filters with
+            | None ->
+                Log.debug "outgoing message dropped by filters";
+                wakeup w serial;
+                fail (Failure "message dropped by filters")
 
-           | Some message ->
-               begin match reply_waiter_opt with
-                 | Some w ->
-                     connection.reply_waiters <- Serial_map.add serial w connection.reply_waiters
-                 | None ->
-                     ()
-               end;
+            | Some message ->
+                begin match reply_waiter_opt with
+                  | Some w ->
+                      connection.reply_waiters <- Serial_map.add serial w connection.reply_waiters
+                  | None ->
+                      ()
+                end;
 
-               if !(OBus_info.dump) then
-                 Format.eprintf "-----@\n@[<hv 2>sending message:@\n%a@]@."
-                   OBus_message.print message;
+                if !(OBus_info.dump) then
+                  Format.eprintf "-----@\n@[<hv 2>sending message:@\n%a@]@."
+                    OBus_message.print message;
 
-               try_bind
-                 (fun _ -> OBus_lowlevel.send connection.transport message)
-                 (fun _ ->
-                    (* Everything went OK, continue with a new serial *)
-                    wakeup w (Int32.succ serial);
-                    return_thread)
-                 (function
-                    | OBus_lowlevel.Data_error _ as exn ->
-                        (* The message can not be marshaled for some
-                           reason. This is not a fatal error. *)
-                        wakeup w serial;
-                        fail exn
+                try_bind
+                  (fun _ -> OBus_lowlevel.send connection.transport message)
+                  (fun _ ->
+                     (* Everything went OK, continue with a new serial *)
+                     wakeup w (Int32.succ serial);
+                     return_thread)
+                  (function
+                     | OBus_lowlevel.Data_error _ as exn ->
+                         (* The message can not be marshaled for some
+                            reason. This is not a fatal error. *)
+                         wakeup w serial;
+                         fail exn
 
-                    | exn ->
-                        (* All other errors are considered as fatal. They
-                           are fatal because it is possible that a
-                           message has been partially sent on the
-                           connection, so the message stream is broken *)
-                        let exn = connection.packed#set_crash (Transport_error exn) in
-                        wakeup_exn w exn;
-                        fail exn))
+                     | exn ->
+                         (* All other errors are considered as fatal. They
+                            are fatal because it is possible that a
+                            message has been partially sent on the
+                            connection, so the message stream is broken *)
+                         let exn = connection.packed#set_crash (Transport_error exn) in
+                         wakeup_exn w exn;
+                         fail exn))
 
 let send_message connection message =
   send_message_backend connection None (return ()) message

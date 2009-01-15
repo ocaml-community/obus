@@ -12,7 +12,7 @@ open Lwt
 type t = {
   connection : OBus_connection.t;
   name : OBus_name.bus option;
-}
+} with projection
 
 let tt = OBus_type.wrap_sequence_ctx <:obus_type< unit >>
   (fun context () -> match context with
@@ -22,8 +22,6 @@ let tt = OBus_type.wrap_sequence_ctx <:obus_type< unit >>
 
 let make c n = { connection = c; name = Some n }
 let anonymous c = { connection = c; name = None }
-let connection p = p.connection
-let name p = p.name
 
 let call member typ peer = OBus_connection.method_call peer.connection
   ?destination:peer.name

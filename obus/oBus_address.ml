@@ -19,7 +19,7 @@ type tcp_params = {
   tcp_bind : string;
   tcp_port : string;
   tcp_family : [ `Ipv4 | `Ipv6 ] option;
-}
+} with projection
 
 type desc =
   | Unix_path of string

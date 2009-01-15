@@ -18,19 +18,13 @@ type t = {
 
   path : OBus_path.t;
   (** Path of the object on the peer *)
-}
+} with projection
 
 val tt : t OBus_type.ty_basic
   (** Type combinator *)
 
-(** {6 Creation/informations} *)
-
 val make : OBus_peer.t -> OBus_path.t -> t
   (** [make peer path] create a proxy *)
-
-val peer : t -> OBus_peer.t
-val path : t -> OBus_path.t
-  (** Functionnal version of proxy filed *)
 
 (** {6 Introspection} *)
 
