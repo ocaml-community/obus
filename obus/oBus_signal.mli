@@ -57,7 +57,7 @@ val make :
   ?broadcast:bool ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->
-  [< 'a OBus_type.cl_sequence ] ->
+  ('a, _) OBus_type.cl_sequence ->
   (unit -> OBus_proxy.t Lwt.t) -> 'a t
   (** [make ?broadcast interface member typ proxy] create a signal.
 

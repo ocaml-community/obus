@@ -9,568 +9,519 @@
 
 open Camlp4
 open Camlp4.PreCast
+open Syntax
 open Printf
 
-INCLUDE "name_translator.ml"
+module Gen = Pa_type_conv.Gen
 
-module Id : Sig.Id = struct
-  let name = "Syntactic sugar for obus types"
-  let version = "0.1"
-end
+(* +-------------------+
+   | Names translation |
+   +-------------------+ *)
 
-module Make(Syntax : Sig.Camlp4Syntax) =
-struct
-  open Sig
-  include Syntax
+let name_translator = ref `ocaml
 
-  let rec expr_of_patt = function
-    | <:patt@_loc< $int:s$ >> -> <:expr< $int:s$ >> (* integer constant *)
-    | <:patt@_loc< $int32:s$ >> -> <:expr< $int32:s$ >>
-    | <:patt@_loc< $int64:s$ >> -> <:expr< $int64:s$ >>
-    | <:patt@_loc< $nativeint:s$ >> -> <:expr< $nativeint:s$ >>
-    | <:patt@_loc< $chr:c$ >> -> <:expr< $chr:c$ >> (* character constant *)
-    | <:patt@_loc< $str:s$ >> -> <:expr< $str:s$ >> (* string constant *)
-    | <:patt@_loc< $lid:b$ >> -> <:expr< $lid:b$ >> (* local variable *)
-    | <:patt@_loc< $uid:b$ >> -> <:expr< $uid:b$ >> (* variable of other module *)
-    | <:patt@_loc< ($tup:p$) >> ->                  (* tuple *)
-      let e = expr_of_patt p in
-        <:expr< ($tup:e$) >>
-    | <:patt@_loc< { $r$ } >> ->
-      Ast.ExRec(_loc, recbinding_of_patt r, Ast.ExNil _loc)
-    | <:patt@_loc< ($e$ : $t$) >> ->                (* type restriction *)
-      let p = expr_of_patt e in
-        <:expr< ($p$ : $t$) >>
-    | p ->
-        Loc.raise (Ast.loc_of_patt p)
-          (Stream.Error "expr_of_patt: this expression is not yet supported")
+let translate_lid str = match !name_translator with
+  | `ocaml -> OBus_name.ocaml_lid str
+  | `haskell -> OBus_name.haskell_lid str
 
-  and recbinding_of_patt = function
-    | <:patt@_loc< >> -> <:rec_binding< >>
-    | <:patt@_loc< $i$ = $p$ >> ->
-      let p = expr_of_patt p in
-        <:rec_binding< $i$ = $p$ >>
-    | <:patt@_loc< $p1$ ; $p2$ >> ->
-        let b1 = recbinding_of_patt p1
-        and b2 = recbinding_of_patt p2 in
-          <:rec_binding< $b1$; $b2$ >>
-    | <:patt@_loc< $anti:_$ >> ->
-      Loc.raise _loc
-        (Stream.Error "recbinding_of_patt: antiquotation are not yet supported")
-    | p -> Loc.raise (Ast.loc_of_patt p) (Stream.Error "recbinding_of_patt: not reached")
+let translate_uid str = match !name_translator with
+  | `ocaml -> OBus_name.ocaml_uid str
+  | `haskell -> OBus_name.haskell_uid str
 
-  (***** Name translator *****)
+(* +-------+
+   | Utils |
+   +-------+ *)
 
-  let name_translator = ref `Lower
+(* Generate a list of variables of the same length of [l], with
+   location from elements of [l] *)
+let gen_vars get_loc l =
+  snd (List.fold_left (fun (n, l) e ->
+                         (n - 1, (get_loc e, Printf.sprintf "x%d" n) :: l))
+         (List.length l - 1, []) l)
 
-  let buffer = Buffer.create 42
-  let pp = Format.formatter_of_buffer buffer
+(* Build a list of patterns/expressions from a list of variables *)
+let pvars = List.map (fun (loc, name) -> Gen.idp loc name)
+let evars = List.map (fun (loc, name) -> Gen.ide loc name)
 
-  let lid str =
-    Buffer.clear buffer;
-    (match !name_translator with
-       | `Lower -> Lower.plid
-       | `Upper -> Upper.plid) pp str;
-    Format.pp_print_flush pp ();
-    Buffer.contents buffer
+(* Returns the firsts [n] element of [l] and the rest of [l]. *)
+let rec break_at n = function
+  | [] ->
+      ([], [])
 
-  let uid str =
-    Buffer.clear buffer;
-    (match !name_translator with
-       | `Lower -> Lower.puid
-       | `Upper -> Upper.puid) pp str;
-    Format.pp_print_flush pp ();
-    Buffer.contents buffer
+  | l when n <= 0 ->
+      ([], l)
 
-  (***** Utils *****)
+  | x :: l ->
+      let firsts, rest = break_at (n - 1) l in
+      (x :: firsts, rest)
 
-  let abstract args expr =
-    List.fold_right (fun arg acc ->
-                       let _loc = Ast.loc_of_patt arg in
-                       <:expr< fun $arg$ -> $acc$ >>)
-      args expr
+(* Check that a member name is valid *)
+let check_member_name loc name =
+  match OBus_name.validate_member name with
+    | Some error ->
+        Loc.raise loc (Stream.Error (OBus_string.error_message error))
 
-  let gen_vars get_loc l =
-    snd (List.fold_left (fun (n, l) e ->
-                           (n - 1, (get_loc e, Printf.sprintf "x%d" n) :: l))
-           (List.length l - 1, []) l)
+    | None ->
+        ()
 
-  let pvars = List.map (fun (_loc, var) -> <:patt< $lid:var$ >>)
-  let evars = List.map (fun (_loc, var) -> <:expr< $lid:var$ >>)
+(* Wrap a type with Lwt.t *)
+let rec wrap_ctyp = function
+  | <:ctyp@_loc< $x$ -> $y$ >> -> <:ctyp< $x$ -> $wrap_ctyp y$ >>
+  | x -> let _loc = Ast.loc_of_ctyp x in <:ctyp< $x$ Lwt.t >>
 
-  (***** Internal type combinators representation *****)
+(* Build the definition of a type combinator:
 
-  type ty =
-    | Tlid of Loc.t * string
-    | Tuid of Loc.t * string
-    | Tidapp of Loc.t * ty * ty
-    | Tapp of Loc.t * ty * ty
-    | Tstruct of Loc.t * ty
-    | Tuple of Loc.t * ty list
-    | Tdict_entry of Loc.t * ty * ty
-    | Tvar of Loc.t * string
+   {[
+     type ('a, 'b) t = ('a, 'b) plop
+   ]}
 
-  let tuple _loc = function
-    | [t] -> t
-    | l -> Tuple(_loc, l)
+   ->
 
-  let loc_of_ty = function
-    | Tlid(l, _) -> l
-    | Tuid(l, _) -> l
-    | Tidapp(l, _, _) -> l
-    | Tapp(l, _, _) -> l
-    | Tstruct(l, _) -> l
-    | Tuple(l, _) -> l
-    | Tdict_entry(l, _, _) -> l
-    | Tvar(l, _) -> l
+   {[
+     let obus_t = fun a b -> obus_plop a b
+   ]}
+*)
+let make_type_combinator_def _loc name tpl expr =
+  <:str_item<
+    let $lid:"obus_" ^ name$ = $Gen.abstract _loc (List.map (fun tp ->
+                                                               let _loc = Ast.loc_of_ctyp tp in
+                                                               <:patt< $lid:Gen.get_tparam_id tp$ >>) tpl) expr$
+  >>
 
-  (***** obus type --> caml type *****)
+(* Returns a list of variables for all the argument of a
+   functionnal type:
 
-  let rec ctyp_of_ty = function
-    | Tlid(_loc, id) -> <:ctyp< $lid:id$ >>
-    | Tuid(_loc, id) -> <:ctyp< $uid:id$ >>
-    | Tidapp(_loc, a, b) ->
-        (try <:ctyp< $id:Ast.ident_of_ctyp (ctyp_of_ty a)$.$id:Ast.ident_of_ctyp (ctyp_of_ty b)$ >>
-         with Invalid_argument s -> raise (Stream.Error s))
-    | Tapp(_loc, a, b) -> <:ctyp< $ctyp_of_ty b$ $ctyp_of_ty a$ >>
-    | Tstruct(_loc, t) -> ctyp_of_ty t
-    | Tuple(_loc, l) -> Ast.TyTup(_loc, Ast.tySta_of_list (List.map ctyp_of_ty l))
-    | Tdict_entry(_loc, a, b) -> <:ctyp< ($ctyp_of_ty a$ * $ctyp_of_ty b$) >>
-    | Tvar(_loc, v) -> <:ctyp< '$v$ >>
+   [int -> string -> bool] -> [x0, x1] *)
+let vars_of_func_ctyp ctyp =
+  let rec collect = function
+    | <:ctyp@_loc< $x$ -> $y$ >> -> x :: collect y
+    | _ -> []
+  in
+  gen_vars Ast.loc_of_ctyp (collect ctyp)
 
-  let rec ctyp_of_fty reply = function
-    | [] -> reply
-    | t :: l -> let _loc = loc_of_ty t in <:ctyp< $ctyp_of_ty t$ -> $ctyp_of_fty reply l$ >>
+(* +-------------------------------------+
+   | type --> type combinator expression |
+   +-------------------------------------+ *)
 
-  (***** obus type --> expression *****)
+(* Return the expression for building a tuple type combinator. *)
+let tuple_combinator _loc = function
+  | [] -> <:expr< OBus_type.Pervasives.unit >>
+  | [t] -> t
+  | l -> Gen.apply _loc <:expr< OBus_type.$lid:"tuple" ^ string_of_int (List.length l)$ >> l
 
-  let make_tuple_type _loc l =
-    List.fold_right (fun typ acc ->
-                       let _loc = Ast.loc_of_expr typ in
-                       <:expr< OBus_type.tup2 $typ$ $acc$ >>)
-      l <:expr< OBus_type.Pervasives.tunit >>
+(* The longest tuple type combinator that can be build with the predefined
+   [OBus_type.tuple*] functions *)
+let max_tuple = 10
 
-  let make_tuple_of_seq _loc l =
-    let vars = gen_vars Ast.loc_of_expr l in
-    <:expr< fun $ List.fold_right (fun (_loc, var) acc -> <:patt< ($lid:var$, $acc$) >>) vars <:patt< () >> $ ->
-              $ Ast.ExTup(_loc, Ast.exCom_of_list (evars vars)) $ >>
+(* Build a tuple in ``cascade'':
 
-  let make_tuple_to_seq _loc l =
-    let vars = gen_vars Ast.loc_of_expr l in
-    <:expr< fun $ Ast.PaTup(_loc, Ast.paCom_of_list (pvars vars)) $ ->
-      $ List.fold_right (fun (_loc, var) acc -> <:expr< ($lid:var$, $acc$) >>) vars <:expr< () >> $ >>
+   {[
+     tuple x1 x2 x3 ... x9
+       (tuple x10 x11 ... x18
+          (tuple x19 x20 x21))
+   ]}
+*)
+let rec make_cascade_tuple tuple _loc l =
+  match break_at 9 l with
+    | [t], [] ->
+        t
 
-  let make_tuple _loc = function
-    | [] -> <:expr< OBus_type.tunit >>
-    | [t] -> t
-    | l ->
-        let count = List.length l in
-        if count <= 10
-          (* if there is less than 10 type, use a predefined tuple combinator *)
-        then List.fold_left (fun acc e -> <:expr< $acc$ $e$ >>) <:expr< OBus_type.$lid:"tup" ^ string_of_int count$ >> l
-          (* if there is more, create on a new specific one *)
-        else <:expr< OBus_type.wrap_sequence
-          $make_tuple_type _loc l$
-          $make_tuple_of_seq _loc l$
-          $make_tuple_to_seq _loc l$ >>
+    | firsts, [] ->
+        tuple _loc firsts
 
-  let rec expr_of_ty = function
-    | Tlid(_loc, id) -> <:expr< $lid:"t" ^ id$ >>
-    | Tuid(_loc, id) -> <:expr< $uid:id$ >>
-    | Tidapp(_loc, a, b) ->
-        (try <:expr< $id:Ast.ident_of_expr (expr_of_ty a)$.$id:Ast.ident_of_expr (expr_of_ty b)$ >>
-         with Invalid_argument s -> raise (Stream.Error s))
-    | Tapp(_loc, a, b) -> <:expr< $expr_of_ty a$ $expr_of_ty b$ >>
-    | Tstruct(_loc, t) -> <:expr< OBus_type.Pervasives.tstructure $expr_of_ty t$ >>
-    | Tuple(_loc, l) -> make_tuple _loc (List.map expr_of_ty l)
-    | Tdict_entry(_loc, a, b) -> <:expr< OBus_type.Pervasives.tdict_entry $expr_of_ty a$ $expr_of_ty b$ >>
-    | Tvar(_loc, v) -> <:expr< $lid:v$ >>
+    | _, [_] ->
+        tuple _loc l
 
-  let rec expr_of_fty reply = function
-    | [] -> let _loc = loc_of_ty reply in <:expr< OBus_type.reply $expr_of_ty reply$ >>
-    | t :: l -> let _loc = loc_of_ty t in <:expr< OBus_type.abstract $expr_of_ty t$ $expr_of_fty reply l$ >>
+    | firsts, rest ->
+        tuple _loc (firsts @ [make_cascade_tuple tuple _loc rest])
 
-  (***** type combinator quotations *****)
+(* Build a tuple type combinator in cascade:
 
-  let typ = Gram.Entry.mk "obus type"
-  let typ_eoi = Gram.Entry.mk "obus type quotation"
+   {[
+     OBus_type.tuple10 t1 t2 t3 ... t9
+       (OBus_type.tuple10 t10 t11 ... t18
+          (OBus_type.tuple3 t19 t20 t21))
+   ]}
+*)
+let make_cascade_tuple_combinator = make_cascade_tuple tuple_combinator
 
-  let ftyp = Gram.Entry.mk "obus functionnal type"
-  let ftyp_eoi = Gram.Entry.mk "obus functionnal type quotation"
+(* Build a cascade tuple pattern/expression:
 
-  EXTEND Gram
-    GLOBAL: typ typ_eoi ftyp ftyp_eoi;
+   [(x1, x2, x3, ..., (x10, x11, ..., x18, (x19, x20, x21)))] *)
+let make_cascade_tuple_patt = make_cascade_tuple (fun _loc l -> <:patt< $tup:Ast.paCom_of_list l$ >>)
+let make_cascade_tuple_expr = make_cascade_tuple (fun _loc l -> <:expr< $tup:Ast.exCom_of_list l$ >>)
 
-    typ:
-      [ "star"
-          [ t = SELF; "*"; tl = star_typ -> tuple _loc (t :: tl) ]
-      | "typ1"
-        [ t1 = SELF; t2 = SELF -> Tapp(_loc, t2, t1) ]
-      | "typ2"
-        [ t1 = SELF; "."; t2 = SELF -> Tidapp(_loc, t1, t2) ]
-      | "simple"
-        [ "'"; i = a_LIDENT -> Tvar(_loc, i)
-        | i = a_LIDENT -> Tlid(_loc, i)
-        | i = a_UIDENT -> Tuid(_loc, i)
-        | "("; t = SELF; ","; mk = comma_typ_app; ")"; i = typ LEVEL "typ2" -> mk (Tapp(_loc, i, t))
-        | "("; t = SELF; ")" -> t
-        | "["; tl = struct_typ ; "]" -> Tstruct(_loc, tuple _loc tl)
-        | "{"; tk = SELF; ","; tv = SELF; "}" -> Tdict_entry(_loc, tk, tv)
-        ] ];
+(* Build a tuple pattern/expression *)
+let make_tuple_patt loc patts = Ast.PaTup(loc, Ast.paCom_of_list patts)
+let make_tuple_expr loc exprs = Ast.ExTup(loc, Ast.exCom_of_list exprs)
 
-    comma_typ_app:
-      [ [ t1 = typ; ","; t2 = SELF -> fun acc -> t2 (Tapp(_loc, acc, t1))
-        | t = typ -> fun acc -> Tapp(_loc, acc, t)
-        ] ];
+(* Build the cast wrapper for a tuple in ``cascade'':
 
-    star_typ:
-      [ [ t1 = typ LEVEL "typ1"; "*"; t2 = SELF -> t1 :: t2
-        | t = typ LEVEL "typ1" -> [t]
-        ] ];
+   {[
+     fun (x1, x2, x3, ..., (x10, x11, ..., x18, (x19, x20, x21))) ->
+       (x1, x2, x3, ..., x21)
+   ]}
+*)
+let make_cascade_tuple_wrapper_cast _loc l =
+  let vars = gen_vars Ast.loc_of_expr l in
+  <:expr< fun $make_cascade_tuple_patt _loc (pvars vars)$ -> $make_tuple_expr _loc (evars vars)$ >>
 
-    struct_typ:
-      [ [ tl = star_typ -> tl
-        | -> []
-        ] ];
+(* Build the make wrapper for a tuple in ``cascade'':
 
-    typ_eoi:
-      [ [ t = typ; `EOI -> expr_of_ty t ] ];
+   {[
+     fun (x1, x2, x3, ..., x21) ->
+       (x1, x2, x3, ..., (x10, x11, ..., x18, (x19, x20, x21)))
+   ]}
+*)
+let make_cascade_tuple_wrapper_make _loc l =
+  let vars = gen_vars Ast.loc_of_expr l in
+  <:expr< fun $make_tuple_patt _loc (pvars vars)$ -> $make_cascade_tuple_expr _loc (evars vars)$ >>
 
-    ftyp:
-      [ [ t = typ; "->"; (tl, reply) = SELF -> (t :: tl, reply)
-        | t = typ -> ([], t) ] ];
+(* Build the type combinator for a tuple *)
+let make_tuple_combinator _loc l =
+  if List.length l <= 10 then
+    (* if there is less than 10 type, use a predefined tuple type
+       combinator *)
+    tuple_combinator _loc l
 
-    ftyp_eoi:
-      [ [ (args, reply) = ftyp; `EOI -> expr_of_fty reply args ] ];
-  END
+  else
+    (* if there is more, create on a new specific one *)
+    <:expr< OBus_type.wrap
+              $make_cascade_tuple_combinator _loc l$
+              $make_cascade_tuple_wrapper_cast _loc l$
+              $make_cascade_tuple_wrapper_make _loc l$ >>
 
-  let expand_typ loc _loc_name_opt quotation_contents =
-    Gram.parse_string typ_eoi loc quotation_contents
+(* Add the "obus_" prefix to an identifier:
 
-  let expand_ftyp loc _loc_name_opt quotation_contents =
-    Gram.parse_string ftyp_eoi loc quotation_contents
+   [A.B.t] -> [A.B.obus_t]
+*)
+let rec wrap_ident = function
+  | <:ident@_loc< $id1$ . $id2$ >> -> <:ident< $id1$ . $wrap_ident id2$ >>
+  | <:ident@_loc< $lid:id$ >> -> <:ident< $lid:"obus_" ^ id$ >>
+  | id -> id
 
-  let _ =
-    Syntax.Quotation.add "obus_type" Syntax.Quotation.DynAst.expr_tag expand_typ;
-    Syntax.Quotation.add "obus_func_type" Syntax.Quotation.DynAst.expr_tag expand_ftyp;
-    Syntax.Quotation.default := "obus_func_type"
+(* Build a type combinator from a caml type *)
+let rec type_combinator_of_ctyp = function
+  | <:ctyp@_loc< $id:id$ >> -> <:expr< $id:wrap_ident id$ >>
+  | <:ctyp@_loc< $x$ $y$ >> -> <:expr< $type_combinator_of_ctyp y$ $type_combinator_of_ctyp x$ >>
+  | <:ctyp@_loc< $tup:l$ >> -> make_tuple_combinator _loc (List.map type_combinator_of_ctyp (Ast.list_of_ctyp l []))
+  | <:ctyp@_loc< '$x$ >> -> <:expr< $lid:x$ >>
+  | t -> Loc.raise (Ast.loc_of_ctyp t) (Failure "pa_obus: this kind of type cannot be used here")
 
-  (***** Bitwise and flag definitions *****)
+(* Build a functionnal type combinator from a caml type *)
+let rec func_combinator_of_ctyp = function
+  | <:ctyp@_loc< $x$ -> $y$ >> -> <:expr< OBus_type.abstract $type_combinator_of_ctyp x$ $func_combinator_of_ctyp y$ >>
+  | t -> let _loc = Ast.loc_of_ctyp t in <:expr< OBus_type.reply $type_combinator_of_ctyp t$ >>
 
-  type vrn_def =
-    | Vrn_classic
-    | Vrn_poly
+(* +----------------------------+
+   | Type combinator quotations |
+   +----------------------------+ *)
 
-  let make_vrn_expr typ _loc id = match typ with
-    | Vrn_classic -> <:expr< $uid:id$ >>
-    | Vrn_poly -> Ast.ExVrn(_loc, id)
+let ctyp_eoi = Gram.Entry.mk "ctyp_eoi"
 
-  let make_vrn_patt typ _loc id = match typ with
-    | Vrn_classic -> <:patt< $uid:id$ >>
-    | Vrn_poly -> Ast.PaVrn(_loc, id)
+EXTEND Gram
+  ctyp_eoi:
+    [ [ t = ctyp; `EOI ->  t ] ];
+END
 
-  let vrn_type_def _loc typ cstrs = match typ with
-    | Vrn_classic ->
-        Ast.TySum(_loc, Ast.sum_type_of_list
-                    (List.map (fun (p, e, loc, id) -> (loc, id, [])) cstrs))
-    | Vrn_poly ->
-        Ast.TyVrnEq(_loc, Ast.tyOr_of_list
-                      (List.map (fun (p, e, _loc, id) -> <:ctyp< ` $id$ >>) cstrs))
+let expand_type loc _loc_name_opt quotation_contents =
+  type_combinator_of_ctyp (Gram.parse_string ctyp_eoi loc quotation_contents)
 
-  let make_caml_type_def _loc name vrn_typ cstrs =
-    Ast.TyDcl(_loc, name, [], vrn_type_def _loc vrn_typ cstrs, [])
+let expand_func loc _loc_name_opt quotation_contents =
+  func_combinator_of_ctyp (Gram.parse_string ctyp_eoi loc quotation_contents)
 
-  let invalid_key _loc = Loc.raise _loc (Stream.Error "bitwise keys must be integers")
+let _ =
+  Quotation.add "obus_type" Quotation.DynAst.expr_tag expand_type;
+  Quotation.add "obus_func" Quotation.DynAst.expr_tag expand_func
 
-  let string_of_key = function
-    | <:patt@_loc< $int:n$ >> -> n
-    | <:patt@_loc< $int32:n$ >> -> n
-    | <:patt@_loc< $int64:n$ >> -> n
-    | p -> invalid_key (Ast.loc_of_patt p)
+(* +----------------------+
+   | The syntax extension |
+   +----------------------+ *)
 
-  let bw_read = function
-    | <:patt@_loc< $int:n$ >> -> <:expr< x land $int:n$ <> 0 >>
-    | <:patt@_loc< $int32:n$ >> -> <:expr< Int32.log_and x $int32:n$ <> 0l >>
-    | <:patt@_loc< $int64:n$ >> -> <:expr< Int64.log_and x $int64:n$ <> 0L >>
-    | p -> invalid_key (Ast.loc_of_patt p)
+EXTEND Gram
+  GLOBAL:str_item class_expr;
 
+  (* A member name, the DBus name is always specified, and the caml name
+     may be sepecified with the "as" keyword *)
+  obus_member:
+    [ [ dbus_name = a_ident; "as"; caml_name = a_ident ->
+          check_member_name _loc dbus_name;
+          (dbus_name, caml_name)
+      | dbus_name = a_ident ->
+          check_member_name _loc dbus_name;
+          (dbus_name, translate_lid dbus_name)
+      ] ];
 
-  let bw_write = function
-    | <:expr@_loc< $int:n$ >> -> <:expr< acc lor $int:n$ >>
-    | <:expr@_loc< $int32:n$ >> -> <:expr< Int32.log_or acc $int32:n$ >>
-    | <:expr@_loc< $int64:n$ >> -> <:expr< Int64.log_or acc $int64:n$ >>
-    | e -> invalid_key (Ast.loc_of_expr e)
+  (* +--------------------------------------------------+
+     | Extension for DBus interfaces as virtual classes |
+     +--------------------------------------------------+ *)
 
-  let bw_empty = function
-    | <:patt@_loc< $int:n$ >> -> <:expr< 0 >>
-    | <:patt@_loc< $int32:n$ >> -> <:expr< 0l >>
-    | <:patt@_loc< $int64:n$ >> -> <:expr< 0L >>
-    | p -> invalid_key (Ast.loc_of_patt p)
+  obus_class_str_item:
+    [ [ "OBUS_method"; names = obus_member; ":"; typ = ctyp ->
+          `Method(names, typ)
+      | "OBUS_signal"; names = obus_member; ":"; typ = ctyp ->
+          `Signal(names, typ)
+      | "OBUS_val_r"; m = opt_mutable; names = obus_member; ":"; typ = ctyp ->
+          `Val_r(names, typ, m)
+      | "OBUS_val_w"; m = opt_mutable; names = obus_member; ":"; typ = ctyp ->
+          `Val_w(names, typ, m)
+      | "OBUS_val_rw"; m = opt_mutable; names = obus_member; ":"; typ = ctyp ->
+          `Val_rw(names, typ, m)
+      | "OBUS_property_r"; names = obus_member; ":"; typ = ctyp ->
+          `Prop_r(names, typ)
+      | "OBUS_property_w"; names = obus_member; ":"; typ = ctyp ->
+          `Prop_w(names, typ)
+      | "OBUS_property_rw"; names = obus_member; ":"; typ = ctyp ->
+          `Prop_rw(names, typ)
+      ] ];
 
-  (***** records *****)
+  obus_class_structure:
+    [ [ l = LIST0 [ cst = obus_class_str_item; semi -> cst ] -> l
 
-  let make_record_decl _loc name tpl l =
-    Ast.TyDcl(_loc, name, tpl,
-              <:ctyp< { $Ast.record_type_of_list
-                          (List.map (fun (loc, n, m, ty) ->  (loc, n, m, ctyp_of_ty ty)) l)
-                          $ } >>,
-              [])
+      ] ];
 
-  let make_record_expr _loc l =
-    let vars = gen_vars (fun (l, _, _, _) -> l) l in
-    <:expr< OBus_type.wrap_sequence $make_tuple _loc (List.map (fun (_, _, _, t) -> expr_of_ty t) l)$
-      (fun $ Ast.PaTup(_loc, Ast.paCom_of_list (pvars vars)) $ ->
+  class_expr:
+    [ "simple"
+      [ "OBUS_interface"; iface = expr; defs = obus_class_structure; "end" ->
+        <:class_expr<
+          object(self)
+            inherit OBus_object.interface;;
+
+            (* Virtual methods and signals *)
+            $Ast.crSem_of_list
+              (List.map (function
+                           | `Method((dname, cname), typ) ->
+                               <:class_str_item< method virtual $lid:cname$ : $wrap_ctyp typ$ >>
+                           | `Signal((dname, cname), typ) ->
+                               <:class_str_item< method $lid:cname$ = self#obus_emit_signal $iface$ $str:dname$ $type_combinator_of_ctyp typ$ >>
+                           | `Val_r((dname, cname), typ, m)
+                           | `Val_w((dname, cname), typ, m)
+                           | `Val_rw((dname, cname), typ, m) ->
+                               <:class_str_item< val virtual $mutable:m$ $lid:cname$ : $typ$ >>
+                           | `Prop_r((dname, cname), typ) ->
+                               <:class_str_item< method virtual $lid:cname ^ "_get"$ : $typ$ Lwt.t >>
+                           | `Prop_w((dname, cname), typ) ->
+                               <:class_str_item< method virtual $lid:cname ^ "_set"$ : $typ$ -> unit Lwt.t >>
+                           | `Prop_rw((dname, cname), typ) ->
+                               <:class_str_item< method virtual $lid:cname ^ "_get"$ : $typ$ Lwt.t;;
+                                                 method virtual $lid:cname ^ "_set"$ : $typ$ -> unit Lwt.t >>)
+                 defs)$
+
+            initializer
+
+              (* Interface informations *)
+              self#obus_add_interface $iface$
+                $Gen.mk_expr_lst _loc
+                   (List.map
+                      (function
+                         | `Method((dname, cname), typ) ->
+                             let vars = vars_of_func_ctyp typ and typ = func_combinator_of_ctyp typ in
+                             if vars = [] then
+                               <:expr< OBus_object.md_method $str:dname$ (OBus_type.abstract OBus_type.Pervasives.obus_unit $typ$)
+                                         (fun _ -> self#$lid:cname$) >>
+                             else
+                               <:expr< OBus_object.md_method $str:dname$ $typ$
+                                         $Gen.abstract _loc (pvars vars) (Gen.apply _loc <:expr< self#$lid:cname$ >> (evars vars))$ >>
+                         | `Signal((dname, cname), typ) ->
+                             <:expr< OBus_object.md_signal $str:dname$ $type_combinator_of_ctyp typ$ >>
+                         | `Val_r((dname, cname), typ, m) ->
+                             <:expr< OBus_object.md_property_r $str:dname$ $type_combinator_of_ctyp typ$
+                               (fun _ -> Lwt.return $lid:cname$) >>
+                         | `Val_w((dname, cname), typ, m) ->
+                             <:expr< OBus_object.md_property_w $str:dname$ $type_combinator_of_ctyp typ$
+                               (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) >>
+                         | `Val_rw((dname, cname), typ, m) ->
+                             <:expr< OBus_object.md_property_rw $str:dname$ $type_combinator_of_ctyp typ$
+                               (fun _ -> Lwt.return $lid:cname$)
+                               (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) >>
+                         | `Prop_r((dname, cname), typ) ->
+                             <:expr< OBus_object.md_property_r $str:dname$ $type_combinator_of_ctyp typ$
+                               (fun _ -> self#$lid:cname ^ "_get"$) >>
+                         | `Prop_w((dname, cname), typ) ->
+                             <:expr< OBus_object.md_property_w $str:dname$ $type_combinator_of_ctyp typ$
+                               (fun x -> self#$lid:cname ^ "_set"$ x) >>
+                         | `Prop_rw((dname, cname), typ) ->
+                             <:expr< OBus_object.md_property_rw $str:dname$ $type_combinator_of_ctyp typ$
+                               (fun _ -> self#$lid:cname ^ "_get"$)
+                               (fun x -> self#$lid:cname ^ "_set"$ x) >>)
+                      defs)$
+          end >>
+      ] ];
+
+  (* +--------------------------+
+     | Extension for proxy code |
+     +--------------------------+ *)
+
+  obus_type:
+    [ [ t = ctyp -> type_combinator_of_ctyp t ] ];
+
+  obus_func:
+    [ [ t = ctyp -> func_combinator_of_ctyp t ] ];
+
+  str_item:
+    [ [ "OBUS_name_translator"; n = a_STRING ->
+          begin match n with
+            | "ocaml" -> name_translator := `ocaml
+            | "haskell" -> name_translator := `haskell
+            | _ -> Loc.raise _loc (Stream.Error (sprintf "invalid name translator: %S, must be \"ocaml\" or \"haskell\"" n))
+          end;
+          <:str_item< >>
+
+      | "OBUS_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
+          <:str_item< let $lid:cname$ = call $str:dname$ $typ$ >>
+
+      | "OBUS_signal"; no_broadcast = OPT "!"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          begin match no_broadcast with
+            | Some _ ->
+                <:str_item< let $lid:cname$ = signal ~broadcast:false $str:dname$ $typ$ >>
+            | None ->
+                <:str_item< let $lid:cname$ = signal $str:dname$ $typ$ >>
+          end
+
+      | "OBUS_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:cname$ = property $str:dname$ OBus_property.rd_only $typ$ >>
+
+      | "OBUS_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:cname$ = property $str:dname$ OBus_property.wr_only $typ$ >>
+
+      | "OBUS_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:cname$ = property $str:dname$ OBus_property.rdwr $typ$ >>
+      ] ];
+END
+
+(* +----------------------+
+   | Generators for types |
+   +----------------------+ *)
+
+let rec generate f = function
+  | Ast.TyDcl(loc, name, tpl, typ, _) ->
+      [f loc name tpl typ]
+
+  | Ast.TyAnd(_loc, tp1, tp2) ->
+      generate f tp1 @ generate f tp2
+
+  | _ ->
+      assert false
+
+(* Build a wrapper for a record type *)
+let make_record_combinator _loc fields =
+  let vars = gen_vars (fun (loc, id, t) -> loc) fields in
+  <:expr<
+    OBus_type.wrap $make_cascade_tuple_combinator _loc
+                      (List.map (fun (_, _, t) -> type_combinator_of_ctyp t) fields)$
+      (fun $make_cascade_tuple_patt _loc (pvars vars)$ ->
          $Ast.ExRec(_loc,
-                    List.fold_left2 (fun acc (_loc, name, _, _) (_, var) ->
-                                       <:rec_binding< $acc$; $lid:name$ = $lid:var$ >>)
-                      (Ast.RbNil _loc) l vars,
+                    Ast.rbSem_of_list
+                      (List.map2 (fun (_loc, name, _) (_, var) -> <:rec_binding< $lid:name$ = $lid:var$ >>) fields vars),
                     Ast.ExNil _loc)$)
       (fun x ->
-         $Ast.ExTup(_loc,
-                    Ast.exCom_of_list
-                      (List.map (fun (_loc, name, _, _) -> <:expr< x.$lid:name$ >>) l))$)
-    >>
+         $make_cascade_tuple_expr _loc
+            (List.map (fun (_loc, name, _) -> <:expr< x.$lid:name$ >>) fields)$)
+  >>
 
-  let make_ty_def _loc n tpl expr =
-    <:str_item<
-      let $lid:"t" ^ n$ =
-        $abstract (List.map (function
-                               | <:ctyp@_loc< '$x$ >> -> <:patt< $lid:x$ >>
-                               | <:ctyp@_loc< +'$x$ >> -> <:patt< $lid:x$ >>
-                               | <:ctyp@_loc< -'$x$ >> -> <:patt< $lid:x$ >>
-                               | t -> Loc.raise (Ast.loc_of_ctyp t) (Stream.Error "invalid type parameter"))
-                     tpl)
-          expr$
-    >>
+let _ =
+  Pa_type_conv.add_generator "obus"
+    (fun typ -> Ast.stSem_of_list
+       (generate (fun loc name tpl typ ->
+                    let rec loop = function
+                      | <:ctyp< private $t$ >> ->
+                          loop t
+                      | <:ctyp@_loc< $id:_$ >>
+                      | <:ctyp@_loc< ( $tup:_$ ) >>
+                      | <:ctyp@_loc< '$_$ >>
+                      | <:ctyp@_loc< $_$ $_$ >> as typ ->
+                          make_type_combinator_def _loc name tpl (type_combinator_of_ctyp typ)
+                      | <:ctyp@_loc< { $fields$ } >> ->
+                          make_type_combinator_def _loc name tpl (make_record_combinator _loc
+                                                                    (List.map
+                                                                       (function
+                                                                          | <:ctyp@loc< $lid:id$ : mutable $t$ >> -> (loc, id, t)
+                                                                          | <:ctyp@loc< $lid:id$ : $t$ >> -> (loc, id, t)
+                                                                          | _ -> assert false)
+                                                                       (Ast.list_of_ctyp fields [])))
+                      | <:ctyp< $tp1$ = $tp2$ >> ->
+                          loop tp2
+                      | _ ->
+                          Loc.raise (Ast.loc_of_ctyp typ) (Stream.Error "pa_obus: obus does not know how to handle this type")
+                    in
+                    loop typ) typ))
 
-  EXTEND Gram
-    GLOBAL:str_item class_expr;
+let obus_type_class = Gram.Entry.mk "obus_type_class"
+let obus_type_class_eoi = Gram.Entry.mk "obus_type_class_eoi"
 
-    (*** Parsing of module implementation with obus annotations ***)
+EXTEND Gram
+  GLOBAL: obus_type_class obus_type_class_eoi;
 
-    obus_poly_constructor:
-      [ [ p = patt; "->"; "`"; id = a_ident ->
-            (p, expr_of_patt p, _loc, id)
-        ] ];
+  obus_class_ident:
+    [ [ x = a_LIDENT ->
+          let valid_classes = ["basic"; "single"; "element"; "sequence"] in
+          if List.mem x valid_classes then
+            x
+          else
+            Loc.raise _loc (Stream.Error (sprintf "pa_obus: invalid classe %s, must be one of %s"
+                                            x (String.concat ", " valid_classes)))
+      ] ];
 
-    obus_constructor:
-      [ [ p = patt; "->"; id = a_UIDENT ->
-            (p, expr_of_patt p, _loc, id)
-        ] ];
+  obus_type_class:
+    [ [ x = obus_class_ident; "->"; (y, ret) = SELF -> (x :: y, ret)
+      | x = obus_class_ident -> ([], x)
+      ] ];
 
-    obus_data_type:
-      [ [ "["; OPT "|"; l = LIST1 obus_poly_constructor SEP "|"; "]" -> (Vrn_poly, l)
-        | OPT "|"; l = LIST1 obus_constructor SEP "|" -> (Vrn_classic, l)
-        ] ];
+  obus_type_class_eoi:
+    [ [ (l, ret) = obus_type_class; `EOI -> (_loc, l, ret) ] ];
+END
 
-    obus_record_field:
-      [ [ "mutable"; n = a_LIDENT; ":"; ty = typ -> (_loc, n, true, ty)
-        | n = a_LIDENT; ":"; ty = typ -> (_loc, n, false, ty)
-        ] ];
+let _ =
+  Pa_type_conv.add_sig_generator_with_arg "obus" obus_type_class_eoi
+    (fun typ arg ->
+       match arg with
+         | None ->
+             Loc.raise (Ast.loc_of_ctyp typ) (Stream.Error "pa_obus: argument recquired for the 'obus' generator")
 
-    obus_record_fields:
-      [ [ a = obus_record_field; ";"; b = SELF -> a :: b;
-        | x = obus_record_field -> [x]
-        | -> [] ] ];
+         | Some(loc, classes, ret_class) ->
+             Ast.sgSem_of_list
+               (generate
+                  (fun _loc name tpl typ ->
+                     if List.length tpl <> List.length classes then
+                       Loc.raise loc (Stream.Error "wrong number of arguments")
+                     else
+                       let ret_typ = Pa_type_conv.Gen.drop_variance_annotations _loc
+                         (List.fold_left (fun acc tp ->
+                                            let _loc = Ast.loc_of_ctyp tp in
+                                            <:ctyp< $tp$ $acc$ >>) <:ctyp< $lid:name$ >> tpl) in
+                       <:sig_item<
+                         val $lid:"obus_" ^ name$ :
+                           $List.fold_right2
+                              (fun tp cl acc ->
+                                 <:ctyp< ('$Gen.get_tparam_id tp$, _) OBus_type.$lid:"cl_" ^ cl$ -> $acc$ >>)
+                              tpl classes <:ctyp< $ret_typ$ OBus_type.$lid:ret_class$ >>$
+                       >>) typ))
 
-    obus_record:
-      [ [ (n, tpl) = type_ident_and_parameters; "="; "{"; fields = obus_record_fields; "}" ->
-            (n, tpl, fields)
-        ] ];
+(* +---------------------------+
+   | Generators for exceptions |
+   +---------------------------+ *)
 
-    obus_class_member:
-      [ [ "OBUS_method"; name = a_ident; ":"; (args, reply) = ftyp ->
-            `Method(lid name, name, args, reply)
-        | "OBUS_signal"; name = a_ident; ":"; t = typ ->
-            `Signal(lid name, name, t)
-        | "OBUS_val_r"; m = opt_mutable; name = a_ident; ":"; t = typ ->
-            `Val_r(lid name, name, t, m)
-        | "OBUS_val_w"; m = opt_mutable; name = a_ident; ":"; t = typ ->
-            `Val_w(lid name, name, t, m)
-        | "OBUS_val_rw"; m = opt_mutable; name = a_ident; ":"; t = typ ->
-            `Val_rw(lid name, name, t, m)
-        | "OBUS_property_r"; name = a_ident; ":"; t = typ ->
-            `Prop_r(lid name, name, t)
-        | "OBUS_property_w"; name = a_ident; ":"; t = typ ->
-            `Prop_w(lid name, name, t)
-        | "OBUS_property_rw"; name = a_ident; ":"; t = typ ->
-            `Prop_rw(lid name, name, t) ] ];
+let _ =
+  Pa_type_conv.add_generator_with_arg ~is_exn:true "obus" expr_eoi
+    (fun typ arg -> match typ, arg with
+       | _, None ->
+           Loc.raise (Ast.loc_of_ctyp typ) (Stream.Error "pa_obus: argument recquired for the 'obus' generator")
 
-    obus_class_members:
-      [ [ -> []
-        | a = obus_class_member; b = obus_class_members -> a :: b
-        | a = obus_class_member; ";"; b = obus_class_members -> a :: b
-        | a = obus_class_member; ";;"; b = obus_class_members -> a :: b ] ];
+       | <:ctyp@_loc< $uid:caml_name$ of $_$ >>, Some dbus_name ->
+           <:str_item<
+             let _ = OBus_error.register $dbus_name$
+               (fun msg -> $uid:caml_name$ msg)
+               (function
+                  | $uid:caml_name$ msg -> Some msg
+                  | _ -> None)
+           >>
 
-    obus_error_name:
-      [ [ m = a_ident; "."; (dname, cname) = obus_error_name ->
-            (m ^ "." ^ dname, cname)
-        | n = a_ident ->
-            (n, uid n) ] ];
+       | _ ->
+           Loc.raise (Ast.loc_of_ctyp typ) (Stream.Error "pa_obus: ``Caml_name of string'' expected"))
 
-    str_item:
-      [ [ "OBUS_bitwise"; name = a_LIDENT; ":"; key_typ = typ; "="; (vrntyp, cstrs) = obus_data_type ->
-            <:str_item<
-              (* First create the caml type definition *)
-              type $make_caml_type_def _loc name vrntyp cstrs$
-              type $lid:name ^ "_list"$ = $lid:name$ list
-
-              (* Construct the combinator *)
-              let $lid:"t" ^ name ^ "_list"$ = OBus_type.wrap_basic $expr_of_ty key_typ$
-                (fun x ->
-                   let l = [] in
-                   $ List.fold_left
-                       (fun acc (patt, expr, _loc, id) ->
-                          <:expr< let l = if $bw_read patt$ then $make_vrn_expr vrntyp _loc id$ :: l else l in $acc$ >>)
-                       <:expr< l >> cstrs $)
-                (List.fold_left
-                   (fun acc x -> match x with
-                        $ Ast.mcOr_of_list
-                          (List.map (fun (patt, expr, _loc, id) ->
-                                       <:match_case< $make_vrn_patt vrntyp _loc id$ -> $bw_write expr$ >>)
-                             cstrs) $)
-                   $ let (patt, expr, _loc, name) = List.hd cstrs in bw_empty patt $)
-            >>
-
-        | "OBUS_flag"; name = a_LIDENT; ":"; key_typ = typ; "="; (vrntyp, cstrs) = obus_data_type ->
-            <:str_item<
-              type $make_caml_type_def _loc name vrntyp cstrs$
-
-              let $lid:"t" ^ name$ = OBus_type.wrap_basic $expr_of_ty key_typ$
-                (function
-                     $ Ast.mcOr_of_list
-                       ((List.map
-                           (fun (patt, expr, _loc, id) ->
-                              <:match_case< $patt$ -> $make_vrn_expr vrntyp _loc id$ >>)
-                           cstrs) @
-                          [ <:match_case< _ -> (failwith $str:"invalid value for " ^ name$ : $lid:name$) >> ]) $)
-                (function
-                     $ Ast.mcOr_of_list
-                       (List.map
-                          (fun (patt, expr, _loc, id) ->
-                             <:match_case< $make_vrn_patt vrntyp _loc id$ -> $expr$ >>)
-                          cstrs) $)
-            >>
-
-        | "OBUS_exception"; (dbus_name, name) = obus_error_name ->
-            <:str_item<
-                exception $uid:name$ of OBus_error.message
-                let _ = register_exn $str:dbus_name$
-                  (fun msg -> $uid:name$ msg)
-                  (function
-                     | $uid:name$ msg -> Some msg
-                     | _ -> None)
-            >>
-
-        | "OBUS_global_exception"; (dbus_name, name) = obus_error_name ->
-            <:str_item<
-                exception $uid:name$ of OBus_error.message
-                let _ = OBus_error.register $str:dbus_name$
-                  (fun msg -> $uid:name$ msg)
-                  (function
-                     | $uid:name$ msg -> Some msg
-                     | _ -> None)
-            >>
-
-        | "OBUS_record"; (n, tpl, l) = obus_record ->
-            <:str_item<
-                type $make_record_decl _loc n tpl l$
-                $make_ty_def _loc n tpl (make_record_expr _loc l)$
-            >>
-
-        | "OBUS_struct"; (n, tpl, l) = obus_record ->
-            <:str_item<
-                type $make_record_decl _loc n tpl l$
-                $make_ty_def _loc n tpl <:expr< OBus_type.Pervasives.tstructure $make_record_expr _loc l$ >>$
-            >>
-
-        | "OBUS_type"; (n, tpl) = type_ident_and_parameters; "="; t = typ ->
-            <:str_item<
-                type $Ast.TyDcl(_loc, n, [], ctyp_of_ty t, [])$
-                $make_ty_def _loc n tpl (expr_of_ty t)$
-            >>
-
-        | "OBUS_name_translator"; n = a_ident ->
-            begin match n with
-              | "upper" -> name_translator := `Upper
-              | "lower" -> name_translator := `Lower
-              | _ -> Loc.raise _loc (Stream.Error (sprintf "invalid name translator: %S, must be \"upper\" or \"lower\"" n))
-            end;
-            <:str_item< >>
-
-        | "OBUS_method"; name = a_ident; ":"; (args, reply) = ftyp ->
-            <:str_item< let $lid:lid name$ = call $str:name$ $expr_of_fty reply args$ >>
-
-        | "OBUS_signal"; no_broadcast = OPT "!"; name = a_ident; ":"; t = typ ->
-            begin match no_broadcast with
-              | Some _ ->
-                  <:str_item< let $lid:lid name$ = signal ~broadcast:false $str:name$ $expr_of_ty t$ >>
-              | None ->
-                  <:str_item< let $lid:lid name$ = signal $str:name$ $expr_of_ty t$ >>
-            end
-
-        | "OBUS_property_r"; name = a_ident; ":"; t = typ ->
-            <:str_item< let $lid:lid name$ = property $str:name$ OBus_property.rd_only $expr_of_ty t$ >>
-
-        | "OBUS_property_w"; name = a_ident; ":"; t = typ ->
-            <:str_item< let $lid:lid name$ = property $str:name$ OBus_property.wr_only $expr_of_ty t$ >>
-
-        | "OBUS_property_rw"; name = a_ident; ":"; t = typ ->
-            <:str_item< let $lid:lid name$ = property $str:name$ OBus_property.rdwr $expr_of_ty t$ >>
-        ] ];
-
-    class_expr:
-      [ "simple"
-        [ "OBUS_interface"; iface = a_STRING; defs = obus_class_members; "end" ->
-            <:class_expr<
-                object(self)
-                  inherit OBus_object.interface;;
-                  $Ast.crSem_of_list
-                    (List.map (function
-                                 | `Method(cname, dname, args, reply) ->
-                                     <:class_str_item< method virtual $lid:cname$ : $ctyp_of_fty (<:ctyp< $ctyp_of_ty reply$ Lwt.t >>) args$ >>
-                                 | `Signal(cname, dname, t) ->
-                                     <:class_str_item< method $lid:cname$ = self#obus_emit_signal $str:iface$ $str:dname$ $expr_of_ty t$ >>
-                                 | `Val_r(cname, dname, ty, m)
-                                 | `Val_w(cname, dname, ty, m)
-                                 | `Val_rw(cname, dname, ty, m) ->
-                                     <:class_str_item< val virtual $mutable:m$ $lid:cname$ : $ctyp_of_ty ty$ >>
-                                 | `Prop_r(cname, dname, ty) ->
-                                     <:class_str_item< method virtual $lid:cname ^ "_get"$ : $ctyp_of_ty ty$ Lwt.t >>
-                                 | `Prop_w(cname, dname, ty) ->
-                                     <:class_str_item< method virtual $lid:cname ^ "_set"$ : $ctyp_of_ty ty$ -> unit Lwt.t >>
-                                 | `Prop_rw(cname, dname, ty) ->
-                                     <:class_str_item< method virtual $lid:cname ^ "_get"$ : $ctyp_of_ty ty$ Lwt.t;;
-                                                       method virtual $lid:cname ^ "_set"$ : $ctyp_of_ty ty$ -> unit Lwt.t >>)
-                       defs)$
-                  initializer
-                    self#obus_add_interface $str:iface$
-                      $List.fold_right
-                        (fun def acc -> match def with
-                           | `Method(cname, dname, args, reply) ->
-                               <:expr< OBus_object.md_method $str:dname$ $expr_of_fty reply args$ (fun _ -> self#$lid:cname$) :: $acc$ >>
-                           | `Signal(cname, dname, t) ->
-                               <:expr< OBus_object.md_signal $str:dname$ $expr_of_ty t$ :: $acc$ >>
-                           | `Val_r(cname, dname, ty, m) ->
-                               <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> Lwt.return $lid:cname$) :: $acc$ >>
-                           | `Val_w(cname, dname, ty, m) ->
-                               <:expr< OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) :: $acc$ >>
-                           | `Val_rw(cname, dname, ty, m) ->
-                               <:expr< OBus_object.md_property_rw $str:dname$ $expr_of_ty ty$ (fun _ -> Lwt.return $lid:cname$)
-                                         (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) :: $acc$ >>
-                           | `Prop_r(cname, dname, ty) ->
-                               <:expr< OBus_object.md_property_r $str:dname$ $expr_of_ty ty$ (fun _ -> self#$lid:cname ^ "_get"$) :: $acc$ >>
-                           | `Prop_w(cname, dname, ty) ->
-                               <:expr< OBus_object.md_property_w $str:dname$ $expr_of_ty ty$ (fun x -> self#$lid:cname ^ "_set"$ x) :: $acc$ >>
-                           | `Prop_rw(cname, dname, ty) ->
-                               <:expr< OBus_object.md_property_rw $str:dname$ $expr_of_ty ty$ (fun _ -> self#$lid:cname ^ "_get"$)
-                                         (fun x -> self#$lid:cname ^ "_set"$ x) :: $acc$ >>)
-                        defs <:expr< [] >>$
-                end >>
-        ] ];
-  END
-end
-
-let module M = Register.OCamlSyntaxExtension(Id)(Make) in ()
+(* +--------------------------------------+
+   | Auto-opening of OBus_type.Pervasives |
+   +--------------------------------------+ *)
 
 let _ =
   AstFilters.register_sig_item_filter

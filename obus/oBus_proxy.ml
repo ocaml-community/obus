@@ -21,7 +21,7 @@ let make peer path = {
   path = path;
 }
 
-let tt = OBus_type.wrap_basic_ctx <:obus_type< object_path >>
+let obus_t = OBus_type.wrap_with_context <:obus_type< object_path >>
   (fun context path -> match context with
      | Context(connection, msg) ->
          { peer = { connection = connection;
@@ -74,7 +74,7 @@ let dcall_no_reply proxy ?interface ~member body =
 type introspection = OBus_introspect.interface list * t list
 
 let raw_introspect proxy =
-  call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" << OBus_introspect.document >>
+  call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" <:obus_func< OBus_introspect.document >>
 
 let introspect proxy =
   raw_introspect proxy >>= fun (ifaces, sub_nodes) ->

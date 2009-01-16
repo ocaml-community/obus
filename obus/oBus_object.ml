@@ -20,7 +20,7 @@ type member_desc = OBus_internals.member_desc
 class virtual interface = object
   method virtual obus_emit_signal : 'a 'b.
     OBus_name.interface -> OBus_name.member ->
-    ([< 'a OBus_type.cl_sequence ] as 'b) -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
+    ('a, 'b) OBus_type.cl_sequence -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
   method virtual obus_add_interface : OBus_name.interface -> member_desc list -> unit
 end
 
@@ -33,7 +33,7 @@ let md_method name typ f =
              fun connection message ->
                ignore_result
                  (try_bind
-                    (fun _ -> OBus_type.cast_func (OBus_type.abstract tunit typ) ~context:(Context(connection, message)) message.body f)
+                    (fun _ -> OBus_type.cast_func typ ~context:(Context(connection, message)) message.body f)
                     (send_reply connection message (OBus_type.func_reply typ))
                     (send_exn connection message))))
 
@@ -196,16 +196,16 @@ class t = object(self)
 
   initializer
     self#obus_add_interface "org.freedesktop.DBus.Introspectable"
-      [md_method "Introspect" << OBus_connection.t -> OBus_introspect.document >>
-         (fun _ connection -> self#obus_introspect connection)];
+      [md_method "Introspect" <:obus_func< OBus_connection.t -> OBus_introspect.document >>
+         (fun connection -> self#obus_introspect connection)];
 
     self#obus_add_interface "org.freedesktop.DBus.Properties"
-      [md_method "Get" << string -> string -> variant >>
-         (fun _ iface name -> self#obus_get iface name);
-       md_method "Set" << string -> string -> variant -> unit >>
-         (fun _ iface name x -> self#obus_set iface name x);
-       md_method "GetAll" << string -> {string, variant} list >>
-         (fun _ iface -> self#obus_get_all iface)]
+      [md_method "Get" <:obus_func< string -> string -> variant >>
+         (fun iface name -> self#obus_get iface name);
+       md_method "Set" <:obus_func< string -> string -> variant -> unit >>
+         (fun iface name x -> self#obus_set iface name x);
+       md_method "GetAll" <:obus_func< string -> (string, variant) dict_entry list >>
+         (fun iface -> self#obus_get_all iface)]
 end
 
 (*let tt = OBus_type.wrap_basic_ctx tpath

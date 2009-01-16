@@ -47,3 +47,32 @@ type error = OBus_string.t
         example: "org.freedesktop.Error.UnknownMethod" *)
 
 val validate_error : OBus_string.validator
+
+(** {6 DBus name translation} *)
+
+val split : string -> string list
+  (** Split a name into longest blocks matched by the regular
+      expression "[A-Z]*[^A-Z.]*":
+
+      [split "SetCPUFreqGovernor" = ["Set"; "CPUFreq"; "Governor"]],
+      [split "org.freedesktop.DBus" = ["org"; "freedesktop"; "DBus"]] *)
+
+val ocaml_lid : string -> string
+  (** Translate a DBus name into an ocaml-style lower-identifier:
+
+      [caml_lid "SetCPUFreqGovernor" = "set_cpufreq_governor"] *)
+
+val ocaml_uid : string -> string
+  (** Translate a DBus name into an ocaml-style upper-identifier:
+
+      [caml_uid "org.freedesktop.DBus" = "Org_freedesktop_dbus"] *)
+
+val haskell_lid : string -> string
+  (** Translate a DBus name into an haskell-style lower-identifier:
+
+      [haskell_lid "SetCPUFreqGovernor" = "setCPUFreqGovernor"] *)
+
+val haskell_uid : string -> string
+  (** Translate a DBus name into an haskell-style upper-identifier:
+
+      [haskell_uid "org.freedesktop.DBus" = "OrgFreedesktopDBus" *)

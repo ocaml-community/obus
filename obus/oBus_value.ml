@@ -26,7 +26,7 @@ struct
     | Tobject_path
   type tsingle =
     | Tbasic of tbasic
-    | Tstruct of tsingle list
+    | Tstructure of tsingle list
     | Tarray of telement
     | Tvariant
   and telement =
@@ -81,7 +81,7 @@ let print_tbasic pp t = pp_print_string pp (string_of_tbasic t)
 let rec print_tsingle pp = function
   | Tbasic t -> fprintf pp "@[<2>Tbasic@ %a@]" print_tbasic t
   | Tarray t -> fprintf pp "@[<2>Tarray@,(%a)@]" print_telement t
-  | Tstruct tl -> fprintf pp "@[<2>Tstruct@ %a@]" print_tsequence tl
+  | Tstructure tl -> fprintf pp "@[<2>Tstructure@ %a@]" print_tsequence tl
   | Tvariant -> fprintf pp "Tvariant"
 
 and print_telement pp = function
@@ -106,9 +106,9 @@ let validate_signature =
           Some "too many nested array"
         else
           aux_element depth_struct (depth_array + 1) depth_dict_entry t
-    | Tstruct [] ->
+    | Tstructure [] ->
         Some "empty structure"
-    | Tstruct tl ->
+    | Tstructure tl ->
         if depth_struct > Constant.max_type_recursion_depth then
           Some "too many nested structure"
         else
@@ -201,7 +201,7 @@ type basic =
 type single =
   | Basic of basic
   | Array of telement * element list
-  | Struct of single list
+  | Structure of single list
   | Variant of single
 
 and element =
@@ -227,7 +227,7 @@ let type_of_basic = function
 let rec type_of_single = function
   | Basic x -> Tbasic(type_of_basic x)
   | Array(t, x) -> Tarray t
-  | Struct x -> Tstruct(List.map type_of_single x)
+  | Structure x -> Tstructure(List.map type_of_single x)
   | Variant _ -> Tvariant
 
 let type_of_element = function
@@ -236,29 +236,29 @@ let type_of_element = function
 
 let type_of_sequence = List.map type_of_single
 
-let vbyte x = Byte x
-let vboolean x = Boolean x
-let vint16 x = Int16 x
-let vint32 x = Int32 x
-let vint64 x = Int64 x
-let vuint16 x = Uint16 x
-let vuint32 x = Uint32 x
-let vuint64 x = Uint64 x
-let vdouble x = Double x
-let vstring x = String x
-let vsignature x = Signature x
-let vobject_path x = Object_path x
-let vbasic x = Basic x
-let varray t l =
+let byte x = Byte x
+let boolean x = Boolean x
+let int16 x = Int16 x
+let int32 x = Int32 x
+let int64 x = Int64 x
+let uint16 x = Uint16 x
+let uint32 x = Uint32 x
+let uint64 x = Uint64 x
+let double x = Double x
+let string x = String x
+let signature x = Signature x
+let object_path x = Object_path x
+let basic x = Basic x
+let array t l =
   List.iter (fun x ->
                if type_of_element x <> t
                then failwith "OBus_value.varray: unexpected type") l;
   Array(t, l)
-let vstruct l = Struct l
-let vvariant v = Variant v
+let structure l = Structure l
+let variant v = Variant v
 
-let vdict_entry k v = Dict_entry(k, v)
-let vsingle x = Single x
+let dict_entry k v = Dict_entry(k, v)
+let single x = Single x
 
 let print_basic pp = function
   | Byte x -> fprintf pp  "%C" x
@@ -277,7 +277,7 @@ let print_basic pp = function
 let rec print_single pp = function
   | Basic v -> print_basic pp v
   | Array(t, l) -> print_list print_element pp l
-  | Struct l -> print_sequence pp l
+  | Structure l -> print_sequence pp l
   | Variant x -> fprintf pp "@[<2>Variant@,(@[<hv>%a,@ %a@])@]" print_tsingle (type_of_single x) print_single x
 
 and print_element pp = function

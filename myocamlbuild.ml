@@ -11,8 +11,10 @@ open Printf
 open Ocamlbuild_plugin
 open Command (* no longer needed for OCaml >= 3.10.2 *)
 
-(* Syntax extensions used internally *)
-let intern_syntaxes = ["trace"; "pa_obus"; "pa_projection"]
+(* Syntax extensions used internally, (tag and the byte-code file). *)
+let intern_syntaxes = ["pa_trace", "syntax/trace.cmo";
+                       "pa_obus", "pa_obus.cma";
+                       "pa_projection", "syntax/pa_projection.cmo"]
 
 (* +-----------------------------------+
    | Packages installed with ocamlfind |
@@ -111,12 +113,9 @@ let _ =
         Pathname.define_context "obus" [ "obus/internals" ];
         Pathname.define_context "obus/internals" [ "obus" ];
 
-        (* +---------------------+
-           | Manual dependencies |
-           +---------------------+ *)
-
-        dep ["file:syntax/pa_obus.ml"] ["name_translator.ml"];
-        dep ["file:obus/oBus_info.ml"] ["version.ml"];
+        (* The syntax extension need to see the library because it use
+           some of its modules *)
+        Pathname.define_context "syntax" [ "obus" ];
 
         (* +-----------+
            | Libraries |
@@ -158,9 +157,9 @@ let _ =
            +-------------------+ *)
 
         List.iter
-          (fun tag ->
-             flag_all_stages_except_link tag & S[A"-ppopt"; A("syntax/" ^ tag ^ ".cmo")];
-             dep ["ocaml"; "ocamldep"; tag] ["syntax/" ^ tag ^ ".cmo"])
+          (fun (tag, file) ->
+             flag_all_stages_except_link tag & S[A"-ppopt"; A file];
+             dep ["ocaml"; "ocamldep"; tag] [file])
           intern_syntaxes;
 
         (* +-------+

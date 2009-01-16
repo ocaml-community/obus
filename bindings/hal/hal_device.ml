@@ -15,7 +15,8 @@ let get_peer =
          bus <-- Lazy.force OBus_bus.system;
          return (OBus_peer.make bus "org.freedesktop.Hal"))
 
-OBUS_type udi = path
+type udi = path
+  with obus
 
 external make : OBus_path.t -> udi = "%identity"
 external path : udi -> OBus_path.t = "%identity"
@@ -41,25 +42,25 @@ type property =
   | Pbool of bool
   | Pdouble of float
 
-let tproperty = OBus_type.wrap_single tvariant
+let obus_property = OBus_type.wrap obus_variant
   (function
      | Basic(String s) -> Pstring s
-     | Array(Tsingle (Tbasic Tstring), _) as l -> Pstrlist(OBus_type.cast_single (tlist tstring) l)
+     | Array(Tsingle (Tbasic Tstring), _) as l -> Pstrlist(OBus_type.cast_single (obus_list obus_string) l)
      | Basic(Int32 x) -> Pint x
      | Basic(Uint64 x) -> Puint64 x
      | Basic(Boolean x) -> Pbool x
      | Basic(Double x) -> Pdouble x
      | v -> failwith ("invalid device property: " ^ OBus_value.string_of_single v))
   (function
-     | Pstring s -> vbasic (String s)
-     | Pstrlist l -> OBus_type.make_single (tlist tstring) l
-     | Pint x -> vbasic (Int32 x)
-     | Puint64 x -> vbasic (Uint64 x)
-     | Pbool x -> vbasic (Boolean x)
-     | Pdouble x -> vbasic (Double x))
+     | Pstring s -> basic (String s)
+     | Pstrlist l -> OBus_type.make_single (obus_list obus_string) l
+     | Pint x -> basic (Int32 x)
+     | Puint64 x -> basic (Uint64 x)
+     | Pbool x -> basic (Boolean x)
+     | Pdouble x -> basic (Double x))
 
-OBUS_method GetAllProperties : {string, property} list
-OBUS_method SetMultipleProperties : {string, property} list -> unit
+OBUS_method GetAllProperties : (string, property) dict_entry list
+OBUS_method SetMultipleProperties : (string, property) dict_entry list -> unit
 OBUS_method GetProperty : string -> property
 OBUS_method GetPropertyString : string -> string
 OBUS_method GetPropertyStringList : string -> string list
@@ -93,7 +94,7 @@ OBUS_method Reprobe : bool
 OBUS_method ClaimInterface : string -> string -> bool
 OBUS_method AddonIsReady : bool
 
-OBUS_signal PropertyModified : int * [string * bool * bool] list
+OBUS_signal PropertyModified : int * (string * bool * bool) structure list
 OBUS_signal Condition : string * string
 OBUS_signal InterfaceLockAcquired : string * string * int
 OBUS_signal InterfaceLockReleased : string * string * int

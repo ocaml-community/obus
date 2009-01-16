@@ -64,39 +64,50 @@ let of_laddresses laddr = Lazy.force laddr >>= of_addresses
 let session = lazy(of_laddresses OBus_address.session)
 let system = lazy(of_laddresses OBus_address.system)
 
-OBUS_exception Error.ServiceUnknown
-OBUS_exception Error.MatchRuleNotFound
-OBUS_exception Error.ServiceUnknown
-OBUS_exception Error.NameHasNoOwner
+let prefix = interface ^ ".Error."
+
+exception Service_unknown of string
+ with obus(prefix ^ "ServiceUnknown")
+
+exception Match_rule_not_found of string
+ with obus(prefix ^ "MatchRuleNotFound")
+
+exception Service_unknown of string
+ with obus(prefix ^ "ServiceUnknown")
+
+exception Name_has_no_owner of string
+ with obus(prefix ^ "NameHasNoOwner")
 
 let acquired_names bus = match bus#get with
   | Crashed exn -> raise exn
   | Running connection -> connection.acquired_names
 
-OBUS_bitwise request_name_flag : uint =
-  [ 1 -> `allow_replacement
-  | 2 -> `replace_existing
-  | 4 -> `do_not_queue ]
+type request_name_result =
+    [ `primary_owner
+    | `in_queue
+    | `exists
+    | `already_owner ]
 
-OBUS_flag request_name_result : uint =
-  [ 1 -> `primary_owner
-  | 2 -> `in_queue
-  | 3 -> `exists
-  | 4 -> `already_owner ]
+let obus_request_name_result = OBus_type.map obus_uint
+  [`primary_owner, 1; `in_queue, 2; `exists, 3; `already_owner, 4]
 
-OBUS_method RequestName : string -> request_name_flag_list -> request_name_result
-let request_name bus ?(flags=[]) name = request_name bus name flags
+OBUS_method RequestName : string -> uint -> request_name_result
+let request_name bus ?(allow_replacement=false) ?(replace_existing=false) ?(do_not_queue=false) name =
+  request_name bus name ((if allow_replacement then 1 else 0) lor
+                           (if replace_existing then 2 else 0) lor
+                           (if do_not_queue then 4 else 0))
 
-OBUS_flag release_name_result : uint =
-    [ 1 -> `released
-    | 2 -> `non_existent
-    | 3 -> `not_owner ]
+type release_name_result = [ `released | `non_existent | `not_owner ]
+
+let obus_release_name_result = OBus_type.map obus_uint
+  [`released, 1; `non_existent, 2; `not_owner, 3]
 
 OBUS_method ReleaseName : string -> release_name_result
 
-OBUS_flag start_service_by_name_result : uint =
-  [ 1 -> `success
-  | 2 -> `already_running ]
+type start_service_by_name_result = [ `success | `already_running ]
+
+let obus_start_service_by_name_result = OBus_type.map obus_uint
+  [(`success, 1); (`already_running, 2)]
 
 OBUS_method StartServiceByName : string -> uint -> start_service_by_name_result
 let start_service_by_name bus name = start_service_by_name bus name 0
@@ -106,7 +117,8 @@ OBUS_method ListActivatableNames : string list
 OBUS_method GetNameOwner : string -> string
 OBUS_method ListQueuedOwners : string -> string list
 
-OBUS_type match_rule = Match_rule.t
+type match_rule = Match_rule.t
+  with obus
 
 let match_rule = Match_rule.make
 
@@ -119,7 +131,7 @@ OBUS_method GetConnectionSelinuxSecurityContext : string -> byte_array
 OBUS_method ReloadConfig : unit
 OBUS_method GetId : OBus_uuid.t
 
-let tname_opt = OBus_type.wrap_basic tstring
+let obus_name_opt = OBus_type.wrap obus_string
   (function
      | "" -> None
      | str -> Some str)

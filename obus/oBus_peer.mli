@@ -57,7 +57,7 @@ type t = {
     have to care about this if you use it.
 *)
 
-val tt : t OBus_type.ty_sequence
+val obus_t : t OBus_type.sequence
   (** This return the peer sending a message.
 
       This may be used in method type to get the sender of a call, for

@@ -8,9 +8,8 @@
  *)
 
 type udi = private OBus_path.t
-    (** Unique Device Identifier *)
-
-val tudi : udi OBus_type.ty_basic
+ with obus(basic)
+     (** Unique Device Identifier *)
 
 external make : OBus_path.t -> udi = "%identity"
   (** Create an udi from an object path *)
@@ -34,8 +33,7 @@ type property =
   | Pbool of bool
   | Pdouble of float
       (** IEEE754 double precision floating point number  *)
-
-val tproperty : property OBus_type.ty_single
+ with obus(single)
 
 (** {6 Common device interface} *)
 

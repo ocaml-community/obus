@@ -10,21 +10,18 @@
 open Format
 open OBus_introspect
 open Term
-open Name_translator
 
 (***** Printing of module interfaces *****)
 
-type translator = Lower | Upper
-
-let translator = ref Lower
+let translator : [ `ocaml | `haskell ] ref = ref `ocaml
 
 let plid pp str = match !translator with
-  | Lower -> Lower.plid pp str
-  | Upper -> Upper.plid pp str
+  | `ocaml -> pp_print_string pp (OBus_name.ocaml_lid str)
+  | `haskell -> pp_print_string pp (OBus_name.haskell_lid str)
 
 let puid pp str = match !translator with
-  | Lower -> Lower.puid pp str
-  | Upper -> Upper.puid pp str
+  | `ocaml -> pp_print_string pp (OBus_name.ocaml_uid str)
+  | `haskell -> pp_print_string pp (OBus_name.haskell_uid str)
 
 let unit = term "unit" []
 

@@ -24,10 +24,10 @@ let args = [
   "generate code for service implementation instead of proxy code";
   "-no-sugar", Arg.Set no_sugar,
   "disable the use of syntactic sugars in generated files";
-  "-name-translator", Arg.Symbol(["upper"; "lower"],
+  "-name-translator", Arg.Symbol(["ocaml"; "haskell"],
                                  (function
-                                    | "upper" -> translator := Upper
-                                    | "lower" -> translator := Lower
+                                    | "ocaml" -> translator := `ocaml
+                                    | "haskell" -> translator := `haskell
                                     | n -> failwith "invalid name translator")),
   " how to translate dbus names to caml names";
 ]

@@ -18,7 +18,7 @@ type server_info = {
   server_vendor : string;
   server_version : string;
   server_spec_version : string;
-}
+} with obus(sequence)
 
 type 'a id
   (** A notification id *)
@@ -43,12 +43,12 @@ type image = {
   img_bits_per_sample : int;
   img_channels : int;
   img_data : string;
-}
+} with obus(single)
 
 val notify :
   ?app_name:string ->
   ?desktop_entry:string ->
-  ?replace:'a id ->
+  ?replace:_ id ->
   ?icon:string ->
   ?image:image ->
   summary:string ->

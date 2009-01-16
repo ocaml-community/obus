@@ -17,60 +17,62 @@
     caml types.
 *)
 
-open OBus_value
+type ('a, 'cl) t
+  (** Type of type combinators *)
 
-type 'a ty_desc_basic
-type 'a ty_desc_single
-type 'a ty_desc_element
-type 'a ty_desc_sequence
-  (** Simple types description *)
+type 'a basic = ('a, [`basic]) t
+type 'a single = ('a, [`single]) t
+type 'a element = ('a, [`element]) t
+type 'a sequence = ('a, [`sequence]) t
 
-type 'a ty_basic = [ `basic of 'a ty_desc_basic ]
-type 'a ty_single = [ `single of 'a ty_desc_single ]
-type 'a ty_element = [ `element of 'a ty_desc_element ]
-type 'a ty_sequence = [ `sequence of 'a ty_desc_sequence ]
+type ('a, 'cl) cl_basic = ('a, 'cl) t
+constraint 'cl = [ `basic ]
 
-type 'a cl_basic = 'a ty_basic
-type 'a cl_single = [ 'a cl_basic | 'a ty_single ]
-type 'a cl_element = [ 'a cl_single | 'a ty_element ]
-type 'a cl_sequence = [ 'a cl_single | 'a ty_sequence ]
+type ('a, 'cl) cl_single = ('a, 'cl) t
+constraint 'cl = [< `basic | `single ]
 
-type ('a, 'b, 'c) ty_function
+type ('a, 'cl) cl_element = ('a, 'cl) t
+constraint 'cl = [< `basic | `single | `element ]
+
+type ('a, 'cl) cl_sequence = ('a, 'cl) t
+constraint 'cl = [< `basic | `single | `sequence ]
+
+type ('a, 'b, 'c) func
   (** Functionnal types *)
 
 (** {6 DBus types} *)
 
-val isignature : ('a, 'b, 'c) ty_function -> signature
+val isignature : ('a, 'b, 'c) func -> OBus_value.signature
   (** "in" signature, it describe types of the method/signal
       parameters. *)
 
-val osignature : ('a, 'b, 'c) ty_function -> signature
+val osignature : ('a, 'b, 'c) func -> OBus_value.signature
   (** "out" signature, it describe types of return values returned by
       the method. For signals it is [[]]. *)
 
-val type_basic : [< 'a cl_basic ] -> tbasic
-val type_single : [< 'a cl_single ] -> tsingle
-val type_element : [< 'a cl_element ] -> telement
-val type_sequence : [< 'a cl_sequence ] -> tsequence
+val type_basic : ('a, _) cl_basic -> OBus_value.tbasic
+val type_single : ('a, _) cl_single -> OBus_value.tsingle
+val type_element : ('a, _) cl_element -> OBus_value.telement
+val type_sequence : ('a, _) cl_sequence -> OBus_value.tsequence
   (** Return the DBus type of a type description *)
 
-type 'a with_ty_basic = { with_ty_basic : 'b. 'b ty_basic -> 'a }
-type 'a with_ty_single = { with_ty_single : 'b. 'b ty_single -> 'a }
-type 'a with_ty_element = { with_ty_element : 'b. 'b ty_element -> 'a }
-type 'a with_ty_sequence = { with_ty_sequence : 'b. 'b ty_sequence -> 'a }
-val with_ty_basic : 'a with_ty_basic -> tbasic -> 'a
-val with_ty_single : 'a with_ty_single -> tsingle -> 'a
-val with_ty_element : 'a with_ty_element -> telement -> 'a
-val with_ty_sequence : 'a with_ty_sequence -> tsequence -> 'a
+type 'a with_basic = { with_basic : 'b. 'b basic -> 'a }
+type 'a with_single = { with_single : 'b. 'b single -> 'a }
+type 'a with_element = { with_element : 'b. 'b element -> 'a }
+type 'a with_sequence = { with_sequence : 'b. 'b sequence -> 'a }
+val with_basic : 'a with_basic -> OBus_value.tbasic -> 'a
+val with_single : 'a with_single -> OBus_value.tsingle -> 'a
+val with_element : 'a with_element -> OBus_value.telement -> 'a
+val with_sequence : 'a with_sequence -> OBus_value.tsequence -> 'a
   (** [with_*_ty func typ] Construct the default combinator for [typ]
       and give it to [func] *)
 
 (** {6 Dynamic values operations} *)
 
-val make_basic : [< 'a cl_basic ] -> 'a -> basic
-val make_single : [< 'a cl_single ] -> 'a -> single
-val make_element : [< 'a cl_element ] -> 'a -> element
-val make_sequence : [< 'a cl_sequence ] -> 'a -> sequence
+val make_basic : ('a, _) cl_basic -> 'a -> OBus_value.basic
+val make_single : ('a, _) cl_single -> 'a -> OBus_value.single
+val make_element : ('a, _) cl_element -> 'a -> OBus_value.element
+val make_sequence : ('a, _) cl_sequence -> 'a -> OBus_value.sequence
   (** Make a dynamically typed value from a statically typed one *)
 
 exception Cast_failure
@@ -87,67 +89,71 @@ type context = exn
 exception No_context
   (** Context used when no one is specified *)
 
-val cast_basic : [< 'a cl_basic ] -> ?context:context -> basic -> 'a
-val cast_single : [< 'a cl_single ] -> ?context:context -> single -> 'a
-val cast_element : [< 'a cl_element ] -> ?context:context -> element -> 'a
-val cast_sequence : [< 'a cl_sequence ] -> ?context:context -> sequence -> 'a
+val cast_basic : ('a, _) cl_basic -> ?context:context -> OBus_value.basic -> 'a
+val cast_single : ('a, _) cl_single -> ?context:context -> OBus_value.single -> 'a
+val cast_element : ('a, _) cl_element -> ?context:context -> OBus_value.element -> 'a
+val cast_sequence : ('a, _) cl_sequence -> ?context:context -> OBus_value.sequence -> 'a
   (** Cast a dynamically typed value into a statically typed one. It
       raise a [Cast_failure] if types do not match.
 
       If the type contain [tproxy] or a type derived from [tproxy] you
       must also provide a context. *)
 
-val opt_cast_basic : [< 'a cl_basic ] -> ?context:context -> basic -> 'a option
-val opt_cast_single : [< 'a cl_single ] -> ?context:context -> single -> 'a option
-val opt_cast_element : [< 'a cl_element ] -> ?context:context -> element -> 'a option
-val opt_cast_sequence : [< 'a cl_sequence ] -> ?context:context -> sequence -> 'a option
+val opt_cast_basic : ('a, _) cl_basic -> ?context:context -> OBus_value.basic -> 'a option
+val opt_cast_single : ('a, _) cl_single -> ?context:context -> OBus_value.single -> 'a option
+val opt_cast_element : ('a, _) cl_element -> ?context:context -> OBus_value.element -> 'a option
+val opt_cast_sequence : ('a, _) cl_sequence -> ?context:context -> OBus_value.sequence -> 'a option
   (** Same thing but return an option instead of raising an
       exception *)
 
-val make_func : ('a, 'b, 'c) ty_function -> (sequence -> 'b) -> 'a
+val make_func : ('a, 'b, 'c) func -> (OBus_value.sequence -> 'b) -> 'a
   (** [make_func typ cont ...] make a sequence from extra parameters
       and pass it to [cont] *)
 
-val cast_func : ('a, 'b, 'c) ty_function -> ?context:context -> sequence -> 'a -> 'b
+val cast_func : ('a, 'b, 'c) func -> ?context:context -> OBus_value.sequence -> 'a -> 'b
   (** [cast_func typ seq f] cast [seq] using [typ] and pass the
       resulting values to [f] *)
 
-val opt_cast_func : ('a, 'b, 'c) ty_function -> ?context:context -> sequence -> 'a -> 'b option
+val opt_cast_func : ('a, 'b, 'c) func -> ?context:context -> OBus_value.sequence -> 'a -> 'b option
   (** Same as [cast_func] but do not raise an exception *)
 
-val func_reply : ('a, 'b, 'c) ty_function -> 'c cl_sequence
+val func_reply : ('a, 'b, 'c) func -> 'c sequence
   (** Return the return type of a functionnal type *)
 
 (** {6 Types construction} *)
 
-val reply : [< 'a cl_sequence ] -> ('b, 'b, 'a) ty_function
+val reply : ('a, _) cl_sequence -> ('b, 'b, 'a) func
   (** Create a functionnal type from a simple type *)
 
-val abstract : [< 'a cl_sequence ] -> ('b, 'c, 'd) ty_function -> ('a -> 'b, 'c, 'd) ty_function
-val ( --> ) : [< 'a cl_sequence ] -> ('b, 'c, 'd) ty_function -> ('a -> 'b, 'c, 'd) ty_function
+val abstract : ('a, _) cl_sequence -> ('b, 'c, 'd) func -> ('a -> 'b, 'c, 'd) func
+val ( --> ) : ('a, _) cl_sequence -> ('b, 'c, 'd) func -> ('a -> 'b, 'c, 'd) func
   (** [abstrant x y] or [x --> y], make an abstraction *)
 
-val wrap_basic : 'a ty_basic -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_basic
-val wrap_single : 'a ty_single -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_single
-val wrap_element : 'a ty_element -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_element
-val wrap_sequence : 'a ty_sequence -> ('a -> 'b) -> ('b -> 'a) -> 'b ty_sequence
+val wrap : ('a, 'cl) t -> ('a -> 'b) -> ('b -> 'a) -> ('b, 'cl) t
   (** Wrap a type description by applying a convertion function *)
 
-val wrap_array : [< 'a cl_element ] ->
-  make:(('a -> element) -> 'b -> element list) ->
-  cast:((element -> 'a) -> element list -> 'b) -> 'b ty_single
+val wrap_array : ('a, _) cl_element ->
+  make:(('a -> OBus_value.element) -> 'b -> OBus_value.element list) ->
+  cast:((OBus_value.element -> 'a) -> OBus_value.element list -> 'b) -> 'b single
   (** [wrap_array t make cast] wrap an array type. It more efficient
-      than a [wrap_single (tlist t) ...] since it does not create an
+      than a [wrap (tlist t) ...] since it does not create an
       intermediate list. *)
 
-val wrap_basic_ctx : 'a ty_basic -> (context -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_basic
-val wrap_single_ctx : 'a ty_single -> (context -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_single
-val wrap_element_ctx : 'a ty_element -> (context -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_element
-val wrap_sequence_ctx : 'a ty_sequence -> (context -> 'a -> 'b) -> ('b -> 'a) -> 'b ty_sequence
-val wrap_array_ctx : [< 'a cl_element ] ->
-  make:(('a -> element) -> 'b -> element list) ->
-  cast:(context -> (element -> 'a) -> element list -> 'b) -> 'b ty_single
+val wrap_with_context : ('a, 'cl) t -> (context -> 'a -> 'b) -> ('b -> 'a) -> ('b, 'cl) t
+val wrap_array_with_context : ('a, _) cl_element ->
+  make:(('a -> OBus_value.element) -> 'b -> OBus_value.element list) ->
+  cast:(context -> (OBus_value.element -> 'a) -> OBus_value.element list -> 'b) -> 'b single
   (** Same thing but with access to the context *)
+
+(** {6 Helpers} *)
+
+val map : ('a, 'cl) t -> ('b * 'a) list -> ('b, 'cl) t
+  (** Create a type combinator from another one and a value
+      mapping. *)
+
+val bitwise : (int, 'cl) t -> ('a * int) list -> ('a list, 'cl) t
+val bitwise32 : (int32, 'cl) t -> ('a * int) list -> ('a list, 'cl) t
+val bitwise64 : (int64, 'cl) t -> ('a * int) list -> ('a list, 'cl) t
 
 (** {6 Default type combinators} *)
 
@@ -155,38 +161,38 @@ module Pervasives : sig
 
   (** This module is automatically opened by the syntax extension *)
 
-  val tbyte : char ty_basic
-  val tchar : char ty_basic
-  val tboolean : bool ty_basic
-  val tbool : bool ty_basic
-  val tint8 : int ty_basic
-  val tint16 : int ty_basic
-  val tint : int ty_basic
-  val tint32 : int32 ty_basic
-  val tint64 : int64 ty_basic
-  val tuint8 : int ty_basic
-  val tuint16 : int ty_basic
-  val tuint : int ty_basic
-  val tuint32 : int32 ty_basic
-  val tuint64 : int64 ty_basic
-  val tdouble : float ty_basic
-  val tfloat : float ty_basic
-  val tstring : string ty_basic
-  val tsignature : signature ty_basic
-  val tobject_path : OBus_path.t ty_basic
-  val tpath : OBus_path.t ty_basic
+  val obus_byte : char basic
+  val obus_char : char basic
+  val obus_boolean : bool basic
+  val obus_bool : bool basic
+  val obus_int8 : int basic
+  val obus_int16 : int basic
+  val obus_int : int basic
+  val obus_int32 : int32 basic
+  val obus_int64 : int64 basic
+  val obus_uint8 : int basic
+  val obus_uint16 : int basic
+  val obus_uint : int basic
+  val obus_uint32 : int32 basic
+  val obus_uint64 : int64 basic
+  val obus_double : float basic
+  val obus_float : float basic
+  val obus_string : string basic
+  val obus_signature : OBus_value.signature basic
+  val obus_object_path : OBus_path.t basic
+  val obus_path : OBus_path.t basic
 
-  val tlist : [< 'a cl_element ] -> 'a list ty_single
-  val tdict_entry : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) ty_element
-  val tassoc : [< 'a cl_basic ] -> [< 'b cl_single ] -> ('a * 'b) list ty_single
+  val obus_list : ('a, _) cl_element -> 'a list single
+  val obus_dict_entry : ('a, _) cl_basic -> ('b, _) cl_single -> ('a * 'b) element
+  val obus_assoc : ('a, _) cl_basic -> ('b, _) cl_single -> ('a * 'b) list single
     (** [tassoc tk tv] is equivalent to [tlist (tdict_entry tk tv)] *)
-  val tstructure : [< 'a cl_sequence ] -> 'a ty_single
-  val tvariant : single ty_single
+  val obus_structure : ('a, _) cl_sequence -> 'a single
+  val obus_variant : OBus_value.single single
 
-  val tbyte_array : string ty_single
+  val obus_byte_array : string single
     (** Array of bytes seen as string *)
 
-  val tunit : unit ty_sequence
+  val obus_unit : unit sequence
 
   type byte = char
   type boolean = bool
@@ -204,7 +210,7 @@ module Pervasives : sig
   type ('a, 'b) dict_entry = 'a * 'b
   type ('a, 'b) assoc = ('a, 'b) dict_entry list
   type 'a structure = 'a
-  type variant = single
+  type variant = OBus_value.single
   type byte_array = string
       (** Dummy type definition, they should be used in combination with
           the syntax extension, to define the dbus type and the caml
@@ -216,97 +222,97 @@ end
 
 module type Ordered_element_type = sig
   type t
-  val tt : t cl_element
+  val obus_t : (t, _) cl_element
   val compare : t -> t -> int
 end
 
 module Make_set(Ord : Ordered_element_type) : sig
   include Set.S with type elt = Ord.t
-  val tt : t ty_single
+  val obus_t : t single
 end
 
 module type Ordered_basic_type = sig
   type t
-  val tt : t cl_basic
+  val obus_t : (t, _) cl_basic
   val compare : t -> t -> int
 end
 
 module Make_map(Ord : Ordered_basic_type) : sig
   include Map.S with type key = Ord.t
-  val tt : [< 'a cl_single ] -> 'a t ty_single
+  val obus_t : ('a, _) cl_single -> 'a t single
 end
 
 (** {6 Tuples} *)
 
-val tup2 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  ('a1 * 'a2) ty_sequence
-val tup3 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  [< 'a3 cl_sequence ] ->
-  ('a1 * 'a2 * 'a3) ty_sequence
-val tup4 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  [< 'a3 cl_sequence ] ->
-  [< 'a4 cl_sequence ] ->
-  ('a1 * 'a2 * 'a3 * 'a4) ty_sequence
-val tup5 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  [< 'a3 cl_sequence ] ->
-  [< 'a4 cl_sequence ] ->
-  [< 'a5 cl_sequence ] ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5) ty_sequence
-val tup6 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  [< 'a3 cl_sequence ] ->
-  [< 'a4 cl_sequence ] ->
-  [< 'a5 cl_sequence ] ->
-  [< 'a6 cl_sequence ] ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) ty_sequence
-val tup7 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  [< 'a3 cl_sequence ] ->
-  [< 'a4 cl_sequence ] ->
-  [< 'a5 cl_sequence ] ->
-  [< 'a6 cl_sequence ] ->
-  [< 'a7 cl_sequence ] ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7) ty_sequence
-val tup8 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  [< 'a3 cl_sequence ] ->
-  [< 'a4 cl_sequence ] ->
-  [< 'a5 cl_sequence ] ->
-  [< 'a6 cl_sequence ] ->
-  [< 'a7 cl_sequence ] ->
-  [< 'a8 cl_sequence ] ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8) ty_sequence
-val tup9 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  [< 'a3 cl_sequence ] ->
-  [< 'a4 cl_sequence ] ->
-  [< 'a5 cl_sequence ] ->
-  [< 'a6 cl_sequence ] ->
-  [< 'a7 cl_sequence ] ->
-  [< 'a8 cl_sequence ] ->
-  [< 'a9 cl_sequence ] ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9) ty_sequence
-val tup10 :
-  [< 'a1 cl_sequence ] ->
-  [< 'a2 cl_sequence ] ->
-  [< 'a3 cl_sequence ] ->
-  [< 'a4 cl_sequence ] ->
-  [< 'a5 cl_sequence ] ->
-  [< 'a6 cl_sequence ] ->
-  [< 'a7 cl_sequence ] ->
-  [< 'a8 cl_sequence ] ->
-  [< 'a9 cl_sequence ] ->
-  [< 'a10 cl_sequence ] ->
-  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10) ty_sequence
+val tuple2 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a1 * 'a2) sequence
+val tuple3 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a3, _) cl_sequence ->
+  ('a1 * 'a2 * 'a3) sequence
+val tuple4 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a3, _) cl_sequence ->
+  ('a4, _) cl_sequence ->
+  ('a1 * 'a2 * 'a3 * 'a4) sequence
+val tuple5 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a3, _) cl_sequence ->
+  ('a4, _) cl_sequence ->
+  ('a5, _) cl_sequence ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5) sequence
+val tuple6 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a3, _) cl_sequence ->
+  ('a4, _) cl_sequence ->
+  ('a5, _) cl_sequence ->
+  ('a6, _) cl_sequence ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) sequence
+val tuple7 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a3, _) cl_sequence ->
+  ('a4, _) cl_sequence ->
+  ('a5, _) cl_sequence ->
+  ('a6, _) cl_sequence ->
+  ('a7, _) cl_sequence ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7) sequence
+val tuple8 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a3, _) cl_sequence ->
+  ('a4, _) cl_sequence ->
+  ('a5, _) cl_sequence ->
+  ('a6, _) cl_sequence ->
+  ('a7, _) cl_sequence ->
+  ('a8, _) cl_sequence ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8) sequence
+val tuple9 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a3, _) cl_sequence ->
+  ('a4, _) cl_sequence ->
+  ('a5, _) cl_sequence ->
+  ('a6, _) cl_sequence ->
+  ('a7, _) cl_sequence ->
+  ('a8, _) cl_sequence ->
+  ('a9, _) cl_sequence ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9) sequence
+val tuple10 :
+  ('a1, _) cl_sequence ->
+  ('a2, _) cl_sequence ->
+  ('a3, _) cl_sequence ->
+  ('a4, _) cl_sequence ->
+  ('a5, _) cl_sequence ->
+  ('a6, _) cl_sequence ->
+  ('a7, _) cl_sequence ->
+  ('a8, _) cl_sequence ->
+  ('a9, _) cl_sequence ->
+  ('a10, _) cl_sequence ->
+  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10) sequence

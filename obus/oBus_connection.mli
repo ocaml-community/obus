@@ -16,7 +16,7 @@
 
 type t = OBus_internals.packed_connection
 
-val tt : t OBus_type.ty_sequence
+val obus_t : t OBus_type.sequence
   (** This return the connection from which a message come *)
 
 (** {6 Creation} *)
@@ -114,7 +114,7 @@ val method_call : t ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
-  ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+  ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
   (** Send a method call and wait for the reply *)
 
 val method_call_no_reply : t ->
@@ -124,7 +124,7 @@ val method_call_no_reply : t ->
   path:OBus_path.t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
-  ('a, unit Lwt.t, unit) OBus_type.ty_function -> 'a
+  ('a, unit Lwt.t, unit) OBus_type.func -> 'a
   (** Send a method call without waiting for the reply. The
       [no_reply_expected] flag is automatically set to [true]. *)
 
@@ -136,7 +136,7 @@ val method_call' : t ->
   ?interface:OBus_name.interface ->
   member:OBus_name.member ->
   OBus_message.body ->
-  [< 'a OBus_type.cl_sequence ] -> 'a Lwt.t
+  ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
   (** Same thing but take the body of the message as a
       dynamically-typed value. *)
 
@@ -168,7 +168,7 @@ val emit_signal : t ->
   path:OBus_path.t ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->
-  [< 'a OBus_type.cl_sequence ] -> 'a -> unit Lwt.t
+  ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
   (** Emit a signal *)
 
 val demit_signal : t ->
@@ -180,7 +180,7 @@ val demit_signal : t ->
   member:OBus_name.member ->
   OBus_message.body -> unit Lwt.t
 
-val send_reply : t -> OBus_message.t -> [< 'a OBus_type.cl_sequence ] -> 'a -> unit Lwt.t
+val send_reply : t -> OBus_message.t -> ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
   (** [send_reply connection method_call reply] Send a reply to a
       method call *)
 

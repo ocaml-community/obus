@@ -18,10 +18,7 @@ type t = {
 
   path : OBus_path.t;
   (** Path of the object on the peer *)
-} with projection
-
-val tt : t OBus_type.ty_basic
-  (** Type combinator *)
+} with projection, obus(basic)
 
 val make : OBus_peer.t -> OBus_path.t -> t
   (** [make peer path] create a proxy *)
@@ -36,13 +33,13 @@ val raw_introspect : t -> OBus_introspect.document Lwt.t
 
 (** {6 Method calls} *)
 
-val call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
+val call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
   (** Call a method of the given proxy *)
 
-val call_no_reply : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, unit Lwt.t, unit) OBus_type.ty_function -> 'a
+val call_no_reply : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, unit Lwt.t, unit) OBus_type.func -> 'a
   (** Same as call but do not wait for a reply *)
 
-val call' : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> [< 'a OBus_type.cl_sequence ] -> 'a Lwt.t
+val call' : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
   (** Take the body of the call as a dynamically-typed value. This can
       be used to write some generic function, for example:
 

@@ -44,9 +44,6 @@ val assert_validate : validator -> string -> unit
   (** Raises {!Invalid_string} if the given string failed to
       validate *)
 
-val lwt_assert_validate : validator -> string -> unit Lwt.t
-  (** Lwt-version of {!assert_validate} *)
-
 (** {6 Common strings} *)
 
 type t = string

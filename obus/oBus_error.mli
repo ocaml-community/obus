@@ -71,7 +71,8 @@ val register : name -> (message -> exn) -> (exn -> message option) -> unit
       Or, with the syntax extension:
 
       {[
-        OBUS_global_exception Full.DBus.Name
+        exception Caml_name of OBus_error.message
+          with obus("Full.DBus.Name")
       ]}
   *)
 

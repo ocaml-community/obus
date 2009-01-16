@@ -19,7 +19,7 @@ module type S = sig
   val interface : OBus_name.interface
     (** Name of the interface *)
 
-  val call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> t -> 'a
+  val call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> t -> 'a
     (** [call member typ obj ...] define a method call.
 
         A method call definition looks like:
@@ -35,7 +35,7 @@ module type S = sig
         ]}
     *)
 
-  val signal : ?broadcast:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> t -> 'a OBus_signal.t
+  val signal : ?broadcast:bool -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> t -> 'a OBus_signal.t
     (** [signal ?broadcast member typ proxy] define a signal.
 
         A signal defintion looks like:
@@ -53,7 +53,7 @@ module type S = sig
         ]}
     *)
 
-  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> t -> ('a, 'b) OBus_property.t
+  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> ('a, _) OBus_type.cl_single -> t -> ('a, 'b) OBus_property.t
     (** [property member access typ proxy] define a property.
 
         A property definition looks like:
@@ -70,26 +70,6 @@ module type S = sig
           OBUS_property_r DBusName : property_type
           OBUS_property_w DBusName : property_type
           OBUS_property_rw DBusName : property_type
-        ]}
-    *)
-
-  val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
-    (** Same as [OBus_error.register] but the error name will be
-        prefixed by the interface name.
-
-        An exception definition looks like:
-
-        {[
-          exception Caml_name of string
-          let _ = register_exn "Error.DBusName" (fun msg -> Caml_name msg) (function
-                                                                              | Caml_name msg -> Some msg
-                                                                              | _ -> None)
-        ]}
-
-        Or, with the syntax extension:
-
-        {[
-          OBUS_exception Error.DBusName
         ]}
     *)
 end
@@ -118,8 +98,7 @@ end
 
 module Make_single(Proxy : Single_proxy)(Name : Name) : sig
   val interface : OBus_name.interface
-  val call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> 'a
-  val signal : ?broadcast:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> 'a OBus_signal.t
-  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> ('a, 'b) OBus_property.t
-  val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
+  val call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
+  val signal : ?broadcast:bool -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> 'a OBus_signal.t
+  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> ('a, _) OBus_type.cl_single -> ('a, 'b) OBus_property.t
 end

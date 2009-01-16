@@ -10,8 +10,7 @@
 (** Matching rules *)
 
 type t
-
-val tt : t OBus_type.ty_basic
+  with obus(basic)
 
 val make :
   ?typ:[ `signal | `error | `method_call | `method_return ] ->

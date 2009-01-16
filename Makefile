@@ -12,6 +12,7 @@ OF = ocamlfind
 SAMPLES = hello bus_functions eject notify monitor signals list_services \
 	  ping pong progress_server progress_client
 LIB = obus
+SYNTAX = pa_obus
 BINDINGS = hal notification
 TOOLS = obus_introspect obus_binder obus_dump
 TEST = test_serialization test_printing test_communication valid auth server errors logging
@@ -23,7 +24,7 @@ all:
 	  $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) $(BINDINGS:=.cmxs) \
 	  $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native) \
 	  $(SAMPLES:%=samples/%.byte) $(SAMPLES:%=samples/%.native) \
-	  obus.docdir/index.html META
+	  $(SYNTAX:=.cma) obus.docdir/index.html META
 
 .PHONY: dist
 dist:
@@ -104,8 +105,10 @@ test:
 
 .PHONY: test-syntax
 test-syntax:
-	$(OC) syntax/pa_obus.ml
-	camlp4o _build/syntax/pa_obus.cmo test/syntax_extension.ml
+	$(OC) $(SYNTAX:=.cma)
+	camlp4o `ocamlfind query -i-format type-conv.syntax` \
+	  `ocamlfind query -predicates syntax,preprocessor -a-format type-conv.syntax` \
+	  $(SYNTAX:%=_build/%.cma) test/syntax_extension.ml
 
 # +---------------+
 # | Documentation |
@@ -131,7 +134,7 @@ prefix:
 .PHONY: install
 install: prefix
 	$(OF) install obus _build/META \
-	 _build/syntax/pa_obus.cmo \
+	 $(SYNTAX:%=_build/%.cma) \
 	 $(LIB:%=%/*.mli) \
 	 $(LIB:%=_build/%/*.cmi) \
 	 $(LIB:%=_build/%.cma) \

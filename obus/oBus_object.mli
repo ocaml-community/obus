@@ -60,18 +60,18 @@ type member_desc
 
 class virtual interface : object
   method virtual obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->
-    ([< 'a OBus_type.cl_sequence ] as 'b) -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
+    ('a, 'b) OBus_type.cl_sequence -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
     (** Emit a signal *)
 
   method virtual obus_add_interface : OBus_name.interface -> member_desc list -> unit
     (** Attach dbus description to the object *)
 end
 
-val md_method : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> (unit -> 'a) -> member_desc
-val md_signal : OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> member_desc
-val md_property_r : OBus_name.member -> [< 'a OBus_type.cl_single ] -> (unit -> 'a Lwt.t) -> member_desc
-val md_property_w : OBus_name.member -> [< 'a OBus_type.cl_single ] -> ('a -> unit Lwt.t) -> member_desc
-val md_property_rw : OBus_name.member -> [< 'a OBus_type.cl_single ] -> (unit -> 'a Lwt.t) -> ('a -> unit Lwt.t) -> member_desc
+val md_method : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a -> member_desc
+val md_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> member_desc
+val md_property_r : OBus_name.member -> ('a, _) OBus_type.cl_single -> (unit -> 'a Lwt.t) -> member_desc
+val md_property_w : OBus_name.member -> ('a, _) OBus_type.cl_single -> ('a -> unit Lwt.t) -> member_desc
+val md_property_rw : OBus_name.member -> ('a, _) OBus_type.cl_single -> (unit -> 'a Lwt.t) -> ('a -> unit Lwt.t) -> member_desc
 
 (** {6 Objects} *)
 
@@ -92,7 +92,7 @@ class t : object
     (** Object properties *)
 
   method obus_emit_signal : 'a 'b. OBus_name.interface -> OBus_name.member ->
-    ([< 'a OBus_type.cl_sequence ] as 'b) -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
+    ('a, 'b) OBus_type.cl_sequence -> ?peer:OBus_peer.t -> 'a -> unit Lwt.t
     (** Emit a signal.
 
         If [peer] is specified it will be sent to this peer only,

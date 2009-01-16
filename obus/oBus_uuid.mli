@@ -15,9 +15,7 @@
     Note that they are not compatible with RFC4122. *)
 
 type t
-
-val tt : t OBus_type.ty_basic
-  (** Type combinator *)
+ with obus(basic)
 
 val generate : unit -> t
   (** Generate a new uuid *)

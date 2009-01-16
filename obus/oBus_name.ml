@@ -121,3 +121,51 @@ let validate_member str =
       fail 0 "invalid character"
 
 let is_unique name = length name > 0 && unsafe_get name 0 = ':'
+
+(* Split a name into blocks. Blocks are the longest sub-strings
+   matched by the regulare expression: "[A-Z]*[^A-Z.]*" *)
+let split name =
+
+  (* Recognize the first part of a block: "[A-Z]*" *)
+  let rec part1 i =
+    if i = String.length name then
+      i
+    else
+      match name.[i] with
+        | 'A' .. 'Z' ->
+            part1 (i + 1)
+        | _ ->
+            part2 i
+
+  (* Recognize the second part of a block: "[^A-Z.]*" *)
+  and part2 i =
+    if i = String.length name then
+      i
+    else
+      match name.[i] with
+        | 'A' .. 'Z' | '.' ->
+            i
+        | _ ->
+            part2 (i + 1)
+
+  in
+
+  let rec split i =
+    if i = String.length name then
+      []
+    else
+      let j = part1 i in
+      if j = i then
+        (* Skip empty blocks *)
+        split (i + 1)
+      else
+        String.sub name i (j - i) :: split j
+
+  in
+  split 0
+
+let ocaml_lid name = String.uncapitalize (String.concat "_" (List.map String.lowercase (split name)))
+let ocaml_uid name = String.capitalize (String.concat "_" (List.map String.lowercase (split name)))
+
+let haskell_lid name = String.uncapitalize (String.concat "" (split name))
+let haskell_uid name = String.capitalize (String.concat "" (split name))

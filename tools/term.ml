@@ -48,7 +48,7 @@ let implem_term_of_basic = function
 
 let rec implem_term_of_single = function
   | Tbasic t -> implem_term_of_basic t
-  | Tstruct tl -> term "structure" [implem_term_of_sequence tl]
+  | Tstructure tl -> term "structure" [implem_term_of_sequence tl]
   | Tarray t -> term "list"
       [match t with
          | Tsingle t ->  implem_term_of_single t
@@ -73,7 +73,7 @@ let interf_term_of_basic = function
 
 let rec interf_term_of_single = function
   | Tbasic t -> interf_term_of_basic t
-  | Tstruct tl -> interf_term_of_sequence tl
+  | Tstructure tl -> interf_term_of_sequence tl
   | Tarray t -> term "list" [interf_term_of_element t]
   | Tvariant -> term "OBus_value.single" []
 

@@ -42,7 +42,7 @@ let pad8 i = (8 - i) land 7
 let pad8_p = function
   | Tdict_entry _ -> true
   | Tsingle t -> match t with
-      | Tstruct _
+      | Tstructure _
       | Tbasic Tint64
       | Tbasic Tuint64
       | Tbasic Tdouble -> true
@@ -403,7 +403,7 @@ struct
                put_uint32 (Int32.of_int len);
                put_initial_padding;
                put_array)
-      | Struct x ->
+      | Structure x ->
           (* Structure are serialized as follow:
 
              (1) alignement to an 8-block
@@ -949,7 +949,7 @@ struct
     let rec rsingle = function
       | Tbasic t ->
           let reader = rbasic t in
-          (fun i size -> reader i size >>= fun (i, x) -> return (i, vbasic x))
+          (fun i size -> reader i size >>= fun (i, x) -> return (i, basic x))
       | Tarray t ->
           let reader = relement t in
           (fun i size -> perform
@@ -963,8 +963,8 @@ struct
              else perform
                get_padding;
                l <-- rarray_elements i limit reader;
-               return (limit, varray t l))
-      | Tstruct tl ->
+               return (limit, array t l))
+      | Tstructure tl ->
           let reader = rsequence tl in
           (fun i size ->
              let i, get_padding = rpad8 i in
@@ -973,12 +973,12 @@ struct
              else perform
                get_padding;
                (i, l) <-- reader i size;
-               return (i, vstruct l))
+               return (i, structure l))
       | Tvariant ->
           (fun i size -> perform
              (i, t) <-- rtype i size;
              (i, v) <-- rsingle t i size;
-             return (i, vvariant v))
+             return (i, variant v))
 
     and relement = function
       | Tdict_entry(tk, tv) ->

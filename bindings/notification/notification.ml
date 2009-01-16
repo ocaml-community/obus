@@ -8,7 +8,6 @@
  *)
 
 open Lwt
-open OBus_type
 open OBus_value
 
 let server_name = "org.freedesktop.Notifications"
@@ -16,14 +15,14 @@ let server_path = ["org"; "freedesktop"; "Notifications"]
 
 include OBus_interface.Make(struct let name = "org.freedesktop.Notifications" end)
 
-OBUS_record server_info = {
+type server_info = {
   server_name : string;
   server_vendor : string;
   server_version : string;
   server_spec_version : string;
-}
+} with obus
 
-OBUS_struct image = {
+type image = {
   img_width : int;
   img_height : int;
   img_rowstride : int;
@@ -31,32 +30,29 @@ OBUS_struct image = {
   img_bits_per_sample : int;
   img_channels : int;
   img_data : byte_array;
-}
+} with obus
 
-OBUS_flag urgency : uint8 =
-  [ 0 -> `low
-  | 1 -> `normal
-  | 2 -> `critical ]
+let obus_image = obus_structure obus_image
 
-OBUS_flag closed_reason : uint =
-    [ 1 -> `expired
-    | 2 -> `closed_by_user
-    | 3 -> `closed_explicitly
-    | 4 -> `undefined ]
+type urgency = [ `low | `normal | `critical ]
 
-OBUS_type notification_server_id = uint32
-    (* An notification id as returned by the server *)
+let obus_urgency = OBus_type.map obus_uint8 [`low, 0; `normal, 1; `critical, 2]
 
-OBUS_type notification_id = OBus_peer.t * notification_server_id
-    (* We consider that an id is the pair of the id given by the
-       daemon plus the peer of the daemon. This is to avoid the
-       following problem:
+type notification_server_id = uint32
+ with obus
+     (* An notification id as returned by the server *)
 
-       1 - the notification daemon start
-       2 - we open a notification -> id = 1
-       3 - a new notification daemon starts and replaces the first one
-       4 - we open a notification -> id = 1 (ARGL!!)
-    *)
+type notification_id = OBus_peer.t * notification_server_id
+ with obus
+     (* We consider that an id is the pair of the id given by the
+        daemon plus the peer of the daemon. This is to avoid the
+        following problem:
+
+        1 - the notification daemon start
+        2 - we open a notification -> id = 1
+        3 - a new notification daemon starts and replaces the first one
+        4 - we open a notification -> id = 1 (ARGL!!)
+     *)
 
 type notification = {
   (* All information about an opened notification *)
@@ -100,17 +96,17 @@ type hint =
   | Hint_image of image
   | Hint_variant of string * single
 
-let thint = wrap_element (tdict_entry tstring tvariant)
+let obus_hint = OBus_type.wrap <:obus_type< (string, variant) dict_entry >>
   (fun (name, value) ->
      match name with
-       | "image_data" -> begin match opt_cast_single timage value with
+       | "image_data" -> begin match OBus_type.opt_cast_single obus_image value with
            | None -> Hint_variant(name, value)
            | Some img -> Hint_image img
          end
        | _ -> Hint_variant(name, value))
   (function
-     | Hint_image img -> ("image_data", make_single timage img)
-     | Hint_variant(name, value) -> (name, vvariant value))
+     | Hint_image img -> ("image_data", OBus_type.make_single obus_image img)
+     | Hint_variant(name, value) -> (name, variant value))
 
 let app_name = ref (Filename.basename Sys.argv.(0))
 let desktop_entry = ref None
@@ -234,16 +230,16 @@ let notify ?(app_name= !app_name) ?desktop_entry
     | Some x -> Some (f x)
     | None -> None in
   let mkvariant v name f = mkhint v (fun x -> Hint_variant(name, f x)) in
-  let mkstring v name = mkvariant v name (make_single tstring) in
+  let mkstring v name = mkvariant v name (fun x -> basic(String x)) in
   let hints = filter_map (fun x -> x)
     [mkstring desktop_entry "desktop_entry";
      mkhint image (fun img -> Hint_image img);
-     mkvariant urgency "urgency" (make_single turgency);
+     mkvariant urgency "urgency" (OBus_type.make_single obus_urgency);
      mkstring category "category";
      mkstring sound_file "sound-file";
-     mkvariant suppress_sound "suppress-sound" (make_single tboolean);
-     mkvariant pos "x" (fun (x, y) -> make_single tint x);
-     mkvariant pos "y" (fun (x, y) -> make_single tint y)]
+     mkvariant suppress_sound "suppress-sound" (fun x -> basic(Boolean x));
+     mkvariant pos "x" (fun (x, y) -> basic(Int32(Int32.of_int x)));
+     mkvariant pos "y" (fun (x, y) -> basic(Int32(Int32.of_int y)))]
     @ List.map (fun (name, value) -> Hint_variant(name, value)) hints in
 
   (*** Handling of actions ***)

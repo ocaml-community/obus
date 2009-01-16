@@ -25,7 +25,7 @@ module type Types = sig
     | Tobject_path
   type tsingle =
     | Tbasic of tbasic
-    | Tstruct of tsingle list
+    | Tstructure of tsingle list
     | Tarray of telement
     | Tvariant
   and telement =
@@ -86,7 +86,7 @@ end = struct
     | '(' ->
         (perform
            t <-- get_char >>= parse_struct;
-           return (Tstruct t))
+           return (Tstructure t))
     | ')' ->
         failwith "')' without '('"
     | 'v' ->
@@ -147,7 +147,7 @@ end = struct
         | Tdict_entry(_, t) -> single_size_aux (acc + 4) t
         | Tsingle t -> single_size_aux (acc + 1) t
       end
-    | Tstruct tl -> List.fold_left single_size_aux (acc + 2) tl
+    | Tstructure tl -> List.fold_left single_size_aux (acc + 2) tl
     | _ -> acc + 1
 
   let single_size = single_size_aux 0
@@ -174,7 +174,7 @@ end = struct
     | Tarray t ->
         let sz, wr = write_element t in
         (sz + 1, perform put_char 'a'; wr)
-    | Tstruct ts ->
+    | Tstructure ts ->
         let sz, wr = write_sequence ts in
         (sz + 2, perform put_char '('; wr; put_char ')')
     | Tvariant ->

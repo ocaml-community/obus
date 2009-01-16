@@ -27,7 +27,7 @@ type tbasic =
 
 type tsingle =
   | Tbasic of tbasic
-  | Tstruct of tsingle list
+  | Tstructure of tsingle list
   | Tarray of telement
   | Tvariant
 
@@ -74,7 +74,7 @@ type single =
     private
   | Basic of basic
   | Array of telement * element list
-  | Struct of single list
+  | Structure of single list
   | Variant of single
 
 and element =
@@ -85,28 +85,28 @@ type sequence = single list
 
 (** {6 Constructors} *)
 
-val vbyte : char -> basic
-val vboolean : bool -> basic
-val vint16 : int -> basic
-val vint32 : int32 -> basic
-val vint64 : int64 -> basic
-val vuint16 : int -> basic
-val vuint32 : int32 -> basic
-val vuint64 : int64 -> basic
-val vdouble : float -> basic
-val vstring : string -> basic
-val vsignature : signature -> basic
-val vobject_path : OBus_path.t -> basic
+val byte : char -> basic
+val boolean : bool -> basic
+val int16 : int -> basic
+val int32 : int32 -> basic
+val int64 : int64 -> basic
+val uint16 : int -> basic
+val uint32 : int32 -> basic
+val uint64 : int64 -> basic
+val double : float -> basic
+val string : string -> basic
+val signature : signature -> basic
+val object_path : OBus_path.t -> basic
 
-val vbasic : basic -> single
-val varray : telement -> element list -> single
-  (** [varray] raise an [Invalid_argument] if one of the value does
+val basic : basic -> single
+val array : telement -> element list -> single
+  (** [array] raise an [Invalid_argument] if one of the value does
       not have the expected type *)
-val vstruct : single list -> single
-val vvariant : single -> single
+val structure : single list -> single
+val variant : single -> single
 
-val vdict_entry : basic -> single -> element
-val vsingle : single -> element
+val dict_entry : basic -> single -> element
+val single : single -> element
 
 (** {6 Utils} *)
 

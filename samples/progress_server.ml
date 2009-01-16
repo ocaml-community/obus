@@ -12,25 +12,36 @@
 open Printf
 open Lwt
 
-OBUS_flag closed_reason : uint =
-    | 0 -> Cancel
-    | 1 -> OK
-    | 2 -> Explicitly_closed
-    | 3 -> Killed
+type closed_reason =
+  | Cancel
+  | OK
+  | Explicitly_closed
+  | Killed
 
-class virtual if_manager = OBUS_interface "org.ocamlcore.forge.obus.ProgressBar.Manager"
+let obus_closed_reason = OBus_type.map obus_uint
+  [(Cancel, 0);
+   (OK, 1);
+   (Explicitly_closed, 2);
+   (Killed, 3)]
+
+let prefix = "org.ocamlcore.forge.obus.ProgressBar"
+
+class virtual if_manager = OBUS_interface (prefix ^ ".Manager")
   OBUS_method ServerVersion : string
   OBUS_method CreateProgressBar : OBus_peer.t -> int -> path
 end
 
-class virtual if_bar = OBUS_interface "org.ocamlcore.forge.obus.ProgressBar.Bar"
+class virtual if_bar = OBUS_interface (prefix ^ ".Bar")
   OBUS_property_rw Position : int
   OBUS_method Close : unit
   OBUS_signal Closed : closed_reason
 end
 
-OBUS_global_exception org.ocamlcore.forge.obus.ProgressBar.InvalidValue
-OBUS_global_exception org.ocamlcore.forge.obus.ProgressBar.Closed
+exception Invalid_value of string
+ with obus(prefix ^ ".InvalidValue")
+
+exception Closed of string
+ with obus(prefix ^ ".Closed")
 
 class bar peer initial_value =
   let fdr, fdw = Lwt_unix.pipe_out () in

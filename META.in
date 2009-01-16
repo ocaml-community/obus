@@ -13,8 +13,8 @@ package "syntax" (
   version = "[distrubuted with OBus]"
   description = "Syntactic sugars for OBus"
   requires = "camlp4"
-  archive(syntax,preprocessor) = "pa_obus.cmo"
-  archive(syntax,toploop) = "pa_obus.cmo"
+  archive(syntax,preprocessor) = "pa_obus.cma"
+  archive(syntax,toploop) = "pa_obus.cma"
 )
 
 package "hal" (

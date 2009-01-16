@@ -26,7 +26,7 @@ type filter_id = filter MSet.node
 
 exception Context of t * OBus_message.t
 
-let tt = OBus_type.wrap_sequence_ctx tunit
+let obus_t = OBus_type.wrap_with_context obus_unit
   (fun context () -> match context with
      | Context(connection, msg) -> connection
      | _ -> raise OBus_type.Cast_failure)
@@ -199,7 +199,7 @@ let send_error connection { sender = sender; serial = serial } name msg =
                             flags = { no_reply_expected = true; no_auto_start = true };
                             serial = 0l;
                             typ = Error(serial, name);
-                            body = [vbasic(String msg)] }
+                            body = [basic(String msg)] }
 
 let send_exn connection method_call exn =
   match OBus_error.unmake exn with

@@ -68,14 +68,6 @@ val get_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t Lwt.t
 val acquired_names : t -> OBus_name.bus list
   (** Returns the list of names we currently own *)
 
-type request_name_flag =
-    [ `allow_replacement
-        (** Allow other application to steal you the name *)
-    | `replace_existing
-        (** Replace any existing owner of the name *)
-    | `do_not_queue
-        (** Do not queue if not available *) ]
-
 type request_name_result =
     [ `primary_owner
         (** You are now the primary owner of the connection *)
@@ -86,15 +78,28 @@ type request_name_result =
             what to do in this case *)
     | `already_owner
         (** You already have the name *) ]
+ with obus(basic)
 
-val request_name : t -> ?flags:request_name_flag list -> OBus_name.bus -> request_name_result Lwt.t
+val request_name : t ->
+  ?allow_replacement:bool ->
+  ?replace_existing:bool ->
+  ?do_not_queue:bool ->
+  OBus_name.bus -> request_name_result Lwt.t
   (** Request a name to the bus. This is the way to acquire a
-      well-know name. *)
+      well-know name.
+
+      All optionnal parameters default to [false], their meaning are:
+
+      - [allow_replacement]: allow other application to steal you the name
+      - [replace_existing]: replace any existing owner of the name
+      - [do_not_queue]: do not queue if not available
+  *)
 
 type release_name_result =
     [ `released
     | `non_existent
     | `not_owner ]
+ with obus(basic)
 
 val release_name : t -> OBus_name.bus -> release_name_result Lwt.t
 
@@ -107,6 +112,7 @@ exception Service_unknown of string
 type start_service_by_name_result =
     [ `success
     | `already_running ]
+ with obus(basic)
 
 val start_service_by_name : t -> OBus_name.bus -> start_service_by_name_result Lwt.t
   (** Start a service on the given bus by its name *)

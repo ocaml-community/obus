@@ -44,7 +44,7 @@ let main =
      in
 
      let _ = printf "trying to acquire the name %S: %!" name in
-     result <-- OBus_bus.request_name bus ~flags:[ `replace_existing; `do_not_queue ] name;
+     result <-- OBus_bus.request_name bus ~replace_existing:true ~do_not_queue:true name;
      let _ = print_endline
        (match result with
           | `primary_owner -> "success"

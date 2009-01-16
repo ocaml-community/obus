@@ -12,10 +12,9 @@ open Lwt
 module type S = sig
   type t
   val interface : OBus_name.interface
-  val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.ty_function -> t -> 'a
-  val signal : ?broadcast:bool -> OBus_name.member -> [< 'a OBus_type.cl_sequence ] -> t -> 'a OBus_signal.t
-  val property : string -> ([< OBus_property.access ] as 'b) -> [< 'a OBus_type.cl_single ] -> t -> ('a, 'b) OBus_property.t
-  val register_exn : OBus_error.name -> (OBus_error.message -> exn) -> (exn -> OBus_error.message option) -> unit
+  val call : string -> ('a, 'b Lwt.t, 'b) OBus_type.func -> t -> 'a
+  val signal : ?broadcast:bool -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> t -> 'a OBus_signal.t
+  val property : string -> ([< OBus_property.access ] as 'b) -> ('a, _) OBus_type.cl_single -> t -> ('a, 'b) OBus_property.t
 end
 
 module type Name = sig
@@ -38,7 +37,6 @@ struct
   let call member typ proxy = OBus_proxy.call ~interface ~member proxy typ
   let signal ?broadcast member typ proxy = OBus_signal.make ?broadcast ~interface ~member typ (fun _ -> return proxy)
   let property member access typ proxy = OBus_property.make ~interface ~member ~access typ (fun _ -> return proxy)
-  let register_exn error_name = OBus_error.register (interface ^ "." ^ error_name)
 end
 
 module Make_custom(Proxy : Custom_proxy)(Name : Name) =
@@ -52,7 +50,6 @@ struct
          OBus_proxy.call' proxy ~interface ~member body (OBus_type.func_reply typ))
   let signal ?broadcast member typ obj = OBus_signal.make ?broadcast ~interface ~member typ (fun _ -> Proxy.make_proxy obj)
   let property member access typ obj = OBus_property.make ~interface ~member ~access typ (fun _ -> Proxy.make_proxy obj)
-  let register_exn error_name = OBus_error.register (interface ^ "." ^ error_name)
 end
 
 module Make_single(Proxy : Single_proxy)(Name : Name) =
@@ -65,5 +62,4 @@ struct
          OBus_proxy.call' proxy ~interface ~member body (OBus_type.func_reply typ))
   let signal ?broadcast member typ = OBus_signal.make ?broadcast ~interface ~member typ (fun _ -> Lazy.force Proxy.proxy)
   let property member access typ = OBus_property.make ~interface ~member ~access typ (fun _ -> Lazy.force Proxy.proxy)
-  let register_exn error_name = OBus_error.register (interface ^ "." ^ error_name)
 end

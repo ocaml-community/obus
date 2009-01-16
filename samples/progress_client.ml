@@ -9,11 +9,17 @@
 
 open Lwt
 
-OBUS_flag closed_reason : uint =
-    | 0 -> Cancel
-    | 1 -> OK
-    | 2 -> Explicitly_closed
-    | 3 -> Killed
+type closed_reason =
+  | Cancel
+  | OK
+  | Explicitly_closed
+  | Killed
+
+let obus_closed_reason = OBus_type.map obus_uint
+  [(Cancel, 0);
+   (OK, 1);
+   (Explicitly_closed, 2);
+   (Killed, 3)]
 
 let service = "org.ocamlcore.forge.obus.ProgressBar"
 

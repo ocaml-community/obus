@@ -10,7 +10,8 @@
 open Lwt
 open OBus_internals
 
-OBUS_type match_rule = string
+type match_rule = string
+  with obus
 
 type 'a t = {
   broadcast : bool;

@@ -71,6 +71,3 @@ let validate s =
 let assert_validate validator str = match validator str with
   | Some error -> raise (Invalid_string error)
   | None -> ()
-let lwt_assert_validate validator str = match validator str with
-  | Some error -> Lwt.fail (Invalid_string error)
-  | None -> Lwt.return ()

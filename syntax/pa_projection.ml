@@ -18,6 +18,7 @@ let rec generate f = function
                   (List.fold_left (fun acc tp -> let _loc = Ast.loc_of_ctyp tp in <:ctyp< $tp$ $acc$ >>) <:ctyp< $lid:type_name$ >> tps)))
             (List.map
                (function
+                  | <:ctyp@loc< $lid:id$ : mutable $t$ >> -> (loc, id, t)
                   | <:ctyp@loc< $lid:id$ : $t$ >> -> (loc, id, t)
                   | _ -> assert false)
                (Ast.list_of_ctyp fields []))

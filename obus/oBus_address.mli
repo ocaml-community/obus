@@ -43,7 +43,7 @@ type desc =
 
 type t = desc * guid option
 
-val tlist : t list OBus_type.ty_basic
+val obus_list : t list OBus_type.basic
   (** Type combinator *)
 
 exception Parse_failure of string

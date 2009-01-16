@@ -20,7 +20,7 @@ type ('a, 'access) t
   (** A property of type ['a] with allowed operations ['access]. *)
 
 val make :  interface:OBus_name.interface -> member:OBus_name.member ->
-  access:([< access ] as 'access) -> [< 'a OBus_type.cl_single ] -> (unit -> OBus_proxy.t Lwt.t) -> ('a, 'access) t
+  access:([< access ] as 'access) -> ('a, _) OBus_type.cl_single -> (unit -> OBus_proxy.t Lwt.t) -> ('a, 'access) t
   (** Create a property *)
 
 val dmake :  interface:OBus_name.interface -> member:OBus_name.member ->

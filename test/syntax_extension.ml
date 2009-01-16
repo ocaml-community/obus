@@ -1,57 +1,44 @@
-let x = <:obus_func_type< string -> uint -> string -> string -> string -> string list -> (string, variant) assoc -> int -> uint >>
 
-OBUS_type t = int
+let x = <:obus_func< string -> uint -> string -> string -> string -> string list -> (string, variant) assoc -> int -> uint >>
 
-OBUS_type ('a, 'b, 'c) t = [int * 'a list] * ('c, 'b) balbla
+type t = int with obus
 
-OBUS_bitwise request_name_flag : uint =
-  [ 1 -> `allow_replacement
-  | 2 -> `replace_existing
-  | 4 -> `do_not_queue ];;
+type ('a, 'b, 'c) t = (int * 'a list) structure * ('c, 'b) balbla
+  with obus
 
-OBUS_flag request_name_result : uint =
-  [ 1 -> `primary_owner
-  | 2 -> `in_queue
-  | 3 -> `exists
-  | 4 -> `already_owner ]
-
-OBUS_exception Error.NameHasNoOwner
-OBUS_global_exception org.freedesktop.DBus.Error.NameHasNoOwner
+exception Fatal_error of string
+  with obus(prefix ^ ".Error.FatalError")
 
 let big_tuple =
   <:obus_type< int * string * uint * int32 * byte * char * int list * int * int * string * variant * signature >>
-;;
 
-let other_sugars =
-  <:obus_type< [ int * string * int ] * {int, string} set >>
-;;
+let super_big_tuple =
+  <:obus_type< x0 * x1 * x2 * x3 * x4 * x5 * x6 * x7 * x8 * x9 * x10 * x11 * x12 * x13 * x14 * x15 * x16 * x17 * x18 * x19 * x20 * x21 * x22 * x23 * x24 * x25 * x26 * x27 * x28 * x29 * x30 * x31 * x32 * x33 * x34 * x35 * x36 * x37 * x38 * x39 * x40 * x41 * x42 >>
 
-OBUS_record toto = {
-  a: A.B.string;
-  b: int list;
-  c: (int, string, char) machin;
-  d: [int * byte_array * {int, string} set] * int;
-}
+type toto = {
+  a : A.B.string;
+  b : int list;
+  c : (int, string, char) machin;
+  d : (int * byte_array * (int, string) dict_entry set) structure * int;
+} with obus
 
-OBUS_struct ('a, 'b) coord = { x: 'a; y: 'b }
-
-OBUS_struct 'a x = { x: 'a }
 
 class virtual dbus = OBUS_interface "org.freedesktop.DBus"
-  OBUS_method ListNames : string list;
-  OBUS_method Truc : [{string, variant} list * int] -> string;
-  OBUS_signal NameOwnerChanged : string * string * string;
-  OBUS_val_rw mutable x : int;
+  OBUS_method ListNames : string list
+  OBUS_method Truc : string list * int -> string
+  OBUS_signal NameOwnerChanged : string * string * string
+  OBUS_val_rw mutable x : int
   OBUS_property_r y : string
 end
 
 OBUS_method Plop : int -> string
 OBUS_signal HaHaHa : string
+OBUS_property_r Foo : int list
 
-OBUS_name_translator upper
+OBUS_name_translator "ocaml"
 
 OBUS_method SetCPUFreqGovernor : string
 
-OBUS_name_translator lower
+OBUS_name_translator "haskell"
 
 OBUS_method SetCPUFreqGovernor : string

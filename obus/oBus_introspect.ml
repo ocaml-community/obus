@@ -158,7 +158,7 @@ let to_xml (ifaces, nodes) =
                               @ pannots annots)) ifaces
           @ List.map (fun n -> Element("node", [("name", n)], [])) nodes)
 
-let tdocument = OBus_type.wrap_basic OBus_type.Pervasives.tstring
+let obus_document = OBus_type.wrap OBus_type.Pervasives.obus_string
   (fun x ->
      let p = XmlParser.make () in
      XmlParser.prove p false;
