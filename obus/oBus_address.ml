@@ -28,6 +28,7 @@ type desc =
   | Tcp of tcp_params
   | Autolaunch
   | Unknown of name * (key * value) list
+ with constructor
 
 type t = desc * guid option
 

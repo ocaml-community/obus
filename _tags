@@ -5,8 +5,8 @@
 
 # Use camlp4 for all files
 <**/*.ml{,i}>: syntax_camlp4o, pkg_camlp4
-<syntax/pa_{obus,projection}.*>: pkg_type-conv
-<{obus,tools,test,samples,bindings}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection
+<syntax/pa_{obus,projection,constructor}.*>: pkg_type-conv
+<{obus,tools,test,samples,bindings}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
 
 # Use pa_obus for all files except pa_obus itself
 <{tools,test,samples,bindings/*}/*.ml{,i}>: pkg_monad, pa_obus

@@ -26,6 +26,7 @@ type tbasic =
   | Tstring
   | Tsignature
   | Tobject_path
+ with constructor
 
 type tsingle =
   | Tbasic of tbasic
@@ -36,6 +37,7 @@ type tsingle =
 and telement =
   | Tdict_entry of tbasic * tsingle
   | Tsingle of tsingle
+ with constructor
 
 type tsequence = tsingle list
 
@@ -363,6 +365,7 @@ type basic =
   | String of string
   | Signature of signature
   | Object_path of OBus_path.t
+ with constructor
 
 type single =
   | Basic of basic
@@ -373,6 +376,7 @@ type single =
 and element =
   | Dict_entry of basic * single
   | Single of single
+ with constructor
 
 type sequence = single list
 
@@ -406,29 +410,11 @@ let type_of_element = function
 
 let type_of_sequence = List.map type_of_single
 
-let byte x = Byte x
-let boolean x = Boolean x
-let int16 x = Int16 x
-let int32 x = Int32 x
-let int64 x = Int64 x
-let uint16 x = Uint16 x
-let uint32 x = Uint32 x
-let uint64 x = Uint64 x
-let double x = Double x
-let string x = String x
-let signature x = Signature x
-let object_path x = Object_path x
-let basic x = Basic x
 let array t l =
   List.iter (fun x ->
                if type_of_element x <> t
                then failwith "OBus_value.varray: unexpected type") l;
   Array(t, l)
-let structure l = Structure l
-let variant v = Variant v
-
-let dict_entry k v = Dict_entry(k, v)
-let single x = Single x
 
 (* +-----------------------+
    | Value pretty-printing |

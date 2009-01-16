@@ -40,6 +40,7 @@ type desc =
   | Autolaunch
   | Unknown of name * (key * value) list
       (** An address which is not known by obus *)
+ with constructor
 
 type t = desc * guid option
 

@@ -12,7 +12,8 @@ open Camlp4.PreCast
 let rec generate f = function
   | Ast.TyDcl(_loc, type_name, tps, rhs, _) ->
       begin match rhs with
-        | <:ctyp< { $fields$ } >> ->
+        | <:ctyp< { $fields$ } >>
+        | <:ctyp< private { $fields$ } >> ->
           List.map
             (f (Pa_type_conv.Gen.drop_variance_annotations _loc
                   (List.fold_left (fun acc tp -> let _loc = Ast.loc_of_ctyp tp in <:ctyp< $tp$ $acc$ >>) <:ctyp< $lid:type_name$ >> tps)))

@@ -24,6 +24,7 @@ type tbasic =
   | Tstring
   | Tsignature
   | Tobject_path
+ with constructor
 
 type tsingle =
   | Tbasic of tbasic
@@ -34,6 +35,7 @@ type tsingle =
 and telement =
   | Tdict_entry of tbasic * tsingle
   | Tsingle of tsingle
+ with constructor
 
 type tsequence = tsingle list
 
@@ -69,44 +71,23 @@ type basic =
   | String of string
   | Signature of signature
   | Object_path of OBus_path.t
+ with constructor
 
 type single =
     private
   | Basic of basic
   | Array of telement * element list
+      (** [array] raise an [Invalid_argument] if one of the value does
+          not have the expected type *)
   | Structure of single list
   | Variant of single
 
 and element =
   | Dict_entry of basic * single
   | Single of single
+ with constructor
 
 type sequence = single list
-
-(** {6 Constructors} *)
-
-val byte : char -> basic
-val boolean : bool -> basic
-val int16 : int -> basic
-val int32 : int32 -> basic
-val int64 : int64 -> basic
-val uint16 : int -> basic
-val uint32 : int32 -> basic
-val uint64 : int64 -> basic
-val double : float -> basic
-val string : string -> basic
-val signature : signature -> basic
-val object_path : OBus_path.t -> basic
-
-val basic : basic -> single
-val array : telement -> element list -> single
-  (** [array] raise an [Invalid_argument] if one of the value does
-      not have the expected type *)
-val structure : single list -> single
-val variant : single -> single
-
-val dict_entry : basic -> single -> element
-val single : single -> element
 
 (** {6 Utils} *)
 
