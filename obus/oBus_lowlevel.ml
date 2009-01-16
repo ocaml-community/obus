@@ -254,7 +254,7 @@ struct
 
   (***** Message writing *****)
 
-  module T = Types_rw.Make_writer(OBus_value)(Writer)
+  module Signature_writer = OBus_value.Make_signature_writer(Writer)
 
   type offset = int
 
@@ -302,7 +302,7 @@ struct
       | Some reason ->
           failwith (invalid_signature s reason)
       | None ->
-          let len, put_signature = T.write s in
+          let len, put_signature = Signature_writer.write_signature s in
           if len > 255 then
             failwith (signature_too_long s len)
           else
@@ -513,7 +513,7 @@ struct
            put_padding;
            put_uint8 code;
            put_uint8 1;
-           put_char (T.char_of_basic typ);
+           put_char (OBus_value.basic_type_code typ);
            put_null;
            writer) in
 
@@ -793,7 +793,7 @@ struct
 
   (***** Message reading *****)
 
-  module T = Types_rw.Make_reader(OBus_value)
+  module Signature_reader = OBus_value.Make_signature_reader
     (struct
        type 'a t = int ref -> 'a Reader.t
        let bind m f remaining = Reader.bind (m remaining) (fun x -> f x remaining)
@@ -876,7 +876,7 @@ struct
          if len < 0 || i > size then
            out_of_bounds ()
          else
-           T.read (ref len) >>= fun s ->
+           Signature_reader.read_signature (ref len) >>= fun s ->
              match OBus_value.validate_signature s with
                | Some reason ->
                    failwith (invalid_signature s reason)

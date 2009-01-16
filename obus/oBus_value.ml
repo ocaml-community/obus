@@ -9,35 +9,41 @@
 
 open Format
 
-module T =
-struct
-  type tbasic =
-    | Tbyte
-    | Tboolean
-    | Tint16
-    | Tint32
-    | Tint64
-    | Tuint16
-    | Tuint32
-    | Tuint64
-    | Tdouble
-    | Tstring
-    | Tsignature
-    | Tobject_path
-  type tsingle =
-    | Tbasic of tbasic
-    | Tstructure of tsingle list
-    | Tarray of telement
-    | Tvariant
-  and telement =
-    | Tdict_entry of tbasic * tsingle
-    | Tsingle of tsingle
-  type tsequence = tsingle list
-end
+(* +-----------------------+
+   | DBus type definitions |
+   +-----------------------+ *)
 
-include T
+type tbasic =
+  | Tbyte
+  | Tboolean
+  | Tint16
+  | Tint32
+  | Tint64
+  | Tuint16
+  | Tuint32
+  | Tuint64
+  | Tdouble
+  | Tstring
+  | Tsignature
+  | Tobject_path
+
+type tsingle =
+  | Tbasic of tbasic
+  | Tstructure of tsingle list
+  | Tarray of telement
+  | Tvariant
+
+and telement =
+  | Tdict_entry of tbasic * tsingle
+  | Tsingle of tsingle
+
+type tsequence = tsingle list
 
 type signature = tsequence
+
+(* +----------------------------+
+   | DBus types pretty-printing |
+   +----------------------------+ *)
 
 let string_of printer x =
   let buf = Buffer.create 42 in
@@ -91,11 +97,9 @@ and print_telement pp = function
 
 and print_tsequence pp = print_list print_tsingle pp
 
-type depth = {
-  d_struct : int;
-  d_array : int;
-  d_dict_entry : int;
-}
+(* +----------------------+
+   | Signature validation |
+   +----------------------+ *)
 
 let validate_signature =
   let rec aux_single depth_struct depth_array depth_dict_entry = function
@@ -135,6 +139,164 @@ let validate_signature =
   in
   aux_sequence 0 0 0
 
+(* +-------------------+
+   | Signature reading |
+   +-------------------+ *)
+
+module type Char_reader = sig
+  type 'a t
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val return : 'a -> 'a t
+  val failwith : string -> 'a t
+
+  val get_char : char t
+  val eof : bool t
+end
+
+module Make_signature_reader(Reader : Char_reader) =
+struct
+  open Reader
+
+  let ( >>= ) = bind
+
+  let parse_basic msg = function
+    | 'y' -> return Tbyte
+    | 'b' -> return Tboolean
+    | 'n' -> return Tint16
+    | 'q' -> return Tuint16
+    | 'i' -> return Tint32
+    | 'u' -> return Tuint32
+    | 'x' -> return Tint64
+    | 't' -> return Tuint64
+    | 'd' -> return Tdouble
+    | 's' -> return Tstring
+    | 'o' -> return Tobject_path
+    | 'g' -> return Tsignature
+    | chr -> Printf.ksprintf failwith msg chr
+
+  let rec parse_single = function
+    | 'a' ->
+        (perform
+           t <-- get_char >>= parse_element;
+           return (Tarray t))
+    | '(' ->
+        (perform
+           t <-- get_char >>= parse_struct;
+           return (Tstructure t))
+    | ')' ->
+        failwith "')' without '('"
+    | 'v' ->
+        return Tvariant
+    | ch ->
+        (perform
+           t <-- parse_basic "invalid type code: %c" ch;
+           return (Tbasic t))
+
+  and parse_struct = function
+    | ')' ->
+        return []
+    | ch ->
+        (perform
+           t <-- parse_single ch;
+           l <-- get_char >>= parse_struct;
+           return (t :: l))
+
+  and parse_element = function
+    | '{' ->
+        (perform
+           tk <-- get_char >>= parse_basic "invalid basic type code: %c";
+           tv <-- get_char >>= parse_single;
+           get_char >>= function
+             | '}' -> return (Tdict_entry(tk, tv))
+             | _ -> failwith "'}' missing")
+    | ch ->
+        (perform
+           t <-- parse_single ch;
+           return (Tsingle t))
+
+  let rec parse_sequence = function
+    | true ->
+        return []
+    | false ->
+        (perform
+           t <-- get_char >>= parse_single;
+           l <-- eof >>= parse_sequence;
+           return (t :: l))
+
+  let read_signature = eof >>= parse_sequence
+end
+
+(* +-------------------+
+   | Signature writing |
+   +-------------------+ *)
+
+module type Char_writer = sig
+  type 'a t
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val return : 'a -> 'a t
+
+  val put_char : char -> unit t
+end
+
+let basic_type_code = function
+  | Tbyte -> 'y'
+  | Tboolean -> 'b'
+  | Tint16 -> 'n'
+  | Tuint16 -> 'q'
+  | Tint32 -> 'i'
+  | Tuint32 -> 'u'
+  | Tint64 -> 'x'
+  | Tuint64 -> 't'
+  | Tdouble -> 'd'
+  | Tstring -> 's'
+  | Tobject_path -> 'o'
+  | Tsignature -> 'g'
+
+module Make_signature_writer(Writer : Char_writer) =
+struct
+  open Writer
+
+  let ( >>= ) = bind
+
+  let rec write_single = function
+    | Tbasic t ->
+        (1, put_char (basic_type_code t))
+    | Tarray t ->
+        let sz, wr = write_element t in
+        (sz + 1, perform put_char 'a'; wr)
+    | Tstructure ts ->
+        let sz, wr = write_sequence ts in
+        (sz + 2, perform put_char '('; wr; put_char ')')
+    | Tvariant ->
+        (1, put_char 'v')
+
+  and write_element = function
+    | Tdict_entry(tk, tv) ->
+        let sz, wr = write_single tv in
+        (sz + 3,
+         perform
+           put_char '{';
+           put_char (basic_type_code tk);
+           wr;
+           put_char '}')
+    | Tsingle t ->
+        write_single t
+
+  and write_sequence = function
+    | [] ->
+        0, return ()
+    | x :: l ->
+        let shd, whd = write_single x
+        and stl, wtl = write_sequence l in
+        (shd + stl, perform whd; wtl)
+
+  let write_signature = write_sequence
+end
+
+(* +----------------------+
+   | signature <-> string |
+   +----------------------+ *)
+
 type ptr = { buffer : string; mutable offset : int }
 
 module Ptr =
@@ -144,7 +306,7 @@ struct
   let return x _ = x
 end
 
-module TR = Types_rw.Make_reader(T)
+module Signature_reader = Make_signature_reader
   (struct
      include Ptr
      let failwith msg _ = Pervasives.failwith msg
@@ -159,7 +321,7 @@ module TR = Types_rw.Make_reader(T)
      let eof ptr = ptr.offset = String.length ptr.buffer
    end)
 
-module TW = Types_rw.Make_writer(T)
+module Signature_writer = Make_signature_writer
   (struct
      include Ptr
      let put_char ch ptr =
@@ -171,18 +333,22 @@ module TW = Types_rw.Make_writer(T)
    end)
 
 let string_of_signature ts =
-  let len, writer = TW.write ts in
+  let len, writer = Signature_writer.write_signature ts in
   let str = String.create len in
   writer { buffer = str; offset = 0 };
   str
 
 let signature_of_string str =
   try
-    TR.read { buffer = str; offset = 0 }
+    Signature_reader.read_signature { buffer = str; offset = 0 }
   with
       Failure msg ->
         raise (Invalid_argument
                  (sprintf "signature_of_string: invalid signature(%S): %s" str msg))
+
+(* +------------------------+
+   | DBus value definitions |
+   +------------------------+ *)
 
 type basic =
   | Byte of char
@@ -209,6 +375,10 @@ and element =
   | Single of single
 
 type sequence = single list
+
+(* +--------------+
+   | Value typing |
+   +--------------+ *)
 
 let type_of_basic = function
   | Byte _ -> Tbyte
@@ -259,6 +429,10 @@ let variant v = Variant v
 
 let dict_entry k v = Dict_entry(k, v)
 let single x = Single x
+
+(* +-----------------------+
+   | Value pretty-printing |
+   +-----------------------+ *)
 
 let print_basic pp = function
   | Byte x -> fprintf pp  "%C" x
