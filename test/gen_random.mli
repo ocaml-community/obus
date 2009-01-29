@@ -9,5 +9,5 @@
 
 (** Generation of random test data *)
 
-val message : unit -> OBus_message.any
+val message : unit -> OBus_message.t
   (** Generate a random message *)

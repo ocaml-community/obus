@@ -15,17 +15,13 @@ let _ =
   Log.log "plop %s" "plip";
   Log.debug "toto";
   Log.error "fatal error";
-  IFDEF HAVE_BACKTRACE THEN
-    Printexc.record_backtrace false;
-  END;
+  Printexc.record_backtrace false;
   (try
      if 1 = 1 then
        raise (Failure "arg!")
    with
        exn -> Log.failure exn "");
-  IFDEF HAVE_BACKTRACE THEN
-    Printexc.record_backtrace true;
-  END;
+  Printexc.record_backtrace true;
   try
     if 1 = 1 then
       raise (Failure "arg!")

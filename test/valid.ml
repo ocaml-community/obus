@@ -18,11 +18,11 @@ let test f s =
         ()
 
 let testc b s =
-  catch (fun _ -> OBus_connection.method_call (OBus_bus.connection b)
+  catch (fun _ -> OBus_connection.method_call b
            ~interface:"toto"
            ~member:"toto"
            ~path:[]
-           << string -> unit >> s)
+           <:obus_func< string -> unit >> s)
     (fun exn -> prerr_endline (Printexc.to_string exn); return ())
 
 let _ =
@@ -40,8 +40,8 @@ let _ =
        b <-- Lazy.force OBus_bus.session;
        testc b "aa\x81oo";
        testc b "dfsdf\x00kljsd";
-       OBus_connection.method_call (OBus_bus.connection b)
+       OBus_connection.method_call b
          ~interface:"aa.$.e"
          ~member:"toto"
          ~path:[]
-       << unit >>)
+         <:obus_func< unit >>)

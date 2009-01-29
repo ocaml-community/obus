@@ -35,7 +35,7 @@ let rec run_tests con = function
       >>= fun _ -> run_tests con (n - 1)
 
 let rec wait_for_name con =
-  OBus_bus.name_has_owner (OBus_bus.make con) name >>= function
+  OBus_bus.name_has_owner con name >>= function
     | true -> return ()
     | false -> Lwt_unix.sleep 0.1 >>= fun _ -> wait_for_name con
 
@@ -44,7 +44,7 @@ let _ =
   if Unix.fork () = 0 then
     Lwt_unix.run
       (perform
-         con <-- Lazy.force OBus_bus.session >>= (fun bus -> return (OBus_bus.connection bus));
+         con <-- Lazy.force OBus_bus.session >>= (fun bus -> return bus);
          wait_for_name con;
          run_tests con test_count;
          OBus_connection.demit_signal con ~destination:name ~interface:"a.a" ~member:"exit_now" ~path:[] [])
@@ -53,18 +53,17 @@ let _ =
       (perform
          bus <-- Lazy.force OBus_bus.session;
          OBus_bus.request_name bus name;
-         let con = OBus_bus.connection bus
-         and received = ref 0
+         let received = ref 0
          and _ = printf "received: 0%!" in
-         let _ = OBus_connection.add_incoming_filter con
+         let _ = OBus_connection.add_incoming_filter bus
            (function
-              | { typ = `Signal(_, _, "exit_now") } ->
+              | { typ = Signal(_, _, "exit_now") } ->
                   printf "\nexit signal received.\n%!";
-                  OBus_connection.close con;
+                  OBus_connection.close bus;
                   None
               | { destination = Some n } when n = name ->
                   incr received;
                   print_progress !received;
                   None
               | msg -> Some msg) in
-         OBus_connection.watch con)
+         OBus_connection.watch bus)

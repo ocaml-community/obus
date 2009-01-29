@@ -18,8 +18,8 @@ let _ =
   OBus_info.debug := true;
   Printexc.record_backtrace true;
   ignore (add_incoming_filter loopback filter);
-  ignore (OBus_signal.connect (OBus_proxy.make (OBus_peer.anonymous loopback) [])
-            (OBus_signal.dmake "aa" "plop")
+  ignore (OBus_signal.connect
+            (OBus_signal.dmake "aa" "plop" (fun _ -> return (OBus_proxy.make (OBus_peer.anonymous loopback) [])))
             handler);
   Lwt_unix.run
     (perform

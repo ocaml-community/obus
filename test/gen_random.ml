@@ -51,10 +51,10 @@ let member () = string 20
 let serial () = Random.int32 Int32.max_int
 
 let message_type () = match Random.int 4 with
-  | 0 -> `Method_call(path (), option name, member ())
-  | 1 -> `Method_return(serial ())
-  | 2 -> `Error(serial (), name ())
-  | _ -> `Signal(path (), name (), member ())
+  | 0 -> Method_call(path (), option name, member ())
+  | 1 -> Method_return(serial ())
+  | 2 -> Error(serial (), name ())
+  | _ -> Signal(path (), name (), member ())
 
 let uint16 () = Random.int (1 lsl 16)
 let uint32 () = Int32.logor (Int32.shift_left (Random.int32 Int32.max_int) 1) (Random.int32 2l)
@@ -88,7 +88,7 @@ let rec tsingle count deep =
   else
     match Random.int 4 with
       | 0 -> let count, t = tbasic count deep in (count, Tbasic t)
-      | 1 -> let count, t = tsequence count (deep + 1) in (count, Tstruct t)
+      | 1 -> let count, t = tsequence count (deep + 1) in (count, Tstructure t)
       | 2 -> let count, t = telement count (deep + 1) in (count, Tarray t)
       | _ -> (count + 1, Tvariant)
 
@@ -129,20 +129,20 @@ let basic count deep = function
 let rec single count deep = function
   | Tbasic t ->
       let count, x = basic count deep t in
-      (count, vbasic x)
-  | Tstruct tl ->
+      (count, OBus_value.basic x)
+  | Tstructure tl ->
       let count, x = sequence count (deep + 1) tl in
-      (count, vstruct x)
+      (count, structure x)
   | Tarray t ->
       let rec aux count acc = function
-        | 0 -> (count, varray t acc)
+        | 0 -> (count, array t acc)
         | n -> let count, x = element count (deep + 1) t in aux count (x :: acc) (n - 1)
       in
       aux count [] (Random.int (max 1 (min 200 (1000 - count))))
   | Tvariant ->
       let _, t = tsingle 15 (deep + 1) in
       let count, x = single count (deep + 1) t in
-      (count, vvariant x)
+      (count, variant x)
 
 and element count deep = function
   | Tsingle t ->
