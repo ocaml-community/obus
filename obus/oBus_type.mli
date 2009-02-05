@@ -21,21 +21,17 @@ type ('a, 'cl) t
   (** Type of type combinators *)
 
 type 'a basic = ('a, [`basic]) t
-type 'a single = ('a, [`single]) t
-type 'a element = ('a, [`element]) t
+type 'a container = ('a, [`container]) t
 type 'a sequence = ('a, [`sequence]) t
 
 type ('a, 'cl) cl_basic = ('a, 'cl) t
 constraint 'cl = [ `basic ]
 
 type ('a, 'cl) cl_single = ('a, 'cl) t
-constraint 'cl = [< `basic | `single ]
-
-type ('a, 'cl) cl_element = ('a, 'cl) t
-constraint 'cl = [< `basic | `single | `element ]
+constraint 'cl = [< `basic | `container ]
 
 type ('a, 'cl) cl_sequence = ('a, 'cl) t
-constraint 'cl = [< `basic | `single | `sequence ]
+constraint 'cl = [< `basic | `container | `sequence ]
 
 type ('a, 'b, 'c) func
   (** Functionnal types *)
@@ -52,26 +48,13 @@ val osignature : ('a, 'b, 'c) func -> OBus_value.signature
 
 val type_basic : ('a, _) cl_basic -> OBus_value.tbasic
 val type_single : ('a, _) cl_single -> OBus_value.tsingle
-val type_element : ('a, _) cl_element -> OBus_value.telement
 val type_sequence : ('a, _) cl_sequence -> OBus_value.tsequence
   (** Return the DBus type of a type description *)
-
-type 'a with_basic = { with_basic : 'b. 'b basic -> 'a }
-type 'a with_single = { with_single : 'b. 'b single -> 'a }
-type 'a with_element = { with_element : 'b. 'b element -> 'a }
-type 'a with_sequence = { with_sequence : 'b. 'b sequence -> 'a }
-val with_basic : 'a with_basic -> OBus_value.tbasic -> 'a
-val with_single : 'a with_single -> OBus_value.tsingle -> 'a
-val with_element : 'a with_element -> OBus_value.telement -> 'a
-val with_sequence : 'a with_sequence -> OBus_value.tsequence -> 'a
-  (** [with_*_ty func typ] Construct the default combinator for [typ]
-      and give it to [func] *)
 
 (** {6 Dynamic values operations} *)
 
 val make_basic : ('a, _) cl_basic -> 'a -> OBus_value.basic
 val make_single : ('a, _) cl_single -> 'a -> OBus_value.single
-val make_element : ('a, _) cl_element -> 'a -> OBus_value.element
 val make_sequence : ('a, _) cl_sequence -> 'a -> OBus_value.sequence
   (** Make a dynamically typed value from a statically typed one *)
 
@@ -91,7 +74,6 @@ exception No_context
 
 val cast_basic : ('a, _) cl_basic -> ?context:context -> OBus_value.basic -> 'a
 val cast_single : ('a, _) cl_single -> ?context:context -> OBus_value.single -> 'a
-val cast_element : ('a, _) cl_element -> ?context:context -> OBus_value.element -> 'a
 val cast_sequence : ('a, _) cl_sequence -> ?context:context -> OBus_value.sequence -> 'a
   (** Cast a dynamically typed value into a statically typed one. It
       raise a [Cast_failure] if types do not match.
@@ -101,7 +83,6 @@ val cast_sequence : ('a, _) cl_sequence -> ?context:context -> OBus_value.sequen
 
 val opt_cast_basic : ('a, _) cl_basic -> ?context:context -> OBus_value.basic -> 'a option
 val opt_cast_single : ('a, _) cl_single -> ?context:context -> OBus_value.single -> 'a option
-val opt_cast_element : ('a, _) cl_element -> ?context:context -> OBus_value.element -> 'a option
 val opt_cast_sequence : ('a, _) cl_sequence -> ?context:context -> OBus_value.sequence -> 'a option
   (** Same thing but return an option instead of raising an
       exception *)
@@ -132,17 +113,24 @@ val ( --> ) : ('a, _) cl_sequence -> ('b, 'c, 'd) func -> ('a -> 'b, 'c, 'd) fun
 val wrap : ('a, 'cl) t -> ('a -> 'b) -> ('b -> 'a) -> ('b, 'cl) t
   (** Wrap a type description by applying a convertion function *)
 
-val wrap_array : ('a, _) cl_element ->
-  make:(('a -> OBus_value.element) -> 'b -> OBus_value.element list) ->
-  cast:((OBus_value.element -> 'a) -> OBus_value.element list -> 'b) -> 'b single
+val wrap_array : ('a, _) cl_single ->
+  make:(('a -> OBus_value.single) -> 'b -> OBus_value.single list) ->
+  cast:((OBus_value.single -> 'a) -> OBus_value.single list -> 'b) -> 'b container
   (** [wrap_array t make cast] wrap an array type. It more efficient
-      than a [wrap (tlist t) ...] since it does not create an
+      than a [wrap (obus_list t) ...] since it does not create an
       intermediate list. *)
 
+val wrap_dict : ('a, _) cl_basic -> ('b, _) cl_single ->
+  make:(('a -> OBus_value.basic) -> ('b -> OBus_value.single) -> 'c -> (OBus_value.basic * OBus_value.single) list) ->
+  cast:((OBus_value.basic -> 'a) -> (OBus_value.single -> 'b) -> (OBus_value.basic * OBus_value.single) list -> 'c) -> 'c container
+
 val wrap_with_context : ('a, 'cl) t -> (context -> 'a -> 'b) -> ('b -> 'a) -> ('b, 'cl) t
-val wrap_array_with_context : ('a, _) cl_element ->
-  make:(('a -> OBus_value.element) -> 'b -> OBus_value.element list) ->
-  cast:(context -> (OBus_value.element -> 'a) -> OBus_value.element list -> 'b) -> 'b single
+val wrap_array_with_context : ('a, _) cl_single ->
+  make:(('a -> OBus_value.single) -> 'b -> OBus_value.single list) ->
+  cast:(context -> (OBus_value.single -> 'a) -> OBus_value.single list -> 'b) -> 'b container
+val wrap_dict_with_context : ('a, _) cl_basic -> ('b, _) cl_single ->
+  make:(('a -> OBus_value.basic) -> ('b -> OBus_value.single) -> 'c -> (OBus_value.basic * OBus_value.single) list) ->
+  cast:(context -> (OBus_value.basic -> 'a) -> (OBus_value.single -> 'b) -> (OBus_value.basic * OBus_value.single) list -> 'c) -> 'c container
   (** Same thing but with access to the context *)
 
 (** {6 Helpers} *)
@@ -157,7 +145,7 @@ val bitwise64 : (int64, 'cl) t -> ('a * int) list -> ('a list, 'cl) t
 
 (** {6 Default type combinators} *)
 
-module Pervasives : sig
+module OBus_pervasives : sig
 
   (** This module is automatically opened by the syntax extension *)
 
@@ -182,14 +170,12 @@ module Pervasives : sig
   val obus_object_path : OBus_path.t basic
   val obus_path : OBus_path.t basic
 
-  val obus_list : ('a, _) cl_element -> 'a list single
-  val obus_dict_entry : ('a, _) cl_basic -> ('b, _) cl_single -> ('a * 'b) element
-  val obus_assoc : ('a, _) cl_basic -> ('b, _) cl_single -> ('a * 'b) list single
-    (** [tassoc tk tv] is equivalent to [tlist (tdict_entry tk tv)] *)
-  val obus_structure : ('a, _) cl_sequence -> 'a single
-  val obus_variant : OBus_value.single single
+  val obus_list : ('a, _) cl_single -> 'a list container
+  val obus_dict : ('a, _) cl_basic -> ('b, _) cl_single -> ('a * 'b) list container
+  val obus_structure : ('a, _) cl_sequence -> 'a container
+  val obus_variant : OBus_value.single container
 
-  val obus_byte_array : string single
+  val obus_byte_array : string container
     (** Array of bytes seen as string *)
 
   val obus_unit : unit sequence
@@ -207,8 +193,7 @@ module Pervasives : sig
   type signature = OBus_value.signature
   type object_path = OBus_path.t
   type path = OBus_path.t
-  type ('a, 'b) dict_entry = 'a * 'b
-  type ('a, 'b) assoc = ('a, 'b) dict_entry list
+  type ('a, 'b) dict = ('a * 'b) list
   type 'a structure = 'a
   type variant = OBus_value.single
   type byte_array = string
@@ -220,15 +205,15 @@ end
 
 (** {6 map and set with obus type} *)
 
-module type Ordered_element_type = sig
+module type Ordered_single_type = sig
   type t
-  val obus_t : (t, _) cl_element
+  val obus_t : (t, _) cl_single
   val compare : t -> t -> int
 end
 
-module Make_set(Ord : Ordered_element_type) : sig
+module Make_set(Ord : Ordered_single_type) : sig
   include Set.S with type elt = Ord.t
-  val obus_t : t single
+  val obus_t : t container
 end
 
 module type Ordered_basic_type = sig
@@ -239,7 +224,7 @@ end
 
 module Make_map(Ord : Ordered_basic_type) : sig
   include Map.S with type key = Ord.t
-  val obus_t : ('a, _) cl_single -> 'a t single
+  val obus_t : ('a, _) cl_single -> 'a t container
 end
 
 (** {6 Tuples} *)

@@ -40,13 +40,11 @@ let pad4 i = (4 - i) land 3
 let pad8 i = (8 - i) land 7
 
 let pad8_p = function
-  | Tdict_entry _ -> true
-  | Tsingle t -> match t with
-      | Tstructure _
-      | Tbasic Tint64
-      | Tbasic Tuint64
-      | Tbasic Tdouble -> true
-      | _ -> false
+  | Tstructure _
+  | Tbasic Tint64
+  | Tbasic Tuint64
+  | Tbasic Tdouble -> true
+  | _ -> false
 
 (* Common error message *)
 let array_too_big len = sprintf "array size exceed the limit: %d" len
@@ -372,37 +370,56 @@ struct
       | Signature x -> wsignature i x
       | Object_path x -> wobject_path i x
 
-    let rec wsingle i = function
+    let rec warray i padded_on_8 welement x =
+      (* Array are serialized as follow:
+
+         (1) padding to a 4-block alignement (for array size)
+         (2) array size
+         (3) alignement to array elements padding (even if the array is empty)
+         (4) serialized elements
+
+         The array size (2) is the size of serialized elements (4) *)
+
+      let i, put_padding = wpad4 i in
+      let i = i + 4 in
+      (* After the size we are always padded on 4, so we only need to
+         add padding if elements padding is 8 *)
+      let i, put_initial_padding = if padded_on_8 then wpad8 i else i, return () in
+      let j, put_array = List.fold_left (fun (i, f) x ->
+                                           let i, g = welement i x in
+                                           (i, perform f; g))
+        (i, return ()) x in
+      let len = j - i in
+      if len < 0 || len > max_array_size then
+        failwith (array_too_big len)
+      else
+        (j,
+         perform
+           put_padding;
+           put_uint32 (Int32.of_int len);
+           put_initial_padding;
+           put_array)
+
+    let rec wdict_entry i (k, v) =
+      (* Dict-entries are serialized as follow:
+
+         (1) alignement on a 8-block
+         (2) serialized key
+         (3) serialized value *)
+      let i, put_padding = wpad8 i in
+      let i, put_key = wbasic i k in
+      let i, put_val = wsingle i v in
+      (i, perform
+         put_padding;
+         put_key;
+         put_val)
+
+    and wsingle i = function
       | Basic x -> wbasic i x
       | Array(t, x) ->
-          (* Array are serialized as follow:
-
-             (1) padding to a 4-block alignement (for array size)
-             (2) array size
-             (3) alignement to array elements padding (even if the array is empty)
-             (4) serialized elements
-
-             The array size (2) is the size of serialized elements (4) *)
-
-          let i, put_padding = wpad4 i in
-          let i = i + 4 in
-          (* After the size we are always padded on 4, so we only need
-             to add padding if elements padding is 8 *)
-          let i, put_initial_padding = if pad8_p t then wpad8 i else i, return () in
-          let j, put_array = List.fold_left (fun (i, f) x ->
-                                               let i, g = welement i x in
-                                               (i, perform f; g))
-            (i, return ()) x in
-          let len = j - i in
-          if len < 0 || len > max_array_size then
-            failwith (array_too_big len)
-          else
-            (j,
-             perform
-               put_padding;
-               put_uint32 (Int32.of_int len);
-               put_initial_padding;
-               put_array)
+          warray i (pad8_p t) wsingle x
+      | Dict(tk, tv, x) ->
+          warray i true wdict_entry x
       | Structure x ->
           (* Structure are serialized as follow:
 
@@ -422,22 +439,6 @@ struct
            perform
              put_signature;
              put_variant)
-
-    and welement i = function
-      | Dict_entry(k, v) ->
-          (* Dict-entry are serialized as follow:
-
-             (1) alignement on a 8-block
-             (2) serialized key
-             (3) serialized value *)
-          let i, put_padding = wpad8 i in
-          let i, put_key = wbasic i k in
-          let i, put_val = wsingle i v in
-          (i, perform
-             put_padding;
-             put_key;
-             put_val)
-      | Single x -> wsingle i x
 
     and wsequence i = function
       | [] -> (i, return ())
@@ -946,24 +947,45 @@ struct
            l <-- rarray_elements i limit reader;
            return (x :: l))
 
+    let rarray padded_on_8 relement i size =
+      (perform
+         (i, len) <-- ruint i size;
+         let i, get_padding = if padded_on_8 then rpad8 i else (i, return ()) in
+         let limit = i + len in
+         if len < 0 || len > max_array_size then
+           failwith (array_too_big len)
+         else if limit > size then
+           out_of_bounds ()
+         else perform
+           get_padding;
+           l <-- rarray_elements i limit relement;
+           return (limit, l))
+
     let rec rsingle = function
       | Tbasic t ->
           let reader = rbasic t in
           (fun i size -> reader i size >>= fun (i, x) -> return (i, basic x))
       | Tarray t ->
-          let reader = relement t in
+          let reader = rsingle t in
+          (fun i size ->
+             perform
+               (i, l) <-- rarray (pad8_p t) reader i size;
+               return (i, array t l))
+      | Tdict(tk, tv) ->
+          let kreader = rbasic tk
+          and vreader = rsingle tv in
           (fun i size -> perform
-             (i, len) <-- ruint i size;
-             let i, get_padding = if pad8_p t then rpad8 i else (i, return ()) in
-             let limit = i + len in
-             if len < 0 || len > max_array_size then
-               failwith (array_too_big len)
-             else if limit > size then
-               out_of_bounds ()
-             else perform
-               get_padding;
-               l <-- rarray_elements i limit reader;
-               return (limit, array t l))
+             (i, l) <-- rarray true
+               (fun i size ->
+                  let i, get_padding = rpad8 i in
+                  if i > size then
+                    out_of_bounds ()
+                  else perform
+                    get_padding;
+                    (i, k) <-- kreader i size;
+                    (i, v) <-- vreader i size;
+                    return (i, (k, v))) i size;
+             return (i, dict tk tv l))
       | Tstructure tl ->
           let reader = rsequence tl in
           (fun i size ->
@@ -979,25 +1001,6 @@ struct
              (i, t) <-- rtype i size;
              (i, v) <-- rsingle t i size;
              return (i, variant v))
-
-    and relement = function
-      | Tdict_entry(tk, tv) ->
-          let kreader = rbasic tk
-          and vreader = rsingle tv in
-          (fun i size ->
-             let i, get_padding = rpad8 i in
-             if i > size then
-               out_of_bounds ()
-             else perform
-               get_padding;
-               (i, k) <-- kreader i size;
-               (i, v) <-- vreader i size;
-               return (i, Dict_entry(k, v)))
-      | Tsingle t ->
-          let reader = rsingle t in
-          (fun i size -> perform
-             (i, x) <-- reader i size;
-             return (i, Single x))
 
     and rsequence = function
       | [] -> (fun i size -> return (i, []))

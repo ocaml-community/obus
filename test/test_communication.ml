@@ -47,7 +47,7 @@ let _ =
          con <-- Lazy.force OBus_bus.session >>= (fun bus -> return bus);
          wait_for_name con;
          run_tests con test_count;
-         OBus_connection.demit_signal con ~destination:name ~interface:"a.a" ~member:"exit_now" ~path:[] [])
+         OBus_connection.dyn_emit_signal con ~destination:name ~interface:"a.a" ~member:"exit_now" ~path:[] [])
   else
     Lwt_unix.run
       (perform

@@ -33,7 +33,7 @@ type property =
   | Pbool of bool
   | Pdouble of float
       (** IEEE754 double precision floating point number  *)
- with obus(single)
+ with obus(container)
 
 (** {6 Common device interface} *)
 

@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+(* DBus types as term (for printing) *)
+
 module T : sig
   type t =
       private
@@ -49,10 +51,8 @@ let implem_term_of_basic = function
 let rec implem_term_of_single = function
   | Tbasic t -> implem_term_of_basic t
   | Tstructure tl -> term "structure" [implem_term_of_sequence tl]
-  | Tarray t -> term "list"
-      [match t with
-         | Tsingle t ->  implem_term_of_single t
-         | Tdict_entry(tk, tv) -> term "dict_entry" [implem_term_of_basic tk; implem_term_of_single tv]]
+  | Tarray t -> term "list" [implem_term_of_single t]
+  | Tdict(tk, tv) -> term "dict" [implem_term_of_basic tk; implem_term_of_single tv]
   | Tvariant -> term "variant" []
 
 and implem_term_of_sequence tl = tuple (List.map implem_term_of_single tl)
@@ -68,28 +68,21 @@ let interf_term_of_basic = function
   | Tuint64 -> term "int64" []
   | Tdouble -> term "float" []
   | Tstring -> term "string" []
-  | Tsignature -> term "OBus_types.signature" []
+  | Tsignature -> term "OBus_value.signature" []
   | Tobject_path -> term "OBus_proxy.t" []
 
 let rec interf_term_of_single = function
   | Tbasic t -> interf_term_of_basic t
   | Tstructure tl -> interf_term_of_sequence tl
-  | Tarray t -> term "list" [interf_term_of_element t]
+  | Tarray t -> term "list" [interf_term_of_single t]
+  | Tdict(tk, tv) -> term "list" [tuple [interf_term_of_basic tk; interf_term_of_single tv]]
   | Tvariant -> term "OBus_value.single" []
-
-and interf_term_of_element = function
-  | Tsingle t -> interf_term_of_single t
-  | Tdict_entry(tk, tv) -> tuple [interf_term_of_basic tk; interf_term_of_single tv]
 
 and interf_term_of_sequence tl = tuple (List.map interf_term_of_single tl)
 
 open Format
 
 let rec print_term top pp = function
-  | Term("structure", []) -> fprintf pp "[]"
-  | Term("structure", [Tuple tl]) -> fprintf pp "[%a]" (print_seq false " * ") tl
-  | Term("structure", [t]) -> fprintf pp "[%a]" (print_term true) t
-  | Term("dict_entry", [tk; tv]) -> fprintf pp "{%a, %a}" (print_term true) tk (print_term true) tv
   | Term(id, []) -> pp_print_string pp id
   | Term(id, [t]) -> fprintf pp "%a %s" (print_term false) t id
   | Term(id, tl) -> fprintf pp "(%a) %s" (print_seq true ", ") tl id
@@ -111,24 +104,3 @@ let rec print_func ret pp = function
 let paren top pp f = match top with
   | true -> f pp ()
   | false -> fprintf pp "(%a)" f ()
-
-let rec print_term_no_sugar top pp = function
-  | Term(id, []) -> fprintf pp "t%s" id
-  | Term(id, tl) -> paren top pp (fun pp _ -> fprintf pp "t%s %a" id print_seq_no_sugar tl)
-  | Var v -> fprintf pp "%s" v
-  | Tuple [] -> pp_print_string pp "tunit"
-  | Tuple tl -> paren top pp (fun pp _ -> fprintf pp "tup%d %a" (List.length tl) print_seq_no_sugar tl)
-
-and print_seq_no_sugar pp = function
-  | [] -> ()
-  | [t] -> print_term_no_sugar false pp t
-  | t :: tl -> fprintf pp "%a %a" (print_term_no_sugar false) t print_seq_no_sugar tl
-
-let print_func_no_sugar ret pp = function
-  | [] -> print_term_no_sugar false pp (term "reply" [ret])
-  | l ->
-      let rec aux pp = function
-        | [] -> print_term_no_sugar true pp (term "reply" [ret])
-        | arg :: args -> fprintf pp "(%a --> %a)" (print_term_no_sugar true) arg aux args
-      in
-      aux pp l

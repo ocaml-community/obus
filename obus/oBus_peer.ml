@@ -23,7 +23,7 @@ let obus_t = OBus_type.wrap_with_context <:obus_type< unit >>
 let make c n = { connection = c; name = Some n }
 let anonymous c = { connection = c; name = None }
 
-let call member typ peer = OBus_connection.method_call peer.connection
+let method_call member typ peer = OBus_connection.method_call peer.connection
   ?destination:peer.name
   ~path:[]
   ~interface:"org.freedesktop.DBus.Peer"

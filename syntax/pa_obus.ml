@@ -105,7 +105,7 @@ let vars_of_func_ctyp ctyp =
 
 (* Return the expression for building a tuple type combinator. *)
 let tuple_combinator _loc = function
-  | [] -> <:expr< OBus_type.Pervasives.unit >>
+  | [] -> <:expr< OBus_type.OBus_pervasives.unit >>
   | [t] -> t
   | l -> Gen.apply _loc <:expr< OBus_type.$lid:"tuple" ^ string_of_int (List.length l)$ >> l
 
@@ -317,7 +317,7 @@ EXTEND Gram
                          | `Method((dname, cname), typ) ->
                              let vars = vars_of_func_ctyp typ and typ = func_combinator_of_ctyp typ in
                              if vars = [] then
-                               <:expr< OBus_object.md_method $str:dname$ (OBus_type.abstract OBus_type.Pervasives.obus_unit $typ$)
+                               <:expr< OBus_object.md_method $str:dname$ (OBus_type.abstract OBus_type.OBus_pervasives.obus_unit $typ$)
                                          (fun _ -> self#$lid:cname$) >>
                              else
                                <:expr< OBus_object.md_method $str:dname$ $typ$
@@ -368,7 +368,7 @@ EXTEND Gram
           <:str_item< >>
 
       | "OBUS_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
-          <:str_item< let $lid:cname$ = call $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = method_call $str:dname$ $typ$ >>
 
       | "OBUS_signal"; no_broadcast = OPT "!"; (dname, cname) = obus_member; ":"; typ = obus_type ->
           begin match no_broadcast with
@@ -449,22 +449,29 @@ let _ =
 let obus_type_class = Gram.Entry.mk "obus_type_class"
 let obus_type_class_eoi = Gram.Entry.mk "obus_type_class_eoi"
 
+let valid_lclasses = ["basic"; "single"; "sequence"]
+let valid_rclasses = ["basic"; "container"; "sequence"]
+
 EXTEND Gram
   GLOBAL: obus_type_class obus_type_class_eoi;
 
-  obus_class_ident:
-    [ [ x = a_LIDENT ->
-          let valid_classes = ["basic"; "single"; "element"; "sequence"] in
-          if List.mem x valid_classes then
-            x
+  obus_type_class:
+    [ [ x = a_LIDENT; "->"; (y, ret) = SELF ->
+          if List.mem x valid_lclasses then
+            (x :: y, ret)
+          else if x = "container" then
+            Loc.raise _loc (Stream.Error "this class can not be used at the left side of an arrow")
           else
             Loc.raise _loc (Stream.Error (sprintf "pa_obus: invalid classe %s, must be one of %s"
-                                            x (String.concat ", " valid_classes)))
-      ] ];
-
-  obus_type_class:
-    [ [ x = obus_class_ident; "->"; (y, ret) = SELF -> (x :: y, ret)
-      | x = obus_class_ident -> ([], x)
+                                            x (String.concat ", " valid_lclasses)))
+      | x = a_LIDENT ->
+          if List.mem x valid_rclasses then
+            ([], x)
+          else if x = "single" then
+            Loc.raise _loc (Stream.Error "this class can not be used at the right side of an arrow")
+          else
+            Loc.raise _loc (Stream.Error (sprintf "pa_obus: invalid classe %s, must be one of %s"
+                                            x (String.concat ", " valid_rclasses)))
       ] ];
 
   obus_type_class_eoi:
@@ -519,23 +526,40 @@ let _ =
        | _ ->
            Loc.raise (Ast.loc_of_ctyp typ) (Stream.Error "pa_obus: ``Caml_name of string'' expected"))
 
-(* +--------------------------------------+
-   | Auto-opening of OBus_type.Pervasives |
-   +--------------------------------------+ *)
+(* +-------------------------------------------+
+   | Auto-opening of OBus_type.OBus_pervasives |
+   +-------------------------------------------+ *)
 
 let _ =
+  (* In .mli files *)
   AstFilters.register_sig_item_filter
     (fun sg ->
        let _loc = Ast.loc_of_sig_item sg in
        <:sig_item<
-         open OBus_type.Pervasives
+         open OBus_type.OBus_pervasives
          $sg$
        >>);
 
+  (* In .ml files *)
   AstFilters.register_str_item_filter
     (fun st ->
        let _loc = Ast.loc_of_str_item st in
        <:str_item<
-         open OBus_type.Pervasives
+         open OBus_type.OBus_pervasives
          $st$
        >>);
+
+  (* In the toplevel *)
+  let opened_in_toplevel = ref false in
+  AstFilters.register_topphrase_filter
+    (fun st ->
+       if !opened_in_toplevel then
+         st
+       else begin
+         opened_in_toplevel := true;
+         let _loc = Ast.loc_of_str_item st in
+         <:str_item<
+           open OBus_type.OBus_pervasives
+           $st$
+         >>
+       end)

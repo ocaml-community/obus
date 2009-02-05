@@ -86,20 +86,15 @@ let rec tsingle count deep =
     let count, t = tbasic count deep in
     (count, Tbasic t)
   else
-    match Random.int 4 with
+    match Random.int 5 with
       | 0 -> let count, t = tbasic count deep in (count, Tbasic t)
       | 1 -> let count, t = tsequence count (deep + 1) in (count, Tstructure t)
-      | 2 -> let count, t = telement count (deep + 1) in (count, Tarray t)
+      | 2 -> let count, t = tsingle count (deep + 1) in (count, Tarray t)
+      | 3 ->
+          let count, tk = tbasic count (deep + 1) in
+          let count, tv = tsingle count (deep + 1) in
+          (count, Tdict(tk, tv))
       | _ -> (count + 1, Tvariant)
-
-and telement count deep = match Random.int 2 with
-  | 0 ->
-      let count, t = tsingle count deep in
-      (count, Tsingle t)
-  | _ ->
-      let count, tk = tbasic count deep in
-      let count, tv = tsingle count deep in
-      (count, Tdict_entry(tk, tv))
 
 and tsequence count deep =
   let rec aux count acc = function
@@ -136,22 +131,22 @@ let rec single count deep = function
   | Tarray t ->
       let rec aux count acc = function
         | 0 -> (count, array t acc)
-        | n -> let count, x = element count (deep + 1) t in aux count (x :: acc) (n - 1)
+        | n -> let count, x = single count (deep + 1) t in aux count (x :: acc) (n - 1)
+      in
+      aux count [] (Random.int (max 1 (min 200 (1000 - count))))
+  | Tdict(tk, tv) ->
+      let rec aux count acc = function
+        | 0 -> (count, dict tk tv acc)
+        | n ->
+            let count, k = basic count (deep + 1) tk in
+            let count, v = single count (deep + 1) tv in
+            aux count ((k, v) :: acc) (n - 1)
       in
       aux count [] (Random.int (max 1 (min 200 (1000 - count))))
   | Tvariant ->
       let _, t = tsingle 15 (deep + 1) in
       let count, x = single count (deep + 1) t in
       (count, variant x)
-
-and element count deep = function
-  | Tsingle t ->
-      let count, x = single count deep t in
-      (count, Single x)
-  | Tdict_entry(tk, tv) ->
-      let count, k = basic count deep tk in
-      let count, v = single count deep tv in
-      (count, Dict_entry(k, v))
 
 and sequence count deep tl =
   List.fold_right (fun t (count, l) ->

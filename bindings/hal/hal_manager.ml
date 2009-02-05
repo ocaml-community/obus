@@ -25,7 +25,7 @@ include OBus_interface.Make_single
      end)
 
 OBUS_method GetAllDevices : unit -> Hal_device.udi list
-OBUS_method GetAllDevicesWithProperties : unit -> (Hal_device.udi * (string, Hal_device.property) dict_entry list) structure list
+OBUS_method GetAllDevicesWithProperties : unit -> (Hal_device.udi * (string, Hal_device.property) dict) structure list
 OBUS_method DeviceExists : Hal_device.udi -> bool
 OBUS_method FindDeviceStringMatch : string -> string -> Hal_device.udi list
 
@@ -37,7 +37,7 @@ let obus_broken_udi = OBus_type.wrap obus_string
    we temporary use this ugly hack: *)
 let find_device_by_capability capability =
   Lazy.force get_manager >>= fun proxy ->
-    OBus_proxy.dcall proxy ~interface ~member:"FindDeviceByCapability" [basic (String capability)] >>= fun v ->
+    OBus_proxy.dyn_method_call proxy ~interface ~member:"FindDeviceByCapability" [basic (String capability)] >>= fun v ->
       match OBus_type.opt_cast_sequence <:obus_type< Hal_device.udi list >> v with
         | Some x -> return x
         | None ->

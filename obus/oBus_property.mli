@@ -9,22 +9,22 @@
 
 (** Manipulation of DBus object properties *)
 
-type access = [ `readable | `writable ]
+type 'mode access
 
-val rd_only : [ `readable ]
-val wr_only : [ `writable ]
-val rdwr : [ `readable | `writable ]
+val rd_only : [ `readable ] access
+val wr_only : [ `writable ] access
+val rdwr : [ `readable | `writable ] access
   (** Access modes *)
 
-type ('a, 'access) t
-  (** A property of type ['a] with allowed operations ['access]. *)
+type ('a, 'mode) t
+  (** A property of type ['a] with allowed operations ['mode]. *)
 
 val make :  interface:OBus_name.interface -> member:OBus_name.member ->
-  access:([< access ] as 'access) -> ('a, _) OBus_type.cl_single -> (unit -> OBus_proxy.t Lwt.t) -> ('a, 'access) t
+  access:'mode access -> ('a, _) OBus_type.cl_single -> OBus_proxy.t -> ('a, 'mode) t
   (** Create a property *)
 
-val dmake :  interface:OBus_name.interface -> member:OBus_name.member ->
-  access:([< access ] as 'access) -> (unit -> OBus_proxy.t Lwt.t) -> (OBus_value.single, 'access) t
+val dyn_make : interface:OBus_name.interface -> member:OBus_name.member ->
+  access:'mode access -> OBus_proxy.t -> (OBus_value.single, 'mode) t
   (** Create a dynamically typed property *)
 
 val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
@@ -38,3 +38,11 @@ val get : ('a, [> `readable ]) t -> 'a Lwt.t
 
 val get_all : OBus_proxy.t -> OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
   (** Retreive all properties of an object *)
+
+(**/**)
+
+val make_custom :  interface:OBus_name.interface -> member:OBus_name.member ->
+  access:'mode access -> ('a, _) OBus_type.cl_single -> (unit -> OBus_proxy.t Lwt.t) -> ('a, 'mode) t
+
+val dyn_make_custom : interface:OBus_name.interface -> member:OBus_name.member ->
+  access:'mode access -> (unit -> OBus_proxy.t Lwt.t) -> (OBus_value.single, 'mode) t

@@ -129,7 +129,7 @@ let to_string l =
   end l;
   Buffer.contents buf
 
-let obus_list = OBus_type.wrap OBus_type.Pervasives.obus_string of_string to_string
+let obus_list = OBus_type.wrap OBus_type.OBus_pervasives.obus_string of_string to_string
 
 let system_bus_variable = "DBUS_SYSTEM_BUS_ADDRESS"
 let session_bus_variable = "DBUS_SESSION_BUS_ADDRESS"

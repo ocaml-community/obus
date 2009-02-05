@@ -96,17 +96,20 @@ type hint =
   | Hint_image of image
   | Hint_variant of string * single
 
-let obus_hint = OBus_type.wrap <:obus_type< (string, variant) dict_entry >>
-  (fun (name, value) ->
-     match name with
-       | "image_data" -> begin match OBus_type.opt_cast_single obus_image value with
-           | None -> Hint_variant(name, value)
-           | Some img -> Hint_image img
-         end
-       | _ -> Hint_variant(name, value))
-  (function
-     | Hint_image img -> ("image_data", OBus_type.make_single obus_image img)
-     | Hint_variant(name, value) -> (name, variant value))
+let obus_hints = OBus_type.wrap_dict obus_string obus_variant
+  (fun f g l ->
+     List.map (function
+                 | Hint_image img -> (f "image_data", g (OBus_type.make_single obus_image img))
+                 | Hint_variant(name, value) -> (f name, g value)) l)
+  (fun f g l ->
+     List.map (fun (k, v) ->
+                 let name = f k and value = g v in
+                 match name with
+                   | "image_data" -> begin match OBus_type.opt_cast_single obus_image value with
+                       | None -> Hint_variant(name, value)
+                       | Some img -> Hint_image img
+                     end
+                   | _ -> Hint_variant(name, value)) l)
 
 let app_name = ref (Filename.basename Sys.argv.(0))
 let desktop_entry = ref None
@@ -116,7 +119,7 @@ open Lwt
 OBUS_method GetServerInformation : server_info
 OBUS_method GetCapabilities : string list
 
-OBUS_method Notify : string -> uint32 -> string -> string -> string -> string list -> hint list -> int -> notification_id
+OBUS_method Notify : string -> uint32 -> string -> string -> string -> string list -> hints -> int -> notification_id
 OBUS_method CloseNotification : notification_server_id -> unit
 
 OBUS_signal NotificationClosed : notification_id

@@ -7,7 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Common
 open OBus_interface
 
 let recursive = ref false
@@ -67,7 +66,7 @@ let main service path =
                       (Interf_map.fold (fun name (content, annots) acc -> (name, content, annots) :: acc) map [], []))
              | true ->
                  Interf_map.iter (fun name (content, annots) ->
-                                    print_proxy_interf Format.std_formatter (name, content, annots))
+                                    Print.print_proxy_interf Format.std_formatter (name, content, annots))
                    map
            end
        | true ->

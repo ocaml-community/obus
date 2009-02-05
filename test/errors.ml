@@ -19,12 +19,12 @@ let _ =
   Printexc.record_backtrace true;
   ignore (add_incoming_filter loopback filter);
   ignore (OBus_signal.connect
-            (OBus_signal.dmake "aa" "plop" (fun _ -> return (OBus_proxy.make (OBus_peer.anonymous loopback) [])))
+            (OBus_signal.dyn_make "aa" "plop" (OBus_proxy.make (OBus_peer.anonymous loopback) []))
             handler);
   Lwt_unix.run
     (perform
-       demit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [];
+       dyn_emit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [];
        Lwt_unix.sleep 0.5;
        let _ = close loopback in
-       demit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [])
+       dyn_emit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [])
 

@@ -31,12 +31,9 @@ type tbasic =
 type tsingle =
   | Tbasic of tbasic
   | Tstructure of tsingle list
-  | Tarray of telement
+  | Tarray of tsingle
+  | Tdict of tbasic * tsingle
   | Tvariant
-
-and telement =
-  | Tdict_entry of tbasic * tsingle
-  | Tsingle of tsingle
  with constructor
 
 type tsequence = tsingle list
@@ -88,14 +85,10 @@ let print_tbasic pp t = pp_print_string pp (string_of_tbasic t)
 
 let rec print_tsingle pp = function
   | Tbasic t -> fprintf pp "@[<2>Tbasic@ %a@]" print_tbasic t
-  | Tarray t -> fprintf pp "@[<2>Tarray@,(%a)@]" print_telement t
+  | Tarray t -> fprintf pp "@[<2>Tarray@,(%a)@]" print_tsingle t
+  | Tdict(tk, tv) -> fprintf pp "@[<2>Tdict@,(@[<hv>%a,@ %a@])@]" print_tbasic tk print_tsingle tv
   | Tstructure tl -> fprintf pp "@[<2>Tstructure@ %a@]" print_tsequence tl
   | Tvariant -> fprintf pp "Tvariant"
-
-and print_telement pp = function
-  | Tdict_entry(tk, tv) -> fprintf pp "@[<2>Tdict_entry@,(@[<hv>%a,@ %a@])@]" print_tbasic tk print_tsingle tv
-  | Tsingle Tvariant -> fprintf pp "@[<2>Tsingle@ Tvariant@]"
-  | Tsingle t -> fprintf pp "@[<2>Tsingle@,(%a)@]" print_tsingle t
 
 and print_tsequence pp = print_list print_tsingle pp
 
@@ -109,25 +102,23 @@ let validate_signature =
         None
     | Tarray t ->
         if depth_array > Constant.max_type_recursion_depth then
-          Some "too many nested array"
+          Some "too many nested arrays"
         else
-          aux_element depth_struct (depth_array + 1) depth_dict_entry t
+          aux_single depth_struct (depth_array + 1) depth_dict_entry t
+    | Tdict(tk, tv) ->
+        if depth_array > Constant.max_type_recursion_depth then
+          Some "too many nested arrays"
+        else if depth_dict_entry > Constant.max_type_recursion_depth then
+          Some "too many nested dict-entries"
+        else
+          aux_single depth_struct (depth_array + 1) (depth_dict_entry + 1) tv
     | Tstructure [] ->
         Some "empty structure"
     | Tstructure tl ->
         if depth_struct > Constant.max_type_recursion_depth then
-          Some "too many nested structure"
+          Some "too many nested structures"
         else
           aux_sequence (depth_struct + 1) depth_array depth_dict_entry tl
-
-  and aux_element depth_struct depth_array depth_dict_entry = function
-    | Tsingle t ->
-        aux_single depth_struct depth_array depth_dict_entry t
-    | Tdict_entry(tk, tv) ->
-        if depth_dict_entry > Constant.max_type_recursion_depth then
-          Some "too many nested dict-entry"
-        else
-          aux_single depth_struct depth_array (depth_dict_entry + 1) tv
 
   and aux_sequence depth_struct depth_array depth_dict_entry = function
     | [] ->
@@ -178,9 +169,20 @@ struct
 
   let rec parse_single = function
     | 'a' ->
-        (perform
-           t <-- get_char >>= parse_element;
-           return (Tarray t))
+        begin
+          get_char >>= function
+            | '{' ->
+                (perform
+                   tk <-- get_char >>= parse_basic "invalid basic type code: %c";
+                   tv <-- get_char >>= parse_single;
+                   get_char >>= function
+                     | '}' -> return (Tdict(tk, tv))
+                     | _ -> failwith "'}' missing")
+            | ch ->
+                (perform
+                   t <-- parse_single ch;
+                   return (Tarray t))
+        end
     | '(' ->
         (perform
            t <-- get_char >>= parse_struct;
@@ -202,19 +204,6 @@ struct
            t <-- parse_single ch;
            l <-- get_char >>= parse_struct;
            return (t :: l))
-
-  and parse_element = function
-    | '{' ->
-        (perform
-           tk <-- get_char >>= parse_basic "invalid basic type code: %c";
-           tv <-- get_char >>= parse_single;
-           get_char >>= function
-             | '}' -> return (Tdict_entry(tk, tv))
-             | _ -> failwith "'}' missing")
-    | ch ->
-        (perform
-           t <-- parse_single ch;
-           return (Tsingle t))
 
   let rec parse_sequence = function
     | true ->
@@ -264,25 +253,22 @@ struct
     | Tbasic t ->
         (1, put_char (basic_type_code t))
     | Tarray t ->
-        let sz, wr = write_element t in
+        let sz, wr = write_single t in
         (sz + 1, perform put_char 'a'; wr)
+    | Tdict(tk, tv) ->
+        let sz, wr = write_single tv in
+        (sz + 4,
+         perform
+           put_char 'a';
+           put_char '{';
+           put_char (basic_type_code tk);
+           wr;
+           put_char '}')
     | Tstructure ts ->
         let sz, wr = write_sequence ts in
         (sz + 2, perform put_char '('; wr; put_char ')')
     | Tvariant ->
         (1, put_char 'v')
-
-  and write_element = function
-    | Tdict_entry(tk, tv) ->
-        let sz, wr = write_single tv in
-        (sz + 3,
-         perform
-           put_char '{';
-           put_char (basic_type_code tk);
-           wr;
-           put_char '}')
-    | Tsingle t ->
-        write_single t
 
   and write_sequence = function
     | [] ->
@@ -369,16 +355,26 @@ type basic =
 
 type single =
   | Basic of basic
-  | Array of telement * element list
+  | Array of tsingle * single list
+  | Dict of tbasic * tsingle * (basic * single) list
   | Structure of single list
   | Variant of single
-
-and element =
-  | Dict_entry of basic * single
-  | Single of single
  with constructor
 
 type sequence = single list
+
+let sbyte x = Basic(Byte x)
+let sboolean x = Basic(Boolean x)
+let sint16 x = Basic(Int16 x)
+let sint32 x = Basic(Int32 x)
+let sint64 x = Basic(Int64 x)
+let suint16 x = Basic(Uint16 x)
+let suint32 x = Basic(Uint32 x)
+let suint64 x = Basic(Uint64 x)
+let sdouble x = Basic(Double x)
+let sstring x = Basic(String x)
+let ssignature x = Basic(Signature x)
+let sobject_path x = Basic(Object_path x)
 
 (* +--------------+
    | Value typing |
@@ -401,20 +397,23 @@ let type_of_basic = function
 let rec type_of_single = function
   | Basic x -> Tbasic(type_of_basic x)
   | Array(t, x) -> Tarray t
+  | Dict(tk, tv, x) -> Tdict(tk, tv)
   | Structure x -> Tstructure(List.map type_of_single x)
   | Variant _ -> Tvariant
-
-let type_of_element = function
-  | Dict_entry(k, v) -> Tdict_entry(type_of_basic k, type_of_single v)
-  | Single x -> Tsingle(type_of_single x)
 
 let type_of_sequence = List.map type_of_single
 
 let array t l =
   List.iter (fun x ->
-               if type_of_element x <> t
-               then failwith "OBus_value.varray: unexpected type") l;
+               if type_of_single x <> t then
+                 invalid_arg "OBus_value.array: unexpected type") l;
   Array(t, l)
+
+let dict tk tv l =
+  List.iter (fun (k, v) ->
+               if type_of_basic k <> tk || type_of_single v <> tv then
+                 invalid_arg "OBus_value.dict: unexpected type") l;
+  Dict(tk, tv, l)
 
 (* +-----------------------+
    | Value pretty-printing |
@@ -436,20 +435,15 @@ let print_basic pp = function
 
 let rec print_single pp = function
   | Basic v -> print_basic pp v
-  | Array(t, l) -> print_list print_element pp l
+  | Array(t, l) -> print_list print_single pp l
+  | Dict(tk, tv, l) -> print_list (fun pp (k, v) -> fprintf pp "(@[%a,@ %a@])" print_basic k print_single v) pp l
   | Structure l -> print_sequence pp l
   | Variant x -> fprintf pp "@[<2>Variant@,(@[<hv>%a,@ %a@])@]" print_tsingle (type_of_single x) print_single x
-
-and print_element pp = function
-  | Dict_entry(k, v) -> fprintf pp "(@[%a,@ %a@])" print_basic k print_single v
-  | Single x -> print_single pp x
 
 and print_sequence pp l = print_tuple print_single pp l
 
 let string_of_tsingle = string_of print_tsingle
-let string_of_telement = string_of print_telement
 let string_of_tsequence = string_of print_tsequence
 let string_of_basic = string_of print_basic
 let string_of_single = string_of print_single
-let string_of_element = string_of print_element
 let string_of_sequence = string_of print_sequence

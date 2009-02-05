@@ -58,17 +58,31 @@ val make :
   interface:OBus_name.interface ->
   member:OBus_name.member ->
   ('a, _) OBus_type.cl_sequence ->
-  (unit -> OBus_proxy.t Lwt.t) -> 'a t
+  OBus_proxy.t -> 'a t
   (** [make ?broadcast interface member typ proxy] create a signal.
 
       [broadcast] tell weather the signal is broadcasted or not. It
       default to [true]. *)
 
-val dmake :
+val dyn_make :
+  ?broadcast:bool ->
+  interface:OBus_name.interface ->
+  member:OBus_name.member ->
+  OBus_proxy.t -> OBus_message.body t
+  (** Same thing but the value returned are dynamically typed and
+      there is no constraint on the signal type *)
+
+(**/**)
+
+val make_custom :
+  ?broadcast:bool ->
+  interface:OBus_name.interface ->
+  member:OBus_name.member ->
+  ('a, _) OBus_type.cl_sequence ->
+  (unit -> OBus_proxy.t Lwt.t) -> 'a t
+
+val dyn_make_custom :
   ?broadcast:bool ->
   interface:OBus_name.interface ->
   member:OBus_name.member ->
   (unit -> OBus_proxy.t Lwt.t) -> OBus_message.body t
-  (** Same thing but the value returned are dynamically typed and
-      there is no constraint on the signal type *)
-

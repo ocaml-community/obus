@@ -45,7 +45,7 @@ type property =
 let obus_property = OBus_type.wrap obus_variant
   (function
      | Basic(String s) -> Pstring s
-     | Array(Tsingle (Tbasic Tstring), _) as l -> Pstrlist(OBus_type.cast_single (obus_list obus_string) l)
+     | Array(Tbasic Tstring, _) as l -> Pstrlist(OBus_type.cast_single (obus_list obus_string) l)
      | Basic(Int32 x) -> Pint x
      | Basic(Uint64 x) -> Puint64 x
      | Basic(Boolean x) -> Pbool x
@@ -59,8 +59,8 @@ let obus_property = OBus_type.wrap obus_variant
      | Pbool x -> basic (Boolean x)
      | Pdouble x -> basic (Double x))
 
-OBUS_method GetAllProperties : (string, property) dict_entry list
-OBUS_method SetMultipleProperties : (string, property) dict_entry list -> unit
+OBUS_method GetAllProperties : (string, property) dict
+OBUS_method SetMultipleProperties : (string, property) dict -> unit
 OBUS_method GetProperty : string -> property
 OBUS_method GetPropertyString : string -> string
 OBUS_method GetPropertyStringList : string -> string list

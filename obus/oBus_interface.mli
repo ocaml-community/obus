@@ -19,7 +19,7 @@ module type S = sig
   val interface : OBus_name.interface
     (** Name of the interface *)
 
-  val call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> t -> 'a
+  val method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> t -> 'a
     (** [call member typ obj ...] define a method call.
 
         A method call definition looks like:
@@ -53,7 +53,7 @@ module type S = sig
         ]}
     *)
 
-  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> ('a, _) OBus_type.cl_single -> t -> ('a, 'b) OBus_property.t
+  val property : OBus_name.member -> 'mode OBus_property.access -> ('a, _) OBus_type.cl_single -> t -> ('a, 'mode) OBus_property.t
     (** [property member access typ proxy] define a property.
 
         A property definition looks like:
@@ -72,6 +72,10 @@ module type S = sig
           OBUS_property_rw DBusName : property_type
         ]}
     *)
+
+  val property_r : OBus_name.member -> ('a, _) OBus_type.cl_single -> t -> ('a, [ `readable ]) OBus_property.t
+  val property_w : OBus_name.member -> ('a, _) OBus_type.cl_single -> t -> ('a, [ `writable ]) OBus_property.t
+  val property_rw : OBus_name.member -> ('a, _) OBus_type.cl_single -> t -> ('a, [ `readable | `writable ]) OBus_property.t
 end
 
 (** Name of an interface *)
@@ -98,7 +102,10 @@ end
 
 module Make_single(Proxy : Single_proxy)(Name : Name) : sig
   val interface : OBus_name.interface
-  val call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
+  val method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
   val signal : ?broadcast:bool -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> 'a OBus_signal.t
-  val property : OBus_name.member -> ([< OBus_property.access ] as 'b) -> ('a, _) OBus_type.cl_single -> ('a, 'b) OBus_property.t
+  val property : OBus_name.member -> 'mode OBus_property.access -> ('a, _) OBus_type.cl_single -> ('a, 'mode) OBus_property.t
+  val property_r : OBus_name.member -> ('a, _) OBus_type.cl_single -> ('a, [ `readable ]) OBus_property.t
+  val property_w : OBus_name.member -> ('a, _) OBus_type.cl_single -> ('a, [ `writable ]) OBus_property.t
+  val property_rw : OBus_name.member -> ('a, _) OBus_type.cl_single -> ('a, [ `readable | `writable ]) OBus_property.t
 end

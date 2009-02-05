@@ -154,11 +154,11 @@ class t = object(self)
     and path = self#obus_path in
     match peer with
       | Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
-          demit_signal connection ?destination ~interface ~member ~path body
+          dyn_emit_signal connection ?destination ~interface ~member ~path body
       | None ->
           Lwt_util.iter
             (fun connection ->
-               demit_signal connection ~interface ~member ~path body)
+               dyn_emit_signal connection ~interface ~member ~path body)
             exports
 
   method obus_export (connection : OBus_connection.t) = match connection#get with
@@ -204,7 +204,7 @@ class t = object(self)
          (fun iface name -> self#obus_get iface name);
        md_method "Set" <:obus_func< string -> string -> variant -> unit >>
          (fun iface name x -> self#obus_set iface name x);
-       md_method "GetAll" <:obus_func< string -> (string, variant) dict_entry list >>
+       md_method "GetAll" <:obus_func< string -> (string, variant) dict >>
          (fun iface -> self#obus_get_all iface)]
 end
 

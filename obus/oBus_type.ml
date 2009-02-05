@@ -50,26 +50,21 @@ type ('typ, 'make, 'cast) type_combinator = {
 
 type ('a, 'cl) t =
   | Cbasic of (tbasic, 'a -> basic, basic -> 'a) type_combinator
-  | Csingle of (tsingle, 'a -> single, single -> 'a) type_combinator
-  | Celement of (telement, 'a -> element, element -> 'a) type_combinator
+  | Ccontainer of (tsingle, 'a -> single, single -> 'a) type_combinator
   | Csequence of (tsingle tree, 'a -> single tree, sequence -> 'a * sequence) type_combinator
 
 type 'a basic = ('a, [`basic]) t
-type 'a single = ('a, [`single]) t
-type 'a element = ('a, [`element]) t
+type 'a container = ('a, [`container]) t
 type 'a sequence = ('a, [`sequence]) t
 
 type ('a, 'cl) cl_basic = ('a, 'cl) t
 constraint 'cl = [ `basic ]
 
 type ('a, 'cl) cl_single = ('a, 'cl) t
-constraint 'cl = [< `basic | `single ]
-
-type ('a, 'cl) cl_element = ('a, 'cl) t
-constraint 'cl = [< `basic | `single | `element ]
+constraint 'cl = [< `basic | `container ]
 
 type ('a, 'cl) cl_sequence = ('a, 'cl) t
-constraint 'cl = [< `basic | `single | `sequence ]
+constraint 'cl = [< `basic | `container | `sequence ]
 
 type ('a, 'b, 'c) func = {
   ftype : OBus_value.tsingle tree;
@@ -83,18 +78,12 @@ let type_basic = function
   | _ -> assert false
 let type_single = function
   | Cbasic { dtype = t } -> Tbasic t
-  | Csingle { dtype = t } -> t
-  | _ -> assert false
-let type_element = function
-  | Cbasic { dtype = t } -> Tsingle (Tbasic t)
-  | Csingle { dtype = t } -> Tsingle t
-  | Celement { dtype = t } -> t
+  | Ccontainer { dtype = t } -> t
   | _ -> assert false
 let type_sequence = function
   | Cbasic { dtype = t } -> [Tbasic t]
-  | Csingle { dtype = t } -> [t]
+  | Ccontainer { dtype = t } -> [t]
   | Csequence { dtype = t } -> tree_get_boundary t
-  | _ -> assert false
 
 let isignature { ftype = s } = tree_get_boundary s
 let osignature { freply = r } = type_sequence r
@@ -104,18 +93,12 @@ let make_basic = function
   | _ -> assert false
 let make_single = function
   | Cbasic { make = f } -> (fun x -> basic(f x))
-  | Csingle { make = f } -> f
-  | _ -> assert false
-let make_element =function
-  | Cbasic { make = f } -> (fun x -> Single(basic(f x)))
-  | Csingle { make = f } -> (fun x -> Single(f x))
-  | Celement { make = f } -> f
+  | Ccontainer { make = f } -> f
   | _ -> assert false
 let make_sequence = function
   | Cbasic { make = f } -> (fun x -> [basic(f x)])
-  | Csingle { make = f } -> (fun x -> [f x])
+  | Ccontainer { make = f } -> (fun x -> [f x])
   | Csequence { make = f } -> (fun x -> tree_get_boundary (f x))
-  | _ -> assert false
 
 exception Cast_failure
 
@@ -127,25 +110,14 @@ let _cast_single = function
       (fun context -> function
          | Basic x -> f context x
          | _ -> raise Cast_failure)
-  | Csingle { cast = f } -> f
-  | _ -> assert false
-let _cast_element = function
-  | Cbasic { cast = f } ->
-      (fun context -> function
-         | Single(Basic x) -> f context x
-         | _ -> raise Cast_failure)
-  | Csingle { cast = f } ->
-      (fun context -> function
-         | Single x -> f context x
-         | _ -> raise Cast_failure)
-  | Celement { cast = f } -> f
+  | Ccontainer { cast = f } -> f
   | _ -> assert false
 let _cast_sequence = function
   | Cbasic { cast = f } ->
       (fun context -> function
          | [Basic x] -> f context x
          | _ -> raise Cast_failure)
-  | Csingle { cast = f } ->
+  | Ccontainer { cast = f } ->
       (fun context -> function
          | [x] -> f context x
          | _ -> raise Cast_failure)
@@ -153,19 +125,16 @@ let _cast_sequence = function
       (fun context -> fun l -> match f context l with
          | v, [] -> v
          | _ -> raise Cast_failure)
-  | _ -> assert false
 
 exception No_context
 
 let cast_basic t ?(context=No_context) x = _cast_basic t context x
 let cast_single t ?(context=No_context) x = _cast_single t context x
-let cast_element t ?(context=No_context) x = _cast_element t context x
 let cast_sequence t ?(context=No_context) x = _cast_sequence t context x
 
 let opt_cast f ?(context=No_context) x = try Some(f context x) with Cast_failure -> None
 let opt_cast_basic t = opt_cast (_cast_basic t)
 let opt_cast_single t = opt_cast (_cast_single t)
-let opt_cast_element t = opt_cast (_cast_element t)
 let opt_cast_sequence t = opt_cast (_cast_sequence t)
 
 let make_func { fmake = f } cont = f Tnil cont
@@ -186,8 +155,7 @@ let wrap t f g = {
 
 let wrap t f g = match t with
   | Cbasic t -> Cbasic(wrap t f g)
-  | Csingle t -> Csingle(wrap t f g)
-  | Celement t -> Celement(wrap t f g)
+  | Ccontainer t -> Ccontainer(wrap t f g)
   | Csequence t -> Csequence{
       dtype = t.dtype;
       make = (fun x -> t.make (g x));
@@ -202,8 +170,7 @@ let wrap_with_context t f g = {
 
 let wrap_with_context t f g = match t with
   | Cbasic t -> Cbasic(wrap_with_context t f g)
-  | Csingle t -> Csingle(wrap_with_context t f g)
-  | Celement t -> Celement(wrap_with_context t f g)
+  | Ccontainer t -> Ccontainer(wrap_with_context t f g)
   | Csequence t -> Csequence{
       dtype = t.dtype;
       make = (fun x -> t.make (g x));
@@ -211,25 +178,47 @@ let wrap_with_context t f g = match t with
     }
 
 let wrap_array elt ~make ~cast =
-  let typ = type_element elt in
-  Csingle
+  let typ = type_single elt in
+  Ccontainer
     { dtype = Tarray typ;
-      make = (let f = make_element elt in
+      make = (let f = make_single elt in
               fun x -> array typ (make f x));
-      cast = (let f = _cast_element elt in
+      cast = (let f = _cast_single elt in
               fun context -> function
                 | Array(t, l) when t = typ -> cast (f context) l
                 | _ -> raise Cast_failure) }
 
+let wrap_dict tyk tyv ~make ~cast =
+  let ktyp = type_basic tyk and vtyp = type_single tyv in
+  Ccontainer
+    { dtype = Tdict(ktyp, vtyp);
+      make = (let f = make_basic tyk and g = make_single tyv in
+              fun x -> dict ktyp vtyp (make f g x));
+      cast = (let f = _cast_basic tyk and g = _cast_single tyv in
+              fun context -> function
+                | Dict(tk, tv, l) when tk = ktyp && tv = vtyp -> cast (f context) (g context) l
+                | _ -> raise Cast_failure) }
+
 let wrap_array_with_context elt ~make ~cast =
-  let typ = type_element elt in
-  Csingle
+  let typ = type_single elt in
+  Ccontainer
     { dtype = Tarray typ;
-      make = (let f = make_element elt in
+      make = (let f = make_single elt in
               fun x -> array typ (make f x));
-      cast = (let f = _cast_element elt in
+      cast = (let f = _cast_single elt in
               fun context -> function
                 | Array(t, l) when t = typ -> cast context (f context) l
+                | _ -> raise Cast_failure) }
+
+let wrap_dict_with_context tyk tyv ~make ~cast =
+  let ktyp = type_basic tyk and vtyp = type_single tyv in
+  Ccontainer
+    { dtype = Tdict(ktyp, vtyp);
+      make = (let f = make_basic tyk and g = make_single tyv in
+              fun x -> dict ktyp vtyp (make f g x));
+      cast = (let f = _cast_basic tyk and g = _cast_single tyv in
+              fun context -> function
+                | Dict(tk, tv, l) when tk = ktyp && tv = vtyp -> cast context (f context) (g context) l
                 | _ -> raise Cast_failure) }
 
 (* +---------+
@@ -293,7 +282,7 @@ let bitwise64 t bits =
    | Predefined types |
    +------------------+ *)
 
-module Pervasives =
+module OBus_pervasives =
 struct
 
   let obus_byte = Cbasic
@@ -417,23 +406,11 @@ struct
        ignore (List.fold_left (fun i x -> String.unsafe_set str i (f x); i + 1) 0 l);
        str)
 
-  let obus_dict_entry tyk tyv =
-    let ktyp = type_basic tyk
-    and vtyp = type_single tyv in
-    Celement
-      { dtype = Tdict_entry(ktyp, vtyp);
-        make = (let f = make_basic tyk
-                and g = make_single tyv in
-                fun (k, v) -> Dict_entry(f k, g v));
-        cast = (let f = _cast_basic tyk
-                and g = _cast_single tyv in
-                fun context -> function
-                  | Dict_entry(k, v) -> (f context k, g context v)
-                  | _ -> raise Cast_failure) }
+  let obus_dict tyk tyv = wrap_dict tyk tyv
+    (fun f g l -> List.map (fun (k, v) -> (f k, g v)) l)
+    (fun f g l -> List.map (fun (k, v) -> (f k, g v)) l)
 
-  let obus_assoc tyk tyv = obus_list (obus_dict_entry tyk tyv)
-
-  let obus_structure ty = Csingle
+  let obus_structure ty = Ccontainer
     { dtype = Tstructure(type_sequence ty);
       make = (let f = make_sequence ty in
               fun x -> structure (f x));
@@ -442,7 +419,7 @@ struct
                 | Structure l -> f context l
                 | _ -> raise Cast_failure) }
 
-  let obus_variant = Csingle
+  let obus_variant = Ccontainer
     { dtype = Tvariant;
       make = variant;
       cast = (fun context -> function
@@ -467,19 +444,17 @@ struct
   type signature = OBus_value.signature
   type object_path = OBus_path.t
   type path = OBus_path.t
-  type 'a set = 'a list
-  type ('a, 'b) dict_entry = 'a * 'b
-  type ('a, 'b) assoc = ('a, 'b) dict_entry set
+  type ('a, 'b) dict = ('a * 'b) list
   type 'a structure = 'a
   type variant = OBus_value.single
   type byte_array = string
 end
 
-open Pervasives
+open OBus_pervasives
 
-module type Ordered_element_type = sig
+module type Ordered_single_type = sig
   type t
-  val obus_t : (t, _) cl_element
+  val obus_t : (t, _) cl_single
   val compare : t -> t -> int
 end
 
@@ -489,7 +464,7 @@ module type Ordered_basic_type = sig
   val compare : t -> t -> int
 end
 
-module Make_set(Ord : Ordered_element_type) =
+module Make_set(Ord : Ordered_single_type) =
 struct
   include Set.Make(Ord)
   let obus_t = wrap_array Ord.obus_t
@@ -500,35 +475,30 @@ end
 module Make_map(Ord : Ordered_basic_type) =
 struct
   include Map.Make(Ord)
-  let obus_t ty = wrap_array (obus_dict_entry Ord.obus_t ty)
-    ~make:(fun f map -> fold (fun k v acc -> f (k, v) :: acc) map [])
-    ~cast:(fun f l -> List.fold_left (fun acc x ->
-                                        let (k, v) = f x in
-                                        add k v acc) empty l)
+  let obus_t ty = wrap_dict Ord.obus_t ty
+    ~make:(fun f g map -> fold (fun k v acc -> (f k, g v) :: acc) map [])
+    ~cast:(fun f g l -> List.fold_left (fun acc (k, v) -> add (f k) (g v) acc) empty l)
 end
 
 let (@) a b = Tcons(a, b)
 let typ = function
   | Cbasic { dtype = t } -> Tone (Tbasic t)
-  | Csingle { dtype = t } -> Tone t
+  | Ccontainer { dtype = t } -> Tone t
   | Csequence { dtype = t } -> t
-  | _ -> assert false
 let make = function
   | Cbasic { make = f } -> (fun v -> Tone (basic(f v)))
-  | Csingle { make = f } -> (fun v -> Tone (f v))
+  | Ccontainer { make = f } -> (fun v -> Tone (f v))
   | Csequence { make = f } -> f
-  | _ -> assert false
 let cast = function
   | Cbasic { cast = f } ->
       (fun context -> function
          | Basic x :: l -> f context x, l
          | _ -> raise Cast_failure)
-  | Csingle { cast = f } ->
+  | Ccontainer { cast = f } ->
       (fun context -> function
          | x :: l -> f context x, l
          | _ -> raise Cast_failure)
   | Csequence { cast = f } -> f
-  | _ -> raise Cast_failure
 
 let reply ty =
   { ftype = Tnil;
@@ -818,42 +788,3 @@ let tuple10 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 = Csequence
               let v9, l = cast9 context l in
               let v10, l = cast10 context l in
               ((v1, v2, v3, v4, v5, v6, v7, v8, v9, v10), l)) }
-
-type 'a with_basic = { with_basic : 'b. 'b basic -> 'a }
-type 'a with_single = { with_single : 'b. 'b single -> 'a }
-type 'a with_element = { with_element : 'b. 'b element -> 'a }
-type 'a with_sequence = { with_sequence : 'b. 'b sequence -> 'a }
-
-let with_basic w = function
-  | Tbyte -> w.with_basic obus_byte
-  | Tboolean -> w.with_basic obus_boolean
-  | Tint16 -> w.with_basic obus_int16
-  | Tint32 -> w.with_basic obus_int32
-  | Tint64 -> w.with_basic obus_int64
-  | Tuint16 -> w.with_basic obus_uint16
-  | Tuint32 -> w.with_basic obus_uint32
-  | Tuint64 -> w.with_basic obus_uint64
-  | Tdouble -> w.with_basic obus_double
-  | Tstring -> w.with_basic obus_string
-  | Tsignature -> w.with_basic obus_signature
-  | Tobject_path -> w.with_basic obus_object_path
-
-let rec with_single w = function
-  | Tbasic t -> with_basic { with_basic = fun t -> w.with_single (t :> (_, [`single]) t) } t
-  | Tarray t -> with_element { with_element = fun t -> w.with_single (obus_list t) } t
-  | Tstructure tl -> with_sequence { with_sequence = fun t -> w.with_single (obus_structure t) } tl
-  | Tvariant -> w.with_single obus_variant
-
-and with_element w = function
-  | Tdict_entry(tk, tv) ->
-      with_basic { with_basic = fun tk ->
-                        with_single { with_single = fun tv -> w.with_element (obus_dict_entry tk tv) } tv } tk
-  | Tsingle t ->
-      with_single { with_single = fun t -> w.with_element (t :> (_, [`element]) t) } t
-
-and with_sequence w = function
-  | [] -> w.with_sequence obus_unit
-  | tx :: tl -> with_single
-      { with_single = fun tx ->
-          with_sequence
-            { with_sequence = fun tl -> w.with_sequence (tuple2 tx tl) } tl } tx

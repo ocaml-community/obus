@@ -161,12 +161,12 @@ let method_call_no_reply connection ?(flags=default_flags) ?sender ?destination 
                                ?sender ?destination ~path ?interface ~member body)
   end
 
-let dmethod_call connection ?flags ?sender ?destination ~path ?interface ~member body =
+let dyn_method_call connection ?flags ?sender ?destination ~path ?interface ~member body =
   send_message_with_reply connection
     (method_call ?flags ?sender ?destination ~path ?interface ~member body)
   >>= fun { body = x } -> return x
 
-let dmethod_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member body =
+let dyn_method_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member body =
   send_message connection
     (method_call ~flags:{ flags with no_reply_expected = true }
        ?sender ?destination ~path ?interface ~member body)
@@ -179,10 +179,10 @@ let method_call connection ?flags ?sender ?destination ~path ?interface ~member 
 let emit_signal connection ?flags ?sender ?destination ~path ~interface ~member ty x =
   send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member (OBus_type.make_sequence ty x))
 
-let demit_signal connection ?flags ?sender ?destination ~path ~interface ~member body =
+let dyn_emit_signal connection ?flags ?sender ?destination ~path ~interface ~member body =
   send_message connection (signal ?flags ?sender ?destination ~path ~interface ~member body)
 
-let dsend_reply connection { sender = sender; serial = serial } body =
+let dyn_send_reply connection { sender = sender; serial = serial } body =
   send_message connection { destination = sender;
                             sender = None;
                             flags = { no_reply_expected = true; no_auto_start = true };
@@ -191,7 +191,7 @@ let dsend_reply connection { sender = sender; serial = serial } body =
                             body = body }
 
 let send_reply connection mc typ v =
-  dsend_reply connection mc (OBus_type.make_sequence typ v)
+  dyn_send_reply connection mc (OBus_type.make_sequence typ v)
 
 let send_error connection { sender = sender; serial = serial } name msg =
   send_message connection { destination = sender;
@@ -385,7 +385,7 @@ let dispatch_message connection message = match message with
       match member, body with
         | "Ping", [] ->
             (* Just pong *)
-            ignore (dsend_reply connection.packed message [])
+            ignore (dyn_send_reply connection.packed message [])
         | "GetMachineId", [] ->
             ignore
               (try_bind (fun _ -> Lazy.force OBus_info.machine_uuid)

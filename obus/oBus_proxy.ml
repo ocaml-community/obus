@@ -9,7 +9,6 @@
 
 open Lwt
 open OBus_peer
-open OBus_connection
 
 type t = {
   peer : OBus_peer.t;
@@ -23,31 +22,31 @@ let make peer path = {
 
 let obus_t = OBus_type.wrap_with_context <:obus_type< object_path >>
   (fun context path -> match context with
-     | Context(connection, msg) ->
+     | OBus_connection.Context(connection, msg) ->
          { peer = { connection = connection;
                     name = OBus_message.sender msg };
            path = path }
      | _ -> raise OBus_type.Cast_failure)
   path
 
-let call proxy ?interface ~member typ =
-  method_call proxy.peer.connection
+let method_call proxy ?interface ~member typ =
+  OBus_connection.method_call proxy.peer.connection
     ?destination:proxy.peer.name
     ~path:proxy.path
     ?interface
     ~member
     typ
 
-let call_no_reply proxy ?interface ~member typ =
-  method_call_no_reply proxy.peer.connection
+let method_call_no_reply proxy ?interface ~member typ =
+  OBus_connection.method_call_no_reply proxy.peer.connection
     ?destination:proxy.peer.name
     ~path:proxy.path
     ?interface
     ~member
     typ
 
-let call' proxy ?interface ~member body typ =
-  method_call' proxy.peer.connection
+let method_call' proxy ?interface ~member body typ =
+  OBus_connection.method_call' proxy.peer.connection
     ?destination:proxy.peer.name
     ~path:proxy.path
     ?interface
@@ -55,16 +54,16 @@ let call' proxy ?interface ~member body typ =
     body
     typ
 
-let dcall proxy ?interface ~member body =
-  dmethod_call proxy.peer.connection
+let dyn_method_call proxy ?interface ~member body =
+  OBus_connection.dyn_method_call proxy.peer.connection
     ?destination:proxy.peer.name
     ~path:proxy.path
     ?interface
     ~member
     body
 
-let dcall_no_reply proxy ?interface ~member body =
-  dmethod_call_no_reply proxy.peer.connection
+let dyn_method_call_no_reply proxy ?interface ~member body =
+  OBus_connection.dyn_method_call_no_reply proxy.peer.connection
     ?destination:proxy.peer.name
     ~path:proxy.path
     ?interface
@@ -74,7 +73,7 @@ let dcall_no_reply proxy ?interface ~member body =
 type introspection = OBus_introspect.interface list * t list
 
 let raw_introspect proxy =
-  call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" <:obus_func< OBus_introspect.document >>
+  method_call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" <:obus_func< OBus_introspect.document >>
 
 let introspect proxy =
   raw_introspect proxy >>= fun (ifaces, sub_nodes) ->

@@ -140,7 +140,7 @@ val method_call' : t ->
   (** Same thing but take the body of the message as a
       dynamically-typed value. *)
 
-val dmethod_call : t ->
+val dyn_method_call : t ->
   ?flags:OBus_message.flags ->
   ?sender:OBus_name.bus ->
   ?destination:OBus_name.bus ->
@@ -152,7 +152,7 @@ val dmethod_call : t ->
       dynamically-typed value and return the reply as a
       dynamically-typed value too *)
 
-val dmethod_call_no_reply : t ->
+val dyn_method_call_no_reply : t ->
   ?flags:OBus_message.flags ->
   ?sender:OBus_name.bus ->
   ?destination:OBus_name.bus ->
@@ -171,7 +171,7 @@ val emit_signal : t ->
   ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
   (** Emit a signal *)
 
-val demit_signal : t ->
+val dyn_emit_signal : t ->
   ?flags:OBus_message.flags ->
   ?sender:OBus_name.bus ->
   ?destination:OBus_name.bus ->
@@ -184,7 +184,7 @@ val send_reply : t -> OBus_message.t -> ('a, _) OBus_type.cl_sequence -> 'a -> u
   (** [send_reply connection method_call reply] Send a reply to a
       method call *)
 
-val dsend_reply : t -> OBus_message.t -> OBus_value.sequence -> unit Lwt.t
+val dyn_send_reply : t -> OBus_message.t -> OBus_value.sequence -> unit Lwt.t
 
 val send_error : t -> OBus_message.t -> OBus_error.name -> OBus_error.message -> unit Lwt.t
   (** Send an error message in reply to a method call *)

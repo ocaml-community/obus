@@ -43,7 +43,7 @@ type image = {
   img_bits_per_sample : int;
   img_channels : int;
   img_data : string;
-} with obus(single)
+} with obus(container)
 
 val notify :
   ?app_name:string ->

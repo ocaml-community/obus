@@ -29,17 +29,17 @@ val introspect : t -> (OBus_introspect.interface list * t list) Lwt.t
   (** Introspect the proxy *)
 
 val raw_introspect : t -> OBus_introspect.document Lwt.t
-  (** Same as [introspect] but do not create proxy for sub-nodes *)
+  (** Same as [introspect] but do not creates proxies for sub-nodes *)
 
 (** {6 Method calls} *)
 
-val call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
+val method_call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
   (** Call a method of the given proxy *)
 
-val call_no_reply : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, unit Lwt.t, unit) OBus_type.func -> 'a
+val method_call_no_reply : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, unit Lwt.t, unit) OBus_type.func -> 'a
   (** Same as call but do not wait for a reply *)
 
-val call' : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
+val method_call' : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
   (** Take the body of the call as a dynamically-typed value. This can
       be used to write some generic function, for example:
 
@@ -49,8 +49,8 @@ val call' : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OB
             (fun body -> perform
                bus <-- Lazy.force OBus_bus.session;
                peer <-- OBus_bus.get_peer "some.well.known.bus.name";
-               call' { peer = peer;
-                       path = [ "some"; "well"; "known"; "path" ] }
+               method_call' { peer = peer;
+                              path = [ "some"; "well"; "known"; "path" ] }
                  ~interface:"some.well.known.interface"
                  ~member
                  body
@@ -58,5 +58,5 @@ val call' : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OB
       ]}
   *)
 
-val dcall : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> OBus_message.body Lwt.t
+val dyn_method_call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> OBus_message.body Lwt.t
   (** Use only dynamically typed values *)
