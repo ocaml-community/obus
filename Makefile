@@ -5,7 +5,11 @@
 #
 # This file is a part of obus, an ocaml implemtation of dbus.
 
+ifeq ($(TERM),dumb)
+OC = ocamlbuild -classic-display
+else
 OC = ocamlbuild
+endif
 OF = ocamlfind
 
 # Targets

@@ -138,8 +138,8 @@ let _ =
            | Ocamlfind stuff |
            +-----------------+ *)
 
-        (* When one link an OCaml library/binary/package, one should use -linkpkg *)
-        flag ["ocaml"; "link"] & A"-linkpkg";
+        (* When one link an OCaml binary, one should use -linkpkg *)
+        flag ["ocaml"; "link"; "program"] & A"-linkpkg";
 
         (* Deals with packages needing ordering first *)
         List.iter define_package packages_needing_ordering;
