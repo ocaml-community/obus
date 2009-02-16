@@ -22,16 +22,6 @@ type t = {
 
 exception Shutdown
 
-let socket fd (ic, oc) = OBus_lowlevel.make_transport
-  ~recv:(fun _ -> OBus_lowlevel.get_message ic)
-  ~send:(fun msg ->
-           perform
-             OBus_lowlevel.put_message oc msg;
-             Lwt_chan.flush oc)
-  ~shutdown:(fun _ ->
-               Lwt_unix.shutdown fd SHUTDOWN_ALL;
-               Lwt_unix.close fd)
-
 let rec loop server (listen_fd, guid) =
   catch
     (fun _ -> perform
@@ -48,7 +38,7 @@ let rec loop server (listen_fd, guid) =
             return ());
        let _ =
          try
-           server.on_connection (socket fd chans)
+           server.on_connection (OBus_lowlevel.socket fd chans)
          with
              exn ->
                Log.failure exn "on_connection failed with"

@@ -476,11 +476,23 @@ let rec dispatch_forever connection =
                  Log.failure exn "the error handler (OBus_connection.on_disconnect) failed with:";
                  return ())
 
+(* +-----------------+
+   | Cleanup at exit |
+   +-----------------+ *)
+
+let opened_connections = ref []
+
+let _ =
+  let close_all_connections = lazy(
+    List.iter (fun c -> ignore (c#set_crash Connection_closed)) !opened_connections
+  ) in
+  at_exit (fun _ -> Lazy.force close_all_connections)
+
 (* +-----------------------+
    | ``Packed'' connection |
    +-----------------------+ *)
 
-class packed_connection = object
+class packed_connection = object(self)
 
   val mutable state = Crashed Exit (* Fake initial state *)
 
@@ -497,6 +509,7 @@ class packed_connection = object
         exn
     | Running connection ->
         state <- Crashed exn;
+        opened_connections := List.filter ((!=) (self  :> packed_connection)) !opened_connections;
 
         begin match connection.guid with
           | Some guid -> guid_connection_map := Guid_map.remove guid !guid_connection_map
@@ -513,11 +526,12 @@ class packed_connection = object
 
         (* Shutdown the transport *)
         if !(connection.shutdown_transport_on_close) then
-          (try
-             OBus_lowlevel.shutdown connection.transport
-           with
-               exn ->
-                 Log.failure exn "failed to abort/shutdown the transport");
+          ignore (Lwt.catch
+                    (fun _ ->
+                       OBus_lowlevel.shutdown connection.transport)
+                    (fun exn ->
+                       Log.failure exn "failed to abort/shutdown the transport";
+                       return ()));
 
         (* Wakeup all reply handlers so they will not wait forever *)
         Serial_map.iter (fun _ w -> wakeup_exn w exn) connection.reply_waiters;
@@ -535,6 +549,9 @@ class packed_connection = object
         end connection.exported_objects;
 
         exn
+
+  initializer
+    opened_connections := (self :> packed_connection) :: !opened_connections
 end
 
 (* +---------------------+
@@ -548,7 +565,7 @@ let of_transport ?guid ?(up=true) transport =
       name = None;
       acquired_names = [];
       transport = transport;
-      shutdown_transport_on_close = ref false;
+      shutdown_transport_on_close = ref true;
       on_disconnect = ref (fun _ -> ());
       guid = guid;
       down = (if up then None else Some(Lwt.wait ()));

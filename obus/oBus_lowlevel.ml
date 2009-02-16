@@ -1195,7 +1195,7 @@ module Log = Log.Make(struct let section = "transport" end)
 type transport = {
   recv : unit -> OBus_message.t Lwt.t;
   send : OBus_message.t -> unit Lwt.t;
-  shutdown : unit -> unit;
+  shutdown : unit -> unit Lwt.t;
 }
 
 let make_transport ~recv ~send ~shutdown = { recv = recv; send = send; shutdown = shutdown }
@@ -1205,17 +1205,123 @@ let send { send = send } message = send message
 let shutdown { shutdown = shutdown } = shutdown ()
 
 let chans_of_fd fd = (Lwt_chan.in_channel_of_descr fd,
-                       Lwt_chan.out_channel_of_descr fd)
+                      Lwt_chan.out_channel_of_descr fd)
+
+type buffer_state =
+    (* State of a channel buffer *)
+  | Writing of int
+      (* [n] threads are currently writing data into the buffer. This
+         is normally never more than 1 because obus serialize the
+         sending of messages *)
+  | Dirty
+      (* The buffer contains data but nobody is currently writing *)
+  | Clean
+      (* The buffer contains nothing *)
+  | Closed of bool
+      (* The transport has been closed. The argument is [true] iff the
+         buffer was dirty before being closed. *)
+
+type delayed_flush = {
+  df_chan : Lwt_chan.out_channel;
+  (* The channel to flush *)
+
+  mutable df_state : buffer_state;
+  (* [true] iff there is some data not flushed in the buffer *)
+
+  mutable df_wait : unit Lwt.t;
+  (* Thread which is wakeup when a flush is requested *)
+
+  df_exit : unit Lwt.t;
+  (* Thread which is wakeup when to told the flusher to exit *)
+
+  df_done : unit Lwt.t;
+  (* Thread which is wakeup by the flusher when it exits *)
+}
+
+(* Flusher, it try to flush only when there is nothing to do *)
+let rec flush_forever df =
+  (perform
+     (* Wait until something wakeup us, this happen when a message has
+        been completely written *)
+     df.df_wait;
+     (* Wait until there is nothing else to do, or the transport is
+        closed *)
+     Lwt.choose [Lwt_unix.yield (); df.df_exit];
+     match df.df_state with
+       | Writing _ ->
+           (* Somebody started to write a new message, wait again *)
+           flush_forever df
+       | Dirty ->
+           (* OK, this is flushing time *)
+           df.df_state <- Clean;
+           (perform
+              Lwt_chan.flush df.df_chan;
+              flush_forever df)
+       | Closed false ->
+           Lwt.wakeup df.df_done ();
+           Lwt.return ()
+       | Closed true ->
+           Lwt.finalize
+             (fun _ ->
+                Lwt_chan.flush df.df_chan)
+             (fun _ ->
+                Lwt.wakeup df.df_done ();
+                Lwt.return ())
+       | Clean ->
+           (* never happen *)
+           Log.error "OBus_lowlevel.flush_forever: trying to flush a clean buffer";
+           exit 1)
+
+(* Called before writing a message to the buffer *)
+let starts_writing df = match df.df_state with
+  | Closed _ ->
+      ()
+  | Writing n ->
+      df.df_state <- Writing(n + 1)
+  | _ ->
+      df.df_state <- Writing 1
+
+(* Called after writing a message to the buffer *)
+let ends_writing df = match df.df_state with
+  | Closed _ ->
+      ()
+  | Writing 1 ->
+      (* We where the only writer, buffer can be flushed now *)
+      df.df_state <- Dirty;
+      let w = df.df_wait in
+      df.df_wait <- Lwt.wait ();
+      Lwt.wakeup w ()
+  | Writing n ->
+      df.df_state <- Writing(n - 1)
+  | _ ->
+      (* never happen *)
+      assert false
 
 let socket fd (ic, oc) =
+  let df = { df_wait = Lwt.wait ();
+             df_state = Clean;
+             df_chan = oc;
+             df_exit = Lwt.wait ();
+             df_done = Lwt.wait () } in
+  let _ = flush_forever df in
   { recv = (fun _ -> get_message ic);
     send = (fun msg ->
-              perform
-                put_message oc msg;
-                Lwt_chan.flush oc);
+              starts_writing df;
+              Lwt.finalize
+                (fun _ ->
+                   put_message oc msg)
+                (fun _ ->
+                   ends_writing df;
+                   Lwt.return ()));
     shutdown = (fun _ ->
-                  Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                  Lwt_unix.close fd) }
+                  df.df_state <- Closed(df.df_state = Dirty);
+                  (* Tell the flusher to exit and wait for that *)
+                  Lwt.wakeup df.df_wait ();
+                  Lwt.wakeup df.df_exit ();
+                  df.df_done >>= fun _ ->
+                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                    Lwt_unix.close fd;
+                    Lwt.return ()) }
 
 let loopback _ =
   let queue = MQueue.create () in
@@ -1224,7 +1330,8 @@ let loopback _ =
     shutdown = (fun _ ->
                   Queue.iter (fun w -> wakeup_exn w (Failure "transport closed")) queue.MQueue.waiters;
                   Queue.clear queue.MQueue.waiters;
-                  Queue.clear queue.MQueue.queued) }
+                  Queue.clear queue.MQueue.queued;
+                  return ()) }
 
 let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in

@@ -103,17 +103,28 @@ val get_message_size : string -> int -> int
 type transport = {
   recv : unit -> OBus_message.t Lwt.t;
   send : OBus_message.t -> unit Lwt.t;
-  shutdown : unit -> unit;
+  shutdown : unit -> unit Lwt.t;
 }
+
+(** Note for implementation of new transports: OBus send messages one
+    by one, you can rely on that. *)
 
 val make_transport :
   recv:(unit -> OBus_message.t Lwt.t) ->
   send:(OBus_message.t -> unit Lwt.t) ->
-  shutdown:(unit -> unit) -> transport
+  shutdown:(unit -> unit Lwt.t) -> transport
 
 val recv : transport -> OBus_message.t Lwt.t
 val send : transport -> OBus_message.t -> unit Lwt.t
-val shutdown : transport -> unit
+val shutdown : transport -> unit Lwt.t
+
+val socket : Lwt_unix.file_descr -> Lwt_chan.in_channel * Lwt_chan.out_channel -> transport
+  (** [socket fd (ic, oc)] creates a 'socket' transport. The file
+      descriptor [fd] is only used for [shutdown].
+
+      Note: [socket] optimize writing in the sense that it try to
+      minimize the number of flushing operation, and so the number of
+      syscalls. *)
 
 val loopback : unit -> transport
   (** Loopback transport, each message sent is received on the same
