@@ -34,14 +34,22 @@ let (&) a b = a b
 
 module Interf_map = Map.Make(struct type t = string let compare = compare end)
 
-let rec get (nodes, map) proxy =
+let rec get proxy =
   (perform
      (interfaces, subs) <-- OBus_proxy.introspect proxy;
-     let map = List.fold_left (fun map (name, content, annots) -> Interf_map.add name (content, annots) map) map interfaces in
-     let nodes = (proxy, List.map (fun (name, _, _) -> name) interfaces) :: nodes in
+     let map = List.fold_left (fun map (name, content, annots) ->
+                                 Interf_map.add name (content, annots) map)
+       Interf_map.empty interfaces in
+     let nodes = [(proxy, List.map (fun (name, _, _) -> name) interfaces)] in
      match !recursive with
        | true ->
-           Lwt_util.fold_left get (nodes, map) subs
+           List.fold_left
+             (fun t1 t2 ->
+                perform
+                  (nodes1, map1) <-- t1;
+                  (nodes2, map2) <-- t2;
+                  return (nodes1 @ nodes2, Interf_map.fold Interf_map.add map1 map2))
+             (return (nodes, map)) (List.map get subs)
        | false ->
            return (nodes, map))
 
@@ -56,7 +64,7 @@ let main service path =
        | true, false -> OBus_bus.session
        | false, true -> OBus_bus.system
      end;
-     (nodes, map) <-- get ([], Interf_map.empty) (OBus_proxy.make (OBus_peer.make bus service) path);
+     (nodes, map) <-- get (OBus_proxy.make (OBus_peer.make bus service) path);
      let _ = match !obj_mode with
        | false ->
            begin match !mli with

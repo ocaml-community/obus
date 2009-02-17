@@ -11,7 +11,6 @@ module Log = Log.Make(struct let section = "auth" end)
 
 open Printf
 open Lwt
-open Lwt_chan
 
 exception Auth_failure of string
 let auth_failure fmt = ksprintf (fun msg -> fail (Auth_failure msg)) fmt
@@ -88,7 +87,7 @@ let keyring_file_name context = sprintf "%s/.dbus-keyrings/%s" (Lazy.force Util.
 let load_cookie context id =
   let rec aux ic =
     (perform
-       line <-- input_line ic;
+       line <-- Lwt_chan.input_line ic;
        (id', cookie) <-- catch
          (fun _ -> Scanf.sscanf line "%ld %Ld %s"
             (fun id' time cookie -> return (id', cookie)))
@@ -197,7 +196,7 @@ let save_keyring context content =
             (fun oc ->
                Lwt_util.iter_serial
                  (fun (id, time, cookie) ->
-                    output_string oc (sprintf  "%ld %Ld %s\n" id time cookie))
+                    Lwt_chan.output_string oc (sprintf  "%ld %Ld %s\n" id time cookie))
                  content))
          (fun exn ->
             Log.error "unable to write temporary keyring file %s: %s" tmp_fname (Util.string_of_exn exn);
@@ -210,7 +209,7 @@ let save_keyring context content =
 let load_keyring context =
   let rec aux acc ic =
     catch
-      (fun _ -> input_line ic >>= fun line -> return (Some line))
+      (fun _ -> Lwt_chan.input_line ic >>= fun line -> return (Some line))
       (function
          | End_of_file -> return None
          | exn -> fail exn)
@@ -290,25 +289,51 @@ let default_server_mechanisms = [server_mech_dbus_cookie_sha1]
 
 (***** Transport *****)
 
-let send_line mode oc line =
-  Log.debug "%s: sending: %S" mode line;
-  (perform
-     output_string oc line;
-     output_string oc "\r\n";
-     flush oc)
+type stream = {
+  get_char : unit -> char Lwt.t;
+  put_char : char -> unit Lwt.t;
+  flush : unit -> unit Lwt.t;
+}
 
-let rec recv_line buffer ic eol_state =
+let make_stream ~get_char ~put_char ~flush = {
+  get_char = get_char;
+  put_char = put_char;
+  flush = flush;
+}
+
+let stream_of_lwt_channels (ic, oc) = {
+  get_char = (fun _ -> Lwt_chan.input_char ic);
+  put_char = (fun c -> Lwt_chan.output_char oc c);
+  flush = (fun _ -> Lwt_chan.flush oc);
+}
+
+let send_line mode stream line =
+  Log.debug "%s: sending: %S" mode line;
+  let rec aux i =
+    if i = String.length line then
+      (perform
+         stream.put_char '\r';
+         stream.put_char '\n';
+         stream.flush ())
+    else
+      (perform
+         stream.put_char line.[i];
+         aux (i + 1))
+  in
+  aux 0
+
+let rec recv_line buffer stream eol_state =
   (* We need a limit to avoid consuming all the ram... *)
   if Buffer.length buffer > max_line_length then
     auth_failure "line too long received (>%d)" max_line_length
   else
     (perform
-       ch <-- input_char ic;
+       ch <-- stream.get_char ();
        let _ = Buffer.add_char buffer ch in
        match eol_state, ch with
-         | 0, '\r' -> recv_line buffer ic 1
+         | 0, '\r' -> recv_line buffer stream 1
          | 1, '\n' -> return (Buffer.sub buffer 0 (Buffer.length buffer - 2))
-         | _ -> recv_line buffer ic 0)
+         | _ -> recv_line buffer stream 0)
 
 let rec first f str pos =
   if pos = String.length str then
@@ -353,9 +378,9 @@ let preprocess_line line =
   if i = 0 then failwith "empty command";
   (String.sub line 0 i, sub_strip line i (String.length line))
 
-let rec recv mode command_parser (ic, oc) =
+let rec recv mode command_parser stream =
   (perform
-     line <-- recv_line (Buffer.create 42) ic 0;
+     line <-- recv_line (Buffer.create 42) stream 0;
      let _ = Log.debug "%s: received: %S" mode line in
 
      (* If a parse failure occur, return an error and try again *)
@@ -369,8 +394,8 @@ let rec recv mode command_parser (ic, oc) =
        | `Success x -> return x
        | `Failure(Failure msg) ->
            (perform
-              send_line mode oc ("ERROR \"" ^ msg ^ "\"");
-              recv mode command_parser (ic, oc))
+              send_line mode stream ("ERROR \"" ^ msg ^ "\"");
+              recv mode command_parser stream)
        | `Failure exn -> fail exn)
 
 let client_recv = recv "client"
@@ -510,22 +535,22 @@ struct
         | _ -> return Failure
       end
 
-  let exec mechs (ic, oc) =
+  let exec mechs stream =
     let rec loop = function
       | Transition(cmd, state, mechs) ->
           (perform
-             client_send oc cmd;
-             cmd <-- client_recv (ic, oc);
+             client_send stream cmd;
+             cmd <-- client_recv stream;
              transition mechs state cmd >>= loop)
       | Success guid ->
           (perform
-             client_send oc Client_begin;
+             client_send stream Client_begin;
              return guid)
       | Failure ->
           auth_failure "authentification failure"
     in
     (perform
-       output_char oc '\000';
+       stream.put_char '\000';
        initial mechs >>= loop)
 end
 
@@ -618,10 +643,10 @@ struct
         | _ -> error "BEGIN command expected"
       end
 
-  let exec mechs guid (ic, oc) =
+  let exec mechs guid stream =
     let rec loop state count =
       (perform
-         cmd <-- server_recv (ic, oc);
+         cmd <-- server_recv stream;
          transition guid mechs state cmd >>= function
            | Transition(cmd, state) ->
                let count = match cmd with
@@ -633,19 +658,18 @@ struct
                  auth_failure "too many reject"
                else
                  (perform
-                    server_send oc cmd;
+                    server_send stream cmd;
                     loop state count)
            | Accept ->
                return ()
            | Failure ->
                auth_failure "authentification failure")
     in
-    (perform
-       ch <-- input_char ic;
-       if ch = '\000' then
-         loop Waiting_for_auth 0
-       else
-         auth_failure "initial null byte missing")
+    stream.get_char () >>= function
+      | '\000' ->
+          loop Waiting_for_auth 0
+      | _ ->
+          auth_failure "initial null byte missing"
 end
 
 let client_authenticate ?(mechanisms=default_client_mechanisms) = Client.exec mechanisms

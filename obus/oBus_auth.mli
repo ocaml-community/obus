@@ -75,17 +75,29 @@ type server_mechanism = string * (unit -> server_mechanism_handler)
 val server_mech_dbus_cookie_sha1 : server_mechanism
 val default_server_mechanisms : server_mechanism list
 
+(** {6 Streams} *)
+
+type stream
+  (** Way of communication *)
+
+val make_stream :
+  get_char:(unit -> char Lwt.t) ->
+  put_char:(char -> unit Lwt.t) ->
+  flush:(unit -> unit Lwt.t) -> stream
+  (** Creates a stream from lowlevel functions. *)
+
+val stream_of_lwt_channels : Lwt_chan.in_channel * Lwt_chan.out_channel -> stream
+  (** Creates a stream from a pair of lwt channels *)
+
 (** {6 Authentification} *)
 
-val client_authenticate : ?mechanisms:client_mechanism list ->
-  Lwt_chan.in_channel * Lwt_chan.out_channel -> OBus_address.guid Lwt.t
+val client_authenticate : ?mechanisms:client_mechanism list -> stream -> OBus_address.guid Lwt.t
   (** Launch client-side authentication on the given input and
       output channels.
 
       If it succeed return the unique identifiant of the server
       address. *)
 
-val server_authenticate : ?mechanisms:server_mechanism list -> OBus_address.guid ->
-  Lwt_chan.in_channel * Lwt_chan.out_channel -> unit Lwt.t
-  (** Launch server-side authentication on the given input and
-      output channels. *)
+val server_authenticate : ?mechanisms:server_mechanism list -> OBus_address.guid -> stream -> unit Lwt.t
+  (** Launch server-side authentication on the given input and output
+      channels. *)

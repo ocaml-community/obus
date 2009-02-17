@@ -22,14 +22,25 @@ type t = {
 
 exception Shutdown
 
+let socket fd chans =
+  let tr = OBus_lowlevel.transport_of_channels chans in
+  { tr with
+      OBus_lowlevel.shutdown = fun _ ->
+        Lwt.finalize tr.OBus_lowlevel.shutdown
+          (fun _ ->
+             Lwt_unix.shutdown fd SHUTDOWN_ALL;
+             Lwt_unix.close fd;
+             Lwt.return ()) }
+
 let rec loop server (listen_fd, guid) =
   catch
     (fun _ -> perform
        (fd, addr) <-- Lwt_unix.accept listen_fd;
-       let chans = (Lwt_chan.in_channel_of_descr fd,
-                    Lwt_chan.out_channel_of_descr fd) in
+       let chans = (OBus_lowlevel.make_ichan (fun str ofs len -> Lwt_unix.read fd str ofs len),
+                    OBus_lowlevel.make_ochan (fun str ofs len -> Lwt_unix.write fd str ofs len)) in
        catch
-         (fun _ -> OBus_auth.server_authenticate ?mechanisms:server.mechanisms guid chans)
+         (fun _ -> OBus_auth.server_authenticate ?mechanisms:server.mechanisms guid
+            (OBus_lowlevel.auth_stream_of_channels chans))
          (fun exn ->
             Log.log "authentication failure for client from %a"
               (fun oc -> function
@@ -38,7 +49,7 @@ let rec loop server (listen_fd, guid) =
             return ());
        let _ =
          try
-           server.on_connection (OBus_lowlevel.socket fd chans)
+           server.on_connection (socket fd chans)
          with
              exn ->
                Log.failure exn "on_connection failed with"

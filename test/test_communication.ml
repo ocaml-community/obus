@@ -44,7 +44,7 @@ let _ =
   if Unix.fork () = 0 then
     Lwt_unix.run
       (perform
-         con <-- Lazy.force OBus_bus.session >>= (fun bus -> return bus);
+         con <-- Lazy.force OBus_bus.session;
          wait_for_name con;
          run_tests con test_count;
          OBus_connection.dyn_emit_signal con ~destination:name ~interface:"a.a" ~member:"exit_now" ~path:[] [])

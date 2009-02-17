@@ -72,8 +72,8 @@ DEFINE LEXEC(code) = (match connection#get with
 (* Send a message, maybe adding a reply waiter and return
    [return_thread] *)
 let send_message_backend connection reply_waiter_opt return_thread message =
-  LEXEC(let current_outgoing = connection.outgoing in
-        let w = wait () in
+  LEXEC(let w = wait () in
+        let current_outgoing = connection.outgoing in
         connection.outgoing <- w;
         current_outgoing >>= fun serial ->
           match apply_filters "outgoing" { message with serial = serial } connection.outgoing_filters with

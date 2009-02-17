@@ -60,7 +60,7 @@ type result = {
 
 let run_one_test byte_order msg acc =
   try
-    let msg' = Buf.get (Buf.put ~byte_order msg) in
+    let msg' = OBus_lowlevel.string_get_message (OBus_lowlevel.string_put_message ~byte_order msg) in
     if msg' = msg then
       { acc with success = acc.success + 1 }
     else begin

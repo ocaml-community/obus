@@ -26,9 +26,9 @@ let test mech =
   catch
     (fun _ -> perform
        Lwt_util.join [(perform
-                         guid <-- client_authenticate (client_ic, client_oc);
+                         guid <-- client_authenticate (OBus_auth.stream_of_lwt_channels (client_ic, client_oc));
                          return ());
-                      server_authenticate ~mechanisms:[mech] guid (server_ic, server_oc)];
+                      server_authenticate ~mechanisms:[mech] guid (OBus_auth.stream_of_lwt_channels (server_ic, server_oc))];
        let _ = Printf.eprintf "authentication %s works!\n%!" (fst mech) in
        return ())
     (fun _ ->

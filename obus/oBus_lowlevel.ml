@@ -54,7 +54,9 @@ let invalid_signature s reason = sprintf "invalid signature('%s'): %s" (string_o
 let invalid_protocol_version ver = sprintf "invalid protocol version: %d (obus implement protocol version %d)" ver OBus_info.protocol_version
 let invalid_byte_order ch = sprintf "invalid byte order(%C)" ch
 
-(****** Raw description of header fields ******)
+(* +----------------------------------+
+   | Raw description of header fields |
+   +----------------------------------+ *)
 
 type raw_fields = {
   _path : OBus_path.t option;
@@ -118,7 +120,9 @@ struct
   let failwith msg = raise (Data_error msg)
   let ( >>= ) = bind
 
-  (***** Writing of integers *****)
+  (* +---------------------+
+     | Writing of integers |
+     +---------------------+ *)
 
   module type Int_writers = sig
     val byte_order_char : char
@@ -216,7 +220,9 @@ struct
          put_char (Char.unsafe_chr v))
   end
 
-  (***** Padding *****)
+  (* +---------+
+     | Padding |
+     +---------+ *)
 
   let put_null = put_char '\000'
 
@@ -250,7 +256,9 @@ struct
     | 6 -> i + 2, put_null2
     | _ -> i + 1, put_null1
 
-  (***** Message writing *****)
+  (* +-----------------+
+     | Message writing |
+     +-----------------+ *)
 
   module Signature_writer = OBus_value.Make_signature_writer(Writer)
 
@@ -602,7 +610,9 @@ struct
   let out_of_bounds () = failwith "out of bounds"
   let ( >>= ) = bind
 
-  (***** Reading of integers *****)
+  (* +---------------------+
+     | Reading of integers |
+     +---------------------+ *)
 
   module type Int_readers = sig
     val get_int16 : int Reader.t
@@ -756,7 +766,9 @@ struct
          return (Char.code v0 lor (Char.code v1 lsl 8) lor (Char.code v2 lsl 16) lor (Char.code v3 lsl 24)))
   end
 
-  (***** Padding *****)
+  (* +---------+
+     | Padding |
+     +---------+ *)
 
   let get_null cont =
     get_char >>= function
@@ -792,7 +804,9 @@ struct
     | 6 -> i + 2, get_null2
     | _ -> i + 1, get_null1
 
-  (***** Message reading *****)
+  (* +-----------------+
+     | Message reading |
+     +-----------------+ *)
 
   module Signature_reader = OBus_value.Make_signature_reader
     (struct
@@ -1123,29 +1137,9 @@ struct
       | ch -> failwith (invalid_byte_order ch)
 end
 
-module Lwt_writer = Make_writer(struct
-                                  type 'a t = Lwt_chan.out_channel -> 'a Lwt.t
-                                  let bind m f oc = Lwt.bind (m oc) (fun x -> f x oc)
-                                  let return x  _ = Lwt.return x
-                                  let fail exn _ = Lwt.fail exn
-                                  let put_char ch oc = Lwt_chan.output_char oc ch
-                                  let put_string str oc = Lwt_chan.output_string oc str
-                                end)
-module Lwt_reader = Make_reader(struct
-                                  type 'a t = Lwt_chan.in_channel -> 'a Lwt.t
-                                  let bind m f ic = Lwt.bind (m ic) (fun x -> f x ic)
-                                  let return x _ = Lwt.return x
-                                  let fail exn _ = Lwt.fail exn
-                                  let get_char ic = Lwt_chan.input_char ic
-                                  let get_string len ic =
-                                    let str = String.create len in
-                                    Lwt.bind
-                                      (Lwt_chan.really_input ic str 0 len)
-                                      (fun _ -> Lwt.return str)
-                                end)
-
-let put_message ?byte_order oc msg = snd (Lwt_writer.put_message ?byte_order msg) oc
-let get_message ic = Lwt_reader.get_message ic
+(* +------------------+
+   | Size computation |
+   +------------------+ *)
 
 let get_message_size buf ofs =
 
@@ -1184,11 +1178,332 @@ let get_message_size buf ofs =
 
     total_length
 
-(***** Transport *****)
+(* +-------------------------------------------------+
+   | Serialization/deserialization over lwt channels |
+   +-------------------------------------------------+ *)
 
 open Unix
-open OBus_address
 open Lwt
+
+module Lwt_writer = Make_writer
+  (struct
+     type 'a t = Lwt_chan.out_channel -> 'a Lwt.t
+     let bind m f oc = Lwt.bind (m oc) (fun x -> f x oc)
+     let return x  _ = Lwt.return x
+     let fail exn _ = Lwt.fail exn
+     let put_char ch oc = Lwt_chan.output_char oc ch
+     let put_string str oc = Lwt_chan.output_string oc str
+   end)
+
+module Lwt_reader = Make_reader
+  (struct
+     type 'a t = Lwt_chan.in_channel -> 'a Lwt.t
+     let bind m f ic = Lwt.bind (m ic) (fun x -> f x ic)
+     let return x _ = Lwt.return x
+     let fail exn _ = Lwt.fail exn
+     let get_char ic = Lwt_chan.input_char ic
+     let get_string len ic =
+       let str = String.create len in
+       Lwt.bind
+         (Lwt_chan.really_input ic str 0 len)
+         (fun _ -> Lwt.return str)
+   end)
+
+let lwt_chan_put_message ?byte_order oc msg = snd (Lwt_writer.put_message ?byte_order msg) oc
+let lwt_chan_get_message ic = Lwt_reader.get_message ic
+
+(* +--------------------------------------------+
+   | Serialization/deserialization over strings |
+   +--------------------------------------------+ *)
+
+type ptr = { buffer : string; mutable offset : int }
+
+module Ptr =
+struct
+  type 'a t = ptr -> 'a
+  let bind m f ptr = f (m ptr) ptr
+  let return x _ = x
+  let fail exn ptr = raise exn
+end
+
+module String_reader = Make_reader
+  (struct
+     include Ptr
+     let get_char ptr =
+       let n = ptr.offset in
+       ptr.offset <- n + 1;
+       ptr.buffer.[n]
+     let get_string len ptr =
+       let n = ptr.offset in
+       ptr.offset <- n + len;
+       String.sub ptr.buffer n len
+   end)
+
+module String_writer = Make_writer
+  (struct
+     include Ptr
+     let put_char ch ptr =
+       let n = ptr.offset in
+       ptr.buffer.[n] <- ch;
+       ptr.offset <- n + 1
+     let put_string str ptr =
+       let n = ptr.offset and len = String.length str in
+       String.blit str 0 ptr.buffer n len;
+       ptr.offset <- n + len
+   end)
+
+let string_put_message ?byte_order msg =
+  let size, writer = String_writer.put_message ?byte_order msg in
+  let buf = String.create size in
+  writer { buffer = buf; offset = 0 };
+  buf
+
+let string_get_message buf =
+  String_reader.get_message { buffer = buf; offset = 0 }
+
+(* +----------------------------------------------------+
+   | Serialization/deserialization over custom channels |
+   +----------------------------------------------------+ *)
+
+let default_buffer_size = ref(
+  let default = 16 * 1024 in
+  try
+    let x = int_of_string(Sys.getenv "OBUS_BUFFER_SIZE") in
+    if x <= 0 then begin
+      Log.error "OBUS_BUFFER_SIZE contains a negative or null size (%d)" x;
+      default
+    end else if x > Sys.max_string_length then begin
+      Log.error "OBUS_BUFFER_SIZE contains a too big size (%d)" x;
+      default
+    end else begin
+      Log.debug "using a default buffer size of %d" x;
+      x
+    end
+  with
+      _ ->
+        default
+)
+
+let get_default_buffer_size = !default_buffer_size
+let set_default_buffer_size sz =
+  if sz < 1 then
+    invalid_arg "OBus_lowlevel.set_default_buffer_size: size must be >= 1"
+  else if sz > Sys.max_string_length then
+    invalid_arg "OBus_lowlevel.set_default_buffer_size: size must be < Sys.max_string_length"
+  else
+    default_buffer_size := sz
+
+type ochan = {
+  oc_buffer : string;
+  mutable oc_ptr : int;
+  oc_perform_io : string -> int -> int -> int Lwt.t;
+  mutable oc_writers : int;
+  mutable oc_serializer : unit Lwt.t;
+}
+
+type ichan = {
+  ic_buffer : string;
+  mutable ic_ptr : int;
+  mutable ic_max : int;
+  ic_perform_io : string -> int -> int -> int Lwt.t;
+  mutable ic_serializer : unit Lwt.t;
+}
+
+(* Important note: all operations assumes that:
+
+   - things are serialized and do not need locks
+   - index are always valid
+
+   since these functions are not available from the outside the only
+   thing to check is that the serialization code is correct *)
+
+let make_ochan ?buffer_size perform_io = {
+  oc_buffer = String.create (match buffer_size with
+                               | Some s -> s
+                               | None -> !default_buffer_size);
+  oc_ptr = 0;
+  oc_perform_io = perform_io;
+  oc_writers = 0;
+  oc_serializer = Lwt.return ();
+}
+
+let ochan_enqueue oc f =
+  let new_w = Lwt.wait () in
+  let old_w = oc.oc_serializer in
+  oc.oc_serializer <- new_w;
+  old_w >>= fun _ ->
+    Lwt.finalize f
+      (fun _ ->
+         Lwt.wakeup new_w ();
+         Lwt.return ())
+
+let flush_partial oc =
+  oc.oc_perform_io oc.oc_buffer 0 oc.oc_ptr >>= fun n ->
+    if n < oc.oc_ptr then
+      String.unsafe_blit oc.oc_buffer n oc.oc_buffer 0 (oc.oc_ptr - n);
+    oc.oc_ptr <- oc.oc_ptr - n;
+    return ()
+
+let rec flush_total oc =
+  flush_partial oc >>= fun _ ->
+    if oc.oc_ptr > 0 then
+      flush_total oc
+    else
+      return ()
+
+let yield_flush oc =
+  Lwt_unix.yield () >>= fun _ ->
+    if oc.oc_writers > 0 then
+      (* At least one other thread is currently writing to the buffer,
+         let it flush the buffer when it will finish *)
+      return ()
+    else
+      ochan_enqueue oc (fun _ ->
+                          if oc.oc_writers > 0 then
+                            return ()
+                          else
+                            flush_total oc)
+
+let ochan_flush oc = ochan_enqueue oc (fun _ -> flush_total oc)
+
+let rec put_char ch oc =
+  let ptr = oc.oc_ptr in
+  if ptr < String.length oc.oc_buffer then begin
+    oc.oc_ptr <- ptr + 1;
+    String.unsafe_set oc.oc_buffer ptr ch;
+    return ()
+  end else
+    flush_partial oc >>= fun _ -> put_char ch oc
+
+let rec put_string_rec oc str ofs len =
+  if len = 0 then
+    return ()
+  else begin
+    let buf_size = String.length oc.oc_buffer in
+    let avail = buf_size - oc.oc_ptr in
+    if avail >= len then begin
+      String.unsafe_blit str ofs oc.oc_buffer oc.oc_ptr len;
+      oc.oc_ptr <- oc.oc_ptr + len;
+      return ()
+    end else begin
+      String.unsafe_blit str ofs oc.oc_buffer oc.oc_ptr avail;
+      oc.oc_ptr <- buf_size;
+      flush_partial oc >>= fun _ -> put_string_rec oc str (ofs + avail) (len - avail)
+    end
+  end
+
+let put_string str oc = put_string_rec oc str 0 (String.length str)
+
+let make_ichan ?buffer_size perform_io = {
+  ic_buffer = String.create (match buffer_size with
+                               | Some s -> s
+                               | None -> !default_buffer_size);
+  ic_ptr = 0;
+  ic_max = 0;
+  ic_perform_io = perform_io;
+  ic_serializer = Lwt.return ();
+}
+
+let ichan_enqueue ic f =
+  let new_w = Lwt.wait () in
+  let old_w = ic.ic_serializer in
+  ic.ic_serializer <- new_w;
+  old_w >>= fun _ ->
+    Lwt.finalize f
+      (fun _ ->
+         Lwt.wakeup new_w ();
+         Lwt.return ())
+
+let rec get_char ic =
+  let ptr = ic.ic_ptr in
+  if ptr = ic.ic_max then begin
+    ic.ic_perform_io ic.ic_buffer 0 (String.length ic.ic_buffer) >>= function
+      | 0 ->
+          fail End_of_file
+      | n ->
+          ic.ic_ptr <- 1;
+          ic.ic_max <- n;
+          return (String.unsafe_get ic.ic_buffer 0)
+  end else begin
+    ic.ic_ptr <- ptr + 1;
+    return (String.unsafe_get ic.ic_buffer ptr)
+  end
+
+let rec get_string_rec ic str ofs len =
+  if len = 0 then
+    return str
+  else
+    let avail = ic.ic_max - ic.ic_ptr in
+    if avail > 0 then begin
+      let len' = min len avail in
+      String.unsafe_blit ic.ic_buffer ic.ic_ptr str ofs len';
+      ic.ic_ptr <- ic.ic_ptr + len';
+      get_string_rec ic str (ofs + len') (len - len')
+    end else begin
+      ic.ic_perform_io ic.ic_buffer 0 (String.length ic.ic_buffer) >>= function
+        | 0 ->
+            fail End_of_file
+        | n ->
+            let len' = min len n in
+            String.unsafe_blit ic.ic_buffer 0 str ofs len';
+            ic.ic_ptr <- len';
+            ic.ic_max <- n;
+            get_string_rec ic str (ofs + len') (len - len')
+    end
+
+let get_string len ic =
+  let str = String.create len in
+  get_string_rec ic str 0 len
+
+module Chan_writer = Make_writer
+  (struct
+     type 'a t = ochan -> 'a Lwt.t
+     let bind m f oc = Lwt.bind (m oc) (fun x -> f x oc)
+     let return x  _ = Lwt.return x
+     let fail exn _ = Lwt.fail exn
+     let put_char = put_char
+     let put_string = put_string
+   end)
+
+module Chan_reader = Make_reader
+  (struct
+     type 'a t = ichan -> 'a Lwt.t
+     let bind m f ic = Lwt.bind (m ic) (fun x -> f x ic)
+     let return x _ = Lwt.return x
+     let fail exn _ = Lwt.fail exn
+     let get_char = get_char
+     let get_string = get_string
+   end)
+
+let chan_put_message ?byte_order oc msg =
+  ochan_enqueue oc (fun _ ->
+                      oc.oc_writers <- oc.oc_writers + 1;
+                      Lwt.finalize
+                        (fun _ ->
+                           snd (Chan_writer.put_message ?byte_order msg) oc)
+                        (fun _ ->
+                           oc.oc_writers <- oc.oc_writers - 1;
+                           if oc.oc_writers = 0 then
+                             ignore (yield_flush oc);
+                           return ()))
+
+let chan_get_message ic =
+  ichan_enqueue ic (fun _ -> Chan_reader.get_message ic)
+
+let auth_stream_of_channels (ic, oc) =
+  (* Serialize everything just in case the user do silly things (and
+     we absolutly do not care about performance during
+     authentification) *)
+  OBus_auth.make_stream
+    ~get_char:(fun _ -> ichan_enqueue ic (fun _ -> get_char ic))
+    ~put_char:(fun c -> ochan_enqueue oc (fun _ -> put_char c oc))
+    ~flush:(fun _ -> ochan_flush oc)
+
+(* +-----------+
+   | Transport |
+   +-----------+ *)
+
+open OBus_address
 
 module Log = Log.Make(struct let section = "transport" end)
 
@@ -1204,124 +1519,23 @@ let recv { recv = recv } = recv ()
 let send { send = send } message = send message
 let shutdown { shutdown = shutdown } = shutdown ()
 
-let chans_of_fd fd = (Lwt_chan.in_channel_of_descr fd,
-                      Lwt_chan.out_channel_of_descr fd)
+let chans_of_fd fd = (make_ichan (fun str ofs len -> Lwt_unix.read fd str ofs len),
+                      make_ochan (fun str ofs len -> Lwt_unix.write fd str ofs len))
 
-type buffer_state =
-    (* State of a channel buffer *)
-  | Writing of int
-      (* [n] threads are currently writing data into the buffer. This
-         is normally never more than 1 because obus serialize the
-         sending of messages *)
-  | Dirty
-      (* The buffer contains data but nobody is currently writing *)
-  | Clean
-      (* The buffer contains nothing *)
-  | Closed of bool
-      (* The transport has been closed. The argument is [true] iff the
-         buffer was dirty before being closed. *)
+let transport_of_channels (ic, oc) =
+  { recv = (fun _ -> chan_get_message ic);
+    send = (fun msg -> chan_put_message oc msg);
+    shutdown = (fun _ -> ochan_flush oc) }
 
-type delayed_flush = {
-  df_chan : Lwt_chan.out_channel;
-  (* The channel to flush *)
-
-  mutable df_state : buffer_state;
-  (* [true] iff there is some data not flushed in the buffer *)
-
-  mutable df_wait : unit Lwt.t;
-  (* Thread which is wakeup when a flush is requested *)
-
-  df_exit : unit Lwt.t;
-  (* Thread which is wakeup when to told the flusher to exit *)
-
-  df_done : unit Lwt.t;
-  (* Thread which is wakeup by the flusher when it exits *)
-}
-
-(* Flusher, it try to flush only when there is nothing to do *)
-let rec flush_forever df =
-  (perform
-     (* Wait until something wakeup us, this happen when a message has
-        been completely written *)
-     df.df_wait;
-     (* Wait until there is nothing else to do, or the transport is
-        closed *)
-     Lwt.choose [Lwt_unix.yield (); df.df_exit];
-     match df.df_state with
-       | Writing _ ->
-           (* Somebody started to write a new message, wait again *)
-           flush_forever df
-       | Dirty ->
-           (* OK, this is flushing time *)
-           df.df_state <- Clean;
-           (perform
-              Lwt_chan.flush df.df_chan;
-              flush_forever df)
-       | Closed false ->
-           Lwt.wakeup df.df_done ();
-           Lwt.return ()
-       | Closed true ->
-           Lwt.finalize
-             (fun _ ->
-                Lwt_chan.flush df.df_chan)
-             (fun _ ->
-                Lwt.wakeup df.df_done ();
-                Lwt.return ())
-       | Clean ->
-           (* never happen *)
-           Log.error "OBus_lowlevel.flush_forever: trying to flush a clean buffer";
-           exit 1)
-
-(* Called before writing a message to the buffer *)
-let starts_writing df = match df.df_state with
-  | Closed _ ->
-      ()
-  | Writing n ->
-      df.df_state <- Writing(n + 1)
-  | _ ->
-      df.df_state <- Writing 1
-
-(* Called after writing a message to the buffer *)
-let ends_writing df = match df.df_state with
-  | Closed _ ->
-      ()
-  | Writing 1 ->
-      (* We where the only writer, buffer can be flushed now *)
-      df.df_state <- Dirty;
-      let w = df.df_wait in
-      df.df_wait <- Lwt.wait ();
-      Lwt.wakeup w ()
-  | Writing n ->
-      df.df_state <- Writing(n - 1)
-  | _ ->
-      (* never happen *)
-      assert false
-
-let socket fd (ic, oc) =
-  let df = { df_wait = Lwt.wait ();
-             df_state = Clean;
-             df_chan = oc;
-             df_exit = Lwt.wait ();
-             df_done = Lwt.wait () } in
-  let _ = flush_forever df in
-  { recv = (fun _ -> get_message ic);
-    send = (fun msg ->
-              starts_writing df;
-              Lwt.finalize
-                (fun _ ->
-                   put_message oc msg)
-                (fun _ ->
-                   ends_writing df;
-                   Lwt.return ()));
-    shutdown = (fun _ ->
-                  df.df_state <- Closed(df.df_state = Dirty);
-                  (* Tell the flusher to exit and wait for that *)
-                  Lwt.wakeup df.df_wait ();
-                  Lwt.wakeup df.df_exit ();
-                  df.df_done >>= fun _ ->
-                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                    Lwt_unix.close fd;
-                    Lwt.return ()) }
+let socket fd chans =
+  let tr = transport_of_channels chans in
+  { tr with
+      shutdown = fun _ ->
+        Lwt.finalize tr.shutdown
+          (fun _ ->
+             Lwt_unix.shutdown fd SHUTDOWN_ALL;
+             Lwt_unix.close fd;
+             Lwt.return ()) }
 
 let loopback _ =
   let queue = MQueue.create () in
@@ -1347,7 +1561,7 @@ let transport_of_addresses ?mechanisms addresses =
       (fun _ -> perform
          fd <-- make_socket domain typ addr;
          let chans = chans_of_fd fd in
-         guid <-- OBus_auth.client_authenticate ?mechanisms chans;
+         guid <-- OBus_auth.client_authenticate ?mechanisms (auth_stream_of_channels chans);
          return (guid, socket fd chans))
       (fun exn ->
          Log.log "transport creation failed for address: domain=%s typ=%s addr=%s: %s"

@@ -13,7 +13,7 @@ type element = string
     (** A path component *)
 
 type t = element list
-   (** A complete path *)
+    (** A complete path *)
 
 (** {6 Construction} *)
 
