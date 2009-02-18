@@ -59,6 +59,7 @@ let main connection =
   let w = wait () in
   let benchmark = new benchmark w in
   benchmark#obus_export connection;
+  OBus_connection.set_up connection;
   let proxy = OBus_proxy.make (OBus_peer.anonymous connection) [ "obus"; "benchmark" ] in
   (perform
      loop proxy count;
@@ -66,7 +67,7 @@ let main connection =
      OBus_connection.close connection)
 
 let connection_of_fds (fd_r, fd_w) =
-  OBus_connection.of_transport
+  OBus_connection.of_transport ~up:false
     (let transport = OBus_lowlevel.transport_of_channels
        (OBus_lowlevel.make_ichan (Lwt_unix.read fd_r),
         OBus_lowlevel.make_ochan (Lwt_unix.write fd_w)) in
