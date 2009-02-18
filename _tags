@@ -6,10 +6,10 @@
 # Use camlp4 for all files
 <**/*.ml{,i}>: syntax_camlp4o, pkg_camlp4
 <syntax/pa_{obus,projection,constructor}.*>: pkg_type-conv
-<{obus,tools,test,samples,bindings}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
+<{obus,tools,test,samples,bindings,benchmark}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
 
 # Use pa_obus for all files except pa_obus itself
-<{tools,test,samples,bindings/*}/*.ml{,i}>: pkg_monad, pa_obus
+<{tools,test,samples,bindings/*,benchmark}/*.ml{,i}>: pkg_monad, pa_obus
 <obus/**/*.ml{,i}>: pkg_monad
 <obus/internals/{bus,match_rule}.ml{,i}>: pa_obus
 <obus/oBus_{connection,bus,peer,proxy,property,object,signal,uuid,introspect}.ml{,i}>: pa_obus
@@ -19,19 +19,22 @@
 <syntax/*>: pkg_camlp4.lib, pkg_camlp4.quotations.o, pkg_camlp4.extend
 
 # Common dependencies
-<{obus,obus/internals,tools,test,samples}/*.*>: pkg_lwt, pkg_xml-light
+<{obus,obus/internals,tools,test,samples,benchmark}/*>: pkg_lwt, pkg_xml-light
 
 # Samples
-<samples/*.*>: use_obus
+<samples/*>: use_obus
 <samples/{eject,signals}.*>: use_hal
 <samples/notify.*>: use_notification
 <samples/avahi_list_workstations.*>: use_avahi
 
+# Benchmarks
+<benchmark/*>: use_obus
+
 # Tools
-<tools/*.*>: use_obus, pkg_xml-light, pkg_str
+<tools/*>: use_obus, pkg_xml-light, pkg_str
 
 # Tests
-<test/**>: pkg_str, pkg_xml-light
+<test/**/*>: pkg_str, pkg_xml-light
 
 # Bindings distributed with obus
-<bindings/**/*.*>: use_obus, pkg_lwt
+<bindings/**/*>: use_obus, pkg_lwt
