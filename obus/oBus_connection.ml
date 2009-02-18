@@ -537,6 +537,13 @@ class packed_connection = object(self)
         end connection.exported_objects;
 
         (perform
+           (* If the connection is closed normally, flush it *)
+           if exn = Connection_closed then
+             catch
+               (fun _ -> connection.outgoing >>= fun _ -> return ())
+               (fun _ -> return ())
+           else
+             return ();
            (* Shutdown the transport *)
            catch
              (fun _ ->
