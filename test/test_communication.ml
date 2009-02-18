@@ -16,14 +16,6 @@ open OBus_message
 (* number of message to generate *)
 let test_count = 100
 
-let print_progress n =
-  if n = 0 then
-    printf " 0%!"
-  else if n = test_count then
-    printf "..%d\n%!" n
-  else if n mod 10 = 0 then
-    printf "..%d%!" n
-
 let name = "obus.test.communication"
 
 let rec run_tests con = function
@@ -53,17 +45,17 @@ let _ =
       (perform
          bus <-- Lazy.force OBus_bus.session;
          OBus_bus.request_name bus name;
-         let received = ref 0
-         and _ = printf "received: 0%!" in
+         let progress = Progress.make "received" test_count
+         and w = wait () in
          let _ = OBus_connection.add_incoming_filter bus
            (function
               | { typ = Signal(_, _, "exit_now") } ->
+                  Progress.close progress;
                   printf "\nexit signal received.\n%!";
-                  OBus_connection.close bus;
+                  wakeup w ();
                   None
               | { destination = Some n } when n = name ->
-                  incr received;
-                  print_progress !received;
+                  Progress.incr progress;
                   None
               | msg -> Some msg) in
-         OBus_connection.watch bus)
+         w)

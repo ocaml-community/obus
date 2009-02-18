@@ -14,22 +14,6 @@ open Printf
 (* number of message to generate *)
 let test_count = 100
 
-let print_progress n =
-  if n = 0 then
-    printf " 0%!"
-  else if n = test_count then
-    printf "..%d\n%!" n
-  else if n mod 10 = 0 then
-    printf "..%d%!" n
-
-let rec gen_messages acc = function
-  | 0 ->
-      print_progress test_count;
-      acc
-  | n ->
-      print_progress (test_count - n);
-      gen_messages (Gen_random.message () :: acc) (n - 1)
-
 let save_dir = Filename.concat Filename.temp_dir_name "obus-test-serialization"
 let make_save_dir = lazy(if not (Sys.file_exists save_dir) then Unix.mkdir save_dir 0o755)
 
@@ -73,13 +57,14 @@ let run_one_test byte_order msg acc =
     | OBus_lowlevel.Protocol_error msg ->
         { acc with reading_error = acc.reading_error + 1 }
 
-let run_tests byte_order l =
+let run_tests prefix byte_order l =
+  let progress = Progress.make prefix test_count in
   let rec aux acc n = function
     | [] ->
-        print_progress n;
+        Progress.close progress;
         acc
     | msg :: l ->
-        print_progress n;
+        Progress.incr progress;
         aux (run_one_test byte_order msg acc) (n + 1) l
   in
   aux { success = 0; failure = 0; reading_error = 0; writing_error = 0 } 0 l
@@ -90,12 +75,17 @@ let print_result result =
   printf "     writing error: %d\n" result.writing_error;
   printf "     reading error: %d\n" result.reading_error
 
+let rec gen_messages progress acc = function
+  | 0 ->
+      Progress.close progress;
+      acc
+  | n ->
+      Progress.incr progress;
+      gen_messages progress (Gen_random.message () :: acc) (n - 1)
+
 let _ =
-  printf "generating %d messages:" test_count;
-  let msgs = gen_messages [] test_count in
+  let msgs = gen_messages (Progress.make (sprintf "generating %d messages" test_count) test_count) [] test_count in
   printf "try to serialize/deserialize all messages and compare the result to the original message.\n";
-  printf "  - in little endian:";
-  print_result (run_tests OBus_lowlevel.Little_endian msgs);
-  printf "  - in big endian:";
-  print_result (run_tests OBus_lowlevel.Big_endian msgs);
+  print_result (run_tests "  - in little endian" OBus_lowlevel.Little_endian msgs);
+  print_result (run_tests "  - in big endian" OBus_lowlevel.Big_endian msgs);
   printf "failing tests have been saved in %s\n%!" save_dir
