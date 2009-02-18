@@ -11,16 +11,29 @@ module Log = Log.Make(struct let section = "server" end)
 
 open Unix
 open Lwt
+open OBus_internals
 open OBus_address
 
-type t = {
-  listeners : (Lwt_unix.file_descr * OBus_address.guid) list;
-  addresses : OBus_address.t list;
-  mechanisms : OBus_auth.server_mechanism list option;
-  on_connection : (OBus_lowlevel.transport -> unit);
+type event =
+  | Event_shutdown
+  | Event_connection of Lwt_unix.file_descr * Unix.sockaddr
+
+type listener = {
+  listen_fd : Lwt_unix.file_descr;
+  listen_address : OBus_address.t;
+  listen_guid : OBus_address.guid;
+  mutable listen_thread : unit Lwt.t;
 }
 
-exception Shutdown
+type t = {
+  mutable server_up : bool;
+  server_abort : event Lwt.t;
+  server_listeners : listener list;
+  server_addresses : OBus_address.t list;
+  server_mechanisms : OBus_auth.server_mechanism list option;
+  server_on_connection : OBus_lowlevel.transport callback;
+  mutable server_exit_hook : (unit -> unit Lwt.t) MSet.node option;
+}
 
 let socket fd chans =
   let tr = OBus_lowlevel.transport_of_channels chans in
@@ -32,38 +45,51 @@ let socket fd chans =
              Lwt_unix.close fd;
              Lwt.return ()) }
 
-let rec loop server (listen_fd, guid) =
+let accept server listen =
   catch
-    (fun _ -> perform
-       (fd, addr) <-- Lwt_unix.accept listen_fd;
-       let chans = (OBus_lowlevel.make_ichan (fun str ofs len -> Lwt_unix.read fd str ofs len),
-                    OBus_lowlevel.make_ochan (fun str ofs len -> Lwt_unix.write fd str ofs len)) in
-       catch
-         (fun _ -> OBus_auth.server_authenticate ?mechanisms:server.mechanisms guid
-            (OBus_lowlevel.auth_stream_of_channels chans))
-         (fun exn ->
-            Log.log "authentication failure for client from %a"
-              (fun oc -> function
-                 | ADDR_UNIX path -> output_string oc path
-                 | ADDR_INET(ia, port) -> Printf.fprintf oc "%s:%d" (string_of_inet_addr ia) port) addr;
-            return ());
-       let _ =
-         try
-           server.on_connection (socket fd chans)
-         with
-             exn ->
-               Log.failure exn "on_connection failed with"
-       in
-       return true)
-    (function
-       | Shutdown ->
-           return false
-       | exn ->
-           Log.error "uncaught error: %s" (Printexc.to_string exn);
-           return false)
-  >>= function
-    | true -> loop server (listen_fd, guid)
-    | false -> return ()
+    (fun _ ->
+       perform
+         (fd, addr) <-- Lwt_unix.accept listen.listen_fd;
+         return (Event_connection(fd, addr)))
+    (fun exn ->
+       if server.server_up then
+         Log.error "uncaught error: %s" (Util.string_of_exn exn);
+       return Event_shutdown)
+
+let rec listen_loop server listen =
+  choose [server.server_abort; accept server listen] >>= function
+    | Event_shutdown ->
+        begin
+          try
+            Lwt_unix.close listen.listen_fd;
+            match listen.listen_address with
+              | (Unix_path p, _) ->
+                  Unix.unlink p
+              | _ ->
+                  ()
+          with
+              _ -> ();
+        end;
+        return ()
+
+    | Event_connection(fd, addr) ->
+        let chans = (OBus_lowlevel.make_ichan (fun str ofs len -> Lwt_unix.read fd str ofs len),
+                     OBus_lowlevel.make_ochan (fun str ofs len -> Lwt_unix.write fd str ofs len)) in
+        catch
+          (fun _ ->
+             OBus_auth.server_authenticate
+               ?mechanisms:server.server_mechanisms
+               listen.listen_guid
+               (OBus_lowlevel.auth_stream_of_channels chans))
+          (fun exn ->
+             Log.log "authentication failure for client from %a"
+               (fun oc -> function
+                  | ADDR_UNIX path -> output_string oc path
+                  | ADDR_INET(ia, port) -> Printf.fprintf oc "%s:%d" (string_of_inet_addr ia) port) addr;
+             return ())
+        >>= fun _ ->
+          let _ = callback_apply "on_connection" server.server_on_connection (socket fd chans) in
+          listen_loop server listen
 
 let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in
@@ -119,7 +145,21 @@ let fds_of_address addr = match addr with
   | Unknown(name, params) ->
       fail (Failure ("listening on " ^ name ^ " addresses is not implemented"))
 
-let make_lowlevel ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) on_connection =
+let shutdown server =
+  begin match server.server_exit_hook with
+    | Some n ->
+        server.server_exit_hook <- None;
+        MSet.remove n
+    | None ->
+        ()
+  end;
+  if server.server_up then begin
+    server.server_up <- false;
+    wakeup server.server_abort Event_shutdown
+  end;
+  Lwt_util.iter (fun listen -> listen.listen_thread) server.server_listeners
+
+let make_lowlevel ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) ?(serial=false) on_connection =
   match addresses with
     | [] -> fail (Invalid_argument "OBus_server.make: no addresses given")
     | addresses ->
@@ -144,23 +184,31 @@ let make_lowlevel ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) 
              let guids = List.map (fun _ -> OBus_uuid.generate ()) l in
 
              let server = {
-               listeners = List.flatten (List.map2 (fun (fds, addr) guid ->
-                                                      List.map (fun fd -> (fd, guid)) fds) l guids);
-               addresses = List.map2 (fun (fds, addr) guid -> (addr, Some guid)) l guids;
-               mechanisms = mechanisms;
-               on_connection = on_connection;
+               server_up = true;
+               server_abort = wait ();
+               server_listeners = List.flatten
+                 (List.map2
+                    (fun (fds, addr) guid ->
+                       List.map (fun fd -> { listen_fd = fd;
+                                             listen_address = (addr, Some guid);
+                                             listen_guid = guid;
+                                             listen_thread = return () })
+                         fds) l guids);
+               server_addresses = List.map2 (fun (fds, addr) guid -> (addr, Some guid)) l guids;
+               server_mechanisms = mechanisms;
+               server_on_connection = make_callback serial on_connection;
+               server_exit_hook = None;
              } in
 
+             server.server_exit_hook <- Some(MSet.add exit_hooks (fun _ -> shutdown server));
+
              (* Launch waiting loops *)
-             List.iter (fun listener -> ignore (loop server listener)) server.listeners;
+             List.iter (fun listen -> listen.listen_thread <- listen_loop server listen) server.server_listeners;
 
              return server
            end)
 
-let make ?mechanisms ?addresses on_connection = make_lowlevel ?mechanisms ?addresses
+let make ?mechanisms ?addresses ?serial on_connection = make_lowlevel ?mechanisms ?addresses ?serial
   (fun transport -> on_connection (OBus_connection.of_transport ~up:false transport))
 
-let addresses server = server.addresses
-
-let shutdown server =
-  List.iter (fun (fd, guid) -> Lwt_unix.abort fd Shutdown) server.listeners
+let addresses server = server.server_addresses

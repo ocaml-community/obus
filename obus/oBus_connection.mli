@@ -41,14 +41,17 @@ val of_addresses : ?shared:bool -> OBus_address.t list -> t Lwt.t
 val loopback : t
   (** Connection with a loopback transport *)
 
-val close : t -> unit
+val close : t -> unit Lwt.t
   (** Close a connection.
 
       All thread waiting for a reply will fail with the exception
       {!Connection_closed}.
 
-      Note: when a connection is closed, the transport it use is
-      closed too. *)
+      Notes:
+      - when a connection is closed, the transport it use is
+      closed too
+      - if the connection is already closed, it does nothing
+  *)
 
 val running : t -> bool
   (** Return weather a connection is running. *)

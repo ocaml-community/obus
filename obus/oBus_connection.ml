@@ -112,9 +112,10 @@ let send_message_backend connection reply_waiter_opt return_thread message =
                             are fatal because it is possible that a
                             message has been partially sent on the
                             connection, so the message stream is broken *)
-                         let exn = connection.packed#set_crash (Transport_error exn) in
-                         wakeup_exn w exn;
-                         fail exn))
+                         perform
+                           exn <-- connection.packed#set_crash (Transport_error exn);
+                           let _ = wakeup_exn w exn in
+                           fail exn))
 
 let send_message connection message =
   send_message_backend connection None (return ()) message
@@ -437,14 +438,15 @@ let dispatch_message connection message = match message with
 
 let read_dispatch connection =
   catch
-    (fun _ -> choose [OBus_lowlevel.recv connection.transport;
-                      connection.abort])
+    (fun _ ->
+       choose [OBus_lowlevel.recv connection.transport;
+               connection.abort])
     (fun exn ->
-       fail (connection.packed#set_crash
-               (match exn with
-                  | End_of_file -> Connection_lost
-                  | OBus_lowlevel.Protocol_error _ as exn -> exn
-                  | exn -> Transport_error exn)))
+       connection.packed#set_crash
+         (match exn with
+            | End_of_file -> Connection_lost
+            | OBus_lowlevel.Protocol_error _ as exn -> exn
+            | exn -> Transport_error exn) >>= fail)
   >>= fun message ->
 
     if !(OBus_info.dump) then
@@ -476,18 +478,6 @@ let rec dispatch_forever connection =
                  Log.failure exn "the error handler (OBus_connection.on_disconnect) failed with:";
                  return ())
 
-(* +-----------------+
-   | Cleanup at exit |
-   +-----------------+ *)
-
-let opened_connections = ref []
-
-let _ =
-  let close_all_connections = lazy(
-    List.iter (fun c -> ignore (c#set_crash Connection_closed)) !opened_connections
-  ) in
-  at_exit (fun _ -> Lazy.force close_all_connections)
-
 (* +-----------------------+
    | ``Packed'' connection |
    +-----------------------+ *)
@@ -502,14 +492,21 @@ class packed_connection = object(self)
 
   method get = state
 
+  val mutable exit_hook = None
+
   (* Put the connection in a "crashed" state. This means that all
      subsequent call using the connection will fail. *)
   method set_crash exn = match state with
     | Crashed exn ->
-        exn
+        return exn
     | Running connection ->
         state <- Crashed exn;
-        opened_connections := List.filter ((!=) (self  :> packed_connection)) !opened_connections;
+        begin match exit_hook with
+          | Some n ->
+              MSet.remove n
+          | None ->
+              ()
+        end;
 
         begin match connection.guid with
           | Some guid -> guid_connection_map := Guid_map.remove guid !guid_connection_map
@@ -523,15 +520,6 @@ class packed_connection = object(self)
           | Some w -> wakeup_exn w exn
           | None -> ()
         end;
-
-        (* Shutdown the transport *)
-        if !(connection.shutdown_transport_on_close) then
-          ignore (Lwt.catch
-                    (fun _ ->
-                       OBus_lowlevel.shutdown connection.transport)
-                    (fun exn ->
-                       Log.failure exn "failed to abort/shutdown the transport";
-                       return ()));
 
         (* Wakeup all reply handlers so they will not wait forever *)
         Serial_map.iter (fun _ w -> wakeup_exn w exn) connection.reply_waiters;
@@ -548,10 +536,22 @@ class packed_connection = object(self)
                   (OBus_path.to_string p)
         end connection.exported_objects;
 
-        exn
+        (perform
+           (* Shutdown the transport *)
+           catch
+             (fun _ ->
+                OBus_lowlevel.shutdown connection.transport)
+             (fun exn ->
+                Log.failure exn "failed to abort/shutdown the transport";
+                return ());
+           return exn)
 
   initializer
-    opened_connections := (self :> packed_connection) :: !opened_connections
+    exit_hook <- Some(MSet.add exit_hooks
+                        (fun _ ->
+                           perform
+                             self#set_crash Connection_closed;
+                             return ()))
 end
 
 (* +---------------------+
@@ -565,7 +565,6 @@ let of_transport ?guid ?(up=true) transport =
       name = None;
       acquired_names = [];
       transport = transport;
-      shutdown_transport_on_close = ref true;
       on_disconnect = ref (fun _ -> ());
       guid = guid;
       down = (if up then None else Some(Lwt.wait ()));
@@ -637,8 +636,11 @@ let guid = GET(guid)
 let transport = GET(transport)
 let name = GET(name)
 let on_disconnect = GET(on_disconnect)
-let shutdown_transport_on_close = GET(shutdown_transport_on_close)
-let close connection = EXEC(ignore (connection.packed#set_crash Connection_closed))
+let close connection = match connection#get with
+  | Crashed _ ->
+      return ()
+  | Running _ ->
+      connection#set_crash Connection_closed >>= fun _ -> return ()
 
 let is_up connection =
   EXEC(connection.down = None)

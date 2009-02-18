@@ -107,8 +107,7 @@ let _ =
 
     | After_rules ->
         (* Tests must see everything *)
-        Pathname.define_context "test" [ "obus" ];
-        Pathname.define_context "test" [ "obus/internals" ];
+        Pathname.define_context "test" [ "obus"; "obus/internals" ];
 
         (* The library and internal modules can see each other *)
         Pathname.define_context "obus" [ "obus/internals" ];

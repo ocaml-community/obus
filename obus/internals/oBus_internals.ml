@@ -182,10 +182,6 @@ and connection = {
   transport : OBus_lowlevel.transport;
   (* The transport used for messages *)
 
-  shutdown_transport_on_close : bool ref;
-  (* This tell weather we must shutdown the transport when the
-     connection is closed by the programmer or by a crash *)
-
   on_disconnect : (exn -> unit) ref;
   (* [on_disconnect] is called the connection is closed
      prematurely. This happen on transport errors. *)
@@ -245,7 +241,7 @@ and packed_connection = <
     get : connection_state;
   (* Get the connection state *)
 
-  set_crash : exn -> exn;
+  set_crash : exn -> exn Lwt.t;
   (* Put the connection in a 'crashed' state if not already
      done. Returns the exception to which the connection is set to. *)
 >;;
@@ -289,3 +285,17 @@ let children connection path =
        | Some(elt :: _) -> if List.mem elt acc then acc else elt :: acc
        | _ -> acc)
     connection.exported_objects []
+
+let exit_hooks = MSet.make ()
+
+let cleanup _ =
+  (* Get the list of exit hooks *)
+  let hooks = MSet.fold (fun x l -> x :: l) [] exit_hooks in
+  MSet.clear exit_hooks;
+  (* Call them all *)
+  Lwt_unix.run
+    (Lwt_util.iter
+       (fun hook -> catch hook (fun exn -> Log.failure exn "exit hook failed with"; return ()))
+       hooks)
+
+let _ = at_exit cleanup

@@ -33,12 +33,12 @@ let rec loop pp action what_bus a b =
 let launch pp what_bus laddresses =
   (perform
      bus_addresses <-- Lazy.force laddresses;
-     server <-- OBus_server.make_lowlevel begin fun transport ->
-       ignore (perform
-                 (_, bus) <-- OBus_lowlevel.transport_of_addresses bus_addresses;
-                 choose [loop pp "message received" what_bus bus transport;
-                         loop pp "sending message" what_bus transport bus])
-     end;
+     server <-- OBus_server.make_lowlevel
+       (fun transport ->
+          perform
+            (_, bus) <-- OBus_lowlevel.transport_of_addresses bus_addresses;
+            choose [loop pp "message received" what_bus bus transport;
+                    loop pp "sending message" what_bus transport bus]);
      let _ = Unix.putenv (Printf.sprintf "DBUS_%s_BUS_ADDRESS" (String.uppercase what_bus))
        (OBus_address.to_string (OBus_server.addresses server)) in
      return ())
