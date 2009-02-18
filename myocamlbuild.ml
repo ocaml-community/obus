@@ -14,50 +14,27 @@ open Command (* no longer needed for OCaml >= 3.10.2 *)
 (* Syntax extensions used internally, (tag and the byte-code file). *)
 let intern_syntaxes = [ "pa_obus", "pa_obus.cma";
                         "pa_projection", "syntax/pa_projection.cmo";
-                        "pa_constructor", "syntax/pa_constructor.cmo" ]
+                        "pa_constructor", "syntax/pa_constructor.cmo";
+                        "pa_monad", "syntax/pa_monad.cmo" ]
 
 (* +-----------------------------------+
    | Packages installed with ocamlfind |
    +-----------------------------------+ *)
 
-(* these functions are not really officially exported *)
-let run_and_read = Ocamlbuild_pack.My_unix.run_and_read
-let blank_sep_strings = Ocamlbuild_pack.Lexers.blank_sep_strings
+let packages = [ "type-conv";
+                 "type-conv.syntax";
+                 "camlp4";
+                 "camlp4.extend";
+                 "camlp4.lib";
+                 "camlp4.macro";
+                 "camlp4.quotations.o";
+                 "camlp4.quotations.r";
+                 "lwt";
+                 "str";
+                 "xml-light" ]
 
-let exec cmd =
-  blank_sep_strings &
-    Lexing.from_string &
-    run_and_read cmd
-
-(* List of packages that must appears in a certain order. Sometimes
-   there are problems with syntax extensions... *)
-let packages_needing_ordering = [ "type-conv.syntax"; "camlp4.macro" ]
-
-(* Extract the list of used packages from "_tags" *)
-let get_packages () =
-  List.fold_left
-    (fun set word ->
-       if String.is_prefix "pkg_" word then begin
-         let start = String.length "pkg_"
-         and stop =
-           if String.is_suffix word "," then
-             String.length word - 1
-           else
-             String.length word
-         in
-         let pkg = String.sub word start (stop - start) in
-         if List.mem pkg packages_needing_ordering then
-           set
-         else
-           StringSet.add pkg set
-       end else
-         set) StringSet.empty (string_list_of_file "_tags")
-
-(* List of syntaxes *)
-let syntaxes = ["camlp4o"; "camlp4r"]
-
-(* ocamlfind command *)
-let ocamlfind x = S[A"ocamlfind"; x]
+let syntaxes = [ "camlp4o";
+                 "camlp4r" ]
 
 (* +-------+
    | Utils |
@@ -77,12 +54,6 @@ let define_lib ?dir name =
   dep ["ocaml"; "byte"; "use_" ^ name] [name ^ ".cma"];
   dep ["ocaml"; "native"; "use_" ^ name] [name ^ ".cmxa"]
 
-(* For each ocamlfind package one inject the -package option when
-   compiling, computing dependencies, generating documentation and
-   linking. *)
-let define_package pkg =
-  flag_all_stages ("pkg_" ^ pkg) & S[A"-package"; A pkg]
-
 let substitute env text =
   List.fold_left (fun text (patt, repl) -> String.subst patt repl text) text env
 
@@ -99,10 +70,11 @@ let _ =
     | Before_options ->
 
         (* override default commands by ocamlfind ones *)
-        Options.ocamlc   := ocamlfind & A"ocamlc";
-        Options.ocamlopt := ocamlfind & A"ocamlopt";
-        Options.ocamldep := ocamlfind & A"ocamldep";
-        Options.ocamldoc := ocamlfind & A"ocamldoc"
+        let ocamlfind x = S[A"ocamlfind"; A x] in
+        Options.ocamlc   := ocamlfind "ocamlc";
+        Options.ocamlopt := ocamlfind "ocamlopt";
+        Options.ocamldep := ocamlfind "ocamldep";
+        Options.ocamldoc := ocamlfind "ocamldoc"
 
     | After_rules ->
         (* Tests must see everything *)
@@ -139,11 +111,12 @@ let _ =
         (* When one link an OCaml binary, one should use -linkpkg *)
         flag ["ocaml"; "link"; "program"] & A"-linkpkg";
 
-        (* Deals with packages needing ordering first *)
-        List.iter define_package packages_needing_ordering;
-
-        (* Add others in any order *)
-        StringSet.iter define_package (get_packages ());
+        (* For each ocamlfind package one inject the -package option
+           when compiling, computing dependencies, generating
+           documentation and linking. *)
+        List.iter
+          (fun package -> flag_all_stages ("pkg_" ^ package) (S[A"-package"; A package]))
+          packages;
 
         (* Like -package but for extensions syntax. Morover -syntax is
            useless when linking. *)

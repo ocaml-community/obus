@@ -9,14 +9,17 @@
 <{obus,tools,test,samples,bindings,benchmark}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
 
 # Use pa_obus for all files except pa_obus itself
-<{tools,test,samples,bindings/*,benchmark}/*.ml{,i}>: pkg_monad, pa_obus
-<obus/**/*.ml{,i}>: pkg_monad
+<{tools,test,samples,bindings/*,benchmark}/*.ml{,i}>: pa_monad, pa_obus
+<obus/**/*.ml{,i}>: pa_monad
 <obus/internals/{bus,match_rule}.ml{,i}>: pa_obus
 <obus/oBus_{connection,bus,peer,proxy,property,object,signal,uuid,introspect}.ml{,i}>: pa_obus
 <obus/oBus_connection.ml>: pkg_camlp4.macro
 
 # Syntax extensions
-<syntax/*>: pkg_camlp4.lib, pkg_camlp4.quotations.o, pkg_camlp4.extend
+<syntax/*>: pkg_camlp4.lib
+<syntax/*.ml>: pkg_camlp4.extend
+<syntax/pa_{obus,projection,constructor}.ml>: pkg_camlp4.quotations.o
+<syntax/pa_monad.ml>: pkg_camlp4.quotations.r
 
 # Common dependencies
 <{obus,obus/internals,tools,test,samples,benchmark}/*>: pkg_lwt, pkg_xml-light
