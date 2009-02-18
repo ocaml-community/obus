@@ -12,10 +12,9 @@ open Ocamlbuild_plugin
 open Command (* no longer needed for OCaml >= 3.10.2 *)
 
 (* Syntax extensions used internally, (tag and the byte-code file). *)
-let intern_syntaxes = ["pa_trace", "syntax/trace.cmo";
-                       "pa_obus", "pa_obus.cma";
-                       "pa_projection", "syntax/pa_projection.cmo";
-                       "pa_constructor", "syntax/pa_constructor.cmo"]
+let intern_syntaxes = [ "pa_obus", "pa_obus.cma";
+                        "pa_projection", "syntax/pa_projection.cmo";
+                        "pa_constructor", "syntax/pa_constructor.cmo" ]
 
 (* +-----------------------------------+
    | Packages installed with ocamlfind |
