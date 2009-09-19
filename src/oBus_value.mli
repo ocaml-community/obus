@@ -28,7 +28,7 @@ type tbasic =
 
 type tsingle =
   | Tbasic of tbasic
-  | Tstructure of tsingle list
+  | Tstruct of tsingle list
   | Tarray of tsingle
   | Tdict of tbasic * tsingle
   | Tvariant
@@ -74,10 +74,13 @@ type single =
     private
   | Basic of basic
   | Array of tsingle * single list
+  | Byte_array of string
+      (** Array of bytes are always represented by a string in order
+          to use less memory *)
   | Dict of tbasic * tsingle * (basic * single) list
       (** [array] and [dict] raise [Invalid_argument] if one of the
           value does not have the expected type *)
-  | Structure of single list
+  | Struct of single list
   | Variant of single
  with constructor
 
@@ -140,38 +143,3 @@ val string_of_tsequence : tsequence -> string
 val string_of_basic : basic -> string
 val string_of_single : single -> string
 val string_of_sequence : sequence -> string
-
-(**/**)
-
-(* Signature serialization/deserialization *)
-
-val basic_type_code : tbasic -> char
-  (* Returns the code of a basic type *)
-
-module type Char_reader = sig
-  type 'a t
-  val bind : 'a t -> ('a -> 'b t) -> 'b t
-  val return : 'a -> 'a t
-  val failwith : string -> 'a t
-
-  val get_char : char t
-  val eof : bool t
-end
-
-module Make_signature_reader(Reader : Char_reader) : sig
-  val read_signature : signature Reader.t
-    (* Parse a signature *)
-end
-
-module type Char_writer = sig
-  type 'a t
-  val bind : 'a t -> ('a -> 'b t) -> 'b t
-  val return : 'a -> 'a t
-
-  val put_char : char -> unit t
-end
-
-module Make_signature_writer(Writer : Char_writer) : sig
-  val write_signature : signature -> int * unit Writer.t
-    (* Returns the length of a marshaled signature and a writer *)
-end
