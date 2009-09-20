@@ -930,33 +930,7 @@ struct
       | Some error ->
           raise (Protocol_error(OBus_string.error_message error))
 
-  let read_fields ptr limit =
-    let fields = {
-      rf_path = None;
-      rf_member = None;
-      rf_interface = None;
-      rf_error_name = None;
-      rf_reply_serial = None;
-      rf_destination = None;
-      rf_sender = None;
-      rf_signature = [];
-    } in
-    while ptr.ofs < limit do
-      read_padding8 ptr;
-      match read_uint8 ptr with
-        | 1 -> fields.rf_path <- Some(read_field 1 Tobject_path read_object_path ptr)
-        | 2 -> fields.rf_interface <- Some(read_name_field 2 OBus_name.validate_interface ptr)
-        | 3 -> fields.rf_member <- Some(read_name_field 3 OBus_name.validate_member ptr)
-        | 4 -> fields.rf_name <- Some(read_name_field 4 OBus_name.validate_error ptr)
-        | 5 -> fields.rf_serial <- Some(read_field 5 Tuint32 ruint32 ptr)
-        | 6 -> fields.rf_destination <- Some(read_name_field 6 OBus_name.validate_bus ptr)
-        | 7 -> fields.rf_sender <- Some(read_name_field 7 OBus_name.validate_bus ptr)
-        | 8 -> fields.rf_signature <- read_field 8 Tsignature rsignature ptr
-        | _ -> ignore (read_variant ptr) (* Unsupported header field *)
-    done;
-    fields
-
-  let read_message buffer get_rest =
+  let read_header16 buffer get_message =
     (* Check the protocol version first, since we can not do anything
        if it is not the same as our *)
     if get_uint8 buffer 3 <> protocol_version then
@@ -980,37 +954,83 @@ struct
        on a 8-boundary after it, so we have: *)
     let total_length = 16 + pad8 fields_length + body_length in
 
-    (* Safety checking *)
+    (* Safety checkings *)
+
     if fields_length < 0 || fields_length > max_array_size then
       raise (Protocol_error(array_too_big fields_length));
 
     if body_length < 0 || total_length > max_message_size then
       raise (Protocol_error(message_too_big total_length));
 
-  else perform
-    fields <-- rfields fields_length;
-  get_padding_before_body;
-  (i, body) <-- rsequence fields.rf_signature 0 body_length;
-  if i = body_length then
-    try
-      return { flags = flags;
-               sender = fields.rf_sender;
-               destination = fields.rf_destination;
-               serial = serial;
-               typ = message_maker fields;
-               body = body }
-    with
-        (* If fields are invalid *)
-        Failure msg -> failwith msg
-  else
-    failwith "junk bytes after message")
+    get_message total_length begin fun ptr cont ->
+      let fields = {
+        rf_path = None;
+        rf_member = None;
+        rf_interface = None;
+        rf_error_name = None;
+        rf_reply_serial = None;
+        rf_destination = None;
+        rf_sender = None;
+        rf_signature = [];
+      } in
+      let limit = ptr.ofs + fields_length in
+      (* Reading of fields *)
+      while ptr.ofs < limit do
+        read_padding8 ptr;
+        match read_uint8 ptr with
+          | 1 -> fields.rf_path <- Some(read_field 1 Tobject_path read_object_path ptr)
+          | 2 -> fields.rf_interface <- Some(read_name_field 2 OBus_name.validate_interface ptr)
+          | 3 -> fields.rf_member <- Some(read_name_field 3 OBus_name.validate_member ptr)
+          | 4 -> fields.rf_name <- Some(read_name_field 4 OBus_name.validate_error ptr)
+          | 5 -> fields.rf_serial <- Some(read_field 5 Tuint32 ruint32 ptr)
+          | 6 -> fields.rf_destination <- Some(read_name_field 6 OBus_name.validate_bus ptr)
+          | 7 -> fields.rf_sender <- Some(read_name_field 7 OBus_name.validate_bus ptr)
+          | 8 -> fields.rf_signature <- read_field 8 Tsignature rsignature ptr
+          | _ -> ignore (read_variant ptr) (* Unsupported header field *)
+      done;
+
+      read_padding8 ptr;
+      let body = sequence_reader fields.rf_signature ptr in
+
+      if ptr.ofs < ptr.max then raise (Protocol_error "junk bytes after message");
+      cont { flags = flags;
+             sender = fields.rf_sender;
+             destination = fields.rf_destination;
+             serial = serial;
+             typ = message_maker fields;
+             body = body }
+    end
 end
 
-let get_message =
-  get_char >>= function
-    | 'l' -> LEReader.rmessage
-    | 'B' -> BEReader.rmessage
-    | ch -> failwith (invalid_byte_order ch)
+module LE_reader = Make_reader(LE_integer_readers)
+module BE_reader = Make_reader(BE_integer_readers)
+
+let read_message ic =
+  Lwt_io.atomic begin fun ic ->
+    let buffer = String.create 16 in
+    lwt () = Lwt_io.read_into_exactly ic buffer 0 16 in
+    (match get_char buffer 0 with
+       | 'l' -> LE_reader.read_message
+       | 'B' -> BE_reader.read_message
+       | ch -> raise (Protocol_error(invalid_byte_order ch)))
+      buffer
+      (fun length f ->
+         let length = length - 16 in
+         let buffer = String.create length in
+         lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
+         f { buf = buffer; ofs = 0; max = length } Lwt.return)
+  end ic
+
+let message_of_string buffer =
+  if String.length buffer < 16 then invalid_arg "OBus_lowlevel.message_of_string: buffer too small";
+  (match get_char buffer 0 with
+     | 'l' -> LE_reader.read_message
+     | 'B' -> BE_reader.read_message
+     | ch -> raise (Protocol_error(invalid_byte_order ch)))
+    buffer
+    (fun length f ->
+       if length <> String.length buffer then raise (Protocol_error "invalid message size");
+       f { buf = buffer; ofs = 16; max = length } (fun x -> x))
 
 (* +-----------------------------------------------------------------+
    | Size computation                                                |
@@ -1052,141 +1072,3 @@ let get_message_size buf ofs =
       raise (Protocol_error(message_too_big total_length));
 
     total_length
-
-(* +-----------------------------------------------------------------+
-   | Transport                                                       |
-   +-----------------------------------------------------------------+ *)
-
-open Unix
-open Lwt
-open OBus_address
-
-module Log = OBus_log.Make(struct let section = "transport" end)
-
-type transport = {
-  recv : unit -> OBus_message.t Lwt.t;
-  send : OBus_message.t -> unit Lwt.t;
-  shutdown : unit -> unit Lwt.t;
-}
-
-let make_transport ~recv ~send ~shutdown = { recv = recv; send = send; shutdown = shutdown }
-
-let recv { recv = recv } = recv ()
-let send { send = send } message = send message
-let shutdown { shutdown = shutdown } = shutdown ()
-
-let chans_of_fd fd = (make_ichan (fun str ofs len -> Lwt_unix.read fd str ofs len),
-                      make_ochan (fun str ofs len -> Lwt_unix.write fd str ofs len))
-
-let transport_of_channels (ic, oc) =
-  { recv = (fun _ -> chan_get_message ic);
-    send = (fun msg -> chan_put_message oc msg);
-    shutdown = (fun _ -> ochan_flush oc) }
-
-let socket fd chans =
-  let tr = transport_of_channels chans in
-  { tr with
-      shutdown = fun _ ->
-        Lwt.finalize tr.shutdown
-          (fun _ ->
-             Lwt_unix.shutdown fd SHUTDOWN_ALL;
-             Lwt_unix.close fd;
-             Lwt.return ()) }
-
-let loopback _ =
-  let queue = MQueue.create () in
-  { recv = (fun _ -> MQueue.get queue);
-    send = (fun m -> MQueue.put m queue; return ());
-    shutdown = (fun _ ->
-                  Queue.iter (fun w -> wakeup_exn w (Failure "transport closed")) queue.MQueue.waiters;
-                  Queue.clear queue.MQueue.waiters;
-                  Queue.clear queue.MQueue.queued;
-                  return ()) }
-
-let make_socket domain typ addr =
-  let fd = Lwt_unix.socket domain typ 0 in
-  catch
-    (fun _ -> perform
-       Lwt_unix.connect fd addr;
-       return fd)
-    (fun exn -> Lwt_unix.close fd; fail exn)
-
-let transport_of_addresses ?mechanisms addresses =
-  let rec try_one domain typ addr fallback x =
-    catch
-      (fun _ -> perform
-         fd <-- make_socket domain typ addr;
-         let chans = chans_of_fd fd in
-         guid <-- OBus_auth.client_authenticate ?mechanisms (auth_stream_of_channels chans);
-         return (guid, socket fd chans))
-      (fun exn ->
-         OBus_log.log "transport creation failed for address: domain=%s typ=%s addr=%s: %s"
-           (match domain with
-              | PF_UNIX -> "unix"
-              | PF_INET -> "inet"
-              | PF_INET6 -> "inet6")
-           (match typ with
-              | SOCK_STREAM -> "stream"
-              | SOCK_DGRAM -> "dgram"
-              | SOCK_RAW -> "raw"
-              | SOCK_SEQPACKET -> "seqpacket")
-           (match addr with
-              | ADDR_UNIX path -> sprintf "unix(%s)" path
-              | ADDR_INET(addr, port) -> sprintf "inet(%s,%d)" (string_of_inet_addr addr) port)
-           (Util.string_of_exn exn);
-         fallback x)
-  in
-  let rec aux = function
-    | [] -> failwith "no working DBus address found"
-    | (desc, _) :: rest ->
-        match desc with
-          | Unix_path path ->
-              try_one PF_UNIX SOCK_STREAM (ADDR_UNIX(path))
-                aux rest
-
-          | Unix_abstract path ->
-              try_one PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ path))
-                aux rest
-
-          | Unix_tmpdir _ ->
-              OBus_log.error "unix tmpdir can only be used as a listening address";
-              aux rest
-
-          | Tcp { tcp_host = host; tcp_port = port; tcp_family = family } ->
-              let opts = [AI_SOCKTYPE SOCK_STREAM] in
-              let opts = match family with
-                | Some `Ipv4 -> AI_FAMILY PF_INET :: opts
-                | Some `Ipv6 -> AI_FAMILY PF_INET6 :: opts
-                | None -> opts in
-              let rec try_all = function
-                | [] -> aux rest
-                | ai :: ais ->
-                    try_one ai.ai_family ai.ai_socktype ai.ai_addr
-                      try_all ais
-              in
-              try_all (getaddrinfo host port opts)
-
-          | Autolaunch ->
-              (perform
-                 addresses <-- catch
-                   (fun _ -> perform
-                      uuid <-- Lazy.force OBus_info.machine_uuid;
-                      line <-- catch
-                        (fun _ -> Util.with_process_in "dbus-launch"
-                           [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|]
-                           Lwt_chan.input_line)
-                        (fun exn ->
-                           OBus_log.log "autolaunch failed: %s" (Util.string_of_exn exn);
-                           fail exn);
-                      let line =
-                        try
-                          String.sub line 0 (String.index line '\000')
-                        with _ -> line
-                      in
-                      return (OBus_address.of_string line))
-                   (fun exn -> return []);
-                 aux (addresses @ rest))
-
-          | _ -> aux rest
-  in
-  aux addresses

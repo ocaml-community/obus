@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** Low-level control of OBus *)
+(** Message serialization/deserialization *)
 
 exception Data_error of string
   (** Exception raised a message can not be sent. The parameter is an
@@ -26,8 +26,6 @@ exception Protocol_error of string
       - a boolean value is other than 0 or 1
       - ... *)
 
-(** {6 Message serialization/deserialization} *)
-
 type byte_order = Little_endian | Big_endian
 
 val native_byte_order : byte_order
@@ -45,39 +43,3 @@ val message_of_string : string -> OBus_message.t
 
 val string_of_message : ?byte_order : byte_order -> OBus_message.t -> string
   (** Marshal a message into a string *)
-
-(** {6 Transports} *)
-
-type transport = {
-  recv : unit -> OBus_message.t Lwt.t;
-  send : OBus_message.t -> unit Lwt.t;
-  shutdown : unit -> unit Lwt.t;
-}
-
-(** Note for implementation of new transports: OBus send messages one
-    by one, you can rely on that. *)
-
-val make_transport :
-  recv:(unit -> OBus_message.t Lwt.t) ->
-  send:(OBus_message.t -> unit Lwt.t) ->
-  shutdown:(unit -> unit Lwt.t) -> transport
-
-val recv : transport -> OBus_message.t Lwt.t
-val send : transport -> OBus_message.t -> unit Lwt.t
-val shutdown : transport -> unit Lwt.t
-
-val transport_of_channels : Lwt_io.input_channel * Lwt_io.output_channel -> transport
-  (** [transport_of_channels (ic, oc)] creates a transport from a pair
-      of channels. The [shutdown] function only flushes the output
-      channel. *)
-
-val loopback : unit -> transport
-  (** Loopback transport, each message sent is received on the same
-      transport *)
-
-val transport_of_addresses :
-  ?mechanisms : OBus_auth.client_mechanism list ->
-  OBus_address.t list ->
-  (OBus_address.guid * transport) Lwt.t
-    (** Try to make a working transport from a list of
-        addresses. Return also the guid of the server address *)
