@@ -1,4 +1,4 @@
-obus/internals/Constant
-obus/OBus_string
-obus/OBus_name
+src/private/OBus_constant
+src/OBus_string
+src/OBus_name
 syntax/Pa_obus

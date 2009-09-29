@@ -25,8 +25,7 @@ type declaration =
 type interface = name * declaration list * annotation list
 type node = OBus_path.element
 
-type document = interface list * node list
- with obus(basic)
+type document = interface list * node list with obus(basic)
 
 (** {6 Xml conversion} *)
 

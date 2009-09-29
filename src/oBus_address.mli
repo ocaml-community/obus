@@ -7,16 +7,13 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** Handling of DBus addresses *)
-
-type name = string
-type key = string
-type value = string
+(** Manipulation of DBus addresses *)
 
 type guid = OBus_uuid.t
-    (** Unique address identifier. It is unique for a server listening
-        address.  *)
+    (** A unique address identifier. Each server listenning address'
+        has a unique one. *)
 
+(** Parameters for TCP addresses *)
 type tcp_params = {
   tcp_host : string;
   (** For connecting, this is is the host to contact *)
@@ -31,18 +28,25 @@ type tcp_params = {
   (** Restrict to ipv4 or ipv6 *)
 } with projection
 
-type desc =
+type address =
   | Unix_path of string
   | Unix_abstract of string
   | Unix_tmpdir of string
       (** A unix socket *)
   | Tcp of tcp_params
   | Autolaunch
-  | Unknown of name * (key * value) list
-      (** An address which is not known by obus *)
+  | Unknown of string * (string * string) list
+      (** [Unknown(name, values)] an address which is not known by
+          obus. [values] is a list of [(key, value)]. *)
  with constructor
 
-type t = desc * guid option
+type t = {
+  address : address;
+  (** The address part of an address *)
+
+  guid : guid option;
+  (** An address may optionnally specifiy a guid *)
+} with projection
 
 val obus_list : t list OBus_type.basic
   (** Type combinator *)
@@ -51,7 +55,10 @@ exception Parse_failure of string
 
 val of_string : string -> t list
   (** [of_string str] parse [str] and return the list of addresses
-      defined in it. It can raise a [Parse_error]. *)
+      defined in it.
+
+      @raise [Parse_failure] if the string contains an invalid address
+  *)
 
 val to_string : t list -> string
   (** [to_string addresses] return a string representation of a list

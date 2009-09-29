@@ -8,16 +8,19 @@
  *)
 
 open Lwt
+open OBus_type.Perv
 
 type t = {
   connection : OBus_connection.t;
   name : OBus_name.bus option;
 } with projection
 
-let obus_t = OBus_type.wrap_with_context <:obus_type< unit >>
+let obus_t = OBus_type.map_with_context <:obus_type< unit >>
   (fun context () -> match context with
-     | OBus_connection.Context(connection, msg) -> { connection = connection; name = OBus_message.sender msg }
-     | _ -> raise OBus_type.Cast_failure)
+     | OBus_connection.Context(connection, message) ->
+         { connection = connection; name = OBus_message.sender message }
+     | _ ->
+         raise OBus_type.Cast_failure)
   (fun _ -> ())
 
 let make c n = { connection = c; name = Some n }
@@ -36,20 +39,17 @@ OBUS_method GetMachineId : OBus_uuid.t
 let wait_for_exit peer =
   match peer.name with
     | Some name ->
-        let exited = ref false and w = Lwt.wait () in
-        (perform
-           resolver <-- OBus_resolver.make
-             ~on_change:(fun owner -> match owner, !exited with
-                           | None, false ->
-                               exited := true;
-                               Lwt.wakeup w ();
-                               return ()
-                           | _ ->
-                               return ())
-             peer.connection name;
-           w;
-           let _ = OBus_resolver.disable resolver in
-           return ())
+        let waiter, wakener = Lwt.wait () in
+        lwt resolver = OBus_resolver.make peer.connection name in
+        let ev = React.S.map (function
+                                | None ->
+                                    if Lwt.state waiter = Sleep then Lwt.wakeup wakener ()
+                                | Some _ ->
+                                    ()) resolver#name in
+        lwt () = waiter in
+        (* Just to make the compiler happy: *)
+        ignore ev;
+        resolver#disable
 
     | None ->
         fail (Invalid_argument "OBus_peer.wait_for_exit: peer has no name")

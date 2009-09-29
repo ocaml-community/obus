@@ -8,7 +8,7 @@
  *)
 
 open Printf
-open OBus_private_constant
+open OBus_constant
 open OBus_value
 open OBus_message
 
@@ -16,11 +16,13 @@ exception Data_error of string
 exception Protocol_error of string
 
 type byte_order = Little_endian | Big_endian
-let native_byte_order = Little_endian
+let native_byte_order = match OBus_config.native_byte_order with
+  | `little_endian -> Little_endian
+  | `big_endian -> Big_endian
 
-let pading2 i = i land 1
-let pading4 i = (4 - i) land 3
-let pading8 i = (8 - i) land 7
+let padding2 i = i land 1
+let padding4 i = (4 - i) land 3
+let padding8 i = (8 - i) land 7
 
 let pad2 i = i + padding2 i
 let pad4 i = i + padding4 i
@@ -55,11 +57,11 @@ type raw_fields = {
   mutable rf_signature : signature;
 }
 
-let path = ("path", fun x -> x._path)
-let member = ("member", fun x -> x._member)
-let interface = ("interface", fun x -> x._interface)
-let error_name = ("error_name", fun x -> x._error_name)
-let reply_serial = ("reply_serial", fun x -> x._reply_serial)
+let path = ("path", fun x -> x.rf_path)
+let member = ("member", fun x -> x.rf_member)
+let interface = ("interface", fun x -> x.rf_interface)
+let error_name = ("error_name", fun x -> x.rf_error_name)
+let reply_serial = ("reply_serial", fun x -> x.rf_reply_serial)
 
 let get_required message_type_name (field_name, get_field) fields =
   match get_field fields with
@@ -70,7 +72,7 @@ let get_required message_type_name (field_name, get_field) fields =
 let method_call_of_raw fields =
   let req x = get_required "method_call" x in
   Method_call(req path fields,
-              fields._interface,
+              fields.rf_interface,
               req member fields)
 
 let method_return_of_raw fields =
@@ -97,8 +99,10 @@ let signal_of_raw fields =
 
 let map_exn f = function
   | Failure msg ->
-      let i = String.index ':' msg in
+      let i = String.index msg ':' in
       raise (f (String.sub msg (i + 1) (String.length msg - i - 1)))
+  | OBus_string.Invalid_string err ->
+      raise (f (OBus_string.error_message err))
   | exn ->
       raise exn
 
@@ -109,96 +113,103 @@ let protocol_error msg = Protocol_error msg
    | Message size calculation                                        |
    +-----------------------------------------------------------------+ *)
 
-let path_length = function
-  | [] -> 1
-  | l -> List.fold_left (fun x acc -> 1 + String.length x + acc) l
+module Size =
+struct
+  let path_length = function
+    | [] -> 1
+    | l -> List.fold_left (fun acc x -> 1 + String.length x + acc) 0 l
 
-let rec tsingle_size acc = function
-  | Tbasic _ -> acc + 1
-  | Tarray t -> tsingle_size (acc + 1) t
-  | Tdict(tk, tv) -> tsingle_size (acc + 4) tv
-  | Tstruct l -> List.fold_left tsingle_size acc l
-  | Tvariant -> acc + 1
+  (* Each function takes an argument [i] which represent an offset, it
+     computes the offset after writing what they have to then return
+     it. *)
 
-let tsequence_size l = List.fold_left tsingle_size l
+  let rec tsingle i = function
+    | Tbasic _ -> i + 1
+    | Tarray t -> tsingle (i + 1) t
+    | Tdict(tk, tv) -> tsingle (i + 4) tv
+    | Tstructure l -> List.fold_left tsingle (i + 2) l
+    | Tvariant -> i + 1
 
-let tsingle_size_of_single acc = function
-  | Basic x -> acc + 1
-  | Array(t, x) -> tsingle_size (acc + 1) t
-  | Byte_array _ -> acc + 2
-  | Dict(tk, tv, x) -> tsingle_size (acc + 4) tv
-  | Struct l -> List.fold_left tsingle_size_of_single acc l
-  | Variant x -> acc + 1
+  let tsequence i l = List.fold_left tsingle i l
 
-let tsequence_size_of_sequence acc l = List.fold_left tsingle_size_of_single acc l
+  let rec tsingle_of_single i = function
+    | Basic x -> i + 1
+    | Array(t, x) -> tsingle (i + 1) t
+    | Byte_array _ -> i + 2
+    | Dict(tk, tv, x) -> tsingle (i + 4) tv
+    | Structure l -> List.fold_left tsingle_of_single (i + 2) l
+    | Variant x -> i + 1
 
-let rec basic_size i = function
-  | Byte _ -> i + 1
-  | Int16 _
-  | Uint16 _ -> pad2 i + 2
-  | Boolean _
-  | Int32 _
-  | Uint32 _ -> pad4 i + 4
-  | Int64 _
-  | Uint64 _
-  | Double _ -> pad8 i + 8
-  | String s -> pad4 i + 4 + String.length s + 1
-  | Signature s -> 1 + tsequence_size s + 1
-  | Object_path p -> pad4 i + 4 + path_length p
+  let tsequence_of_sequence i l = List.fold_left tsingle_of_single i l
 
-let rec single_size i = function
-  | Basic x ->
-      basic_size i x
-  | Array(t, l) ->
-      let i = pad4 i + 4 in
-      let i = if pad8_p t then pad8 i else i in
-      List.fold_left single_size i l
-  | Byte_array bytes ->
-      pad4 i + 4 + String.length bytes
-  | Dict(tk, tv, l) ->
-      let i = pad4 i + 4 in
-      let i = pad8 i in
-      List.fold_left (fun i x -> single_size (pad8 i) x) l
-  | Struct l ->
-      List.fold_left single_size (pad8 i) l
-  | Variant x ->
-      let i = 1 + tsingle_size_of_single i x + 1 in
-      single_size i x
+  let rec basic i = function
+    | Byte _ -> i + 1
+    | Int16 _
+    | Uint16 _ -> pad2 i + 2
+    | Boolean _
+    | Int32 _
+    | Uint32 _ -> pad4 i + 4
+    | Int64 _
+    | Uint64 _
+    | Double _ -> pad8 i + 8
+    | String s -> pad4 i + String.length s + 5
+    | Signature s -> tsequence (i + 2) s
+    | Object_path p -> pad4 i + path_length p + 5
 
-let sequence_size i l = List.fold_left single_size i l
+  let rec single i = function
+    | Basic x ->
+        basic i x
+    | Array(t, l) ->
+        let i = pad4 i + 4 in
+        let i = if pad8_p t then pad8 i else i in
+        List.fold_left single i l
+    | Byte_array bytes ->
+        pad4 i + 4 + String.length bytes
+    | Dict(tk, tv, l) ->
+        let i = pad4 i + 4 in
+        let i = pad8 i in
+        List.fold_left (fun i (k, v) -> single (basic (pad8 i) k) v) i l
+    | Structure l ->
+        List.fold_left single (pad8 i) l
+    | Variant x ->
+        let i = 1 + tsingle_of_single i x + 1 in
+        single i x
 
-let message_size msg =
-  let i = 16 in
-  let i = match msg.typ with
-    | Method_call(path, None, member) ->
-        (* +9 for:
-           - the code (1)
-           - the signature of one basic type code (3)
-           - the string length (4)
-           - the null byte (1) *)
-        let i = pad8 i + 9 + path_length path in
-        pad8 i + 9 + String.length member
-    | Method_call(path, Some interface, member)
-    | Signal(path, interface, member) ->
-        let i = pad8 i + 9 + path_length path in
-        let i = pad8 i + 9 + String.length interface in
-        pad8 i + 9 + String.length member
-    | Method_return serial ->
-        pad8 i + 4
-    | Error(serial, name) ->
-        let i = pad8 i + 9 + String.length name in
-        pad8 i + 4
-  in
-  let i = match msg.destination with
-    | None -> i
-    | Some destination -> pad8 i + 9 + String.length destination
-  in
-  let i = match msg.sender with
-    | None -> i
-    | Some sender -> pad8 i + 9 + String.length sender
-  in
-  let i = pad8 i + 6 + tsequence_size_of_sequence i msg.body in
-  sequence_size i msg.body
+  let sequence i l = List.fold_left single i l
+
+  let message msg =
+    let i = 16 in
+    let i = match msg.typ with
+      | Method_call(path, None, member) ->
+          (* +9 for:
+             - the code (1)
+             - the signature of one basic type code (3)
+             - the string length (4)
+             - the null byte (1) *)
+          let i = pad8 i + 9 + path_length path in
+          pad8 i + 9 + String.length member
+      | Method_call(path, Some interface, member)
+      | Signal(path, interface, member) ->
+          let i = pad8 i + 9 + path_length path in
+          let i = pad8 i + 9 + String.length interface in
+          pad8 i + 9 + String.length member
+      | Method_return serial ->
+          pad8 i + 4
+      | Error(serial, name) ->
+          let i = pad8 i + 9 + String.length name in
+          pad8 i + 4
+    in
+    let i = match msg.destination with
+      | None -> i
+      | Some destination -> pad8 i + 9 + String.length destination
+    in
+    let i = match msg.sender with
+      | None -> i
+      | Some sender -> pad8 i + 9 + String.length sender
+    in
+    let i = pad8 i + 6 + tsequence_of_sequence i msg.body in
+    sequence (pad8 i) msg.body
+end
 
 (* +-----------------------------------------------------------------+
    | Unsafe writing of integers                                      |
@@ -307,27 +318,27 @@ struct
     and v1 = get_uint8 buf (ofs + 1) in
     let v = v0 lor (v1 lsl 8) in
     if v land (1 lsl 15) = 0 then
-      return v
+      v
     else
-      return ((-1 land (lnot 0x7fff)) lor v)
+      ((-1 land (lnot 0x7fff)) lor v)
 
   let get_uint16 buf ofs =
     let v0 = get_uint8 buf (ofs + 0)
     and v1 = get_uint8 buf (ofs + 1) in
-    return (v0 lor (v1 lsl 8))
+    (v0 lor (v1 lsl 8))
 
   let get_int32 buf ofs =
     let v0 = get_uint8 buf (ofs + 0)
     and v1 = get_uint8 buf (ofs + 1)
     and v2 = get_uint8 buf (ofs + 2)
     and v3 = get_uint8 buf (ofs + 3) in
-    return (Int32.logor
-              (Int32.logor
-                 (Int32.of_int v0)
-                 (Int32.shift_left (Int32.of_int v1) 8))
-              (Int32.logor
-                 (Int32.shift_left (Int32.of_int v2) 16)
-                 (Int32.shift_left (Int32.of_int v3) 24)))
+    (Int32.logor
+       (Int32.logor
+          (Int32.of_int v0)
+          (Int32.shift_left (Int32.of_int v1) 8))
+       (Int32.logor
+          (Int32.shift_left (Int32.of_int v2) 16)
+          (Int32.shift_left (Int32.of_int v3) 24)))
   let get_uint32 = get_int32
 
   let get_int64 buf ofs =
@@ -339,21 +350,21 @@ struct
     and v5 = get_uint8 buf (ofs + 5)
     and v6 = get_uint8 buf (ofs + 6)
     and v7 = get_uint8 buf (ofs + 7) in
-    return (Int64.logor
-              (Int64.logor
-                 (Int64.logor
-                    (Int64.of_int v0)
-                    (Int64.shift_left (Int64.of_int v1) 8))
-                 (Int64.logor
-                    (Int64.shift_left (Int64.of_int v2) 16)
-                    (Int64.shift_left (Int64.of_int v3) 24)))
-              (Int64.logor
-                 (Int64.logor
-                    (Int64.shift_left (Int64.of_int v4) 32)
-                    (Int64.shift_left (Int64.of_int v5) 40))
-                 (Int64.logor
-                    (Int64.shift_left (Int64.of_int v6) 48)
-                    (Int64.shift_left (Int64.of_int v7) 56))))
+    (Int64.logor
+       (Int64.logor
+          (Int64.logor
+             (Int64.of_int v0)
+             (Int64.shift_left (Int64.of_int v1) 8))
+          (Int64.logor
+             (Int64.shift_left (Int64.of_int v2) 16)
+             (Int64.shift_left (Int64.of_int v3) 24)))
+       (Int64.logor
+          (Int64.logor
+             (Int64.shift_left (Int64.of_int v4) 32)
+             (Int64.shift_left (Int64.of_int v5) 40))
+          (Int64.logor
+             (Int64.shift_left (Int64.of_int v6) 48)
+             (Int64.shift_left (Int64.of_int v7) 56))))
   let get_uint64 = get_int64
 
   let get_uint buf ofs =
@@ -361,7 +372,7 @@ struct
     and v1 = get_uint8 buf (ofs + 1)
     and v2 = get_uint8 buf (ofs + 2)
     and v3 = get_uint8 buf (ofs + 3) in
-    return (v0 lor (v1 lsl 8) lor (v2 lsl 16) lor (v3 lsl 24))
+    (v0 lor (v1 lsl 8) lor (v2 lsl 16) lor (v3 lsl 24))
 end
 
 module BE_integer_readers : Integer_readers =
@@ -371,27 +382,27 @@ struct
     and v0 = get_uint8 buf (ofs + 1) in
     let v = v0 lor (v1 lsl 8) in
     if v land (1 lsl 15) = 0 then
-      return v
+      v
     else
-      return ((-1 land (lnot 0x7fff)) lor v)
+      ((-1 land (lnot 0x7fff)) lor v)
 
   let get_uint16 buf ofs =
     let v1 = get_uint8 buf (ofs + 0)
     and v0 = get_uint8 buf (ofs + 1) in
-    return (v0 lor (v1 lsl 8))
+    (v0 lor (v1 lsl 8))
 
   let get_int32 buf ofs =
     let v3 = get_uint8 buf (ofs + 0)
     and v2 = get_uint8 buf (ofs + 1)
     and v1 = get_uint8 buf (ofs + 2)
     and v0 = get_uint8 buf (ofs + 3) in
-    return (Int32.logor
-              (Int32.logor
-                 (Int32.of_int v0)
-                 (Int32.shift_left (Int32.of_int v1) 8))
-              (Int32.logor
-                 (Int32.shift_left (Int32.of_int v2) 16)
-                 (Int32.shift_left (Int32.of_int v3) 24)))
+    (Int32.logor
+       (Int32.logor
+          (Int32.of_int v0)
+          (Int32.shift_left (Int32.of_int v1) 8))
+       (Int32.logor
+          (Int32.shift_left (Int32.of_int v2) 16)
+          (Int32.shift_left (Int32.of_int v3) 24)))
   let get_uint32 = get_int32
 
   let get_int64 buf ofs =
@@ -403,21 +414,21 @@ struct
     and v2 = get_uint8 buf (ofs + 5)
     and v1 = get_uint8 buf (ofs + 6)
     and v0 = get_uint8 buf (ofs + 7) in
-    return (Int64.logor
-              (Int64.logor
-                 (Int64.logor
-                    (Int64.of_int v0)
-                    (Int64.shift_left (Int64.of_int v1) 8))
-                 (Int64.logor
-                    (Int64.shift_left (Int64.of_int v2) 16)
-                    (Int64.shift_left (Int64.of_int v3) 24)))
-              (Int64.logor
-                 (Int64.logor
-                    (Int64.shift_left (Int64.of_int v4) 32)
-                    (Int64.shift_left (Int64.of_int v5) 40))
-                 (Int64.logor
-                    (Int64.shift_left (Int64.of_int v6) 48)
-                    (Int64.shift_left (Int64.of_int v7) 56))))
+    (Int64.logor
+       (Int64.logor
+          (Int64.logor
+             (Int64.of_int v0)
+             (Int64.shift_left (Int64.of_int v1) 8))
+          (Int64.logor
+             (Int64.shift_left (Int64.of_int v2) 16)
+             (Int64.shift_left (Int64.of_int v3) 24)))
+       (Int64.logor
+          (Int64.logor
+             (Int64.shift_left (Int64.of_int v4) 32)
+             (Int64.shift_left (Int64.of_int v5) 40))
+          (Int64.logor
+             (Int64.shift_left (Int64.of_int v6) 48)
+             (Int64.shift_left (Int64.of_int v7) 56))))
   let get_uint64 = get_int64
 
   let get_uint buf ofs =
@@ -425,7 +436,7 @@ struct
     and v2 = get_uint8 buf (ofs + 1)
     and v1 = get_uint8 buf (ofs + 2)
     and v0 = get_uint8 buf (ofs + 3) in
-    return (v0 lor (v1 lsl 8) lor (v2 lsl 16) lor (v3 lsl 24))
+    (v0 lor (v1 lsl 8) lor (v2 lsl 16) lor (v3 lsl 24))
 end
 
 (* A pointer, used to serialize or unserialize data *)
@@ -462,17 +473,17 @@ let write1 writer ptr value =
   ptr.ofs <- ptr.ofs + 1
 
 let write2 writer ptr value =
-  write_padding2 buffer i;
+  write_padding2 ptr;
   writer ptr.buf ptr.ofs value;
   ptr.ofs <- ptr.ofs + 2
 
 let write4 writer ptr value =
-  write_padding4 buffer i;
+  write_padding4 ptr;
   writer ptr.buf ptr.ofs value;
   ptr.ofs <- ptr.ofs + 4
 
 let write8 writer ptr value =
-  write_padding8 buffer i;
+  write_padding8 ptr;
   writer ptr.buf ptr.ofs value;
   ptr.ofs <- ptr.ofs + 8
 
@@ -485,7 +496,7 @@ let write_bytes ptr value =
    | Message writing                                                 |
    +-----------------------------------------------------------------+ *)
 
-module Make_writer(Ineteger_writers : Integer_writers) =
+module Make_writer(Integer_writers : Integer_writers) =
 struct
   open Integer_writers
 
@@ -524,8 +535,8 @@ struct
         | None ->
             write_string_no_check ptr x
       end
-    | Signature x -> wsignature ptr x
-    | Object_path x -> wobject_path ptr x
+    | Signature x -> write_signature ptr x
+    | Object_path x -> write_object_path ptr x
 
   let rec write_array ptr padded_on_8 write_element values =
     (* Array are serialized as follow:
@@ -551,9 +562,9 @@ struct
     let start_ofs = ptr.ofs in
     List.iter (fun x -> write_element ptr x) values;
     let length = ptr.ofs - start_ofs in
-    if length < 0 || length > max_array_size then raise (Data_error(array_too_big len));
+    if length < 0 || length > max_array_size then raise (Data_error(array_too_big length));
     (* Write the array length: *)
-    put_uint ptr.buffer length_ofs length
+    put_uint ptr.buf length_ofs length
 
   let rec write_dict_entry ptr (k, v) =
     (* Dict-entries are serialized as follow:
@@ -569,12 +580,12 @@ struct
     | Basic x ->
         write_basic ptr x
     | Array(t, x) ->
-        write_array i (pad8_p t) write_single x
+        write_array ptr (pad8_p t) write_single x
     | Byte_array s ->
         write_uint ptr (String.length s);
         write_bytes ptr s
     | Dict(tk, tv, x) ->
-        write_array i true write_dict_entry x
+        write_array ptr true write_dict_entry x
     | Structure x ->
         (* Structure are serialized as follow:
 
@@ -625,13 +636,13 @@ struct
 
   (* Serialize one complete message *)
   let write_message byte_order_char msg =
-    let size = message_size msg in
+    let size = Size.message msg in
     if size > max_message_size then raise (Data_error(message_too_big size));
 
     let buffer = String.create size in
     let ptr = {
-      buf = buf;
-      ofs = 0;
+      buf = buffer;
+      ofs = 16;
       max = size;
     } in
 
@@ -686,11 +697,11 @@ struct
     write_field ptr 5 Tuint32 (write4 put_uint32) fields.rf_reply_serial;
     write_name_field ptr 6 OBus_name.validate_bus fields.rf_destination;
     write_name_field ptr 7 OBus_name.validate_bus fields.rf_sender;
-    write_field_real ptr 8 Tsignature write_signature fields.rf_signature acc;
+    write_field_real ptr 8 Tsignature write_signature fields.rf_signature;
 
-    let fields_length = ptr.count * buffer_size + ptr.offset - 16 in
+    let fields_length = ptr.ofs - 16 in
 
-    if fields_lenfth < 0 || fields_length > max_array_size then
+    if fields_length < 0 || fields_length > max_array_size then
       raise (Data_error(array_too_big fields_length));
 
     (* The message body start aligned on an 8-boundary after the
@@ -735,6 +746,7 @@ let string_of_message ?(byte_order=native_byte_order) msg =
         BE_writer.write_message 'B' msg
 
 let write_message oc ?byte_order msg =
+  lwt () = Lwt_io.hexdump Lwt_io.stdout (string_of_message ?byte_order msg) in
   Lwt_io.write oc (string_of_message ?byte_order msg)
 
 (* +-----------------------------------------------------------------+
@@ -769,34 +781,39 @@ let read_padding8 ptr =
 let read1 reader ptr =
   if ptr.ofs + 1 >= ptr.max then out_of_bounds ();
   let x = reader ptr.buf ptr.ofs in
-  ptr.ofs <- ptr.ofs + 1
+  ptr.ofs <- ptr.ofs + 1;
+  x
 
 let read2 reader ptr =
   let padding = padding2 ptr.ofs in
   if ptr.ofs + padding + 2 >= ptr.max then out_of_bounds ();
   read_padding ptr padding;
   let x = reader ptr.buf ptr.ofs in
-  ptr.ofs <- ptr.ofs + 2
+  ptr.ofs <- ptr.ofs + 2;
+  x
 
 let read4 reader ptr =
   let padding = padding4 ptr.ofs in
   if ptr.ofs + padding + 4 >= ptr.max then out_of_bounds ();
   read_padding ptr padding;
   let x = reader ptr.buf ptr.ofs in
-  ptr.ofs <- ptr.ofs + 4
+  ptr.ofs <- ptr.ofs + 4;
+  x
 
 let read8 reader ptr =
   let padding = padding8 ptr.ofs in
   if ptr.ofs + padding + 8 >= ptr.max then out_of_bounds ();
   read_padding ptr padding;
   let x = reader ptr.buf ptr.ofs in
-  ptr.ofs <- ptr.ofs + 8
+  ptr.ofs <- ptr.ofs + 8;
+  x
 
 let read_bytes ptr len =
   if len < 0 || ptr.ofs + len >= ptr.max then out_of_bounds ();
   let s = String.create len in
   String.unsafe_blit ptr.buf ptr.ofs s 0 len;
-  ptr.ofs <- ptr.ofs + len
+  ptr.ofs <- ptr.ofs + len;
+  s
 
 (* +-----------------------------------------------------------------+
    | Message reading                                                 |
@@ -804,21 +821,22 @@ let read_bytes ptr len =
 
 module Make_reader(Integer_readers : Integer_readers) =
 struct
+  open Integer_readers
 
-  let read_uint ptr = read1 put_uint ptr
-  let read_uint8 ptr = read1 put_uint8 ptr
+  let read_uint ptr = read4 get_uint ptr
+  let read_uint8 ptr = read1 get_uint8 ptr
 
   let read_string_no_check ptr =
     let len = read_uint ptr in
-    let x = read_bytes len in
+    let x = read_bytes ptr len in
     if read_uint8 ptr <> 0 then raise (Protocol_error "missing string terminal null byte");
     x
 
   let read_signature ptr =
     let len = read_uint8 ptr in
-    let x = read_bytes len in
+    let x = read_bytes ptr len in
     if read_uint8 ptr <> 0 then raise (Protocol_error "missing signature terminating null byte");
-    x
+    try OBus_value.signature_of_string x with exn -> map_exn protocol_error exn
 
   let read_object_path ptr =
     let str = read_string_no_check ptr in
@@ -830,11 +848,11 @@ struct
     | 1 -> Boolean true
     | n -> raise (Protocol_error(sprintf "invalid boolean value: %d" n))
   let read_vint16 ptr = Int16(read2 get_int16 ptr)
-  let read_vint32 ptr = Int16(read4 get_int32 ptr)
-  let read_vint64 ptr = Int16(read8 get_int64 ptr)
+  let read_vint32 ptr = Int32(read4 get_int32 ptr)
+  let read_vint64 ptr = Int64(read8 get_int64 ptr)
   let read_vuint16 ptr = Uint16(read2 get_uint16 ptr)
-  let read_vuint32 ptr = Uint16(read4 get_uint32 ptr)
-  let read_vuint64 ptr = Uint16(read8 get_uint64 ptr)
+  let read_vuint32 ptr = Uint32(read4 get_uint32 ptr)
+  let read_vuint64 ptr = Uint64(read8 get_uint64 ptr)
   let read_vdouble ptr = Double(Int64.float_of_bits (read8 get_uint64 ptr))
   let read_vstring ptr =
     let str = read_string_no_check ptr in
@@ -873,36 +891,36 @@ struct
     in
     aux ()
 
-  let read_variant ptr =
-    match read_signature ptr with
-      | [t] ->
-          Variant(single_reader t ptr)
-      | s ->
-          raise (Protocol_error("variant signature does not contain one single type: %S" (OBus_value.string_of_signature s)))
-
   let rec single_reader = function
     | Tbasic t ->
         let reader = basic_reader t in
-        (fun ptr -> Basic(reader ptr))
+        (fun ptr -> basic(reader ptr))
     | Tarray t ->
         let reader = single_reader t and padded_on_8 = pad8_p t in
-        (fun ptr -> Array(t, read_array padded_on_8 reader ptr))
+        (fun ptr -> array t (read_array padded_on_8 reader ptr))
     | Tdict(tk, tv) ->
-        let kreader = rbasic tk and vreader = rsingle tv in
+        let kreader = basic_reader tk and vreader = single_reader tv in
         let reader ptr =
           read_padding8 ptr;
           let k = kreader ptr in
           let v = vreader ptr in
           (k, v)
         in
-        (fun ptr -> Dict(t, read_array true reader ptr))
-    | Tstruct tl ->
+        (fun ptr -> dict tk tv (read_array true reader ptr))
+    | Tstructure tl ->
         let reader = sequence_reader tl in
         (fun ptr ->
            read_padding8 ptr;
-           Struct(reader ptr))
+           structure (reader ptr))
     | Tvariant ->
         read_variant
+
+  and read_variant ptr =
+    match read_signature ptr with
+      | [t] ->
+          variant (single_reader t ptr)
+      | s ->
+          raise (Protocol_error(Printf.sprintf "variant signature does not contain one single type: %S" (OBus_value.string_of_signature s)))
 
   and sequence_reader = function
     | [] ->
@@ -930,10 +948,11 @@ struct
       | Some error ->
           raise (Protocol_error(OBus_string.error_message error))
 
-  let read_header16 buffer get_message =
+  let read_message buffer get_message =
     (* Check the protocol version first, since we can not do anything
        if it is not the same as our *)
-    if get_uint8 buffer 3 <> protocol_version then
+    let protocol_version = get_uint8 buffer 3 in
+    if protocol_version <> OBus_info.protocol_version then
       raise (Protocol_error(invalid_protocol_version protocol_version));
 
     let message_maker = match get_uint8 buffer 1 with
@@ -941,7 +960,7 @@ struct
       | 2 -> method_return_of_raw
       | 3 -> error_of_raw
       | 4 -> signal_of_raw
-      | c -> raise (Protocol_error(sprintf "unknown message type: %d" (Char.code c))) in
+      | n -> raise (Protocol_error(sprintf "unknown message type: %d" n)) in
 
     let n = get_uint8 buffer 2 in
     let flags = { no_reply_expected = n land 1 = 1; no_auto_start = n land 2 = 2 } in
@@ -981,11 +1000,11 @@ struct
           | 1 -> fields.rf_path <- Some(read_field 1 Tobject_path read_object_path ptr)
           | 2 -> fields.rf_interface <- Some(read_name_field 2 OBus_name.validate_interface ptr)
           | 3 -> fields.rf_member <- Some(read_name_field 3 OBus_name.validate_member ptr)
-          | 4 -> fields.rf_name <- Some(read_name_field 4 OBus_name.validate_error ptr)
-          | 5 -> fields.rf_serial <- Some(read_field 5 Tuint32 ruint32 ptr)
+          | 4 -> fields.rf_error_name <- Some(read_name_field 4 OBus_name.validate_error ptr)
+          | 5 -> fields.rf_reply_serial <- Some(read_field 5 Tuint32 (read4 get_uint32) ptr)
           | 6 -> fields.rf_destination <- Some(read_name_field 6 OBus_name.validate_bus ptr)
           | 7 -> fields.rf_sender <- Some(read_name_field 7 OBus_name.validate_bus ptr)
-          | 8 -> fields.rf_signature <- read_field 8 Tsignature rsignature ptr
+          | 8 -> fields.rf_signature <- read_field 8 Tsignature read_signature ptr
           | _ -> ignore (read_variant ptr) (* Unsupported header field *)
       done;
 
@@ -1022,7 +1041,7 @@ let read_message ic =
   end ic
 
 let message_of_string buffer =
-  if String.length buffer < 16 then invalid_arg "OBus_lowlevel.message_of_string: buffer too small";
+  if String.length buffer < 16 then invalid_arg "OBus_wire.message_of_string: buffer too small";
   (match get_char buffer 0 with
      | 'l' -> LE_reader.read_message
      | 'B' -> BE_reader.read_message
@@ -1047,7 +1066,7 @@ let get_message_size buf ofs =
   in
 
   if ofs < 0 || ofs + 16 >= String.length buf then
-    raise (Invalid_argument "OBus_lowlevel.get_message_size")
+    raise (Invalid_argument "OBus_wire.get_message_size")
 
   else
     (* Byte-order *)

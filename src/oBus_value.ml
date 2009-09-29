@@ -45,7 +45,7 @@ type tbasic =
 
 type tsingle =
   | Tbasic of tbasic
-  | Tstruct of tsingle list
+  | Tstructure of tsingle list
   | Tarray of tsingle
   | Tdict of tbasic * tsingle
   | Tvariant
@@ -79,7 +79,7 @@ let rec print_tsingle pp = function
   | Tbasic t -> fprintf pp "@[<2>Tbasic@ %a@]" print_tbasic t
   | Tarray t -> fprintf pp "@[<2>Tarray@,(%a)@]" print_tsingle t
   | Tdict(tk, tv) -> fprintf pp "@[<2>Tdict@,(@[<hv>%a,@ %a@])@]" print_tbasic tk print_tsingle tv
-  | Tstruct tl -> fprintf pp "@[<2>Tstruct@ %a@]" print_tsequence tl
+  | Tstructure tl -> fprintf pp "@[<2>Tstruct@ %a@]" print_tsequence tl
   | Tvariant -> fprintf pp "Tvariant"
 
 and print_tsequence pp = print_list print_tsingle pp
@@ -97,35 +97,36 @@ let length_validate_signature l =
     | Tbasic _ | Tvariant ->
         length + 1
     | Tarray t ->
-        if depth_array > OBus_private_constant.max_type_recursion_depth then
+        if depth_array > OBus_constant.max_type_recursion_depth then
           failwith "too many nested arrays"
         else
           aux_single (length + 1) depth_struct (depth_array + 1) depth_dict_entry t
     | Tdict(tk, tv) ->
-        if depth_array > OBus_private_constant.max_type_recursion_depth then
+        if depth_array > OBus_constant.max_type_recursion_depth then
           failwith "too many nested arrays"
-        else if depth_dict_entry > OBus_private_constant.max_type_recursion_depth then
+        else if depth_dict_entry > OBus_constant.max_type_recursion_depth then
           failwith "too many nested dict-entries"
         else
           aux_single (length + 3) depth_struct (depth_array + 1) (depth_dict_entry + 1) tv
-    | Tstruct [] ->
+    | Tstructure [] ->
         failwith "empty struct"
-    | Tstruct tl ->
-        if depth_struct > OBus_private_constant.max_type_recursion_depth then
+    | Tstructure tl ->
+        if depth_struct > OBus_constant.max_type_recursion_depth then
           failwith "too many nested structs"
         else
           aux_sequence (length + 2) (depth_struct + 1) depth_array depth_dict_entry tl
 
-  and aux_sequence length = function
+  and aux_sequence length depth_struct depth_array depth_dict_entry = function
     | [] ->
         if length > 255 then
           failwith "signature too long"
         else
           length
     | t :: tl ->
-        aux_sequence (aux_single length 0 0 0 t) tl
+        aux_sequence (aux_single length depth_struct depth_array depth_dict_entry t)
+          depth_struct depth_array depth_dict_entry tl
   in
-  aux_sequence 0 l
+  aux_sequence 0 0 0 0 l
 
 let validate_signature l =
   try
@@ -180,7 +181,7 @@ let signature_of_string str =
               Tarray(parse_single ch)
       end
     | '(' ->
-        Tstruct (parse_struct (get_char ()))
+        Tstructure (parse_struct (get_char ()))
     | ')' ->
         fail "')' without '('"
     | 'v' ->
@@ -245,6 +246,8 @@ let string_of_signature signature =
                 | Tsignature -> 'g')
   in
   let rec write_single = function
+    | Tbasic t ->
+        write_basic t
     | Tarray t ->
         put_char 'a';
         write_single t
@@ -254,7 +257,7 @@ let string_of_signature signature =
         write_basic tk;
         write_single tv;
         put_char '}'
-    | Tstruct tl ->
+    | Tstructure tl ->
         put_char '(';
         List.iter write_single tl;
         put_char ')'
@@ -288,7 +291,7 @@ type single =
   | Array of tsingle * single list
   | Byte_array of string
   | Dict of tbasic * tsingle * (basic * single) list
-  | Struct of single list
+  | Structure of single list
   | Variant of single
  with constructor
 
@@ -330,7 +333,7 @@ let rec type_of_single = function
   | Array(t, x) -> Tarray t
   | Byte_array x -> Tarray(Tbasic Tbyte)
   | Dict(tk, tv, x) -> Tdict(tk, tv)
-  | Struct x -> Tstruct(List.map type_of_single x)
+  | Structure x -> Tstructure(List.map type_of_single x)
   | Variant _ -> Tvariant
 
 let type_of_sequence = List.map type_of_single
@@ -339,7 +342,7 @@ let array t l =
   if t = Tbasic Tbyte then begin
     let s = String.create (List.length l) and i = ref 0 in
     List.iter (function
-                 | Byte x ->
+                 | Basic(Byte x) ->
                      String.unsafe_set s !i x;
                      incr i
                  | _ ->
@@ -388,7 +391,7 @@ let rec print_single pp = function
   | Array(t, l) -> print_list print_single pp l
   | Byte_array s -> print_single pp (Array(Tbasic Tbyte, explode s))
   | Dict(tk, tv, l) -> print_list (fun pp (k, v) -> fprintf pp "(@[%a,@ %a@])" print_basic k print_single v) pp l
-  | Struct l -> print_sequence pp l
+  | Structure l -> print_sequence pp l
   | Variant x -> fprintf pp "@[<2>Variant@,(@[<hv>%a,@ %a@])@]" print_tsingle (type_of_single x) print_single x
 
 and print_sequence pp l = print_tuple print_single pp l

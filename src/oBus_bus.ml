@@ -8,7 +8,8 @@
  *)
 
 open Lwt
-open OBus_internals
+open OBus_private
+open OBus_type.Perv
 
 include OBus_interface.Make_custom
   (struct
@@ -25,17 +26,17 @@ include OBus_interface.Make_custom
 OBUS_method Hello : string
 
 let error_handler = function
-  | OBus_lowlevel.Protocol_error msg ->
-      Log.error "the DBus connection with the message bus has been closed due to a protocol error: %s" msg;
+  | OBus_wire.Protocol_error msg ->
+      ERROR("the DBus connection with the message bus has been closed due to a protocol error: %s" msg);
       exit 1
   | OBus_connection.Connection_lost ->
-      Log.log "disconnected from DBus message bus";
+      LOG("disconnected from DBus message bus");
       exit 0
   | OBus_connection.Transport_error exn ->
-      Log.error "the DBus connection with the message bus has been closed due to a transport error: %s" (Util.string_of_exn exn);
+      ERROR("the DBus connection with the message bus has been closed due to a transport error: %s" (OBus_util.string_of_exn exn));
       exit 1
   | exn ->
-      Log.failure exn "the DBus connection with the message bus has been closed due to this uncaught exception";
+      FAILURE(exn, "the DBus connection with the message bus has been closed due to this uncaught exception");
       exit 1
 
 let register_connection connection = match connection#get with
@@ -49,15 +50,14 @@ let register_connection connection = match connection#get with
 
       | None ->
           connection.on_disconnect := error_handler;
-          hello connection.packed >>= fun name ->
-            connection.name <- Some name;
-            return ()
+          lwt name = hello connection.packed in
+          connection.name <- Some name;
+          return ()
 
 let of_addresses addresses =
-  OBus_connection.of_addresses addresses ~shared:true >>= fun bus ->
-    perform
-      register_connection bus;
-      return bus
+  lwt bus = OBus_connection.of_addresses addresses ~shared:true in
+  lwt () = register_connection bus in
+  return bus
 
 let of_laddresses laddr = Lazy.force laddr >>= of_addresses
 
@@ -69,7 +69,7 @@ let prefix = interface ^ ".Error."
 exception Service_unknown of string
  with obus(prefix ^ "ServiceUnknown")
 
-exception Match_rule_not_found of string
+exception OBus_match_not_found of string
  with obus(prefix ^ "MatchRuleNotFound")
 
 exception Service_unknown of string
@@ -88,7 +88,7 @@ type request_name_result =
     | `exists
     | `already_owner ]
 
-let obus_request_name_result = OBus_type.map obus_uint
+let obus_request_name_result = OBus_type.mapping obus_uint
   [`primary_owner, 1; `in_queue, 2; `exists, 3; `already_owner, 4]
 
 OBUS_method RequestName : string -> uint -> request_name_result
@@ -99,14 +99,14 @@ let request_name bus ?(allow_replacement=false) ?(replace_existing=false) ?(do_n
 
 type release_name_result = [ `released | `non_existent | `not_owner ]
 
-let obus_release_name_result = OBus_type.map obus_uint
+let obus_release_name_result = OBus_type.mapping obus_uint
   [`released, 1; `non_existent, 2; `not_owner, 3]
 
 OBUS_method ReleaseName : string -> release_name_result
 
 type start_service_by_name_result = [ `success | `already_running ]
 
-let obus_start_service_by_name_result = OBus_type.map obus_uint
+let obus_start_service_by_name_result = OBus_type.mapping obus_uint
   [(`success, 1); (`already_running, 2)]
 
 OBUS_method StartServiceByName : string -> uint -> start_service_by_name_result
@@ -117,13 +117,8 @@ OBUS_method ListActivatableNames : string list
 OBUS_method GetNameOwner : string -> string
 OBUS_method ListQueuedOwners : string -> string list
 
-type match_rule = Match_rule.t
-  with obus
-
-let match_rule = Match_rule.make
-
-OBUS_method AddMatch : match_rule -> unit
-OBUS_method RemoveMatch : match_rule -> unit
+OBUS_method AddMatch : OBus_match.rule -> unit
+OBUS_method RemoveMatch : OBus_match.rule -> unit
 
 OBUS_method GetConnectionUnixUser : string -> int
 OBUS_method GetConnectionUnixProcessId : string -> int
@@ -131,7 +126,7 @@ OBUS_method GetConnectionSelinuxSecurityContext : string -> byte_array
 OBUS_method ReloadConfig : unit
 OBUS_method GetId : OBus_uuid.t
 
-let obus_name_opt = OBus_type.wrap obus_string
+let obus_name_opt = OBus_type.map obus_string
   (function
      | "" -> None
      | str -> Some str)
@@ -144,18 +139,14 @@ OBUS_signal NameLost : string
 OBUS_signal NameAcquired : string
 
 let get_peer bus name =
-  try_bind
-    (fun _ -> get_name_owner bus name)
-    (fun n -> return (OBus_peer.make bus n))
-    (function
-       | Name_has_no_owner _ ->
-           (perform
-              start_service_by_name bus name;
-              n <-- get_name_owner bus name;
-              return (OBus_peer.make bus n))
-       | exn -> fail exn)
+  try_lwt
+    lwt unique_name = get_name_owner bus name in
+    return (OBus_peer.make bus unique_name)
+  with Name_has_no_owner _ ->
+    lwt _ = start_service_by_name bus name in
+    lwt unique_name = get_name_owner bus name in
+    return (OBus_peer.make bus unique_name)
 
 let get_proxy bus name path =
-  (perform
-     peer <-- get_peer bus name;
-     return (OBus_proxy.make peer path))
+  lwt peer = get_peer bus name in
+  return (OBus_proxy.make peer path)

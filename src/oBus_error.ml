@@ -10,20 +10,17 @@
 type name = string
 type message = string
 exception DBus of name * message
-exception Failed of message
 exception Unknown_method of message
 exception Out_of_memory of message
 exception No_reply of message
-
-let failwith msg = Lwt.fail (Failed msg)
 
 open Printf
 
 let errors = ref
   [ "org.freedesktop.DBus.Error.Failed",
-    ((fun msg -> Failed msg),
+    ((fun msg -> Failure msg),
      (function
-        | Failed msg -> Some msg
+        | Failure msg -> Some msg
         | _ -> None));
     "org.freedesktop.DBus.Error.UnknownMethod",
     ((fun msg -> Unknown_method msg),
@@ -42,13 +39,13 @@ let errors = ref
         | _ -> None)) ]
 
 let make name msg =
-  match Util.assoc name !errors with
+  match OBus_util.assoc name !errors with
     | Some (maker, unmaker) -> maker msg
     | None -> DBus(name, msg)
 
 let unmake = function
   | DBus(name, msg) -> Some(name, msg)
-  | exn -> Util.find_map (fun (name, (maker, unmaker)) ->
-                            Util.wrap_option (unmaker exn) (fun msg -> (name, msg))) !errors
+  | exn -> OBus_util.find_map (fun (name, (maker, unmaker)) ->
+                            OBus_util.wrap_option (unmaker exn) (fun msg -> (name, msg))) !errors
 
 let register name maker unmaker = errors := (name, (maker, unmaker)) :: !errors

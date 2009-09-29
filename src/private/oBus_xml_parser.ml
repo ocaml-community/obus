@@ -1,7 +1,7 @@
 (*
- * xparser.ml
- * ----------
- * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
+ * oBus_xml_parser.ml
+ * ------------------
+ * Copyright : (c) 2009, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
  * This file is a part of obus, an ocaml implemtation of dbus.
@@ -53,7 +53,7 @@ let failwith msg xmls attrs = (xmls, Error([], msg))
 let (>>=) = bind
 
 let ao name xmls attrs =
-  (xmls, Value (Util.assoc name attrs))
+  (xmls, Value (OBus_util.assoc name attrs))
 
 let ar name =
   ao name >>= (function
@@ -65,7 +65,7 @@ let ad name default =
                  | Some v -> return v
                  | None -> return default)
 
-let af name field value = match Util.assoc value field with
+let af name field value = match OBus_util.assoc value field with
   | Some v -> return v
   | None -> Printf.ksprintf failwith "unexpected value for '%s' (%s), must be one of %s"
       name value (String.concat ", " (List.map fst field))
@@ -113,10 +113,10 @@ let raw =
 
 let union nodes =
   let types, fl = List.split nodes in
-  (NT_union types, fun node -> Util.find_map (fun f -> f node) fl)
+  (NT_union types, fun node -> OBus_util.find_map (fun f -> f node) fl)
 
 let wrap (typ, f) g = (typ, fun node ->
-                         Util.wrap_option (f node)
+                         OBus_util.wrap_option (f node)
                            (function
                               | Value v -> Value (g v)
                               | Error _ as e -> e))
@@ -134,7 +134,7 @@ let string_of_type typ =
     | l -> String.concat " or " l
 
 let opt (typ, f) xmls attrs =
-  match Util.part_map f xmls with
+  match OBus_util.part_map f xmls with
     | [], rest -> (rest, Value None)
     | [Value x], rest -> (rest, Value (Some x))
     | [Error _ as err], rest -> (rest, err)
@@ -146,7 +146,7 @@ let one (typ, f) =
     | None -> Printf.ksprintf failwith "element missing: %s" (string_of_type typ)
 
 let rec any (typ, f) xmls attrs =
-  let success, rest = Util.part_map f xmls in
+  let success, rest = OBus_util.part_map f xmls in
   (rest,
    List.fold_right
      (fun result acc -> match result, acc with

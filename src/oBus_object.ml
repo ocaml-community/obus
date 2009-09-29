@@ -74,8 +74,8 @@ let md_property_rw name typ reader writer =
                                                            (string_of_signature [type_of_single x])
                                                            (string_of_signature [ty]))))))
 
-module Method_map = Util.Make_map(struct type t = OBus_name.interface option * OBus_name.member * tsequence end)
-module Property_map = Util.Make_map(struct type t = OBus_name.interface * OBus_name.member end)
+module Method_map = OBus_util.Make_map(struct type t = OBus_name.interface option * OBus_name.member * tsequence end)
+module Property_map = OBus_util.Make_map(struct type t = OBus_name.interface * OBus_name.member end)
 
 class t = object(self)
   val mutable exports = []

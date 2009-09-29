@@ -28,7 +28,7 @@ type tbasic =
 
 type tsingle =
   | Tbasic of tbasic
-  | Tstruct of tsingle list
+  | Tstructure of tsingle list
   | Tarray of tsingle
   | Tdict of tbasic * tsingle
   | Tvariant
@@ -80,7 +80,7 @@ type single =
   | Dict of tbasic * tsingle * (basic * single) list
       (** [array] and [dict] raise [Invalid_argument] if one of the
           value does not have the expected type *)
-  | Struct of single list
+  | Structure of single list
   | Variant of single
  with constructor
 
@@ -122,7 +122,7 @@ val ssignature : signature -> single
 val sobject_path : OBus_path.t -> single
   (** [sobject_path x = basic (object_path x)] *)
 
-(** {6 Utils} *)
+(** {6 OBus_utils} *)
 
 val type_of_basic : basic -> tbasic
 val type_of_single : single -> tsingle

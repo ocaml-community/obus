@@ -1,7 +1,7 @@
 (*
- * util.ml
- * -------
- * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
+ * oBus_util.ml
+ * ------------
+ * Copyright : (c) 2009, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
  * This file is a part of obus, an ocaml implemtation of dbus.
@@ -77,10 +77,10 @@ let decode_char ch = match ch with
   | '0'..'9' -> Char.code ch - Char.code '0'
   | 'a'..'f' -> Char.code ch - Char.code 'a' + 10
   | 'A'..'F' -> Char.code ch - Char.code 'A' + 10
-  | _ -> raise (Invalid_argument "Util.decode_char")
+  | _ -> raise (Invalid_argument "OBus_util.decode_char")
 
 let hex_decode hex =
-  if String.length hex mod 2 <> 0 then raise (Invalid_argument "Util.hex_decode");
+  if String.length hex mod 2 <> 0 then raise (Invalid_argument "OBus_util.hex_decode");
   let len = String.length hex / 2 in
   let str = String.create len in
   for i = 0 to len - 1 do
@@ -91,75 +91,12 @@ let hex_decode hex =
   done;
   str
 
-let exn_to_lwt f x =
-  try
-    return (f x)
-  with
-      exn -> fail exn
-
-let apply f x on_error =
-  try
-    return (f x)
-  with exn ->
-    on_error (string_of_exn exn);
-    fail exn
-
-let call f on_error = apply f () on_error
-
-let with_open_in fname f =
-  (perform
-     ic <-- exn_to_lwt Lwt_chan.open_in fname;
-     finalize
-       (fun _ -> f ic)
-       (fun _ -> Lwt_chan.close_in ic))
-
-let with_open_out fname f =
-  (perform
-     oc <-- exn_to_lwt Lwt_chan.open_out fname;
-     finalize
-       (fun _ -> f oc)
-       (fun _ -> perform
-          Lwt_chan.flush oc;
-          Lwt_chan.close_out oc))
-
-let parallel cmd args stdin stdout toclose =
-  ignore
-    (perform
-       pid <-- call
-         (fun _ -> Unix.create_process cmd args stdin stdout Unix.stderr)
-         (Log.error "cannot create process %s: %s" cmd);
-       let _ = Unix.close toclose in
-       (_, status) <-- Lwt_unix.waitpid [] pid;
-       match status with
-         | Unix.WEXITED 0 -> return ()
-         | Unix.WEXITED n -> fail (Failure (sprintf "command %S exited with status %d" cmd n))
-         | Unix.WSIGNALED n -> fail (Failure (sprintf "command %S killed by signal %d" cmd n))
-         | Unix.WSTOPPED n -> fail (Failure (sprintf "command %S stopped by signal %d" cmd n)))
-
-let with_process_in cmd args f =
-  (perform
-     (fdr, fdw) <-- call Lwt_unix.pipe_in (Log.error "cannot create pipe: %s");
-     let _ = parallel cmd args Unix.stdin fdw fdw in
-     let ic = Lwt_chan.in_channel_of_descr fdr in
-     finalize
-       (fun _ -> f ic)
-       (fun _ -> Lwt_chan.close_in ic))
-
-let with_process_out cmd args f =
-  (perform
-     (fdr, fdw) <-- call Lwt_unix.pipe_out (Log.error "cannot create pipe: %s");
-     let _ = parallel cmd args fdr Unix.stdout fdr in
-     let oc = Lwt_chan.out_channel_of_descr fdw in
-     finalize
-       (fun _ -> f oc)
-       (fun _ -> Lwt_chan.close_out oc))
-
 let homedir = lazy((Unix.getpwuid (Unix.getuid ())).Unix.pw_dir)
 
 let init_pseudo = Lazy.lazy_from_fun Random.self_init
 
 let fill_pseudo buffer pos len =
-  Log.debug "using pseudo-random generator";
+  DEBUG("using pseudo-random generator");
   Lazy.force init_pseudo;
   for i = pos to pos + len - 1 do
     String.unsafe_set buffer i (char_of_int (Random.int 256))
@@ -173,7 +110,7 @@ let fill_random buffer pos len =
     close_in ic
   with
       exn ->
-        Log.debug "failed to get random data from /dev/urandom: %s" (string_of_exn exn);
+        DEBUG("failed to get random data from /dev/urandom: %s" (string_of_exn exn));
         fill_pseudo buffer pos len
 
 let random_string n =

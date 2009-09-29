@@ -22,9 +22,9 @@ val shutdown : t -> unit Lwt.t
   (** [shutdown tr] free resources allocated by the given transport *)
 
 val make :
-  recv : unit -> OBus_message.t Lwt.t ->
-  send : OBus_message.t -> unit Lwt.t ->
-  shutdown : unit -> unit Lwt.t
+  recv : (unit -> OBus_message.t Lwt.t) ->
+  send : (OBus_message.t -> unit Lwt.t) ->
+  shutdown : (unit -> unit Lwt.t) -> t
   (** [make ~recv ~send ~shutdown] creates a new transport from the
       given functions.
 
@@ -37,8 +37,8 @@ val loopback : unit -> t
   (** Loopback transport, each message sent is received on the same
       transport *)
 
-val transport_of_addresses :
-  ?mechanisms : OBus_auth.client_mechanism list ->
+val of_addresses :
+  ?mechanisms : OBus_auth.Client.mechanism list ->
   OBus_address.t list ->
   (OBus_address.guid * t) Lwt.t
     (** Try to make a working transport from a list of

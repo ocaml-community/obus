@@ -14,8 +14,7 @@
 
     Note that they are not compatible with RFC4122. *)
 
-type t
- with obus(basic)
+type t with obus(basic)
 
 val generate : unit -> t
   (** Generate a new uuid *)

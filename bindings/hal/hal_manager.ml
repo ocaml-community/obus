@@ -36,19 +36,19 @@ let obus_broken_udi = OBus_type.wrap obus_string
 (* Signature from introsection seems to be wrong for this method. So
    we temporary use this ugly hack: *)
 let find_device_by_capability capability =
-  Lazy.force get_manager >>= fun proxy ->
-    OBus_proxy.dyn_method_call proxy ~interface ~member:"FindDeviceByCapability" [basic (String capability)] >>= fun v ->
-      match OBus_type.opt_cast_sequence <:obus_type< Hal_device.udi list >> v with
-        | Some x -> return x
-        | None ->
-            match OBus_type.opt_cast_sequence <:obus_type< broken_udi list >> v with
-              | Some x -> return x
-              | None ->
-                  fail
-                    (Failure (Printf.sprintf
-                                "unexpected signature for reply of method \"FindDeviceByCapability\"\
-                                 on interface \"org.freedesktop.Hal.Manager\", expected: \"ao\", got: %S"
-                                (string_of_signature (type_of_sequence v))))
+  lwt proxy = Lazy.force get_manager in
+  lwt v = OBus_proxy.dyn_method_call proxy ~interface ~member:"FindDeviceByCapability" [basic (String capability)] in
+  match OBus_type.opt_cast_sequence <:obus_type< Hal_device.udi list >> v with
+    | Some x -> return x
+    | None ->
+        match OBus_type.opt_cast_sequence <:obus_type< broken_udi list >> v with
+          | Some x -> return x
+          | None ->
+              fail
+                (Failure (Printf.sprintf
+                            "unexpected signature for reply of method \"FindDeviceByCapability\"\
+                             on interface \"org.freedesktop.Hal.Manager\", expected: \"ao\", got: %S"
+                            (string_of_signature (type_of_sequence v))))
 
 OBUS_method NewDevice : unit -> string
 OBUS_method Remove : string -> unit

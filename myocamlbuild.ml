@@ -9,12 +9,12 @@
 
 open Printf
 open Ocamlbuild_plugin
-open Command (* no longer needed for OCaml >= 3.10.2 *)
 
 (* Syntax extensions used internally, (tag and the byte-code file). *)
 let intern_syntaxes = [ "pa_obus", "pa_obus.cma";
                         "pa_projection", "syntax/pa_projection.cmo";
                         "pa_constructor", "syntax/pa_constructor.cmo";
+                        "pa_log", "syntax/pa_log.cmo";
                         "pa_monad", "syntax/pa_monad.cmo" ]
 
 (* +-----------------------------------+
@@ -30,8 +30,11 @@ let packages = [ "type-conv";
                  "camlp4.quotations.o";
                  "camlp4.quotations.r";
                  "lwt";
+                 "lwt.unix";
+                 "lwt.syntax";
                  "str";
-                 "xml-light" ]
+                 "xml-light";
+                 "react" ]
 
 let syntaxes = [ "camlp4o";
                  "camlp4r" ]
@@ -58,7 +61,7 @@ let substitute env text =
   List.fold_left (fun text (patt, repl) -> String.subst patt repl text) text env
 
 let get_public_modules _ =
-  List.filter (fun s -> not (String.is_prefix "obus/internals/" s)) (string_list_of_file "obus.mllib")
+  List.filter (fun s -> not (String.is_prefix "src/private/" s)) (string_list_of_file "obus.mllib")
 
 let get_version _ =
   match string_list_of_file "VERSION" with
@@ -78,21 +81,21 @@ let _ =
 
     | After_rules ->
         (* Tests must see everything *)
-        Pathname.define_context "test" [ "obus"; "obus/internals" ];
+        Pathname.define_context "test" [ "src"; "src/private" ];
 
         (* The library and internal modules can see each other *)
-        Pathname.define_context "obus" [ "obus/internals" ];
-        Pathname.define_context "obus/internals" [ "obus" ];
+        Pathname.define_context "src" [ "src/private" ];
+        Pathname.define_context "src/private" [ "src" ];
 
         (* The syntax extension need to see the library because it use
            some of its modules *)
-        Pathname.define_context "syntax" [ "obus" ];
+        Pathname.define_context "syntax" [ "src" ];
 
         (* +-----------+
            | Libraries |
            +-----------+ *)
 
-        define_lib ~dir:"obus" "obus";
+        define_lib ~dir:"src" "obus";
         define_lib ~dir:"bindings/hal" "hal";
         define_lib ~dir:"bindings/notification" "notification";
 
@@ -138,9 +141,9 @@ let _ =
            | Other |
            +-------+ *)
 
-        (* Generation of the version.ml file *)
-        rule "version" ~prod:"version.ml" ~dep:"VERSION"
-          (fun _ _ -> Echo(["let version = \"" ^ get_version () ^ "\"\n"], "version.ml"));
+        (* Generation of the OBus_version.ml file *)
+        rule "version" ~prod:"src/private/OBus_version.ml" ~dep:"VERSION"
+          (fun _ _ -> Echo(["let version = \"" ^ get_version () ^ "\"\n"], "src/private/OBus_version.ml"));
 
         (* Generation of the obus.odocl file *)
         rule "obus_doc" ~prod:"obus.odocl" ~dep:"obus.mllib"
@@ -152,7 +155,7 @@ let _ =
              Echo([substitute [("@VERSION@", get_version ());
                                ("@MODULES@", String.concat " "
                                   (List.map
-                                     (fun s -> String.after s (String.length "obus/"))
+                                     (fun s -> String.after s (String.length "src/"))
                                      (get_public_modules ())))]
                      (read_file "META.in")], "META"))
 

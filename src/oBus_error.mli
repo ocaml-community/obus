@@ -31,8 +31,6 @@ exception DBus of name * message
     Note that the error message will normally be shown to the user so
     it must be explicative. *)
 
-exception Failed of message
-
 exception Unknown_method of message
   (** Raised when a method does not exists on a given object *)
 
@@ -43,9 +41,6 @@ exception Out_of_memory of message
 exception No_reply of message
   (** Raised when a method did not receive a reply, for example
       because of a timeout *)
-
-val failwith : message -> 'a Lwt.t
-  (** [failwith msg = Lwt.fail (OBus_error.Failed msg)] *)
 
 (** {6 Exception registration} *)
 

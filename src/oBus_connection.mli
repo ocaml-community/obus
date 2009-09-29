@@ -14,10 +14,8 @@
     implement the DBus protocol. It is used to exchange DBus
     messages. *)
 
-type t = OBus_internals.packed_connection
-
-val obus_t : t OBus_type.sequence
-  (** This return the connection from which a message come *)
+type t = OBus_private.packed_connection
+ with obus(sequence)
 
 (** {6 Creation} *)
 
@@ -77,7 +75,7 @@ exception Transport_error of exn
 
 (** {6 Informations} *)
 
-val transport : t -> OBus_lowlevel.transport
+val transport : t -> OBus_transport.t
   (** [transport connection] get the transport associated with a
       connection *)
 
@@ -89,6 +87,14 @@ val name : t -> OBus_name.bus option
       for the lifetime of the connection.
 
       In other cases it is [None]. *)
+
+(** {6 Contextes} *)
+
+exception Context of t * OBus_message.t
+  (** The context used to cast messages *)
+
+val obus_context : (t * OBus_message.t) OBus_type.sequence
+  (** Returns the context of a message *)
 
 (** {6 Sending messages} *)
 
@@ -106,81 +112,75 @@ val send_message_with_reply : t -> OBus_message.t -> OBus_message.t Lwt.t
 
 (** {6 Helpers} *)
 
-exception Context of t * OBus_message.t
-  (** Context used to cast message body, see {!OBus_type.context} for
-      a description *)
-
 val method_call : t ->
-  ?flags:OBus_message.flags ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  ?interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
   ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
   (** Send a method call and wait for the reply *)
 
 val method_call_no_reply : t ->
-  ?flags:OBus_message.flags ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  ?interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
   ('a, unit Lwt.t, unit) OBus_type.func -> 'a
   (** Send a method call without waiting for the reply. The
       [no_reply_expected] flag is automatically set to [true]. *)
 
 val method_call' : t ->
-  ?flags:OBus_message.flags ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  ?interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
   OBus_message.body ->
   ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
   (** Same thing but take the body of the message as a
       dynamically-typed value. *)
 
 val dyn_method_call : t ->
-  ?flags:OBus_message.flags ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  ?interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
   OBus_message.body -> OBus_message.body Lwt.t
-  (** Dynamically-typed version, take the message body as a
-      dynamically-typed value and return the reply as a
-      dynamically-typed value too *)
+  (** Send a method call and wait for the reply. *)
 
 val dyn_method_call_no_reply : t ->
-  ?flags:OBus_message.flags ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  ?interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
   OBus_message.body -> unit Lwt.t
 
 val emit_signal : t ->
-  ?flags:OBus_message.flags ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
   ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
   (** Emit a signal *)
 
 val dyn_emit_signal : t ->
-  ?flags:OBus_message.flags ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
   OBus_message.body -> unit Lwt.t
 
 val send_reply : t -> OBus_message.t -> ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
@@ -221,16 +221,8 @@ type filter = OBus_message.t -> OBus_message.t option
       - [None] which means that the message will be dropped, i.e. not
       dispatched or not sent *)
 
-type filter_id
-
-val add_incoming_filter : t -> filter -> filter_id
-val add_outgoing_filter : t -> filter -> filter_id
-  (** Add a filter to the given connection. It will be called before
-      all previously defined filters *)
-
-val remove_filter : filter_id -> unit
-  (** Remove a previously added filter. Do nothing if the filter was
-      already removed. *)
+val incoming_filters : t -> filter Lwt_sequence.t
+val outgoing_filters : t -> filter Lwt_sequence.t
 
 (** {6 Errors handling} *)
 
@@ -251,7 +243,7 @@ val on_disconnect : t -> (exn -> unit) ref
 
 (** {6 Low-level} *)
 
-val of_transport : ?guid:OBus_address.guid -> ?up:bool -> OBus_lowlevel.transport -> t
+val of_transport : ?guid : OBus_address.guid -> ?up : bool -> OBus_transport.t -> t
   (** Create a DBus connection on the given transport. If [guid] is
       provided the connection will be shared.
 

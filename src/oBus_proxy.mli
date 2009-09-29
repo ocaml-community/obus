@@ -23,6 +23,12 @@ type t = {
 val make : OBus_peer.t -> OBus_path.t -> t
   (** [make peer path] create a proxy *)
 
+val connection : t -> OBus_connection.t
+  (** [connection proxy = OBus_peer.connection proxy.peer] *)
+
+val name : t -> OBus_name.bus option
+  (** [connection proxy = OBus_peer.name proxy.peer] *)
+
 (** {6 Introspection} *)
 
 val introspect : t -> (OBus_introspect.interface list * t list) Lwt.t
@@ -33,22 +39,32 @@ val raw_introspect : t -> OBus_introspect.document Lwt.t
 
 (** {6 Method calls} *)
 
-val method_call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
+val method_call : t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
   (** Call a method of the given proxy *)
 
-val method_call_no_reply : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> ('a, unit Lwt.t, unit) OBus_type.func -> 'a
+val method_call_no_reply : t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  ('a, unit Lwt.t, unit) OBus_type.func -> 'a
   (** Same as call but do not wait for a reply *)
 
-val method_call' : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
+val method_call' : t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  OBus_message.body ->
+  ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
   (** Take the body of the call as a dynamically-typed value. This can
       be used to write some generic function, for example:
 
       {[
         let f member ty =
           OBus_type.make_func ty
-            (fun body -> perform
-               bus <-- Lazy.force OBus_bus.session;
-               peer <-- OBus_bus.get_peer "some.well.known.bus.name";
+            (fun body ->
+               lwt bus = Lazy.force OBus_bus.session in
+               lwt peer = OBus_bus.get_peer "some.well.known.bus.name" in
                method_call' { peer = peer;
                               path = [ "some"; "well"; "known"; "path" ] }
                  ~interface:"some.well.known.interface"
@@ -58,5 +74,14 @@ val method_call' : t -> ?interface:OBus_name.interface -> member:OBus_name.membe
       ]}
   *)
 
-val dyn_method_call : t -> ?interface:OBus_name.interface -> member:OBus_name.member -> OBus_message.body -> OBus_message.body Lwt.t
+val dyn_method_call : t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  OBus_message.body ->
+  OBus_message.body Lwt.t
   (** Use only dynamically typed values *)
+
+val dyn_method_call_no_reply : t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  OBus_message.body -> unit Lwt.t

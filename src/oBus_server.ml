@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-module Log = Log.Make(struct let section = "server" end)
-
 open Unix
 open Lwt
 open OBus_internals
@@ -31,15 +29,15 @@ type t = {
   server_listeners : listener list;
   server_addresses : OBus_address.t list;
   server_mechanisms : OBus_auth.server_mechanism list option;
-  server_on_connection : OBus_lowlevel.transport callback;
+  server_on_connection : OBus_wire.transport callback;
   mutable server_exit_hook : (unit -> unit Lwt.t) MSet.node option;
 }
 
 let socket fd chans =
-  let tr = OBus_lowlevel.transport_of_channels chans in
+  let tr = OBus_wire.transport_of_channels chans in
   { tr with
-      OBus_lowlevel.shutdown = fun _ ->
-        Lwt.finalize tr.OBus_lowlevel.shutdown
+      OBus_wire.shutdown = fun _ ->
+        Lwt.finalize tr.OBus_wire.shutdown
           (fun _ ->
              Lwt_unix.shutdown fd SHUTDOWN_ALL;
              Lwt_unix.close fd;
@@ -53,7 +51,7 @@ let accept server listen =
          return (Event_connection(fd, addr)))
     (fun exn ->
        if server.server_up then
-         Log.error "uncaught error: %s" (Util.string_of_exn exn);
+         ERROR("uncaught error: %s" (OBus_util.string_of_exn exn));
        return Event_shutdown)
 
 let rec listen_loop server listen =
@@ -73,19 +71,19 @@ let rec listen_loop server listen =
         return ()
 
     | Event_connection(fd, addr) ->
-        let chans = (OBus_lowlevel.make_ichan (fun str ofs len -> Lwt_unix.read fd str ofs len),
-                     OBus_lowlevel.make_ochan (fun str ofs len -> Lwt_unix.write fd str ofs len)) in
+        let chans = (OBus_wire.make_ichan (fun str ofs len -> Lwt_unix.read fd str ofs len),
+                     OBus_wire.make_ochan (fun str ofs len -> Lwt_unix.write fd str ofs len)) in
         catch
           (fun _ ->
              OBus_auth.server_authenticate
                ?mechanisms:server.server_mechanisms
                listen.listen_guid
-               (OBus_lowlevel.auth_stream_of_channels chans))
+               (OBus_wire.auth_stream_of_channels chans))
           (fun exn ->
-             Log.log "authentication failure for client from %a"
-               (fun oc -> function
-                  | ADDR_UNIX path -> output_string oc path
-                  | ADDR_INET(ia, port) -> Printf.fprintf oc "%s:%d" (string_of_inet_addr ia) port) addr;
+             LOG("authentication failure for client from %a"
+                   (fun oc -> function
+                      | ADDR_UNIX path -> output_string oc path
+                      | ADDR_INET(ia, port) -> Printf.fprintf oc "%s:%d" (string_of_inet_addr ia) port) addr);
              return ())
         >>= fun _ ->
           let _ = callback_apply "on_connection" server.server_on_connection (socket fd chans) in
@@ -111,13 +109,13 @@ let fds_of_address addr = match addr with
   | Unix_path path -> uniq addr (make_path path)
   | Unix_abstract path -> uniq addr (make_abstract path)
   | Unix_tmpdir dir ->
-      let path = Filename.concat dir ("obus-" ^ Util.hex_encode (Util.random_string 10)) in
+      let path = Filename.concat dir ("obus-" ^ OBus_util.hex_encode (OBus_util.random_string 10)) in
       (* Try with abstract name first *)
       catch
         (fun _ -> uniq (Unix_abstract path) (make_abstract path))
         (fun exn ->
            (* And fallback to path in the filesystem *)
-           Log.debug "failed to create listening socket with abstract path name %s: %s" path (Util.string_of_exn exn);
+           DEBUG("failed to create listening socket with abstract path name %s: %s" path (OBus_util.string_of_exn exn));
            uniq (Unix_path path) (make_path path))
 
   | Tcp { tcp_bind = bind_addr; tcp_port = port; tcp_family = family } ->

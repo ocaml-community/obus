@@ -9,40 +9,33 @@
 
 (** Manipulation of DBus object properties *)
 
-type 'mode access
+val get : OBus_proxy.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  ('a, _) OBus_type.cl_single -> 'a Lwt.t
+  (** [get proxy ~interface ~member typ] returns the value of the
+      given property *)
 
-val rd_only : [ `readable ] access
-val wr_only : [ `writable ] access
-val rdwr : [ `readable | `writable ] access
-  (** Access modes *)
+val set : OBus_proxy.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  ('a, _) OBus_type.cl_single -> 'a -> unit Lwt.t
+  (** [set proxy ~interface ~member typ value] sets the value of the
+      given property *)
 
-type ('a, 'mode) t
-  (** A property of type ['a] with allowed operations ['mode]. *)
+val dyn_get : OBus_proxy.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member -> OBus_value.single Lwt.t
+  (** [dyn_get proxy ~interface ~member] returns the value of the
+      given property as a dynamically typed value *)
 
-val make :  interface:OBus_name.interface -> member:OBus_name.member ->
-  access:'mode access -> ('a, _) OBus_type.cl_single -> OBus_proxy.t -> ('a, 'mode) t
-  (** Create a property *)
+val dyn_set : OBus_proxy.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  OBus_value.single -> unit Lwt.t
+  (** [dyn_set proxy ~interface ~member value] sets the value of the
+      given property *)
 
-val dyn_make : interface:OBus_name.interface -> member:OBus_name.member ->
-  access:'mode access -> OBus_proxy.t -> (OBus_value.single, 'mode) t
-  (** Create a dynamically typed property *)
-
-val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
-  (** Set the value of a property *)
-
-val get : ('a, [> `readable ]) t -> 'a Lwt.t
-  (** Get the value of a property.
-
-      @rase OBus_type.Cast_failure if the property do not have the
-      expected type *)
-
-val get_all : OBus_proxy.t -> OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
-  (** Retreive all properties of an object *)
-
-(**/**)
-
-val make_custom :  interface:OBus_name.interface -> member:OBus_name.member ->
-  access:'mode access -> ('a, _) OBus_type.cl_single -> (unit -> OBus_proxy.t Lwt.t) -> ('a, 'mode) t
-
-val dyn_make_custom : interface:OBus_name.interface -> member:OBus_name.member ->
-  access:'mode access -> (unit -> OBus_proxy.t Lwt.t) -> (OBus_value.single, 'mode) t
+val dyn_get_all : OBus_proxy.t -> interface : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
+  (** [dyn_get_all t ~interface] returns the list of all properties of
+      the given proxy with their values *)

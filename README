@@ -17,6 +17,8 @@ url: https://forge.ocamlcore.org/projects/obus/
   $ make all
   $ make PREFIX=<prefix> install
 
+  Packagers may patch the file "oBus_config.ml".
+
 * Using the library
 
   OBus install the following packages:
@@ -37,7 +39,7 @@ url: https://forge.ocamlcore.org/projects/obus/
 
   The syntax extension add the following quotation:
 
-    <:obus_type< >> and <:obus_func_type< >>.
+    <:obus_type< >> and <:obus_func< >>.
 
   These are expanded into expression describing a DBus type (see
   OBus_type for more information).

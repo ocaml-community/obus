@@ -74,7 +74,7 @@ let validate_from typ valid_char str i =
 
   in
 
-  if len > Constant.max_name_length then
+  if len > OBus_constant.max_name_length then
     fail (-1) "name too long"
   else
     aux_first_element_start i
@@ -111,7 +111,7 @@ let validate_member str =
 
   if len = 0 then
     Some{ typ = "member name"; str = str; ofs = -1; msg = "empty name" }
-  else if len > Constant.max_name_length then
+  else if len > OBus_constant.max_name_length then
     Some{ typ = "member name"; str = str; ofs = -1; msg = "name too long" }
   else
     let ch = unsafe_get str 0 in

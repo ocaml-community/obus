@@ -27,10 +27,17 @@
     Note that with a peer-to-peer connection, resolver will always act
     as if they is no owner. *)
 
-type t
-  (** Type of a resolver *)
+class type t = object
+  method name : OBus_name.bus option React.signal
+    (** Signal holding the name owner. Note: you must not stop this
+        signal by using [React.S.stop], use the [stop] method
+        instead. *)
 
-val make : ?serial:bool -> ?on_change:(OBus_name.bus option -> unit Lwt.t) -> OBus_connection.t -> OBus_name.bus -> t Lwt.t
+  method disable : unit Lwt.t
+    (** Stop monitoring this name *)
+end
+
+val make : OBus_connection.t -> OBus_name.bus -> t Lwt.t
   (** [make ?serial ?on_change bus name] make a new resolver for
       [name]. Each time the name owner change [on_change] is called
       with the new owner, it it also called initially with the current
@@ -38,23 +45,3 @@ val make : ?serial:bool -> ?on_change:(OBus_name.bus option -> unit Lwt.t) -> OB
 
       [serial] tell wether calls to [on_change] must be serialized. It
       defaults to [false] *)
-
-val owner : t -> OBus_name.bus option
-  (** [owner m] returns the current name owner *)
-
-val owned : t -> bool
-  (** [owned m] returns wether the name is currently owned. *)
-
-val disable : t -> unit
-  (** [disable resolver] disable [resolver]. It does nothing if the
-      resolver was already disabled.
-
-      Notes:
-
-      - {!owner} and {!owned} raise [Invalid_argument] when called
-      with a disabled resolver
-
-      - resolvers are automatically disabled when garbage collected *)
-
-(**/**)
-val internal_resolver : t -> OBus_internals.name_resolver_internal

@@ -34,7 +34,6 @@ val debug : bool ref
   (** [true] is the environment variable OBUS_LOG is set to
       "debug". This will make obus more verbose. *)
 
-val dump : bool ref
-  (** [true] is the environment variable OBUS_LOG is set to
-      "dump". This will dump all incoming and outgoind message on
-      stderr. *)
+val logger : ([ `VERBOSE | `DEBUG | `ERROR ] -> string list -> unit) ref
+  (** The function used to log a list of lines. The default one prints
+      them on [stderr] and flush it. *)

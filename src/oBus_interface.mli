@@ -20,7 +20,7 @@ module type S = sig
     (** Name of the interface *)
 
   val method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> t -> 'a
-    (** [call member typ obj ...] define a method call.
+    (** [call member typ] defines a method call.
 
         A method call definition looks like:
 
@@ -35,47 +35,52 @@ module type S = sig
         ]}
     *)
 
-  val signal : ?broadcast:bool -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> t -> 'a OBus_signal.t
-    (** [signal ?broadcast member typ proxy] define a signal.
+  val signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> t -> 'a OBus_signal.t Lwt.t
+    (** [signal member typ] defines a signal.
 
         A signal defintion looks like:
 
         {[
-          let caml_name1 = signal "DBusName1" signal_type
-          let caml_name2 = signal ~broadcast:false "DBusName2" signal_type
+          let caml_name = signal "DBusName" signal_type
         ]}
 
         Or, with the syntax extension:
 
         {[
-          OBUS_signal DBusName1 : signal_type
-          OBUS_signal! DBusName2 : signal_type
+          OBUS_signal DBusName : signal_type
         ]}
     *)
 
-  val property : OBus_name.member -> 'mode OBus_property.access -> ('a, _) OBus_type.cl_single -> t -> ('a, 'mode) OBus_property.t
-    (** [property member access typ proxy] define a property.
+  val property_reader : OBus_name.member -> ('a, _) OBus_type.cl_single -> t -> 'a Lwt.t
+    (** [property_reader member typ] defines a property reader.
 
-        A property definition looks like:
-
-        {[
-          let caml_name = property "DBusName" OBus_property.rd_only property_type
-          let caml_name = property "DBusName" OBus_property.wr_only property_type
-          let caml_name = property "DBusName" OBus_property.rdwr property_type
-        ]}
-
-        Or, with the syntax extension:
+        A property reader definition looks like:
 
         {[
-          OBUS_property_r DBusName : property_type
-          OBUS_property_w DBusName : property_type
-          OBUS_property_rw DBusName : property_type
+          let caml_name = property_reader "DBusName" property_type
         ]}
     *)
 
-  val property_r : OBus_name.member -> ('a, _) OBus_type.cl_single -> t -> ('a, [ `readable ]) OBus_property.t
-  val property_w : OBus_name.member -> ('a, _) OBus_type.cl_single -> t -> ('a, [ `writable ]) OBus_property.t
-  val property_rw : OBus_name.member -> ('a, _) OBus_type.cl_single -> t -> ('a, [ `readable | `writable ]) OBus_property.t
+  val property_writer : OBus_name.member -> ('a, _) OBus_type.cl_single -> t -> 'a -> unit Lwt.t
+    (** [property_writer member typ] defines a property writer.
+
+        A property writer definition looks like:
+
+        {[
+          let set_caml_name = property_writer "DBusName" property_type
+        ]}
+    *)
+
+  (** With the syntax extension, read-only properties
+      (resp. write-only properties, resp. read and write properties)
+      can be defined like this:
+
+      {[
+        OBUS_property_r DBusName : property_type
+        OBUS_property_w DBusName : property_type
+        OBUS_property_rw DBusName : property_type
+      ]}
+  *)
 end
 
 (** Name of an interface *)
@@ -103,9 +108,7 @@ end
 module Make_single(Proxy : Single_proxy)(Name : Name) : sig
   val interface : OBus_name.interface
   val method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
-  val signal : ?broadcast:bool -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> 'a OBus_signal.t
-  val property : OBus_name.member -> 'mode OBus_property.access -> ('a, _) OBus_type.cl_single -> ('a, 'mode) OBus_property.t
-  val property_r : OBus_name.member -> ('a, _) OBus_type.cl_single -> ('a, [ `readable ]) OBus_property.t
-  val property_w : OBus_name.member -> ('a, _) OBus_type.cl_single -> ('a, [ `writable ]) OBus_property.t
-  val property_rw : OBus_name.member -> ('a, _) OBus_type.cl_single -> ('a, [ `readable | `writable ]) OBus_property.t
+  val signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> unit -> 'a OBus_signal.t Lwt.t
+  val property_reader : OBus_name.member -> ('a, _) OBus_type.cl_single -> unit -> 'a Lwt.t
+  val property_writer : OBus_name.member -> ('a, _) OBus_type.cl_single -> 'a -> unit Lwt.t
 end

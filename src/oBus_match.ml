@@ -17,7 +17,7 @@ type rule = {
   arguments : (int * string) list;
 } with projection
 
-let insert_sorted num value = function
+let rec insert_sorted num value = function
   | [] -> [(num, value)]
   | (num', _) as pair :: rest when num' < num ->
       pair :: insert_sorted num value rest
@@ -26,7 +26,7 @@ let insert_sorted num value = function
   | ((num', _) :: rest) as l ->
       (num, value) :: l
 
-let make ?typ ?sender ?interface ?member ?path ?destination ?(arguments=[]) () = {
+let rule ?typ ?sender ?interface ?member ?path ?destination ?(arguments=[]) () = {
   typ = typ;
   sender = sender;
   interface = interface;
@@ -50,7 +50,7 @@ let string_of_rule mr =
     | Some x -> match test x with
         | Some error -> raise (OBus_string.Invalid_string error)
         | None -> add key x in
-  begin match typ with
+  begin match mr.typ with
     | None -> ()
     | Some t ->
         add "type"
@@ -89,9 +89,16 @@ let string_of_rule mr =
 let rule_of_string str =
   let l =
     try
-      OBus_private_match_rule_lexer.match_rules (Lexing.from_string str)
+      OBus_match_rule_lexer.match_rules (Lexing.from_string str)
     with exn ->
       failwith "OBus_match.rule_of_string: invalid matching rule"
+  in
+  let check validate value =
+    match validate value with
+      | None ->
+          ()
+      | Some err ->
+          raise (OBus_string.Invalid_string err)
   in
   let mr = {
     typ = None;
@@ -112,21 +119,21 @@ let rule_of_string str =
                                  | "error" -> `error
                                  | _ -> Printf.ksprintf failwith "OBus_match.rule_of_string: invalid type (%s)" value) }
       | "sender" ->
-          OBus_name.validate_bus value;
+          check OBus_name.validate_bus value;
           { mr with sender = Some value }
       | "destination" ->
-          OBus_name.validate_bus value;
+          check OBus_name.validate_bus value;
           { mr with destination = Some value }
       | "interface" ->
-          OBus_name.validate_interface value;
+          check OBus_name.validate_interface value;
           { mr with interface = Some value }
       | "member" ->
-          OBus_name.validate_member value;
+          check OBus_name.validate_member value;
           { mr with member = Some value }
-      | "path"
+      | "path" ->
           { mr with path = Some(OBus_path.of_string value) }
       | _ ->
-          match OBus_private_match_rule_lexer.arg (Lexing.from_string key) with
+          match OBus_match_rule_lexer.arg (Lexing.from_string key) with
             | Some n ->
                 if n < 64 then
                   { mr with arguments = insert_sorted n value mr.arguments }
@@ -136,7 +143,7 @@ let rule_of_string str =
                 Printf.ksprintf failwith "OBus_match.rule_of_string: invalid key (%s)" key
   end mr l
 
-let obus_rule = OBus_type.map OBus_type.string rule_of_string string_of_rule
+let obus_rule = OBus_type.map OBus_type.Perv.obus_string rule_of_string string_of_rule
 
 let match_key matcher value = match matcher with
   | None -> true
@@ -160,18 +167,20 @@ and match_arguments_aux num num' value' matcher arguments = match arguments with
 
 let match_message mr msg =
   (match OBus_message.typ msg, mr.typ with
-     | OBus_message.Method_call(path, interface, member), `method_call ->
+     | OBus_message.Method_call(path, interface, member), (Some `method_call | None) ->
          (match_key mr.path path) &&
            (mr.interface = None || mr.interface = interface) &&
            (match_key mr.member member)
-     | OBus_message.Method_return serial, `method_return ->
+     | OBus_message.Method_return serial, (Some `method_return | None)->
          true
-     | OBus_message.Signal(path, interface, member), `signal ->
+     | OBus_message.Signal(path, interface, member), (Some `signal | None) ->
          (match_key mr.path path) &&
            (match_key mr.interface interface) &&
            (match_key mr.member member)
-     | OBus_message.Error(serial, name), `error ->
-         true) &&
+     | OBus_message.Error(serial, name), (Some `error | None) ->
+         true
+     | _ ->
+         false) &&
     (mr.sender = None || mr.sender = OBus_message.sender msg) &&
     (mr.destination = None || mr.destination = OBus_message.destination msg) &&
-    (match_arguments mr.arguments (OBus_message.body msg))
+    (match_arguments 0 mr.arguments (OBus_message.body msg))

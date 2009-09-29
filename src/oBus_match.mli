@@ -33,7 +33,7 @@ val rule :
   ?path : OBus_path.t ->
   ?destination : OBus_name.bus ->
   ?arguments : (int * string) list ->
-  unit -> t
+  unit -> rule
   (** Create a matching rule *)
 
 val match_message : rule -> OBus_message.t -> bool

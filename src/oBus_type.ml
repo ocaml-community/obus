@@ -9,9 +9,9 @@
 
 open OBus_value
 
-(* +-----------------------+
-   | Sequence type as tree |
-   +-----------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Sequence type as tree                                           |
+   +-----------------------------------------------------------------+ *)
 
 (* Type description involve a lot of small concatenation, especially
    in functionnal types, and most of the time we will get the type as
@@ -33,25 +33,38 @@ let tree_get_boundary t =
   in
   aux [] t
 
-(* +------------------+
-   | Type combinators |
-   +------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Type combinators                                                |
+   +-----------------------------------------------------------------+ *)
 
 type context = exn
+exception No_context
 
-type ('typ, 'make, 'cast) type_combinator = {
-  (* The dbus type *)
-  dtype : 'typ;
+(* Basic type combinator *)
+type 'a btype = {
+  b_type : tbasic;
+  b_make : 'a -> basic;
+  b_cast : context -> basic -> 'a;
+}
 
-  (* Value functions *)
-  make : 'make;
-  cast : context -> 'cast;
+(* Container type combinator *)
+type 'a ctype = {
+  c_type : tsingle;
+  c_make : 'a -> single;
+  c_cast : context -> single -> 'a;
+}
+
+(* Sequence type combinator *)
+type 'a stype = {
+  s_type : tsingle tree;
+  s_make : 'a -> single tree;
+  s_cast : context -> sequence -> 'a * sequence;
 }
 
 type ('a, 'cl) t =
-  | Cbasic of (tbasic, 'a -> basic, basic -> 'a) type_combinator
-  | Ccontainer of (tsingle, 'a -> single, single -> 'a) type_combinator
-  | Csequence of (tsingle tree, 'a -> single tree, sequence -> 'a * sequence) type_combinator
+  | Btype of 'a btype
+  | Ctype of 'a ctype
+  | Stype of 'a stype
 
 type 'a basic = ('a, [`basic]) t
 type 'a container = ('a, [`container]) t
@@ -59,74 +72,70 @@ type 'a sequence = ('a, [`sequence]) t
 
 type ('a, 'cl) cl_basic = ('a, 'cl) t
 constraint 'cl = [ `basic ]
-
 type ('a, 'cl) cl_single = ('a, 'cl) t
 constraint 'cl = [< `basic | `container ]
-
 type ('a, 'cl) cl_sequence = ('a, 'cl) t
 constraint 'cl = [< `basic | `container | `sequence ]
 
 type ('a, 'b, 'c) func = {
-  ftype : OBus_value.tsingle tree;
-  fmake : OBus_value.single tree -> (OBus_value.sequence -> 'b) -> 'a;
-  fcast : context -> OBus_value.sequence -> 'a -> 'b;
-  freply : 'c sequence;
+  f_type : OBus_value.tsingle tree;
+  f_make : OBus_value.single tree -> (OBus_value.sequence -> 'b) -> 'a;
+  f_cast : context -> OBus_value.sequence -> 'a -> 'b;
+  f_reply : 'c sequence;
 }
 
 let type_basic = function
-  | Cbasic { dtype = t } -> t
+  | Btype { b_type = t } -> t
   | _ -> assert false
 let type_single = function
-  | Cbasic { dtype = t } -> Tbasic t
-  | Ccontainer { dtype = t } -> t
+  | Btype { b_type = t } -> Tbasic t
+  | Ctype { c_type = t } -> t
   | _ -> assert false
 let type_sequence = function
-  | Cbasic { dtype = t } -> [Tbasic t]
-  | Ccontainer { dtype = t } -> [t]
-  | Csequence { dtype = t } -> tree_get_boundary t
+  | Btype { b_type = t } -> [Tbasic t]
+  | Ctype { c_type = t } -> [t]
+  | Stype { s_type = t } -> tree_get_boundary t
 
-let isignature { ftype = s } = tree_get_boundary s
-let osignature { freply = r } = type_sequence r
+let isignature { f_type = s } = tree_get_boundary s
+let osignature { f_reply = r } = type_sequence r
 
 let make_basic = function
-  | Cbasic { make = f } -> f
+  | Btype { b_make = f } -> f
   | _ -> assert false
 let make_single = function
-  | Cbasic { make = f } -> (fun x -> basic(f x))
-  | Ccontainer { make = f } -> f
+  | Btype { b_make = f } -> (fun x -> basic(f x))
+  | Ctype { c_make = f } -> f
   | _ -> assert false
 let make_sequence = function
-  | Cbasic { make = f } -> (fun x -> [basic(f x)])
-  | Ccontainer { make = f } -> (fun x -> [f x])
-  | Csequence { make = f } -> (fun x -> tree_get_boundary (f x))
+  | Btype { b_make = f } -> (fun x -> [basic(f x)])
+  | Ctype { c_make = f } -> (fun x -> [f x])
+  | Stype { s_make = f } -> (fun x -> tree_get_boundary (f x))
 
 exception Cast_failure
 
 let _cast_basic = function
-  | Cbasic { cast = f } -> f
+  | Btype { b_cast = f } -> f
   | _ -> assert false
 let _cast_single = function
-  | Cbasic { cast = f } ->
+  | Btype { b_cast = f } ->
       (fun context -> function
          | Basic x -> f context x
          | _ -> raise Cast_failure)
-  | Ccontainer { cast = f } -> f
+  | Ctype { c_cast = f } -> f
   | _ -> assert false
 let _cast_sequence = function
-  | Cbasic { cast = f } ->
+  | Btype { b_cast = f } ->
       (fun context -> function
          | [Basic x] -> f context x
          | _ -> raise Cast_failure)
-  | Ccontainer { cast = f } ->
+  | Ctype { c_cast = f } ->
       (fun context -> function
          | [x] -> f context x
          | _ -> raise Cast_failure)
-  | Csequence { cast = f } ->
+  | Stype { s_cast = f } ->
       (fun context -> fun l -> match f context l with
          | v, [] -> v
          | _ -> raise Cast_failure)
-
-exception No_context
 
 let cast_basic t ?(context=No_context) x = _cast_basic t context x
 let cast_single t ?(context=No_context) x = _cast_single t context x
@@ -137,93 +146,53 @@ let opt_cast_basic t = opt_cast (_cast_basic t)
 let opt_cast_single t = opt_cast (_cast_single t)
 let opt_cast_sequence t = opt_cast (_cast_sequence t)
 
-let make_func { fmake = f } cont = f Tnil cont
-let cast_func { fcast = f } ?(context=No_context) x g = f context x g
-let opt_cast_func { fcast = f } ?(context=No_context) x g =
+let make_func { f_make = f } cont = f Tnil cont
+let cast_func { f_cast = f } ?(context=No_context) x g = f context x g
+let opt_cast_func { f_cast = f } ?(context=No_context) x g =
   try
     Some(f context x g)
   with
       Cast_failure -> None
 
-let func_reply { freply = r } = r
+let func_reply { f_reply = r } = r
 
-let wrap t f g = {
-  dtype = t.dtype;
-  make = (fun x -> t.make (g x));
-  cast = (fun context x -> f (t.cast context x));
-}
-
-let wrap t f g = match t with
-  | Cbasic t -> Cbasic(wrap t f g)
-  | Ccontainer t -> Ccontainer(wrap t f g)
-  | Csequence t -> Csequence{
-      dtype = t.dtype;
-      make = (fun x -> t.make (g x));
-      cast = (fun context l -> let v, rest = t.cast context l in (f v, rest))
+let map t f g = match t with
+  | Btype t -> Btype{
+      b_type = t.b_type;
+      b_make = (fun x -> t.b_make (g x));
+      b_cast = (fun context x -> f (t.b_cast context x));
+    }
+  | Ctype t -> Ctype{
+      c_type = t.c_type;
+      c_make = (fun x -> t.c_make (g x));
+      c_cast = (fun context x -> f (t.c_cast context x));
+    }
+  | Stype t -> Stype{
+      s_type = t.s_type;
+      s_make = (fun x -> t.s_make (g x));
+      s_cast = (fun context l -> let v, rest = t.s_cast context l in (f v, rest))
     }
 
-let wrap_with_context t f g = {
-  dtype = t.dtype;
-  make = (fun x -> t.make (g x));
-  cast = (fun context x -> f context (t.cast context x));
-}
-
-let wrap_with_context t f g = match t with
-  | Cbasic t -> Cbasic(wrap_with_context t f g)
-  | Ccontainer t -> Ccontainer(wrap_with_context t f g)
-  | Csequence t -> Csequence{
-      dtype = t.dtype;
-      make = (fun x -> t.make (g x));
-      cast = (fun context l -> let v, rest = t.cast context l in (f context v, rest))
+let map_with_context t f g = match t with
+  | Btype t -> Btype{
+      b_type = t.b_type;
+      b_make = (fun x -> t.b_make (g x));
+      b_cast = (fun context x -> f context (t.b_cast context x));
+    }
+  | Ctype t -> Ctype{
+      c_type = t.c_type;
+      c_make = (fun x -> t.c_make (g x));
+      c_cast = (fun context x -> f context (t.c_cast context x));
+    }
+  | Stype t -> Stype{
+      s_type = t.s_type;
+      s_make = (fun x -> t.s_make (g x));
+      s_cast = (fun context l -> let v, rest = t.s_cast context l in (f context v, rest))
     }
 
-let wrap_array elt ~make ~cast =
-  let typ = type_single elt in
-  Ccontainer
-    { dtype = Tarray typ;
-      make = (let f = make_single elt in
-              fun x -> array typ (make f x));
-      cast = (let f = _cast_single elt in
-              fun context -> function
-                | Array(t, l) when t = typ -> cast (f context) l
-                | _ -> raise Cast_failure) }
-
-let wrap_dict tyk tyv ~make ~cast =
-  let ktyp = type_basic tyk and vtyp = type_single tyv in
-  Ccontainer
-    { dtype = Tdict(ktyp, vtyp);
-      make = (let f = make_basic tyk and g = make_single tyv in
-              fun x -> dict ktyp vtyp (make f g x));
-      cast = (let f = _cast_basic tyk and g = _cast_single tyv in
-              fun context -> function
-                | Dict(tk, tv, l) when tk = ktyp && tv = vtyp -> cast (f context) (g context) l
-                | _ -> raise Cast_failure) }
-
-let wrap_array_with_context elt ~make ~cast =
-  let typ = type_single elt in
-  Ccontainer
-    { dtype = Tarray typ;
-      make = (let f = make_single elt in
-              fun x -> array typ (make f x));
-      cast = (let f = _cast_single elt in
-              fun context -> function
-                | Array(t, l) when t = typ -> cast context (f context) l
-                | _ -> raise Cast_failure) }
-
-let wrap_dict_with_context tyk tyv ~make ~cast =
-  let ktyp = type_basic tyk and vtyp = type_single tyv in
-  Ccontainer
-    { dtype = Tdict(ktyp, vtyp);
-      make = (let f = make_basic tyk and g = make_single tyv in
-              fun x -> dict ktyp vtyp (make f g x));
-      cast = (let f = _cast_basic tyk and g = _cast_single tyv in
-              fun context -> function
-                | Dict(tk, tv, l) when tk = ktyp && tv = vtyp -> cast context (f context) (g context) l
-                | _ -> raise Cast_failure) }
-
-(* +---------+
-   | Helpers |
-   +---------+ *)
+(* +-----------------------------------------------------------------+
+   | Helpers                                                         |
+   +-----------------------------------------------------------------+ *)
 
 let rec assocl key = function
   | (key', x) :: l ->
@@ -243,10 +212,10 @@ let rec assocr key = function
   | [] ->
       raise Cast_failure
 
-let map t l = wrap t (fun x -> assocr x l) (fun x -> assocl x l)
+let mapping t l = map t (fun x -> assocr x l) (fun x -> assocl x l)
 
 let bitwise t bits =
-  wrap t
+  map t
     (fun x ->
        List.fold_left (fun acc (v, bit) ->
                          if x land (1 lsl bit) <> 0 then
@@ -257,7 +226,7 @@ let bitwise t bits =
        List.fold_left (fun acc v -> acc lor (1 lsl (assocl v bits))) 0 l)
 
 let bitwise32 t bits =
-  wrap t
+  map t
     (fun x ->
        List.fold_left (fun acc (v, bit) ->
                          if Int32.logand x (Int32.shift_left 1l bit) <> 0l then
@@ -268,7 +237,7 @@ let bitwise32 t bits =
        List.fold_left (fun acc v -> Int32.logor acc (Int32.shift_left 1l (assocl v bits))) 0l l)
 
 let bitwise64 t bits =
-  wrap t
+  map t
     (fun x ->
        List.fold_left (fun acc (v, bit) ->
                          if Int64.logand x (Int64.shift_left 1L bit) <> 0L then
@@ -278,158 +247,197 @@ let bitwise64 t bits =
     (fun l ->
        List.fold_left (fun acc v -> Int64.logor acc (Int64.shift_left 1L (assocl v bits))) 0L l)
 
-(* +------------------+
-   | Predefined types |
-   +------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Predefined types                                                |
+   +-----------------------------------------------------------------+ *)
 
-module OBus_pervasives =
+module Perv =
 struct
 
-  let obus_byte = Cbasic
-    { dtype = Tbyte;
-      make = byte;
-      cast = (fun context -> function
+  let obus_byte = Btype {
+    b_type = Tbyte;
+    b_make = byte;
+    b_cast = (fun context -> function
                 | Byte x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
   let obus_char = obus_byte
 
-  let obus_int8 = wrap obus_byte
+  let obus_int8 = map obus_byte
     (fun x -> let x = int_of_char x in
      if x >= 128 then x - 256 else x)
     (fun x -> Char.unsafe_chr (x land 0xff))
 
-  let obus_uint8 = wrap obus_byte
+  let obus_uint8 = map obus_byte
     int_of_char
     (fun x -> Char.unsafe_chr (x land 0xff))
 
-  let obus_boolean = Cbasic
-    { dtype = Tboolean;
-      make = boolean;
-      cast = (fun context -> function
+  let obus_boolean = Btype {
+    b_type = Tboolean;
+    b_make = boolean;
+    b_cast = (fun context -> function
                 | Boolean x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
   let obus_bool = obus_boolean
 
-  let obus_int16 = Cbasic
-    { dtype = Tint16;
-      make = int16;
-      cast = (fun context -> function
+  let obus_int16 = Btype {
+    b_type = Tint16;
+    b_make = int16;
+    b_cast = (fun context -> function
                 | Int16 x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_int32 = Cbasic
-    { dtype = Tint32;
-      make = int32;
-      cast = (fun context -> function
+  let obus_int32 = Btype {
+    b_type = Tint32;
+    b_make = int32;
+    b_cast = (fun context -> function
                 | Int32 x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_int = wrap obus_int32 Int32.to_int Int32.of_int
+  let obus_int = map obus_int32 Int32.to_int Int32.of_int
 
-  let obus_int64 = Cbasic
-    { dtype = Tint64;
-      make = int64;
-      cast = (fun context -> function
+  let obus_int64 = Btype {
+    b_type = Tint64;
+    b_make = int64;
+    b_cast = (fun context -> function
                 | Int64 x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_uint16 = Cbasic
-    { dtype = Tuint16;
-      make = uint16;
-      cast = (fun context -> function
+  let obus_uint16 = Btype {
+    b_type = Tuint16;
+    b_make = uint16;
+    b_cast = (fun context -> function
                 | Uint16 x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_uint32 = Cbasic
-    { dtype = Tuint32;
-      make = uint32;
-      cast = (fun context -> function
+  let obus_uint32 = Btype {
+    b_type = Tuint32;
+    b_make = uint32;
+    b_cast = (fun context -> function
                 | Uint32 x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_uint = wrap obus_uint32 Int32.to_int Int32.of_int
+  let obus_uint = map obus_uint32 Int32.to_int Int32.of_int
 
-  let obus_uint64 = Cbasic
-    { dtype = Tuint64;
-      make = uint64;
-      cast = (fun context -> function
+  let obus_uint64 = Btype {
+    b_type = Tuint64;
+    b_make = uint64;
+    b_cast = (fun context -> function
                 | Uint64 x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_double = Cbasic
-    { dtype = Tdouble;
-      make = double;
-      cast = (fun context -> function
+  let obus_double = Btype {
+    b_type = Tdouble;
+    b_make = double;
+    b_cast = (fun context -> function
                 | Double x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
   let obus_float = obus_double
 
-  let obus_string = Cbasic
-    { dtype = Tstring;
-      make = string;
-      cast = (fun context -> function
+  let obus_string = Btype {
+    b_type = Tstring;
+    b_make = string;
+    b_cast = (fun context -> function
                 | String x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_signature = Cbasic
-    { dtype = Tsignature;
-      make = signature;
-      cast = (fun context -> function
+  let obus_signature = Btype {
+    b_type = Tsignature;
+    b_make = signature;
+    b_cast = (fun context -> function
                 | Signature x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_object_path = Cbasic
-    { dtype = Tobject_path;
-      make = object_path;
-      cast = (fun context -> function
+  let obus_object_path = Btype {
+    b_type = Tobject_path;
+    b_make = object_path;
+    b_cast = (fun context -> function
                 | Object_path x -> x
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
   let obus_path = obus_object_path
 
-  let obus_list elt = wrap_array elt List.map List.map
+  let obus_list elt =
+    let typ = type_single elt
+    and make = make_single elt
+    and cast = _cast_single elt in
+    Ctype {
+      c_type = Tarray typ;
+      c_make = (fun l -> array typ (List.map make l));
+      c_cast = (fun context -> function
+                  | Array(typ', l) when typ' = typ ->
+                      List.map (fun x -> cast context x) l
+                  | Byte_array s when typ = Tbasic Tbyte ->
+                      let rec aux acc = function
+                        | -1 -> acc
+                        | i -> aux (cast context (sbyte (String.unsafe_get s i)) :: acc) (i - 1)
+                      in
+                      aux [] (String.length s - 1)
+                  | _ -> raise Cast_failure)
+    }
 
-  let obus_byte_array = wrap_array obus_byte
-    (fun f str ->
-       let rec aux i acc =
-         if i = 0
-         then acc
-         else aux (i - 1) (f str.[i] :: acc)
-       in
-       aux (String.length str) [])
-    (fun f l ->
-       let len = List.length l in
-       let str = String.create len in
-       ignore (List.fold_left (fun i x -> String.unsafe_set str i (f x); i + 1) 0 l);
-       str)
+  let obus_byte_array = Ctype {
+    c_type = Tarray(Tbasic Tbyte);
+    c_make = (fun str -> byte_array str);
+    c_cast = (fun context -> function
+                | Byte_array s -> s
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_dict tyk tyv = wrap_dict tyk tyv
-    (fun f g l -> List.map (fun (k, v) -> (f k, g v)) l)
-    (fun f g l -> List.map (fun (k, v) -> (f k, g v)) l)
+  let obus_dict tyk tyv =
+    let typk = type_basic tyk
+    and typv = type_single tyv
+    and makek = make_basic tyk
+    and makev = make_single tyv
+    and castk = _cast_basic tyk
+    and castv = _cast_single tyv in
+    Ctype {
+      c_type = Tdict(typk,  typv);
+      c_make = (fun l -> dict typk typv (List.map (fun (k, v) -> (makek k, makev v)) l));
+      c_cast = (fun context -> function
+                  | Dict(typk', typv', l) when typk' = typk && typv' = typv ->
+                      List.map (fun (k, v) -> (castk context k, castv context v)) l
+                  | _ ->
+                      raise Cast_failure)
+    }
 
-  let obus_structure ty = Ccontainer
-    { dtype = Tstructure(type_sequence ty);
-      make = (let f = make_sequence ty in
+  let obus_structure ty = Ctype {
+    c_type = Tstructure(type_sequence ty);
+    c_make = (let f = make_sequence ty in
               fun x -> structure (f x));
-      cast = (let f = _cast_sequence ty in
+    c_cast = (let f = _cast_sequence ty in
               fun context -> function
                 | Structure l -> f context l
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_variant = Ccontainer
-    { dtype = Tvariant;
-      make = variant;
-      cast = (fun context -> function
+  let obus_variant = Ctype {
+    c_type = Tvariant;
+    c_make = variant;
+    c_cast = (fun context -> function
                 | Variant v -> v
-                | _ -> raise Cast_failure) }
+                | _ -> raise Cast_failure);
+  }
 
-  let obus_unit = Csequence
-    { dtype = Tnil;
-      make = (fun () -> Tnil);
-      cast = (fun context l -> ((), l)) }
+  let obus_unit = Stype {
+    s_type = Tnil;
+    s_make = (fun () -> Tnil);
+    s_cast = (fun context l -> ((), l));
+  }
 
   type byte = char
   type boolean = bool
@@ -450,110 +458,84 @@ struct
   type byte_array = string
 end
 
-open OBus_pervasives
-
-module type Ordered_single_type = sig
-  type t
-  val obus_t : (t, _) cl_single
-  val compare : t -> t -> int
-end
-
-module type Ordered_basic_type = sig
-  type t
-  val obus_t : (t, _) cl_basic
-  val compare : t -> t -> int
-end
-
-module Make_set(Ord : Ordered_single_type) =
-struct
-  include Set.Make(Ord)
-  let obus_t = wrap_array Ord.obus_t
-    ~make:(fun f set -> fold (fun x acc -> f x :: acc) set [])
-    ~cast:(fun f l -> List.fold_left (fun acc x -> add (f x) acc) empty l)
-end
-
-module Make_map(Ord : Ordered_basic_type) =
-struct
-  include Map.Make(Ord)
-  let obus_t ty = wrap_dict Ord.obus_t ty
-    ~make:(fun f g map -> fold (fun k v acc -> (f k, g v) :: acc) map [])
-    ~cast:(fun f g l -> List.fold_left (fun acc (k, v) -> add (f k) (g v) acc) empty l)
-end
-
 let (@) a b = Tcons(a, b)
 let typ = function
-  | Cbasic { dtype = t } -> Tone (Tbasic t)
-  | Ccontainer { dtype = t } -> Tone t
-  | Csequence { dtype = t } -> t
+  | Btype { b_type = t } -> Tone (Tbasic t)
+  | Ctype { c_type = t } -> Tone t
+  | Stype { s_type = t } -> t
 let make = function
-  | Cbasic { make = f } -> (fun v -> Tone (basic(f v)))
-  | Ccontainer { make = f } -> (fun v -> Tone (f v))
-  | Csequence { make = f } -> f
+  | Btype { b_make = f } -> (fun v -> Tone (basic(f v)))
+  | Ctype { c_make = f } -> (fun v -> Tone (f v))
+  | Stype { s_make = f } -> f
 let cast = function
-  | Cbasic { cast = f } ->
+  | Btype { b_cast = f } ->
       (fun context -> function
          | Basic x :: l -> f context x, l
          | _ -> raise Cast_failure)
-  | Ccontainer { cast = f } ->
+  | Ctype { c_cast = f } ->
       (fun context -> function
          | x :: l -> f context x, l
          | _ -> raise Cast_failure)
-  | Csequence { cast = f } -> f
+  | Stype { s_cast = f } -> f
 
-let reply ty =
-  { ftype = Tnil;
-    fmake = (fun acc cont -> cont (tree_get_boundary acc));
-    fcast = (fun context -> function
-               | [] -> (fun f -> f)
-               | _ -> raise Cast_failure);
-    freply = (ty : (_, _) cl_sequence :> _ sequence) }
+let reply ty = {
+  f_type = Tnil;
+  f_make = (fun acc cont -> cont (tree_get_boundary acc));
+  f_cast = (fun context -> function
+             | [] -> (fun f -> f)
+             | _ -> raise Cast_failure);
+  f_reply = (ty : (_, _) cl_sequence :> _ sequence);
+}
 
-let abstract ty fty =
-  { ftype = typ ty @ fty.ftype;
-    fmake = (fun acc cont x -> fty.fmake (Tcons(acc, make ty x)) cont);
-    fcast = (fun context x ->
-               let x, rest = cast ty context x in
-               let f = fty.fcast context rest in
-               fun g -> f (g x));
-    freply = fty.freply }
+let abstract ty fty = {
+  f_type = typ ty @ fty.f_type;
+  f_make = (fun acc cont x -> fty.f_make (Tcons(acc, make ty x)) cont);
+  f_cast = (fun context x ->
+             let x, rest = cast ty context x in
+             let f = fty.f_cast context rest in
+             fun g -> f (g x));
+  f_reply = fty.f_reply;
+}
 
 let (-->) = abstract
 
-let tuple2 t1 t2 = Csequence
-  { dtype = typ t1 @ typ t2;
-    make = (let make1 = make t1
+let tuple2 t1 t2 = Stype {
+  s_type = typ t1 @ typ t2;
+  s_make = (let make1 = make t1
             and make2 = make t2 in
             fun (x1, x2) ->
               make1 x1
               @ make2 x2);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2 in
             fun context l ->
               let v1, l = cast1 context l in
               let v2, l = cast2 context l in
-              ((v1, v2), l)) }
+              ((v1, v2), l));
+}
 
-let tuple3 t1 t2 t3 = Csequence
-  { dtype = typ t1 @ typ t2 @ typ t3;
-    make = (let make1 = make t1
+let tuple3 t1 t2 t3 = Stype {
+  s_type = typ t1 @ typ t2 @ typ t3;
+  s_make = (let make1 = make t1
             and make2 = make t2
             and make3 = make t3 in
             fun (x1, x2, x3) ->
               make1 x1
               @ make2 x2
               @ make3 x3);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2
             and cast3 = cast t3 in
             fun context l ->
               let v1, l = cast1 context l in
               let v2, l = cast2 context l in
               let v3, l = cast3 context l in
-              ((v1, v2, v3), l)) }
+              ((v1, v2, v3), l));
+}
 
-let tuple4 t1 t2 t3 t4 = Csequence
-  { dtype = typ t1 @ typ t2 @ typ t3 @ typ t4;
-    make = (let make1 = make t1
+let tuple4 t1 t2 t3 t4 = Stype {
+  s_type = typ t1 @ typ t2 @ typ t3 @ typ t4;
+  s_make = (let make1 = make t1
             and make2 = make t2
             and make3 = make t3
             and make4 = make t4 in
@@ -562,7 +544,7 @@ let tuple4 t1 t2 t3 t4 = Csequence
               @ make2 x2
               @ make3 x3
               @ make4 x4);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2
             and cast3 = cast t3
             and cast4 = cast t4 in
@@ -571,11 +553,12 @@ let tuple4 t1 t2 t3 t4 = Csequence
               let v2, l = cast2 context l in
               let v3, l = cast3 context l in
               let v4, l = cast4 context l in
-              ((v1, v2, v3, v4), l)) }
+              ((v1, v2, v3, v4), l));
+}
 
-let tuple5 t1 t2 t3 t4 t5 = Csequence
-  { dtype = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5;
-    make = (let make1 = make t1
+let tuple5 t1 t2 t3 t4 t5 = Stype {
+  s_type = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5;
+  s_make = (let make1 = make t1
             and make2 = make t2
             and make3 = make t3
             and make4 = make t4
@@ -586,7 +569,7 @@ let tuple5 t1 t2 t3 t4 t5 = Csequence
               @ make3 x3
               @ make4 x4
               @ make5 x5);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2
             and cast3 = cast t3
             and cast4 = cast t4
@@ -597,11 +580,12 @@ let tuple5 t1 t2 t3 t4 t5 = Csequence
               let v3, l = cast3 context l in
               let v4, l = cast4 context l in
               let v5, l = cast5 context l in
-              ((v1, v2, v3, v4, v5), l)) }
+              ((v1, v2, v3, v4, v5), l));
+}
 
-let tuple6 t1 t2 t3 t4 t5 t6 = Csequence
-  { dtype = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6;
-    make = (let make1 = make t1
+let tuple6 t1 t2 t3 t4 t5 t6 = Stype {
+  s_type = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6;
+  s_make = (let make1 = make t1
             and make2 = make t2
             and make3 = make t3
             and make4 = make t4
@@ -614,7 +598,7 @@ let tuple6 t1 t2 t3 t4 t5 t6 = Csequence
               @ make4 x4
               @ make5 x5
               @ make6 x6);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2
             and cast3 = cast t3
             and cast4 = cast t4
@@ -627,11 +611,12 @@ let tuple6 t1 t2 t3 t4 t5 t6 = Csequence
               let v4, l = cast4 context l in
               let v5, l = cast5 context l in
               let v6, l = cast6 context l in
-              ((v1, v2, v3, v4, v5, v6), l)) }
+              ((v1, v2, v3, v4, v5, v6), l));
+}
 
-let tuple7 t1 t2 t3 t4 t5 t6 t7 = Csequence
-  { dtype = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6 @ typ t7;
-    make = (let make1 = make t1
+let tuple7 t1 t2 t3 t4 t5 t6 t7 = Stype {
+  s_type = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6 @ typ t7;
+  s_make = (let make1 = make t1
             and make2 = make t2
             and make3 = make t3
             and make4 = make t4
@@ -646,7 +631,7 @@ let tuple7 t1 t2 t3 t4 t5 t6 t7 = Csequence
               @ make5 x5
               @ make6 x6
               @ make7 x7);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2
             and cast3 = cast t3
             and cast4 = cast t4
@@ -661,11 +646,12 @@ let tuple7 t1 t2 t3 t4 t5 t6 t7 = Csequence
               let v5, l = cast5 context l in
               let v6, l = cast6 context l in
               let v7, l = cast7 context l in
-              ((v1, v2, v3, v4, v5, v6, v7), l)) }
+              ((v1, v2, v3, v4, v5, v6, v7), l));
+}
 
-let tuple8 t1 t2 t3 t4 t5 t6 t7 t8 = Csequence
-  { dtype = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6 @ typ t7 @ typ t8;
-    make = (let make1 = make t1
+let tuple8 t1 t2 t3 t4 t5 t6 t7 t8 = Stype {
+  s_type = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6 @ typ t7 @ typ t8;
+  s_make = (let make1 = make t1
             and make2 = make t2
             and make3 = make t3
             and make4 = make t4
@@ -682,7 +668,7 @@ let tuple8 t1 t2 t3 t4 t5 t6 t7 t8 = Csequence
               @ make6 x6
               @ make7 x7
               @ make8 x8);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2
             and cast3 = cast t3
             and cast4 = cast t4
@@ -699,11 +685,12 @@ let tuple8 t1 t2 t3 t4 t5 t6 t7 t8 = Csequence
               let v6, l = cast6 context l in
               let v7, l = cast7 context l in
               let v8, l = cast8 context l in
-              ((v1, v2, v3, v4, v5, v6, v7, v8), l)) }
+              ((v1, v2, v3, v4, v5, v6, v7, v8), l));
+}
 
-let tuple9 t1 t2 t3 t4 t5 t6 t7 t8 t9 = Csequence
-  { dtype = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6 @ typ t7 @ typ t8 @ typ t9;
-    make = (let make1 = make t1
+let tuple9 t1 t2 t3 t4 t5 t6 t7 t8 t9 = Stype {
+  s_type = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6 @ typ t7 @ typ t8 @ typ t9;
+  s_make = (let make1 = make t1
             and make2 = make t2
             and make3 = make t3
             and make4 = make t4
@@ -722,7 +709,7 @@ let tuple9 t1 t2 t3 t4 t5 t6 t7 t8 t9 = Csequence
               @ make7 x7
               @ make8 x8
               @ make9 x9);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2
             and cast3 = cast t3
             and cast4 = cast t4
@@ -741,11 +728,12 @@ let tuple9 t1 t2 t3 t4 t5 t6 t7 t8 t9 = Csequence
               let v7, l = cast7 context l in
               let v8, l = cast8 context l in
               let v9, l = cast9 context l in
-              ((v1, v2, v3, v4, v5, v6, v7, v8, v9), l)) }
+              ((v1, v2, v3, v4, v5, v6, v7, v8, v9), l));
+}
 
-let tuple10 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 = Csequence
-  { dtype = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6 @ typ t7 @ typ t8 @ typ t9 @ typ t10;
-    make = (let make1 = make t1
+let tuple10 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 = Stype {
+  s_type = typ t1 @ typ t2 @ typ t3 @ typ t4 @ typ t5 @ typ t6 @ typ t7 @ typ t8 @ typ t9 @ typ t10;
+  s_make = (let make1 = make t1
             and make2 = make t2
             and make3 = make t3
             and make4 = make t4
@@ -766,7 +754,7 @@ let tuple10 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 = Csequence
               @ make8 x8
               @ make9 x9
               @ make10 x10);
-    cast = (let cast1 = cast t1
+  s_cast = (let cast1 = cast t1
             and cast2 = cast t2
             and cast3 = cast t3
             and cast4 = cast t4
@@ -787,4 +775,5 @@ let tuple10 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 = Csequence
               let v8, l = cast8 context l in
               let v9, l = cast9 context l in
               let v10, l = cast10 context l in
-              ((v1, v2, v3, v4, v5, v6, v7, v8, v9, v10), l)) }
+              ((v1, v2, v3, v4, v5, v6, v7, v8, v9, v10), l));
+}

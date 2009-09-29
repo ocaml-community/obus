@@ -81,10 +81,14 @@ let to_string = function
       ignore
         (List.fold_left
            (fun pos elt ->
-              unsafe_set str pos '/';
-              let len = length elt in
-              unsafe_blit elt 0 str (pos + 1) len;
-              pos + 1 + len)
+              match validate_element elt with
+                | None ->
+                    unsafe_set str pos '/';
+                    let len = length elt in
+                    unsafe_blit elt 0 str (pos + 1) len;
+                    pos + 1 + len
+                | Some error ->
+                    raise (Invalid_string error))
            0 path);
       str
 

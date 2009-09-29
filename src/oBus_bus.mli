@@ -145,34 +145,18 @@ exception Service_unknown of string
 
 (** {6 Messages routing} *)
 
-type match_rule
-  (** Type of a rule used to match a message *)
-
-val match_rule :
-  ?typ:[ `method_call | `method_return | `error | `signal ] ->
-  ?sender:OBus_name.bus ->
-  ?interface:OBus_name.interface ->
-  ?member:OBus_name.member ->
-  ?path:OBus_path.t ->
-  ?destination:OBus_name.bus ->
-  ?args:(int * string) list ->
-  unit -> match_rule
-  (** Create a matching rule. Matching the argument [n] with string
-      value [v] will match a message if its [n]th argument is a string
-      and is equal to [v]. [n] must in the range 0..63 *)
-
-val add_match : t -> match_rule -> unit Lwt.t
+val add_match : t -> OBus_match.rule -> unit Lwt.t
   (** Add a matching rule on a message bus. This means that every
       message routed on the message bus matching this rule will be
       sent to us.
 
       It can raise an [Out_of_memory]. *)
 
-exception Match_rule_not_found of string
+exception OBus_match_not_found of string
 
-val remove_match : t -> match_rule -> unit Lwt.t
+val remove_match : t -> OBus_match.rule -> unit Lwt.t
   (** Remove a match rule from the message bus. It raise a
-      [Match_rule_not_found] if the rule does not exists *)
+      [OBus_match_not_found] if the rule does not exists *)
 
 (** {6 Other} *)
 
@@ -186,7 +170,7 @@ val get_id : t -> OBus_uuid.t Lwt.t
 
 (** {6 Signals} *)
 
-val name_owner_changed : t -> (OBus_name.bus * OBus_name.bus option * OBus_name.bus option) OBus_signal.t
+val name_owner_changed : t -> (OBus_name.bus * OBus_name.bus option * OBus_name.bus option) OBus_signal.t Lwt.t
   (** This signal is emited each the owner of a name (unique
       connection name or service name) change.
 
@@ -194,5 +178,5 @@ val name_owner_changed : t -> (OBus_name.bus * OBus_name.bus option * OBus_name.
       disconnection message looks like: [(name, Some name, None)]
       where is a connection unique name. *)
 
-val name_lost : t -> OBus_name.bus OBus_signal.t
-val name_acquired : t -> OBus_name.bus OBus_signal.t
+val name_lost : t -> OBus_name.bus OBus_signal.t Lwt.t
+val name_acquired : t -> OBus_name.bus OBus_signal.t Lwt.t

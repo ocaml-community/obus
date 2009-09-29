@@ -14,9 +14,9 @@ open Printf
 
 module Gen = Pa_type_conv.Gen
 
-(* +-------------------+
-   | Names translation |
-   +-------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Names translation                                               |
+   +-----------------------------------------------------------------+ *)
 
 let name_translator = ref `ocaml
 
@@ -28,9 +28,13 @@ let translate_uid str = match !name_translator with
   | `ocaml -> OBus_name.ocaml_uid str
   | `haskell -> OBus_name.haskell_uid str
 
-(* +-------+
-   | Utils |
-   +-------+ *)
+let prepend_lid str id = match !name_translator with
+  | `ocaml -> str ^ "_" ^ id
+  | `haskell -> str ^ String.capitalize id
+
+(* +-----------------------------------------------------------------+
+   | Utils                                                           |
+   +-----------------------------------------------------------------+ *)
 
 (* Generate a list of variables of the same length of [l], with
    location from elements of [l] *)
@@ -99,9 +103,9 @@ let vars_of_func_ctyp ctyp =
   in
   gen_vars Ast.loc_of_ctyp (collect ctyp)
 
-(* +-------------------------------------+
-   | type --> type combinator expression |
-   +-------------------------------------+ *)
+(* +-----------------------------------------------------------------+
+   | type --> type combinator expression                             |
+   +-----------------------------------------------------------------+ *)
 
 (* Return the expression for building a tuple type combinator. *)
 let tuple_combinator _loc = function
@@ -213,9 +217,9 @@ let rec func_combinator_of_ctyp = function
   | <:ctyp@_loc< $x$ -> $y$ >> -> <:expr< OBus_type.abstract $type_combinator_of_ctyp x$ $func_combinator_of_ctyp y$ >>
   | t -> let _loc = Ast.loc_of_ctyp t in <:expr< OBus_type.reply $type_combinator_of_ctyp t$ >>
 
-(* +----------------------------+
-   | Type combinator quotations |
-   +----------------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Type combinator quotations                                      |
+   +-----------------------------------------------------------------+ *)
 
 let ctyp_eoi = Gram.Entry.mk "ctyp_eoi"
 
@@ -234,9 +238,9 @@ let _ =
   Quotation.add "obus_type" Quotation.DynAst.expr_tag expand_type;
   Quotation.add "obus_func" Quotation.DynAst.expr_tag expand_func
 
-(* +----------------------+
-   | The syntax extension |
-   +----------------------+ *)
+(* +-----------------------------------------------------------------+
+   | The syntax extension                                            |
+   +-----------------------------------------------------------------+ *)
 
 EXTEND Gram
   GLOBAL:str_item class_expr;
@@ -252,9 +256,9 @@ EXTEND Gram
           (dbus_name, translate_lid dbus_name)
       ] ];
 
-  (* +--------------------------------------------------+
-     | Extension for DBus interfaces as virtual classes |
-     +--------------------------------------------------+ *)
+  (* +---------------------------------------------------------------+
+     | Extension for DBus interfaces as virtual classes              |
+     +---------------------------------------------------------------+ *)
 
   obus_class_str_item:
     [ [ "OBUS_method"; names = obus_member; ":"; typ = ctyp ->
@@ -348,9 +352,9 @@ EXTEND Gram
           end >>
       ] ];
 
-  (* +--------------------------+
-     | Extension for proxy code |
-     +--------------------------+ *)
+  (* +---------------------------------------------------------------+
+     | Extension for proxy code                                      |
+     +---------------------------------------------------------------+ *)
 
   obus_type:
     [ [ t = ctyp -> type_combinator_of_ctyp t ] ];
@@ -379,19 +383,20 @@ EXTEND Gram
           end
 
       | "OBUS_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = property $str:dname$ OBus_property.rd_only $typ$ >>
+          <:str_item< let $lid:cname$ = property_reader $str:dname$ $typ$ >>
 
       | "OBUS_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = property $str:dname$ OBus_property.wr_only $typ$ >>
+          <:str_item< let $lid:prepend_lid "set" cname$ = property_writer $str:dname$ $typ$ >>
 
       | "OBUS_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = property $str:dname$ OBus_property.rdwr $typ$ >>
+          <:str_item< let $lid:cname$ = property_reader $str:dname$ $typ$;;
+                      let $lid:prepend_lid "set" cname$ = property_writer $str:dname$ $typ$ >>
       ] ];
 END
 
-(* +----------------------+
-   | Generators for types |
-   +----------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Generators for types                                            |
+   +-----------------------------------------------------------------+ *)
 
 let rec generate f = function
   | Ast.TyDcl(loc, name, tpl, typ, _) ->
@@ -504,9 +509,9 @@ let _ =
                               tpl classes <:ctyp< $ret_typ$ OBus_type.$lid:ret_class$ >>$
                        >>) typ))
 
-(* +---------------------------+
-   | Generators for exceptions |
-   +---------------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Generators for exceptions                                       |
+   +-----------------------------------------------------------------+ *)
 
 let _ =
   Pa_type_conv.add_generator_with_arg ~is_exn:true "obus" expr_eoi
@@ -525,41 +530,3 @@ let _ =
 
        | _ ->
            Loc.raise (Ast.loc_of_ctyp typ) (Stream.Error "pa_obus: ``Caml_name of string'' expected"))
-
-(* +-------------------------------------------+
-   | Auto-opening of OBus_type.OBus_pervasives |
-   +-------------------------------------------+ *)
-
-let _ =
-  (* In .mli files *)
-  AstFilters.register_sig_item_filter
-    (fun sg ->
-       let _loc = Ast.loc_of_sig_item sg in
-       <:sig_item<
-         open OBus_type.OBus_pervasives
-         $sg$
-       >>);
-
-  (* In .ml files *)
-  AstFilters.register_str_item_filter
-    (fun st ->
-       let _loc = Ast.loc_of_str_item st in
-       <:str_item<
-         open OBus_type.OBus_pervasives
-         $st$
-       >>);
-
-  (* In the toplevel *)
-  let opened_in_toplevel = ref false in
-  AstFilters.register_topphrase_filter
-    (fun st ->
-       if !opened_in_toplevel then
-         st
-       else begin
-         opened_in_toplevel := true;
-         let _loc = Ast.loc_of_str_item st in
-         <:str_item<
-           open OBus_type.OBus_pervasives
-           $st$
-         >>
-       end)

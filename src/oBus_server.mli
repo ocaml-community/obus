@@ -32,7 +32,7 @@ val make : ?mechanisms:OBus_auth.server_mechanism list -> ?addresses:OBus_addres
       @raise Invalid_argument if [addresses] is empty *)
 
 val make_lowlevel : ?mechanisms:OBus_auth.server_mechanism list -> ?addresses:OBus_address.desc list ->
-  ?serial:bool -> (OBus_lowlevel.transport -> unit Lwt.t) -> t Lwt.t
+  ?serial:bool -> (OBus_wire.transport -> unit Lwt.t) -> t Lwt.t
   (** Same thing but pass directly a transport to the callback
       function instead of a connection *)
 

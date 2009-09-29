@@ -8,7 +8,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-Ocaml.packs := ["obus.syntax"; "monad"; "obus"]
+Ocaml.packs := ["lwt.syntax"; "obus.syntax"; "obus"]
 --
 
 (* Simple script which listen keyboard events emited by hal and run
@@ -23,39 +23,39 @@ let commands = [
   ("volume-down", "amixer -q set Master 5%-");
 ]
 
-let _ = Lwt_unix.run
-  (perform
-     bus <-- Lazy.force OBus_bus.system;
+let _ = Lwt_unix.run (
+  lwt bus = Lazy.force OBus_bus.system in
 
-     (* Tell the message bus we want to receive ButtonPressed events
-        from hal. *)
-     OBus_bus.add_match bus (OBus_bus.match_rule
-                               ~sender:"org.freedesktop.Hal"
-                               ~interface:"org.freedesktop.Hal.Device"
-                               ~member:"Condition"
-                               ~args:[(0, "ButtonPressed")] ());
+  (* Tell the message bus we want to receive ButtonPressed events from
+     hal. *)
+  lwt () = OBus_bus.add_match bus (OBus_match.rule
+                                     ~sender:"org.freedesktop.Hal"
+                                     ~interface:"org.freedesktop.Hal.Device"
+                                     ~member:"Condition"
+                                     ~args:[(0, "ButtonPressed")] ()) in
 
-     (* Add a message filter. We use that instead of adding a signal
-        receiver because we do not care about which object send the
-        event. *)
-     let _ = OBus_connection.add_incoming_filter bus
-       (function
-          | { OBus_message.typ = OBus_message.Signal(_, "org.freedesktop.Hal.Device", "Condition");
-              OBus_message.body = [Basic(String "ButtonPressed"); Basic(String button)] } ->
+  (* Add a message filter. We use that instead of adding a signal
+     receiver because we do not care about which object send the
+     event. *)
+  OBus_connection.add_incoming_filter bus
+    (function
+       | { OBus_message.typ = OBus_message.Signal(_, "org.freedesktop.Hal.Device", "Condition");
+           OBus_message.body = [String "ButtonPressed"; String button] } ->
 
-              begin
-                try
-                  ignore (Lwt_unix.system (List.assoc button commands))
-                with
-                    _ -> ()
-              end;
+           begin
+             try
+               ignore (Lwt_unix.system (List.assoc button commands))
+             with
+                 _ -> ()
+           end;
 
-              (* Drop the message *)
-              None
+           (* Drop the message *)
+           None
 
-          | msg ->
-              Some msg) in
+       | msg ->
+           Some msg);
 
-     (* Wait forever, the program will exit when the connection is
-        closed *)
-     wait ())
+  (* Wait forever, the program will exit when the connection is
+     closed *)
+  fst (wait ())
+)

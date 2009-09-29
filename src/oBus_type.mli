@@ -18,7 +18,7 @@
 *)
 
 type ('a, 'cl) t
-  (** Type of type combinators *)
+  (** Type of type combinators. *)
 
 type 'a basic = ('a, [`basic]) t
 type 'a container = ('a, [`container]) t
@@ -26,15 +26,28 @@ type 'a sequence = ('a, [`sequence]) t
 
 type ('a, 'cl) cl_basic = ('a, 'cl) t
 constraint 'cl = [ `basic ]
+    (** Type matching type of the basic class *)
 
 type ('a, 'cl) cl_single = ('a, 'cl) t
 constraint 'cl = [< `basic | `container ]
+    (** Type matching type of the single class *)
 
 type ('a, 'cl) cl_sequence = ('a, 'cl) t
 constraint 'cl = [< `basic | `container | `sequence ]
+    (** Type matching type of the sequence class *)
 
 type ('a, 'b, 'c) func
   (** Functionnal types *)
+
+type context = exn
+    (** The context is used to pass extra informations to
+        combinators. See {!OBus_connection.context}.
+
+        Note: [context = exn] because [exn] is the only extensible
+        type, and recursive dependencies are not allowed in ocaml. *)
+
+exception No_context
+  (** Value used when there is no context *)
 
 (** {6 DBus types} *)
 
@@ -61,29 +74,15 @@ val make_sequence : ('a, _) cl_sequence -> 'a -> OBus_value.sequence
 exception Cast_failure
   (** Exception raised when a cast fail *)
 
-type context = exn
-    (** The context is used to pass extra data to combinator so they
-        can peek extra informations from it. For example to create a
-        proxy object we need information from a message header.
-
-        The context used by obus when a message is received on a
-        connection is {!OBus_connection.Context}. *)
-
-exception No_context
-  (** Context used when no one is specified *)
-
-val cast_basic : ('a, _) cl_basic -> ?context:context -> OBus_value.basic -> 'a
-val cast_single : ('a, _) cl_single -> ?context:context -> OBus_value.single -> 'a
-val cast_sequence : ('a, _) cl_sequence -> ?context:context -> OBus_value.sequence -> 'a
+val cast_basic : ('a, _) cl_basic -> ?context : context -> OBus_value.basic -> 'a
+val cast_single : ('a, _) cl_single -> ?context : context -> OBus_value.single -> 'a
+val cast_sequence : ('a, _) cl_sequence -> ?context : context -> OBus_value.sequence -> 'a
   (** Cast a dynamically typed value into a statically typed one. It
-      raise a [Cast_failure] if types do not match.
+      raise a [Cast_failure] if types do not match. *)
 
-      If the type contain [tproxy] or a type derived from [tproxy] you
-      must also provide a context. *)
-
-val opt_cast_basic : ('a, _) cl_basic -> ?context:context -> OBus_value.basic -> 'a option
-val opt_cast_single : ('a, _) cl_single -> ?context:context -> OBus_value.single -> 'a option
-val opt_cast_sequence : ('a, _) cl_sequence -> ?context:context -> OBus_value.sequence -> 'a option
+val opt_cast_basic : ('a, _) cl_basic -> ?context : context -> OBus_value.basic -> 'a option
+val opt_cast_single : ('a, _) cl_single -> ?context : context -> OBus_value.single -> 'a option
+val opt_cast_sequence : ('a, _) cl_sequence -> ?context : context -> OBus_value.sequence -> 'a option
   (** Same thing but return an option instead of raising an
       exception *)
 
@@ -91,11 +90,11 @@ val make_func : ('a, 'b, 'c) func -> (OBus_value.sequence -> 'b) -> 'a
   (** [make_func typ cont ...] make a sequence from extra parameters
       and pass it to [cont] *)
 
-val cast_func : ('a, 'b, 'c) func -> ?context:context -> OBus_value.sequence -> 'a -> 'b
-  (** [cast_func typ seq f] cast [seq] using [typ] and pass the
+val cast_func : ('a, 'b, 'c) func -> ?context : context -> OBus_value.sequence -> 'a -> 'b
+  (** [cast_func typ context seq f] cast [seq] using [typ] and pass the
       resulting values to [f] *)
 
-val opt_cast_func : ('a, 'b, 'c) func -> ?context:context -> OBus_value.sequence -> 'a -> 'b option
+val opt_cast_func : ('a, 'b, 'c) func -> ?context : context -> OBus_value.sequence -> 'a -> 'b option
   (** Same as [cast_func] but do not raise an exception *)
 
 val func_reply : ('a, 'b, 'c) func -> 'c sequence
@@ -110,32 +109,15 @@ val abstract : ('a, _) cl_sequence -> ('b, 'c, 'd) func -> ('a -> 'b, 'c, 'd) fu
 val ( --> ) : ('a, _) cl_sequence -> ('b, 'c, 'd) func -> ('a -> 'b, 'c, 'd) func
   (** [abstrant x y] or [x --> y], make an abstraction *)
 
-val wrap : ('a, 'cl) t -> ('a -> 'b) -> ('b -> 'a) -> ('b, 'cl) t
-  (** Wrap a type description by applying a convertion function *)
+val map : ('a, 'cl) t -> ('a -> 'b) -> ('b -> 'a) -> ('b, 'cl) t
+  (** Map a type description by applying a convertion function *)
 
-val wrap_array : ('a, _) cl_single ->
-  make:(('a -> OBus_value.single) -> 'b -> OBus_value.single list) ->
-  cast:((OBus_value.single -> 'a) -> OBus_value.single list -> 'b) -> 'b container
-  (** [wrap_array t make cast] wrap an array type. It more efficient
-      than a [wrap (obus_list t) ...] since it does not create an
-      intermediate list. *)
-
-val wrap_dict : ('a, _) cl_basic -> ('b, _) cl_single ->
-  make:(('a -> OBus_value.basic) -> ('b -> OBus_value.single) -> 'c -> (OBus_value.basic * OBus_value.single) list) ->
-  cast:((OBus_value.basic -> 'a) -> (OBus_value.single -> 'b) -> (OBus_value.basic * OBus_value.single) list -> 'c) -> 'c container
-
-val wrap_with_context : ('a, 'cl) t -> (context -> 'a -> 'b) -> ('b -> 'a) -> ('b, 'cl) t
-val wrap_array_with_context : ('a, _) cl_single ->
-  make:(('a -> OBus_value.single) -> 'b -> OBus_value.single list) ->
-  cast:(context -> (OBus_value.single -> 'a) -> OBus_value.single list -> 'b) -> 'b container
-val wrap_dict_with_context : ('a, _) cl_basic -> ('b, _) cl_single ->
-  make:(('a -> OBus_value.basic) -> ('b -> OBus_value.single) -> 'c -> (OBus_value.basic * OBus_value.single) list) ->
-  cast:(context -> (OBus_value.basic -> 'a) -> (OBus_value.single -> 'b) -> (OBus_value.basic * OBus_value.single) list -> 'c) -> 'c container
+val map_with_context : ('a, 'cl) t -> (context -> 'a -> 'b) -> ('b -> 'a) -> ('b, 'cl) t
   (** Same thing but with access to the context *)
 
 (** {6 Helpers} *)
 
-val map : ('a, 'cl) t -> ('b * 'a) list -> ('b, 'cl) t
+val mapping : ('a, 'cl) t -> ('b * 'a) list -> ('b, 'cl) t
   (** Create a type combinator from another one and a value
       mapping. *)
 
@@ -145,7 +127,7 @@ val bitwise64 : (int64, 'cl) t -> ('a * int) list -> ('a list, 'cl) t
 
 (** {6 Default type combinators} *)
 
-module OBus_pervasives : sig
+module Perv : sig
 
   (** This module is automatically opened by the syntax extension *)
 
@@ -170,8 +152,8 @@ module OBus_pervasives : sig
   val obus_object_path : OBus_path.t basic
   val obus_path : OBus_path.t basic
 
-  val obus_list : ('a, _) cl_single -> 'a list container
-  val obus_dict : ('a, _) cl_basic -> ('b, _) cl_single -> ('a * 'b) list container
+  val obus_list : ('a, _) cl_single -> ('a list) container
+  val obus_dict : ('a, _) cl_basic -> ('b, _) cl_single -> (('a * 'b) list) container
   val obus_structure : ('a, _) cl_sequence -> 'a container
   val obus_variant : OBus_value.single container
 
@@ -201,30 +183,6 @@ module OBus_pervasives : sig
           the syntax extension, to define the dbus type and the caml
           type at the same time *)
 
-end
-
-(** {6 map and set with obus type} *)
-
-module type Ordered_single_type = sig
-  type t
-  val obus_t : (t, _) cl_single
-  val compare : t -> t -> int
-end
-
-module Make_set(Ord : Ordered_single_type) : sig
-  include Set.S with type elt = Ord.t
-  val obus_t : t container
-end
-
-module type Ordered_basic_type = sig
-  type t
-  val obus_t : (t, _) cl_basic
-  val compare : t -> t -> int
-end
-
-module Make_map(Ord : Ordered_basic_type) : sig
-  include Map.S with type key = Ord.t
-  val obus_t : ('a, _) cl_single -> 'a t container
 end
 
 (** {6 Tuples} *)

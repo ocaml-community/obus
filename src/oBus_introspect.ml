@@ -8,7 +8,7 @@
  *)
 
 open Xml
-open Xparser
+open OBus_xml_parser
 
 type name = string
 
@@ -26,10 +26,10 @@ type interface = name * declaration list * annotation list
 type node = OBus_path.element
 type document = interface list * node list
 
-type parsing_error = Xparser.error
-exception Parse_failure = Xparser.Parse_failure
+type parsing_error = OBus_xml_parser.error
+exception Parse_failure = OBus_xml_parser.Parse_failure
 
-let print_error = Xparser.print_error
+let print_error = OBus_xml_parser.print_error
 
 let annotations =
   any (elt "annotation"
@@ -70,9 +70,9 @@ let method_decl =
     (perform
        name <-- amember;
        (ins, outs) <-- arguments >>= (fun args ->
-                                        return (Util.split (function
-                                                              | (In, x) -> Util.Left x
-                                                              | (Out, x) -> Util.Right x) args));
+                                        return (OBus_util.split (function
+                                                                           | (In, x) -> OBus_util.Left x
+                                                                           | (Out, x) -> OBus_util.Right x) args));
        annots <-- annotations;
        return (Method(name, ins, outs, annots)))
 
@@ -158,7 +158,7 @@ let to_xml (ifaces, nodes) =
                               @ pannots annots)) ifaces
           @ List.map (fun n -> Element("node", [("name", n)], [])) nodes)
 
-let obus_document = OBus_type.wrap OBus_type.OBus_pervasives.obus_string
+let obus_document = OBus_type.map OBus_type.Perv.obus_string
   (fun x ->
      let p = XmlParser.make () in
      XmlParser.prove p false;
