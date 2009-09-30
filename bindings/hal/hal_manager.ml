@@ -30,8 +30,8 @@ OBUS_method DeviceExists : Hal_device.udi -> bool
 OBUS_method FindDeviceStringMatch : string -> string -> Hal_device.udi list
 
 let obus_broken_udi = OBus_type.map obus_string
-  (fun x -> Hal_device.make (OBus_path.of_string x))
-  (fun x -> OBus_path.to_string (x :> OBus_path.t))
+  (fun x -> OBus_path.of_string x)
+  (fun x -> OBus_path.to_string x)
 
 (* Signature from introsection seems to be wrong for this method. So
    we temporary use this ugly hack: *)

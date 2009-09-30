@@ -13,8 +13,8 @@ endif
 OF = ocamlfind
 
 # Targets
-SAMPLES = hello bus_functions eject notify monitor signals list_services \
-	  ping pong progress_server progress_client
+EXAMPLES = hello bus_functions eject notify monitor signals list_services
+#	  ping pong progress_server progress_client
 LIB = obus
 SYNTAX = pa_obus
 BINDINGS = hal notification
@@ -27,7 +27,7 @@ all:
 	  $(LIB:=.cma) $(LIB:=.cmxa) $(LIB:=.cmxs) \
 	  $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) $(BINDINGS:=.cmxs) \
 	  $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native) \
-	  $(SAMPLES:%=samples/%.byte) $(SAMPLES:%=samples/%.native) \
+	  $(EXAMPLES:%=examples/%.byte) $(EXAMPLES:%=examples/%.native) \
 	  $(SYNTAX:=.cma) obus.docdir/index.html META
 
 .PHONY: dist
@@ -79,17 +79,17 @@ bindings-shared:
 bindings:
 	$(OC) $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) $(BINDINGS:=.cmxs)
 
-.PHONY: samples-byte
-samples-byte:
-	$(OC) $(SAMPLES:%=samples/%.byte)
+.PHONY: examples-byte
+examples-byte:
+	$(OC) $(EXAMPLES:%=examples/%.byte)
 
-.PHONY: samples-native
-samples-native:
-	$(OC) $(SAMPLES:%=samples/%.native)
+.PHONY: examples-native
+examples-native:
+	$(OC) $(EXAMPLES:%=examples/%.native)
 
-.PHONY: samples
-samples:
-	$(OC) $(SAMPLES:%=samples/%.byte) $(SAMPLES:%=samples/%.native)
+.PHONY: examples
+examples:
+	$(OC) $(EXAMPLES:%=examples/%.byte) $(EXAMPLES:%=examples/%.native)
 
 .PHONY: tools-byte
 tools-byte:
@@ -158,12 +158,12 @@ install: prefix
 	for tool in $(TOOLS); do \
 	  install -vm 0755 _build/tools/$$tool.native $(PREFIX)/bin/`echo $$tool|sed s/_/-/`; \
 	done
-	mkdir -p $(PREFIX)/share/doc/obus/samples
+	mkdir -p $(PREFIX)/share/doc/obus/examples
 	mkdir -p $(PREFIX)/share/doc/obus/html
 	mkdir -p $(PREFIX)/share/doc/obus/scripts
 	install -vm 0644 LICENSE $(PREFIX)/share/doc/obus
 	install -vm 0644 _build/obus.docdir/* $(PREFIX)/share/doc/obus/html
-	install -vm 0644 samples/*.ml $(PREFIX)/share/doc/obus/samples
+	install -vm 0644 examples/*.ml $(PREFIX)/share/doc/obus/examples
 	install -vm 0755 utils/scripts/* $(PREFIX)/share/doc/obus/scripts
 
 .PHONY: uninstall

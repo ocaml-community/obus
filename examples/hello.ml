@@ -12,9 +12,9 @@
 
 open Lwt
 
-let _ = Lwt_unix.run (
+let () = Lwt_main.run (
   lwt bus = Lazy.force OBus_bus.session in
-  let _ = Printf.printf "My unique connection name is: %s\n"
+  lwt () = Lwt_io.printlf "My unique connection name is: %s"
     (match OBus_connection.name bus with
        | Some x -> x
        | None -> "") in

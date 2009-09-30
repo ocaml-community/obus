@@ -18,9 +18,6 @@ let get_peer =
 type udi = path
   with obus
 
-external make : OBus_path.t -> udi = "%identity"
-external path : udi -> OBus_path.t = "%identity"
-
 module Make_interface =
   OBus_interface.Make_custom(struct
                                type t = udi
