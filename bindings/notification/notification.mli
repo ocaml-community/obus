@@ -20,9 +20,6 @@ type server_info = {
   server_spec_version : string;
 } with obus(sequence)
 
-type 'a id
-  (** A notification id *)
-
 val app_name : string ref
   (** Application name used for notification. The default value is
       taken from [Sys.argv.(0)] *)
@@ -45,10 +42,34 @@ type image = {
   img_data : string;
 } with obus(container)
 
+(** Type of notification id *)
+type id
+
+(** Type of opened notifications *)
+class type ['a] t = object
+  method result : 'a Lwt.t
+    (** Wait for a notification to be closed then return:
+
+        - [`closed] if the user clicked on the cross, timeout was
+        reached or the notification daemon exited
+
+        - [`default] if the default action was invoked, i.e. the user
+        clicked on the notification, but not on a buttons
+
+        - the corresponding action if the user clicked on a button
+        other than the cross *)
+
+  method close : unit Lwt.t
+    (** Close the notification now *)
+
+  method id : id
+    (** Identifier for the notification *)
+end
+
 val notify :
   ?app_name:string ->
   ?desktop_entry:string ->
-  ?replace:_ id ->
+  ?replace:_ t ->
   ?icon:string ->
   ?image:image ->
   summary:string ->
@@ -61,7 +82,7 @@ val notify :
   ?pos:int * int ->
   ?hints:(string * OBus_value.single) list ->
   ?timeout:int ->
-  unit -> 'a id Lwt.t
+  unit -> 'a t Lwt.t
   (** Open a notification.
 
       - [app_name] and [desktop_entry] can override default values
@@ -87,21 +108,6 @@ val notify :
       - [hints] is a list of additionnal hints
       - [timeout] is a timeout in millisecond
   *)
-
-val result : 'a id -> 'a Lwt.t
-  (** Wait for a notification to be closed then return:
-
-      - [`closed] if the user clicked on the cross, timeout was
-      reached or the notification daemon exited
-
-      - [`default] if the default action was invoked, i.e. the user
-      clicked on the notification, but not on a buttons
-
-      - the corresponding action if the user clicked on a button other
-      than the cross *)
-
-val close_notification : 'a id -> unit Lwt.t
-  (** Close a previously opened popup *)
 
 val get_server_information : unit -> server_info Lwt.t
   (** Retreive server informations *)

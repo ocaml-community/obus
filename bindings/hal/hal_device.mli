@@ -72,10 +72,10 @@ val reprobe : udi -> bool Lwt.t
 val claim_interface : udi -> string -> string -> bool Lwt.t
 val addon_is_ready : udi -> bool Lwt.t
 
-val property_modified : udi -> (int * (string * bool * bool) list) OBus_signal.t
-val condition : udi -> (string * string) OBus_signal.t
-val interface_lock_acquired : udi -> (string * string * int) OBus_signal.t
-val interface_lock_released : udi -> (string * string * int) OBus_signal.t
+val property_modified : udi -> (int * (string * bool * bool) list) OBus_signal.t Lwt.t
+val condition : udi -> (string * string) OBus_signal.t Lwt.t
+val interface_lock_acquired : udi -> (string * string * int) OBus_signal.t Lwt.t
+val interface_lock_released : udi -> (string * string * int) OBus_signal.t Lwt.t
 
 (** {6 Specifics interfaces} *)
 

@@ -68,9 +68,9 @@ let check_member_name loc name =
     | None ->
         ()
 
-(* Wrap a type with Lwt.t *)
-let rec wrap_ctyp = function
-  | <:ctyp@_loc< $x$ -> $y$ >> -> <:ctyp< $x$ -> $wrap_ctyp y$ >>
+(* Map a type with Lwt.t *)
+let rec map_ctyp = function
+  | <:ctyp@_loc< $x$ -> $y$ >> -> <:ctyp< $x$ -> $map_ctyp y$ >>
   | x -> let _loc = Ast.loc_of_ctyp x in <:ctyp< $x$ Lwt.t >>
 
 (* Build the definition of a type combinator:
@@ -159,25 +159,25 @@ let make_cascade_tuple_expr = make_cascade_tuple (fun _loc l -> <:expr< $tup:Ast
 let make_tuple_patt loc patts = Ast.PaTup(loc, Ast.paCom_of_list patts)
 let make_tuple_expr loc exprs = Ast.ExTup(loc, Ast.exCom_of_list exprs)
 
-(* Build the cast wrapper for a tuple in ``cascade'':
+(* Build the cast mapper for a tuple in ``cascade'':
 
    {[
      fun (x1, x2, x3, ..., (x10, x11, ..., x18, (x19, x20, x21))) ->
        (x1, x2, x3, ..., x21)
    ]}
 *)
-let make_cascade_tuple_wrapper_cast _loc l =
+let make_cascade_tuple_mapper_cast _loc l =
   let vars = gen_vars Ast.loc_of_expr l in
   <:expr< fun $make_cascade_tuple_patt _loc (pvars vars)$ -> $make_tuple_expr _loc (evars vars)$ >>
 
-(* Build the make wrapper for a tuple in ``cascade'':
+(* Build the make mapper for a tuple in ``cascade'':
 
    {[
      fun (x1, x2, x3, ..., x21) ->
        (x1, x2, x3, ..., (x10, x11, ..., x18, (x19, x20, x21)))
    ]}
 *)
-let make_cascade_tuple_wrapper_make _loc l =
+let make_cascade_tuple_mapper_make _loc l =
   let vars = gen_vars Ast.loc_of_expr l in
   <:expr< fun $make_tuple_patt _loc (pvars vars)$ -> $make_cascade_tuple_expr _loc (evars vars)$ >>
 
@@ -190,23 +190,23 @@ let make_tuple_combinator _loc l =
 
   else
     (* if there is more, create on a new specific one *)
-    <:expr< OBus_type.wrap
+    <:expr< OBus_type.map
               $make_cascade_tuple_combinator _loc l$
-              $make_cascade_tuple_wrapper_cast _loc l$
-              $make_cascade_tuple_wrapper_make _loc l$ >>
+              $make_cascade_tuple_mapper_cast _loc l$
+              $make_cascade_tuple_mapper_make _loc l$ >>
 
 (* Add the "obus_" prefix to an identifier:
 
    [A.B.t] -> [A.B.obus_t]
 *)
-let rec wrap_ident = function
-  | <:ident@_loc< $id1$ . $id2$ >> -> <:ident< $id1$ . $wrap_ident id2$ >>
+let rec map_ident = function
+  | <:ident@_loc< $id1$ . $id2$ >> -> <:ident< $id1$ . $map_ident id2$ >>
   | <:ident@_loc< $lid:id$ >> -> <:ident< $lid:"obus_" ^ id$ >>
   | id -> id
 
 (* Build a type combinator from a caml type *)
 let rec type_combinator_of_ctyp = function
-  | <:ctyp@_loc< $id:id$ >> -> <:expr< $id:wrap_ident id$ >>
+  | <:ctyp@_loc< $id:id$ >> -> <:expr< $id:map_ident id$ >>
   | <:ctyp@_loc< $x$ $y$ >> -> <:expr< $type_combinator_of_ctyp y$ $type_combinator_of_ctyp x$ >>
   | <:ctyp@_loc< $tup:l$ >> -> make_tuple_combinator _loc (List.map type_combinator_of_ctyp (Ast.list_of_ctyp l []))
   | <:ctyp@_loc< '$x$ >> -> <:expr< $lid:x$ >>
@@ -295,7 +295,7 @@ EXTEND Gram
             $Ast.crSem_of_list
               (List.map (function
                            | `Method((dname, cname), typ) ->
-                               <:class_str_item< method virtual $lid:cname$ : $wrap_ctyp typ$ >>
+                               <:class_str_item< method virtual $lid:cname$ : $map_ctyp typ$ >>
                            | `Signal((dname, cname), typ) ->
                                <:class_str_item< method $lid:cname$ = self#obus_emit_signal $iface$ $str:dname$ $type_combinator_of_ctyp typ$ >>
                            | `Val_r((dname, cname), typ, m)
@@ -372,25 +372,20 @@ EXTEND Gram
           <:str_item< >>
 
       | "OBUS_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
-          <:str_item< let $lid:cname$ = method_call $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBUS_INTERFACE.method_call $str:dname$ $typ$ >>
 
-      | "OBUS_signal"; no_broadcast = OPT "!"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          begin match no_broadcast with
-            | Some _ ->
-                <:str_item< let $lid:cname$ = signal ~broadcast:false $str:dname$ $typ$ >>
-            | None ->
-                <:str_item< let $lid:cname$ = signal $str:dname$ $typ$ >>
-          end
+      | "OBUS_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:cname$ = OBUS_INTERFACE.signal $str:dname$ $typ$ >>
 
       | "OBUS_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = property_reader $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBUS_INTERFACE.property_reader $str:dname$ $typ$ >>
 
       | "OBUS_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
           <:str_item< let $lid:prepend_lid "set" cname$ = property_writer $str:dname$ $typ$ >>
 
       | "OBUS_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = property_reader $str:dname$ $typ$;;
-                      let $lid:prepend_lid "set" cname$ = property_writer $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBUS_INTERFACE.property_reader $str:dname$ $typ$;;
+                      let $lid:prepend_lid "set" cname$ = OBUS_INTERFACE.property_writer $str:dname$ $typ$ >>
       ] ];
 END
 
@@ -408,11 +403,11 @@ let rec generate f = function
   | _ ->
       assert false
 
-(* Build a wrapper for a record type *)
+(* Build a mapper for a record type *)
 let make_record_combinator _loc fields =
   let vars = gen_vars (fun (loc, id, t) -> loc) fields in
   <:expr<
-    OBus_type.wrap $make_cascade_tuple_combinator _loc
+    OBus_type.map $make_cascade_tuple_combinator _loc
                       (List.map (fun (_, _, t) -> type_combinator_of_ctyp t) fields)$
       (fun $make_cascade_tuple_patt _loc (pvars vars)$ ->
          $Ast.ExRec(_loc,

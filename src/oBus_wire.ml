@@ -207,7 +207,7 @@ struct
       | None -> i
       | Some sender -> pad8 i + 9 + String.length sender
     in
-    let i = pad8 i + 6 + tsequence_of_sequence i msg.body in
+    let i = tsequence_of_sequence (pad8 i + 6) msg.body in
     sequence (pad8 i) msg.body
 end
 
@@ -746,7 +746,6 @@ let string_of_message ?(byte_order=native_byte_order) msg =
         BE_writer.write_message 'B' msg
 
 let write_message oc ?byte_order msg =
-  lwt () = Lwt_io.hexdump Lwt_io.stdout (string_of_message ?byte_order msg) in
   Lwt_io.write oc (string_of_message ?byte_order msg)
 
 (* +-----------------------------------------------------------------+
@@ -764,29 +763,29 @@ let read_padding ptr count =
 
 let read_padding2 ptr =
   if padding2 ptr.ofs = 1 then begin
-    if ptr.ofs + 1 >= ptr.max then out_of_bounds ();
+    if ptr.ofs + 1 > ptr.max then out_of_bounds ();
     if get_uint8 ptr.buf ptr.ofs <> 0 then unitialized_padding ()
   end
 
 let read_padding4 ptr =
   let padding = padding4 ptr.ofs in
-  if ptr.ofs + padding >= ptr.max then out_of_bounds ();
+  if ptr.ofs + padding > ptr.max then out_of_bounds ();
   read_padding ptr padding
 
 let read_padding8 ptr =
   let padding = padding8 ptr.ofs in
-  if ptr.ofs + padding >= ptr.max then out_of_bounds ();
+  if ptr.ofs + padding > ptr.max then out_of_bounds ();
   read_padding ptr padding
 
 let read1 reader ptr =
-  if ptr.ofs + 1 >= ptr.max then out_of_bounds ();
+  if ptr.ofs + 1 > ptr.max then out_of_bounds ();
   let x = reader ptr.buf ptr.ofs in
   ptr.ofs <- ptr.ofs + 1;
   x
 
 let read2 reader ptr =
   let padding = padding2 ptr.ofs in
-  if ptr.ofs + padding + 2 >= ptr.max then out_of_bounds ();
+  if ptr.ofs + padding + 2 > ptr.max then out_of_bounds ();
   read_padding ptr padding;
   let x = reader ptr.buf ptr.ofs in
   ptr.ofs <- ptr.ofs + 2;
@@ -794,7 +793,7 @@ let read2 reader ptr =
 
 let read4 reader ptr =
   let padding = padding4 ptr.ofs in
-  if ptr.ofs + padding + 4 >= ptr.max then out_of_bounds ();
+  if ptr.ofs + padding + 4 > ptr.max then out_of_bounds ();
   read_padding ptr padding;
   let x = reader ptr.buf ptr.ofs in
   ptr.ofs <- ptr.ofs + 4;
@@ -802,14 +801,14 @@ let read4 reader ptr =
 
 let read8 reader ptr =
   let padding = padding8 ptr.ofs in
-  if ptr.ofs + padding + 8 >= ptr.max then out_of_bounds ();
+  if ptr.ofs + padding + 8 > ptr.max then out_of_bounds ();
   read_padding ptr padding;
   let x = reader ptr.buf ptr.ofs in
   ptr.ofs <- ptr.ofs + 8;
   x
 
 let read_bytes ptr len =
-  if len < 0 || ptr.ofs + len >= ptr.max then out_of_bounds ();
+  if len < 0 || ptr.ofs + len > ptr.max then out_of_bounds ();
   let s = String.create len in
   String.unsafe_blit ptr.buf ptr.ofs s 0 len;
   ptr.ofs <- ptr.ofs + len;

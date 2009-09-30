@@ -9,8 +9,20 @@
 
 open Unix
 open Lwt
-open OBus_internals
+open OBus_private
 open OBus_address
+
+class type t = object
+  method event : OBus_connection.t React.event
+  method addresses : OBus_address.t list
+  method shutdown : unit Lwt.t
+end
+
+class type lowlevel = object
+  method event : OBus_transport.t React.event
+  method addresses : OBus_address.t list
+  method shutdown : unit Lwt.t
+end
 
 type event =
   | Event_shutdown
@@ -20,74 +32,79 @@ type listener = {
   listen_fd : Lwt_unix.file_descr;
   listen_address : OBus_address.t;
   listen_guid : OBus_address.guid;
-  mutable listen_thread : unit Lwt.t;
 }
 
-type t = {
+type server = {
   mutable server_up : bool;
   server_abort : event Lwt.t;
-  server_listeners : listener list;
-  server_addresses : OBus_address.t list;
-  server_mechanisms : OBus_auth.server_mechanism list option;
-  server_on_connection : OBus_wire.transport callback;
-  mutable server_exit_hook : (unit -> unit Lwt.t) MSet.node option;
+  server_mechanisms : OBus_auth.Server.mechanism list option;
+  server_push : OBus_transport.t -> unit;
 }
 
-let socket fd chans =
-  let tr = OBus_wire.transport_of_channels chans in
-  { tr with
-      OBus_wire.shutdown = fun _ ->
-        Lwt.finalize tr.OBus_wire.shutdown
-          (fun _ ->
-             Lwt_unix.shutdown fd SHUTDOWN_ALL;
-             Lwt_unix.close fd;
-             Lwt.return ()) }
+let socket fd ic oc =
+  OBus_transport.make
+    ~recv:(fun () -> OBus_wire.read_message ic)
+    ~send:(fun msg -> OBus_wire.write_message oc msg)
+    ~shutdown:(fun () ->
+                 lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
+                 Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                 Lwt_unix.close fd;
+                 return ())
 
 let accept server listen =
-  catch
-    (fun _ ->
-       perform
-         (fd, addr) <-- Lwt_unix.accept listen.listen_fd;
-         return (Event_connection(fd, addr)))
-    (fun exn ->
-       if server.server_up then
-         ERROR("uncaught error: %s" (OBus_util.string_of_exn exn));
-       return Event_shutdown)
+  try_lwt
+    lwt fd, addr = Lwt_unix.accept listen.listen_fd in
+    return (Event_connection(fd, addr))
+  with Unix_error(err, _, _) ->
+    if server.server_up then ERROR("uncaught error: %s" (error_message err));
+    return Event_shutdown
 
 let rec listen_loop server listen =
   choose [server.server_abort; accept server listen] >>= function
     | Event_shutdown ->
         begin
           try
-            Lwt_unix.close listen.listen_fd;
-            match listen.listen_address with
-              | (Unix_path p, _) ->
-                  Unix.unlink p
-              | _ ->
-                  ()
-          with
-              _ -> ();
+            Lwt_unix.close listen.listen_fd
+          with Unix_error(err, _, _) ->
+            ERROR("cannot close listenning socket: %s" (error_message err));
+        end;
+        begin
+          match listen.listen_address with
+            | { address = Unix_path path } when String.length path > 0 && path.[0] <> '\x00' ->
+                begin
+                  try
+                    Unix.unlink path
+                  with Unix_error(err, _, _) ->
+                    ERROR("cannot unlink %S: %s" path (error_message err))
+                end
+            | _ ->
+                ()
         end;
         return ()
 
     | Event_connection(fd, addr) ->
-        let chans = (OBus_wire.make_ichan (fun str ofs len -> Lwt_unix.read fd str ofs len),
-                     OBus_wire.make_ochan (fun str ofs len -> Lwt_unix.write fd str ofs len)) in
-        catch
-          (fun _ ->
-             OBus_auth.server_authenticate
-               ?mechanisms:server.server_mechanisms
-               listen.listen_guid
-               (OBus_wire.auth_stream_of_channels chans))
-          (fun exn ->
-             LOG("authentication failure for client from %a"
-                   (fun oc -> function
-                      | ADDR_UNIX path -> output_string oc path
-                      | ADDR_INET(ia, port) -> Printf.fprintf oc "%s:%d" (string_of_inet_addr ia) port) addr);
-             return ())
-        >>= fun _ ->
-          let _ = callback_apply "on_connection" server.server_on_connection (socket fd chans) in
-          listen_loop server listen
+        let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_unix.read fd)
+        and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_unix.write fd) in
+        lwt () =
+          try_lwt
+            OBus_auth.Server.authenticate
+              ?mechanisms:server.server_mechanisms
+              listen.listen_guid
+              (OBus_auth.stream_of_channels ic oc)
+          with exn ->
+            LOG("authentication failure for client from %s"
+                  (match addr with
+                     | ADDR_UNIX path -> path
+                     | ADDR_INET(ia, port) -> Printf.sprintf "%s:%d" (string_of_inet_addr ia) port));
+            return ()
+        in
+        let () =
+          try
+            server.server_push (socket fd ic oc)
+          with exn ->
+            FAILURE(exn, "failed to push new transport with")
+        in
+        listen_loop server listen
 
 let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in
@@ -95,7 +112,20 @@ let make_socket domain typ addr =
     Lwt_unix.bind fd addr;
     Lwt_unix.listen fd 10;
     return fd
-  with exn -> Lwt_unix.close fd; fail exn
+  with Unix_error(err, _, _) as exn ->
+    ERROR("failed to create listenning socket with %s: %s"
+            (match addr with
+               | ADDR_UNIX path ->
+                   let len = String.length path in
+                   if len > 0 && path.[0] = '\x00' then
+                     Printf.sprintf "unix abstract path %S" (String.sub path 1 (len - 1))
+                   else
+                     Printf.sprintf "unix path %S" path
+               | ADDR_INET(ia, port) ->
+                   Printf.sprintf "address %s:%d" (string_of_inet_addr ia) port)
+            (Unix.error_message err));
+    Lwt_unix.close fd;
+    fail exn
 
 let make_path path =
   make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX(path))
@@ -103,20 +133,25 @@ let make_path path =
 let make_abstract path =
   make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ path))
 
-let uniq addr t = t >>= fun fd -> return ([fd], addr)
-
 let fds_of_address addr = match addr with
-  | Unix_path path -> uniq addr (make_path path)
-  | Unix_abstract path -> uniq addr (make_abstract path)
+  | Unix_path path ->
+      lwt fd = make_path path in
+      return ([fd], addr)
+  | Unix_abstract path ->
+      lwt fd = make_abstract path in
+      return ([fd], addr)
   | Unix_tmpdir dir ->
       let path = Filename.concat dir ("obus-" ^ OBus_util.hex_encode (OBus_util.random_string 10)) in
       (* Try with abstract name first *)
-      catch
-        (fun _ -> uniq (Unix_abstract path) (make_abstract path))
-        (fun exn ->
-           (* And fallback to path in the filesystem *)
-           DEBUG("failed to create listening socket with abstract path name %s: %s" path (OBus_util.string_of_exn exn));
-           uniq (Unix_path path) (make_path path))
+      begin
+        try_lwt
+          lwt fd = make_abstract path in
+          return ([fd], Unix_abstract path)
+        with exn ->
+          (* And fallback to path in the filesystem *)
+          lwt fd = make_path path in
+          return ([fd], Unix_path path)
+      end
 
   | Tcp { tcp_bind = bind_addr; tcp_port = port; tcp_family = family } ->
       let opts = [AI_SOCKTYPE SOCK_STREAM; AI_PASSIVE] in
@@ -124,89 +159,99 @@ let fds_of_address addr = match addr with
         | Some `Ipv4 -> AI_FAMILY PF_INET :: opts
         | Some `Ipv6 -> AI_FAMILY PF_INET6 :: opts
         | None -> opts in
-      (perform
-         fds <-- Lwt_util.fold_left
-           (fun fds ai ->
-              catch
-                (fun _ -> perform
-                   fd <-- make_socket ai.ai_family ai.ai_socktype ai.ai_addr;
-                   return (fd :: fds))
-                (fun exn ->
-                   (* Close all previously opened file descriptor *)
-                   List.iter (fun fd -> try Lwt_unix.close fd with _ -> ()) fds;
-                   fail exn)) [] (getaddrinfo bind_addr port opts);
-         return (fds, addr))
+      lwt fds = Lwt_util.fold_left
+        (fun fds ai ->
+           try_lwt
+             lwt fd = make_socket ai.ai_family ai.ai_socktype ai.ai_addr in
+             return (fd :: fds)
+           with exn ->
+             (* Close all previously opened file descriptor *)
+             List.iter (fun fd -> try Lwt_unix.close fd with _ -> ()) fds;
+             fail exn) [] (getaddrinfo bind_addr port opts)
+      in
+      return (fds, addr)
 
   | Autolaunch ->
-      fail (Failure "autolaunch can not be used as a listenning address")
+      fail (Failure "OBus_server.make_server: autolaunch can not be used as a listenning address")
 
   | Unknown(name, params) ->
-      fail (Failure ("listening on " ^ name ^ " addresses is not implemented"))
+      fail (Failure ("OBus_server.make_server: listening on " ^ name ^ " addresses is not implemented"))
 
-let shutdown server =
-  begin match server.server_exit_hook with
-    | Some n ->
-        server.server_exit_hook <- None;
-        MSet.remove n
-    | None ->
-        ()
-  end;
-  if server.server_up then begin
-    server.server_up <- false;
-    wakeup server.server_abort Event_shutdown
-  end;
-  Lwt_util.iter (fun listen -> listen.listen_thread) server.server_listeners
-
-let make_lowlevel ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) ?(serial=false) on_connection =
+let make_server ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) () =
   match addresses with
     | [] -> fail (Invalid_argument "OBus_server.make: no addresses given")
     | addresses ->
-        (perform
-           l <-- Lwt_util.fold_left
-             (fun acc address ->
-                catch
-                  (fun _ -> perform
-                     x <-- fds_of_address address;
-                     return (x :: acc))
-                  (fun exn ->
-                     (* Close all previously opened fds *)
-                     List.iter (fun (fds, addr) ->
-                                  List.iter (fun fd -> try Lwt_unix.close fd with _ -> ()) fds) acc;
-                     fail exn)) [] addresses;
+        lwt l = Lwt_util.fold_left
+          (fun acc address ->
+             try_lwt
+               lwt x = fds_of_address address in
+               return (x :: acc)
+             with exn ->
+               (* Close all previously opened fds *)
+               List.iter (fun (fds, addr) ->
+                            List.iter (fun fd -> try Lwt_unix.close fd with _ -> ()) fds) acc;
+               fail exn) [] addresses
+        in
 
-           (* Fail if no listening file descriptor has been created *)
-           if List.for_all (fun (fds, addr) -> fds = []) l then
-             fail (Failure "unable to listening on any address")
+        (* Fail if no listening file descriptor has been created *)
+        if List.for_all (fun (fds, addr) -> fds = []) l then
+          fail (Failure "unable to listening on any address")
 
-           else begin
-             let guids = List.map (fun _ -> OBus_uuid.generate ()) l in
+        else begin
+          let guids = List.map (fun _ -> OBus_uuid.generate ()) l
+          and event, push = React.E.create ()
+          and abort_waiter, abort_wakener = Lwt.wait () in
 
-             let server = {
-               server_up = true;
-               server_abort = wait ();
-               server_listeners = List.flatten
-                 (List.map2
-                    (fun (fds, addr) guid ->
-                       List.map (fun fd -> { listen_fd = fd;
-                                             listen_address = (addr, Some guid);
-                                             listen_guid = guid;
-                                             listen_thread = return () })
-                         fds) l guids);
-               server_addresses = List.map2 (fun (fds, addr) guid -> (addr, Some guid)) l guids;
-               server_mechanisms = mechanisms;
-               server_on_connection = make_callback serial on_connection;
-               server_exit_hook = None;
-             } in
+          let listeners = List.flatten
+            (List.map2
+               (fun (fds, addr) guid ->
+                  List.map (fun fd -> { listen_fd = fd;
+                                        listen_address = { address = addr; guid = Some guid };
+                                        listen_guid = guid })
+                    fds) l guids)
+          and listener_threads = ref [] in
 
-             server.server_exit_hook <- Some(MSet.add exit_hooks (fun _ -> shutdown server));
+          let server = {
+            server_up = true;
+            server_abort = abort_waiter;
+            server_mechanisms = mechanisms;
+            server_push = push;
+          } in
 
-             (* Launch waiting loops *)
-             List.iter (fun listen -> listen.listen_thread <- listen_loop server listen) server.server_listeners;
+          let exit_hook = Lwt_sequence.add_l return Lwt_main.exit_hooks in
 
-             return server
-           end)
+          let rec shutdown = lazy(
+            Lwt_sequence.remove exit_hook;
+            if server.server_up then begin
+              server.server_up <- false;
+              wakeup abort_wakener Event_shutdown
+            end;
+            (* Wait for all listenners to exit: *)
+            Lwt.join !listener_threads
+          ) in
 
-let make ?mechanisms ?addresses ?serial on_connection = make_lowlevel ?mechanisms ?addresses ?serial
-  (fun transport -> on_connection (OBus_connection.of_transport ~up:false transport))
+          Lwt_sequence.set exit_hook (fun () -> Lazy.force shutdown);
 
-let addresses server = server.server_addresses
+          (* Launch waiting loops *)
+          List.iter (fun listen -> listener_threads := listen_loop server listen :: !listener_threads) listeners;
+
+          let addresses = List.map2 (fun (fds, addr) guid -> { address = addr; guid = Some guid }) l guids in
+          return (event, addresses, shutdown)
+        end
+
+let make_lowlevel ?mechanisms ?addresses () =
+  lwt event, addresses, shutdown = make_server ?mechanisms ?addresses () in
+  return (object
+            method event = event
+            method addresses = addresses
+            method shutdown = Lazy.force shutdown
+          end)
+
+let make ?mechanisms ?addresses () =
+  lwt event, addresses, shutdown = make_server ?mechanisms ?addresses () in
+  let event = React.E.map (OBus_connection.of_transport ~up:false) event in
+  return (object
+            method event = event
+            method addresses = addresses
+            method shutdown = Lazy.force shutdown
+          end)

@@ -31,4 +31,5 @@ src/OBus_type
 src/OBus_uuid
 src/OBus_value
 src/OBus_match
+src/OBus_server
 OBus_config

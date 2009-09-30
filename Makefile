@@ -143,8 +143,8 @@ prefix:
 install: prefix
 	$(OF) install obus _build/META \
 	 $(SYNTAX:%=_build/%.cma) \
-	 $(LIB:%=%/*.mli) \
-	 $(LIB:%=_build/%/*.cmi) \
+	 src/*.mli \
+	 _build/src/*.cmi \
 	 $(LIB:%=_build/%.cma) \
 	 $(LIB:%=_build/%.cmxa) \
 	 $(LIB:%=_build/%.cmxs) \

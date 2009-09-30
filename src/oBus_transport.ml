@@ -54,8 +54,7 @@ let make_socket domain typ addr =
     Lwt_unix.close fd;
     fail exn
 
-let 
-    of_addresses ?mechanisms addresses =
+let of_addresses ?mechanisms addresses =
   let rec try_one domain typ addr fallback x =
     try_lwt
       lwt fd = make_socket domain typ addr in

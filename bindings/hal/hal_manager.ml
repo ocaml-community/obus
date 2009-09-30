@@ -9,27 +9,27 @@
 
 open Lwt
 open OBus_value
+open OBus_type.Perv
 
 let get_manager =
-  lazy(perform
-         bus <-- Lazy.force OBus_bus.system;
-         return (OBus_proxy.make (OBus_peer.make bus "org.freedesktop.Hal")
-                   [ "org"; "freedesktop"; "Hal"; "Manager" ]))
+  lazy(lwt bus = Lazy.force OBus_bus.system in
+       return (OBus_proxy.make (OBus_peer.make bus "org.freedesktop.Hal")
+                 [ "org"; "freedesktop"; "Hal"; "Manager" ]))
 
-include OBus_interface.Make_single
-    (struct
-       let proxy = get_manager
-     end)
-    (struct
-       let name = "org.freedesktop.Hal.Manager"
-     end)
+module OBUS_INTERFACE = OBus_interface.Make_single
+  (struct
+     let proxy = get_manager
+   end)
+  (struct
+     let name = "org.freedesktop.Hal.Manager"
+   end)
 
 OBUS_method GetAllDevices : unit -> Hal_device.udi list
 OBUS_method GetAllDevicesWithProperties : unit -> (Hal_device.udi * (string, Hal_device.property) dict) structure list
 OBUS_method DeviceExists : Hal_device.udi -> bool
 OBUS_method FindDeviceStringMatch : string -> string -> Hal_device.udi list
 
-let obus_broken_udi = OBus_type.wrap obus_string
+let obus_broken_udi = OBus_type.map obus_string
   (fun x -> Hal_device.make (OBus_path.of_string x))
   (fun x -> OBus_path.to_string (x :> OBus_path.t))
 
@@ -37,7 +37,9 @@ let obus_broken_udi = OBus_type.wrap obus_string
    we temporary use this ugly hack: *)
 let find_device_by_capability capability =
   lwt proxy = Lazy.force get_manager in
-  lwt v = OBus_proxy.dyn_method_call proxy ~interface ~member:"FindDeviceByCapability" [basic (String capability)] in
+  lwt v = OBus_proxy.dyn_method_call proxy
+    ~interface:OBUS_INTERFACE.interface
+    ~member:"FindDeviceByCapability" [sstring capability] in
   match OBus_type.opt_cast_sequence <:obus_type< Hal_device.udi list >> v with
     | Some x -> return x
     | None ->

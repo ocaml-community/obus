@@ -11,7 +11,7 @@ open Lwt
 open OBus_private
 open OBus_type.Perv
 
-include OBus_interface.Make_custom
+module OBUS_INTERFACE = OBus_interface.Make_custom
   (struct
      type t = OBus_connection.t
      let make_proxy connection =
@@ -22,6 +22,8 @@ include OBus_interface.Make_custom
   (struct
      let name = "org.freedesktop.DBus"
    end)
+
+type t = OBus_connection.t
 
 OBUS_method Hello : string
 
@@ -64,7 +66,7 @@ let of_laddresses laddr = Lazy.force laddr >>= of_addresses
 let session = lazy(of_laddresses OBus_address.session)
 let system = lazy(of_laddresses OBus_address.system)
 
-let prefix = interface ^ ".Error."
+let prefix = OBUS_INTERFACE.interface ^ ".Error."
 
 exception Service_unknown of string
  with obus(prefix ^ "ServiceUnknown")

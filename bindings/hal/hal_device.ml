@@ -9,11 +9,11 @@
 
 open Lwt
 open OBus_value
+open OBus_type.Perv
 
 let get_peer =
-  lazy(perform
-         bus <-- Lazy.force OBus_bus.system;
-         return (OBus_peer.make bus "org.freedesktop.Hal"))
+  lazy(lwt bus = Lazy.force OBus_bus.system in
+       return (OBus_peer.make bus "org.freedesktop.Hal"))
 
 type udi = path
   with obus
@@ -25,12 +25,11 @@ module Make_interface =
   OBus_interface.Make_custom(struct
                                type t = udi
                                let make_proxy udi =
-                                 (perform
-                                    peer <-- Lazy.force get_peer;
-                                    return (OBus_proxy.make peer udi))
+                                 (lwt peer = Lazy.force get_peer in
+                                  return (OBus_proxy.make peer udi))
                              end)
 
-include Make_interface(struct let name = "org.freedesktop.Hal.Device" end)
+module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device" end)
 
 let computer = ["org"; "freedesktop"; "Hal"; "devices"; "computer"]
 
@@ -42,7 +41,7 @@ type property =
   | Pbool of bool
   | Pdouble of float
 
-let obus_property = OBus_type.wrap obus_variant
+let obus_property = OBus_type.map obus_variant
   (function
      | Basic(String s) -> Pstring s
      | Array(Tbasic Tstring, _) as l -> Pstrlist(OBus_type.cast_single (obus_list obus_string) l)
@@ -100,28 +99,28 @@ OBUS_signal InterfaceLockAcquired : string * string * int
 OBUS_signal InterfaceLockReleased : string * string * int
 
 module Volume = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.Volume" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.Volume" end)
   OBUS_method Mount : string -> string -> string list -> int
   OBUS_method Unmount : string list -> int
   OBUS_method Eject : string list -> int
 end
 module Storage = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.Storage" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.Storage" end)
   OBUS_method Eject : string list -> int
   OBUS_method CloseTray : string list -> int
 end
 module Storage_removable = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.Storage.Removable" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.Storage.Removable" end)
   OBUS_method CheckForMedia : bool
 end
 module Wake_on_lan = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.WakeOnLan" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.WakeOnLan" end)
   OBUS_method GetSupported : int
   OBUS_method GetEnabled : int
   OBUS_method SetEnabled : bool -> int
 end
 module System_power_management = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.SystemPowerManagement" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.SystemPowerManagement" end)
   OBUS_method Suspend : int -> int
   OBUS_method SuspendHybrid : int -> int
   OBUS_method Hibernate : int
@@ -130,7 +129,7 @@ module System_power_management = struct
   OBUS_method SetPowerSave : bool -> int
 end
 module Cpufreq = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.CPUFreq" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.CPUFreq" end)
   OBUS_method SetCPUFreqGovernor : string -> unit
   OBUS_method SetCPUFreqPerformance : int -> unit
   OBUS_method SetCPUFreqConsiderNice : bool -> unit
@@ -140,16 +139,16 @@ module Cpufreq = struct
   OBUS_method GetCPUFreqAvailableGovernors : string list
 end
 module Laptop_panel = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.LaptopPanel" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.LaptopPanel" end)
   OBUS_method SetBrightness : int -> int
   OBUS_method GetBrightness : int
 end
 module Dock_station = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.DockStation" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.DockStation" end)
   OBUS_method Undock : int
 end
 module Kill_switch = struct
-  include Make_interface(struct let name = "org.freedesktop.Hal.Device.KillSwitch" end)
+  module OBUS_INTERFACE = Make_interface(struct let name = "org.freedesktop.Hal.Device.KillSwitch" end)
   OBUS_method SetPower : bool -> int
   OBUS_method GetPower : int
 end

@@ -9,25 +9,23 @@
 
 open Lwt
 
-let main =
-  (perform
-     Notification.notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" ();
-     Lwt_unix.sleep 0.5;
+let _ = Lwt_unix.run (
+  lwt _ = Notification.notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" () in
+  lwt () = Lwt_unix.sleep 0.5 in
 
-     id <-- Notification.notify ~summary:"Actions test" ~body:"click on something!"
-       ~category:"network"
-       ~actions:[("coucou", `coucou);
-                 ("plop", `plop)] ();
+  lwt notif = Notification.notify ~summary:"Actions test" ~body:"click on something!"
+    ~category:"network"
+    ~actions:[("coucou", `coucou);
+              ("plop", `plop)] ()
+  in
 
-     result <-- Notification.result id;
+  lwt result = notif#result in
 
-     let _ = match result with
-       | `coucou -> print_endline "You pressed coucou!"
-       | `plop -> print_endline "You pressed plop!"
-       | `default -> print_endline "default action invoked"
-       | `closed -> print_endline "notification closed"
-     in
-
-     return ())
-
-let _ = Lwt_unix.run main
+  begin match result with
+    | `coucou -> print_endline "You pressed coucou!"
+    | `plop -> print_endline "You pressed plop!"
+    | `default -> print_endline "default action invoked"
+    | `closed -> print_endline "notification closed"
+  end;
+  return ()
+)

@@ -107,7 +107,7 @@ let length_validate_signature l =
         else if depth_dict_entry > OBus_constant.max_type_recursion_depth then
           failwith "too many nested dict-entries"
         else
-          aux_single (length + 3) depth_struct (depth_array + 1) (depth_dict_entry + 1) tv
+          aux_single (length + 4) depth_struct (depth_array + 1) (depth_dict_entry + 1) tv
     | Tstructure [] ->
         failwith "empty struct"
     | Tstructure tl ->

@@ -15,16 +15,6 @@ class type ['a] t = object
   method disconnect : unit Lwt.t
 end
 
-let safe_cast cast x =
-  try
-    Some(cast x)
-  with
-    | OBus_type.Cast_failure ->
-        None
-    | exn ->
-        FAILURE(exn, "message cast fail with");
-        None
-
 let _connect proxy ~interface ~member =
   match (OBus_proxy.connection proxy)#get with
     | Crashed exn ->
@@ -90,8 +80,10 @@ let connect proxy ~interface ~member typ =
     try
       Some(OBus_type.cast_sequence typ ~context:(OBus_connection.Context(OBus_proxy.connection proxy, message)) (OBus_message.body message))
     with exn ->
-      FAILURE(exn, "failed to cast signal from %S, interface %S, member %S"
-                (match OBus_proxy.name proxy with None -> "" | Some n -> n) interface member);
+      FAILURE(exn, "failed to cast signal from %S, interface %S, member %S with signature %S to %S"
+                (match OBus_message.sender message with None -> "" | Some n -> n) interface member
+                (OBus_value.string_of_signature (OBus_value.type_of_sequence (OBus_message.body message)))
+                (OBus_value.string_of_signature (OBus_type.type_sequence typ)));
       None
   end event in
   return (object

@@ -9,37 +9,46 @@
 
 (** Server for one-to-one communication *)
 
-type t
+(** Type of servers *)
+class type t = object
+  method event : OBus_connection.t React.event
+    (** Event which receive new connections.
 
-val make : ?mechanisms:OBus_auth.server_mechanism list -> ?addresses:OBus_address.desc list ->
-  ?serial:bool -> (OBus_connection.t -> unit Lwt.t) -> t Lwt.t
-  (** [make ?mechanisms ?addresses ?serial on_connection] Create a server
-      which will listen on all the given addresses.
+        Note that new connections are initially down to avoid race
+        condition. *)
+
+  method addresses : OBus_address.t list
+    (** Listenning addresses *)
+
+  method shutdown : unit Lwt.t
+    (** Shutdown the server *)
+end
+
+(** Type of lowlevel servers *)
+class type lowlevel = object
+  method event : OBus_transport.t React.event
+    (** Event which receive new transports *)
+
+  method addresses : OBus_address.t list
+    (** Listenning addresses *)
+
+  method shutdown : unit Lwt.t
+    (** Shutdown the server *)
+end
+
+val make :
+  ?mechanisms : OBus_auth.Server.mechanism list ->
+  ?addresses : OBus_address.address list -> unit -> t Lwt.t
+  (** [make ?mechanisms ?addresses] Create a server which will listen
+      on all of the given addresses.
 
       [mechanisms] is the list of authentication mechanisms supported
       by the server.
 
       [addresses] default to [OBus_address.Unix_tmpdir "/tmp"].
 
-      [on_connection] is the function which will be called when a new
-      connection is created, i.e. a client connect to the server and
-      successfully authenticate itself. [serial] tell wether calls to
-      [on_connection] must be serialized. It defaults to [false].
-
-      Note that the connection passed to [on_connection] is down to
-      avoid race condition. It must be set up by this function.
-
       @raise Invalid_argument if [addresses] is empty *)
 
-val make_lowlevel : ?mechanisms:OBus_auth.server_mechanism list -> ?addresses:OBus_address.desc list ->
-  ?serial:bool -> (OBus_wire.transport -> unit Lwt.t) -> t Lwt.t
-  (** Same thing but pass directly a transport to the callback
-      function instead of a connection *)
-
-val addresses : t -> OBus_address.t list
-  (** Return the listening address of a server, with their associated
-      guid. One guid is generated for each listening address at server
-      creation time. *)
-
-val shutdown : t -> unit Lwt.t
-  (** Shutdown a server *)
+val make_lowlevel :
+  ?mechanisms : OBus_auth.Server.mechanism list ->
+  ?addresses : OBus_address.address list -> unit -> lowlevel Lwt.t

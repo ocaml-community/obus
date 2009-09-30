@@ -10,7 +10,10 @@
 open Lwt
 open OBus_type.Perv
 
-let method_call member typ proxy = OBus_proxy.method_call proxy ~interface:"org.freedesktop.DBus.Properties" ~member typ
+module OBUS_INTERFACE =
+struct
+  let method_call member typ proxy = OBus_proxy.method_call proxy ~interface:"org.freedesktop.DBus.Properties" ~member typ
+end
 
 OBUS_method Get as _dyn_get : string -> string -> variant
 OBUS_method Set as _dyn_set : string -> string -> variant -> unit
