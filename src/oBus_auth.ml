@@ -71,11 +71,13 @@ end = struct
 
   type context = string
 
+  let keyring_directory = lazy(Filename.concat (Lazy.force OBus_util.homedir) ".dbus-keyrings")
+
   let keyring_file_name context =
-    Filename.concat (Lazy.force OBus_util.homedir) (Filename.concat ".dbus-keyrings" context)
+    Filename.concat (Lazy.force keyring_directory) context
 
   let parse_line line =
-    Scanf.sscanf line "%ld %Ld %[a-fA-F0-9]\n"
+    Scanf.sscanf line "%ld %Ld %[a-fA-F0-9]"
       (fun id time cookie -> { Cookie.id = id;
                                Cookie.time = time;
                                Cookie.cookie = cookie })
@@ -84,12 +86,15 @@ end = struct
     sprintf  "%ld %Ld %s" (Cookie.id cookie) (Cookie.time cookie) (Cookie.cookie cookie)
 
   let load context =
-    try_lwt
-      Lwt_stream.get_while (fun _ -> true)
-        (Lwt_stream.map parse_line (Lwt_io.lines_of_file (keyring_file_name context)))
-    with exn ->
-      ERROR("failed to load cookie file %s: %s" (keyring_file_name context) (OBus_util.string_of_exn exn));
-      fail exn
+    let fname = keyring_file_name context in
+    if Sys.file_exists fname then
+      try_lwt
+        Lwt_stream.get_while (fun _ -> true) (Lwt_stream.map parse_line (Lwt_io.lines_of_file fname))
+      with exn ->
+        ERROR("failed to load cookie file %s: %s" (keyring_file_name context) (OBus_util.string_of_exn exn));
+        fail exn
+    else
+      return []
 
   let lock_file fname =
     let really_lock () =
@@ -134,11 +139,11 @@ end = struct
     let fname = keyring_file_name context in
     let tmp_fname = fname ^ "." ^ hex_encode (OBus_util.random_string 8) in
     let lock_fname = fname ^ ".lock" in
-    let dir = Filename.concat (Lazy.force OBus_util.homedir) ".dbus-keyrings" in
+    let lazy dir = keyring_directory in
     (* Check that the keyring directory exists, or create it *)
-    if try Unix.access dir [Unix.F_OK]; false with _ -> true then begin
+    if not (Sys.file_exists dir) then begin
       try
-        Unix.mkdir dir 0o600
+        Unix.mkdir dir 0o700
       with Unix.Unix_error(error, _, _) as exn ->
         ERROR("failed to create directory %s with permissions 0600: %s" dir (Unix.error_message error));
         raise exn
