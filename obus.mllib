@@ -4,6 +4,7 @@ src/private/OBus_match_rule_lexer
 src/private/OBus_cache
 src/private/OBus_private
 src/private/OBus_private_bus
+src/private/OBus_private_signal
 src/private/OBus_util
 src/private/OBus_xml_parser
 src/private/OBus_version

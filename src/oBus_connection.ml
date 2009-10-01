@@ -285,7 +285,7 @@ let dispatch_message connection message = match message with
               (fun receiver ->
                  if signal_match_ignore_sender receiver message then
                    try
-                     receiver.sr_push message
+                     receiver.sr_push (connection.packed, message)
                    with exn ->
                      FAILURE(exn, "signal event failed with"))
               connection.signal_receivers
@@ -361,7 +361,7 @@ let dispatch_message connection message = match message with
                 (fun receiver ->
                    if signal_match receiver message then
                      try
-                       receiver.sr_push message
+                       receiver.sr_push (connection.packed, message)
                      with exn ->
                        FAILURE(exn, "signal event failed with"))
                 connection.signal_receivers

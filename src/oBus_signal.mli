@@ -14,18 +14,18 @@ class type ['a] t = object
   method event : 'a React.event
     (** The signal itself *)
 
-  method disconnect : unit Lwt.t
+  method disconnect : unit
     (** Stop receiving the signal *)
 end
 
 val connect : OBus_proxy.t ->
   interface : OBus_name.interface ->
   member : OBus_name.member ->
-  ('a, _) OBus_type.cl_sequence -> 'a t Lwt.t
-  (** [connect proxy ?broadcast ~interface ~member typ] connect to
+  ('a, _) OBus_type.cl_sequence -> 'a t
+  (** [connect proxy ~interface ~member typ] connect to
       given signals emitted by [proxy]. *)
 
 val dyn_connect : OBus_proxy.t ->
   interface : OBus_name.interface ->
-  member : OBus_name.member -> OBus_value.sequence t Lwt.t
+  member : OBus_name.member -> OBus_value.sequence t
   (** Same thing but return signals as a dynamically typed values *)

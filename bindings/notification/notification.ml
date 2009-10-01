@@ -154,8 +154,6 @@ let monitor_peer peer =
     end
   end
 
-let events = ref []
-
 let init_callbacks =
   lazy(lwt bus = Lazy.force OBus_bus.session in
 
@@ -166,8 +164,7 @@ let init_callbacks =
                                OBus_proxy.path = server_path } in
 
        (* Handle signals for closed notifications *)
-       lwt s = notification_closed anonymous_proxy in
-       events := React.E.map
+       let _ = Lwt_event.notify_p
          (fun (id, reason) ->
             match find_notification id with
               | Some notif ->
@@ -177,11 +174,10 @@ let init_callbacks =
 
                   return ()
               | None ->
-                  return ()) s#event :: !events;
+                  return ()) (notification_closed anonymous_proxy)#event in
 
        (* Handle signals for actions *)
-       lwt s = action_invoked anonymous_proxy in
-       events := React.E.map
+       let _ = Lwt_event.notify_p
          (fun (id, action) ->
             match find_notification id with
               | Some notif ->
@@ -190,7 +186,7 @@ let init_callbacks =
                   notif.notif_action action;
                   return ()
               | None ->
-                  return ()) s#event :: !events;
+                  return ()) (action_invoked anonymous_proxy)#event in
 
        return ())
 

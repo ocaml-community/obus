@@ -93,7 +93,7 @@ and signal_receiver = {
   sr_path : OBus_path.t;
   sr_interface : OBus_name.interface;
   sr_member : OBus_name.member;
-  sr_push : OBus_message.t -> unit;
+  sr_push : packed_connection * OBus_message.t -> unit;
 }
 
 (* +-----------------------------------------------------------------+

@@ -35,7 +35,7 @@ module type S = sig
         ]}
     *)
 
-  val signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> t -> 'a OBus_signal.t Lwt.t
+  val signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> t -> 'a OBus_signal.t
     (** [signal member typ] defines a signal.
 
         A signal defintion looks like:
@@ -108,7 +108,7 @@ end
 module Make_single(Proxy : Single_proxy)(Name : Name) : sig
   val interface : OBus_name.interface
   val method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
-  val signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> unit -> 'a OBus_signal.t Lwt.t
+  val signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> unit -> 'a OBus_signal.t
   val property_reader : OBus_name.member -> ('a, _) OBus_type.cl_single -> unit -> 'a Lwt.t
   val property_writer : OBus_name.member -> ('a, _) OBus_type.cl_single -> 'a -> unit Lwt.t
 end
