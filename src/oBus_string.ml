@@ -37,7 +37,7 @@ let validate s =
       if n land 0xc0 = 0x80 then
         let acc = (acc lsl 6) lor (n land 0x3f) in
         match count with
-          | 0 ->
+          | 1 ->
               if acc < minimum then
                 fail i "overlong UTF8 sequence"
               else
@@ -57,11 +57,11 @@ let validate s =
       else if n land 0x80 = 0 then
         main (i + 1)
       else if n land 0xe0 = 0xc0 then
-        trail 0x80 (n land 0x1f) 1 i
+        trail 0x80 (n land 0x1f) 1 (i + 1)
       else if n land 0xf0 = 0xe0 then
-        trail 0x800 (n land 0x0f) 2 i
+        trail 0x800 (n land 0x0f) 2 (i + 1)
       else if n land 0xf8 = 0xf0 then
-        trail 0x10000 (n land 0x07) 3 i
+        trail 0x10000 (n land 0x07) 3 (i + 1)
       else
         fail i "invalid start of UTF8 sequence"
   in
