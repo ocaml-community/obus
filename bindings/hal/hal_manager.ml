@@ -16,7 +16,7 @@ let get_manager =
        return (OBus_proxy.make (OBus_peer.make bus "org.freedesktop.Hal")
                  [ "org"; "freedesktop"; "Hal"; "Manager" ]))
 
-module OBUS_INTERFACE = OBus_interface.Make_single
+module OBUS_interface = OBus_interface.Make_single
   (struct
      let proxy = get_manager
    end)
@@ -38,7 +38,7 @@ let obus_broken_udi = OBus_type.map obus_string
 let find_device_by_capability capability =
   lwt proxy = Lazy.force get_manager in
   lwt v = OBus_proxy.dyn_method_call proxy
-    ~interface:OBUS_INTERFACE.interface
+    ~interface:OBUS_interface.interface
     ~member:"FindDeviceByCapability" [sstring capability] in
   match OBus_type.opt_cast_sequence <:obus_type< Hal_device.udi list >> v with
     | Some x -> return x

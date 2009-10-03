@@ -14,7 +14,7 @@ open OBus_type.Perv
 let server_name = "org.freedesktop.Notifications"
 let server_path = ["org"; "freedesktop"; "Notifications"]
 
-module OBUS_INTERFACE = OBus_interface.Make(struct let name = "org.freedesktop.Notifications" end)
+module OBUS_interface = OBus_interface.Make(struct let name = "org.freedesktop.Notifications" end)
 
 type server_info = {
   server_name : string;

@@ -26,7 +26,7 @@ let obus_t = OBus_type.map_with_context <:obus_type< unit >>
 let make c n = { connection = c; name = Some n }
 let anonymous c = { connection = c; name = None }
 
-module OBUS_INTERFACE =
+module OBUS_interface =
 struct
   let method_call member typ peer = OBus_connection.method_call peer.connection
     ?destination:peer.name

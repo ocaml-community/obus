@@ -372,20 +372,20 @@ EXTEND Gram
           <:str_item< >>
 
       | "OBUS_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
-          <:str_item< let $lid:cname$ = OBUS_INTERFACE.method_call $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBUS_interface.method_call $str:dname$ $typ$ >>
 
       | "OBUS_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBUS_INTERFACE.signal $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBUS_interface.signal $str:dname$ $typ$ >>
 
       | "OBUS_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBUS_INTERFACE.property_reader $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBUS_interface.property_reader $str:dname$ $typ$ >>
 
       | "OBUS_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
           <:str_item< let $lid:prepend_lid "set" cname$ = property_writer $str:dname$ $typ$ >>
 
       | "OBUS_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBUS_INTERFACE.property_reader $str:dname$ $typ$;;
-                      let $lid:prepend_lid "set" cname$ = OBUS_INTERFACE.property_writer $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBUS_interface.property_reader $str:dname$ $typ$;;
+                      let $lid:prepend_lid "set" cname$ = OBUS_interface.property_writer $str:dname$ $typ$ >>
       ] ];
 END
 
