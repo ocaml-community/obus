@@ -15,14 +15,12 @@ open Lwt_io
 (* Add an handler on keyboard event which print the multimedia key
    pressed *)
 let handle_multimedia_keys device =
-  ignore begin
-    Lwt_event.notify_p
-      (fun (action, key) ->
-         lwt () = printlf "from Hal: action %S on key %S!" action key in
-         lwt () = printlf "          the signal come from the device %S" (OBus_path.to_string (device :> OBus_path.t)) in
-         return ())
-      (Hal_device.condition device)#event
-  end
+  Lwt_event.always_notify_p
+    (fun (action, key) ->
+       lwt () = printlf "from Hal: action %S on key %S!" action key in
+       lwt () = printlf "          the signal come from the device %S" (OBus_path.to_string (device :> OBus_path.t)) in
+       return ())
+    (Hal_device.condition device)#event
 
 let () = Lwt_main.run (
   lwt session = Lazy.force OBus_bus.session in
@@ -31,45 +29,37 @@ let () = Lwt_main.run (
      | Signals from message bus                                      |
      +---------------------------------------------------------------+ *)
 
-  ignore begin
-    Lwt_event.notify_p
-      (fun (name, old_owner, new_owner) ->
-         let opt = function
-           | Some s -> s
-           | None -> ""
-         in
-         printlf "from DBus: the owner of the name %S changed: %S -> %S"
-           name (opt old_owner) (opt new_owner))
-      (OBus_bus.name_owner_changed session)#event
-  end;
+  Lwt_event.always_notify_p
+    (fun (name, old_owner, new_owner) ->
+       let opt = function
+         | Some s -> s
+         | None -> ""
+       in
+       printlf "from DBus: the owner of the name %S changed: %S -> %S"
+         name (opt old_owner) (opt new_owner))
+    (OBus_bus.name_owner_changed session)#event;
 
-  ignore begin
-    Lwt_event.notify_p
-      (printlf "from DBus: i lost the name %S!")
-      (OBus_bus.name_lost session)#event
-  end;
+  Lwt_event.always_notify_p
+    (printlf "from DBus: i lost the name %S!")
+    (OBus_bus.name_lost session)#event;
 
-  ignore begin
-    Lwt_event.notify_p
-      (printf "from DBus: i got the name '%S!")
-      (OBus_bus.name_acquired session)#event
-  end;
+  Lwt_event.always_notify_p
+    (printf "from DBus: i got the name '%S!")
+    (OBus_bus.name_acquired session)#event;
 
   (* +---------------------------------------------------------------+
      | Some Hal signals                                              |
      +---------------------------------------------------------------+ *)
 
-  ignore begin
-    Lwt_event.notify_p
-      (fun device ->
-         lwt () = printlf "from Hal: device added: %S" (OBus_path.to_string device) in
+  Lwt_event.always_notify_p
+    (fun device ->
+       lwt () = printlf "from Hal: device added: %S" (OBus_path.to_string device) in
 
-         (* Handle the adding of keyboards *)
-         Hal_device.query_capability device "input.keyboard" >>= function
-           | true -> handle_multimedia_keys device; return ()
-           | false -> return ())
-      (Hal_manager.device_added ())#event
-  end;
+       (* Handle the adding of keyboards *)
+       Hal_device.query_capability device "input.keyboard" >>= function
+         | true -> handle_multimedia_keys device; return ()
+         | false -> return ())
+    (Hal_manager.device_added ())#event;
 
   (* Find all keyboards and handle events on them *)
   lwt keyboards = Hal_manager.find_device_by_capability "input.keyboard" in
