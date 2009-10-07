@@ -117,7 +117,7 @@ struct
       members := Signal(member, with_names (OBus_type.type_sequence typ), []) :: !members;
       (fun obj -> emit obj ~interface:Name.name ~member typ)
 
-    let ol_property member typ reader writer =
+    let ol_property member typ reader writer mode =
       let ty = OBus_type.type_single typ in
       properties := Property_map.add (Name.name, member)
         ((match reader with
@@ -136,10 +136,11 @@ struct
                                                   (string_of_signature [type_of_single x])
                                                   (string_of_signature [ty]))))))
         !properties;
-      members := Property(member, ty, (match reader, writer with
-                                         | Some _, Some _ -> Read_write
-                                         | None, _ -> Write
-                                         | _, None -> Read), []) :: !members
+      members := Property(member, ty, mode, []) :: !members
+
+    let ol_property_r member typ reader = ol_property member typ (Some reader) None Read
+    let ol_property_w member typ writer = ol_property member typ None (Some writer) Write
+    let ol_property_rw member typ reader writer = ol_property member typ (Some reader) (Some writer) Read_write
   end
 
   include MakeInterface(struct let name = "org.freedesktop.DBus.Introspectable" end)

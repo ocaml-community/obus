@@ -76,10 +76,20 @@ module Make(Object : Object) : sig
       (** Registers a signal and define the signal emiting
           function. *)
 
-    val ol_property : OBus_name.member ->
+    val ol_property_r : OBus_name.member ->
       ('a, _) OBus_type.cl_single ->
-      (Object.obj -> 'a Lwt.t) option ->
-      (Object.obj -> 'a -> unit Lwt.t) option -> unit
-      (** Registers a property *)
+      (Object.obj -> 'a Lwt.t) -> unit
+      (** Registers a read-only property *)
+
+    val ol_property_w : OBus_name.member ->
+      ('a, _) OBus_type.cl_single ->
+      (Object.obj -> 'a -> unit Lwt.t) -> unit
+      (** Registers a write-only property *)
+
+    val ol_property_rw : OBus_name.member ->
+      ('a, _) OBus_type.cl_single ->
+      (Object.obj -> 'a Lwt.t) ->
+      (Object.obj -> 'a -> unit Lwt.t) -> unit
+      (** Registers a read and write property *)
   end
 end

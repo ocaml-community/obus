@@ -295,22 +295,46 @@ EXTEND Gram
      | Extension for local code                                      |
      +---------------------------------------------------------------+ *)
 
-      | "OL_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
-          <:str_item< let () = ol_method_call $str:dname$ $typ$ $lid:cname$ >>
+      | "OL_method"; (dname, cname) = obus_member; ":"; typ = obus_func; e = equal_expr ->
+          (match e with
+             | Some e ->
+                 <:str_item< let () = ol_method_call $str:dname$ $typ$ $e$ >>
+             | None ->
+                 <:str_item< let () = ol_method_call $str:dname$ $typ$ $lid:cname$ >>)
 
       | "OL_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
           <:str_item< let $lid:cname$ = ol_signal $str:dname$ $typ$ >>
 
-      | "OL_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let () = ol_property $str:dname$ $typ$ (Some $lid:cname$) None >>
+      | "OL_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type; e = equal_expr ->
+          (match e with
+             | Some e ->
+                 <:str_item< let () = ol_property_r $str:dname$ $typ$ $e$ >>
+             | None ->
+                 <:str_item< let () = ol_property_r $str:dname$ $typ$ $lid:cname$>>)
 
-      | "OL_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let () = ol_property $str:dname$ $typ$ None (Some $lid:prepend_lid "set" cname$) >>
+      | "OL_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type; e = equal_expr ->
+          (match e with
+             | Some e ->
+                 <:str_item< let () = ol_property_w $str:dname$ $typ$ $e$ >>
+             | None ->
+                 <:str_item< let () = ol_property_w $str:dname$ $typ$ $lid:prepend_lid "set" cname$ >>)
 
-      | "OL_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let () = ol_property $str:dname$ $typ$ (Some $lid:cname$) (Some $lid:prepend_lid "set" cname$) >>
+      | "OL_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type; e = equal_expr ->
+          (match e with
+             | Some e ->
+                 <:str_item< let () =
+                               let __obus_reader, __obus_writer = $e$ in
+                               ol_property_rw $str:dname$ $typ$ __obus_reader __obus_writer >>
+             | None ->
+                 <:str_item< let () = ol_property_rw $str:dname$ $typ$ $lid:cname$ $lid:prepend_lid "set" cname$ >>)
 
       ] ];
+
+  equal_expr:
+    [ [ "="; e = expr ->
+          Some e
+      | ->
+          None ] ];
 END
 
 (* +-----------------------------------------------------------------+
