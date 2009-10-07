@@ -44,7 +44,7 @@ type result = {
 
 let run_one_test byte_order msg acc =
   try
-    let msg' = OBus_lowlevel.string_get_message (OBus_lowlevel.string_put_message ~byte_order msg) in
+    let msg' = OBus_wire.message_of_string (OBus_wire.string_of_message ~byte_order msg) in
     if msg' = msg then
       { acc with success = acc.success + 1 }
     else begin
@@ -52,9 +52,9 @@ let run_one_test byte_order msg acc =
       { acc with failure = acc.failure + 1 }
     end
   with
-    | OBus_lowlevel.Data_error msg ->
+    | OBus_wire.Data_error msg ->
         { acc with writing_error = acc.writing_error + 1 }
-    | OBus_lowlevel.Protocol_error msg ->
+    | OBus_wire.Protocol_error msg ->
         { acc with reading_error = acc.reading_error + 1 }
 
 let run_tests prefix byte_order l =
@@ -86,6 +86,6 @@ let rec gen_messages progress acc = function
 let _ =
   let msgs = gen_messages (Progress.make (sprintf "generating %d messages" test_count) test_count) [] test_count in
   printf "try to serialize/deserialize all messages and compare the result to the original message.\n";
-  print_result (run_tests "  - in little endian" OBus_lowlevel.Little_endian msgs);
-  print_result (run_tests "  - in big endian" OBus_lowlevel.Big_endian msgs);
+  print_result (run_tests "  - in little endian" OBus_wire.Little_endian msgs);
+  print_result (run_tests "  - in big endian" OBus_wire.Big_endian msgs);
   printf "failing tests have been saved in %s\n%!" save_dir

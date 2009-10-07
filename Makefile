@@ -14,7 +14,7 @@ OF = ocamlfind
 
 # Targets
 EXAMPLES = hello bus_functions eject notify monitor signals list_services \
-	  ping pong #progress_server progress_client
+	  ping pong
 LIB = obus
 SYNTAX = pa_obus
 BINDINGS = hal notification

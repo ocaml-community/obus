@@ -26,15 +26,12 @@ let obus_t = OBus_type.map_with_context <:obus_type< unit >>
 let make c n = { connection = c; name = Some n }
 let anonymous c = { connection = c; name = None }
 
-module OP_interface =
-struct
-  let method_call member typ peer = OBus_connection.method_call peer.connection
-    ?destination:peer.name
-    ~path:[]
-    ~interface:"org.freedesktop.DBus.Peer"
-    ~member
-    typ
-end
+let op_method_call member typ peer = OBus_connection.method_call peer.connection
+  ?destination:peer.name
+  ~path:[]
+  ~interface:"org.freedesktop.DBus.Peer"
+  ~member
+  typ
 
 OP_method Ping : t
 OP_method GetMachineId : OBus_uuid.t

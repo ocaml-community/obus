@@ -8,6 +8,7 @@
  *)
 
 open OBus_name
+open OBus_type.Perv
 open Lwt
 
 let test f s =
@@ -35,13 +36,13 @@ let _ =
   test validate_bus ":er..dsf";
   test validate_bus "erdsf.1ze";
   test validate_bus "toto";
-  Lwt_unix.run
-    (perform
-       b <-- Lazy.force OBus_bus.session;
-       testc b "aa\x81oo";
-       testc b "dfsdf\x00kljsd";
-       OBus_connection.method_call b
-         ~interface:"aa.$.e"
-         ~member:"toto"
-         ~path:[]
-         <:obus_func< unit >>)
+  Lwt_main.run (
+    lwt b = Lazy.force OBus_bus.session in
+    lwt () = testc b "aa\x81oo" in
+    lwt () = testc b "dfsdf\x00kljsd" in
+    OBus_connection.method_call b
+      ~interface:"aa.$.e"
+      ~member:"toto"
+      ~path:[]
+      <:obus_func< unit >>
+  )

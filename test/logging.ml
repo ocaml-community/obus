@@ -7,23 +7,25 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-module Log = Log.Make(struct let section = "test" end)
-
 let _ =
   OBus_info.verbose := true;
   OBus_info.debug := true;
-  Log.log "plop %s" "plip";
-  Log.debug "toto";
-  Log.error "fatal error";
+  OBus_log.log ~section:"test" "plop %s" "plip";
+  OBus_log.debug ~section:"test" "toto";
+  OBus_log.error ~section:"test" "fatal error";
   Printexc.record_backtrace false;
-  (try
-     if 1 = 1 then
-       raise (Failure "arg!")
-   with
-       exn -> Log.failure exn "");
+  begin
+    try
+      if 1 = 1 then
+        raise (Failure "arg!")
+    with
+        exn -> OBus_log.failure exn ""
+  end;
   Printexc.record_backtrace true;
-  try
-    if 1 = 1 then
-      raise (Failure "arg!")
-  with
-      exn -> Log.failure exn "something failed with"
+  begin
+    try
+      if 1 = 1 then
+        raise (Failure "arg!")
+    with
+        exn -> OBus_log.failure exn "something failed with"
+  end

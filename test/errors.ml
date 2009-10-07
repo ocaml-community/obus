@@ -17,14 +17,12 @@ let _ =
   OBus_info.verbose := true;
   OBus_info.debug := true;
   Printexc.record_backtrace true;
-  ignore (add_incoming_filter loopback filter);
-  ignore (OBus_signal.connect
-            (OBus_signal.dyn_make "aa" "plop" (OBus_proxy.make (OBus_peer.anonymous loopback) []))
-            handler);
-  Lwt_unix.run
-    (perform
-       dyn_emit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [];
-       Lwt_unix.sleep 0.5;
-       let _ = close loopback in
-       dyn_emit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [])
+  ignore (Lwt_sequence.add_r filter (incoming_filters loopback));
+  Lwt_event.always_notify handler (OBus_signal.dyn_connect (OBus_proxy.make (OBus_peer.anonymous loopback) []) "aa" "plop")#event;
+  Lwt_main.run begin
+    lwt () = dyn_emit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] [] in
+    lwt () = Lwt_unix.sleep 0.5 in
+    lwt () = close loopback in
+    dyn_emit_signal loopback ~interface:"aa.aa" ~member:"plop" ~path:[] []
+  end
 
