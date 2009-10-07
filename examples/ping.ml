@@ -10,24 +10,29 @@
 (* Ping the pong service *)
 
 open Lwt
+open Lwt_io
+open OBus_type.Perv
 
-let _ = Lwt_unix.run
-  (perform
-     bus <-- Lazy.force OBus_bus.session;
+include OBus_interface.Make(struct let name = "org.plop.foo" end)
 
-     (* Create a proxy for the remote object *)
-     let proxy = OBus_proxy.make (OBus_peer.make bus "org.plop") ["plip"] in
+OP_method Ping : string -> string
 
-     (* Send a ping *)
-     let _ = print_endline "trying to ping the pong service..." in
+let _ = Lwt_main.run (
+  lwt bus = Lazy.force OBus_bus.session in
 
-     catch
-       (fun _ -> perform
-          msg <-- OBus_proxy.method_call proxy ~interface:"org.plop.foo" ~member:"ping" <:obus_func< string -> string >> "coucou";
-          let _ = print_endline ("received: " ^ msg) in
-          return ())
-       (function
-          | OBus_bus.Service_unknown msg ->
-              print_endline "You must run pong to try this sample!";
-              exit 1
-          | exn -> fail exn))
+  (* Create a proxy for the remote object *)
+  let proxy = OBus_proxy.make (OBus_peer.make bus "org.plop") ["plip"] in
+
+  (* Send a ping *)
+  lwt () = printl "trying to ping the pong service..." in
+
+  try_lwt
+    lwt msg = ping proxy "coucou" in
+    printlf "received: %s" msg
+  with
+    | OBus_bus.Service_unknown msg ->
+        lwt () = printl "You must run pong to try this sample!" in
+        exit 1
+    | exn ->
+        fail exn
+)

@@ -7,11 +7,17 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
+type t = OBus_proxy.t with obus(basic)
+    (** Type of devices *)
+
 type udi = OBus_path.t
  with obus(basic)
      (** Unique Device Identifier *)
 
-val computer : udi
+val udi : t -> udi
+  (** Return the udi of a device *)
+
+val computer : t Lwt.t Lazy.t
   (** The computer device *)
 
 type property =
@@ -31,98 +37,98 @@ type property =
 
 (** {6 Common device interface} *)
 
-val get_all_properties : udi -> (string * property) list Lwt.t
-val set_multiple_properties : udi -> (string * property) list -> unit Lwt.t
-val get_property : udi -> string -> property Lwt.t
-val get_property_string : udi -> string -> string Lwt.t
-val get_property_string_list : udi -> string -> string list Lwt.t
-val get_property_integer : udi -> string -> int Lwt.t
-val get_property_boolean : udi -> string -> bool Lwt.t
-val get_property_double : udi -> string -> float Lwt.t
-val set_property : udi -> string -> property -> unit Lwt.t
-val set_property_string : udi -> string -> string -> unit Lwt.t
-val set_property_string_list : udi -> string -> string list -> unit Lwt.t
-val set_property_integer : udi -> string -> int -> unit Lwt.t
-val set_property_boolean : udi -> string -> bool -> unit Lwt.t
-val set_property_double : udi -> string -> float -> unit Lwt.t
-val remove_property : udi -> string -> unit Lwt.t
-val get_property_type : udi -> string -> int Lwt.t
-val property_exists : udi -> string -> bool Lwt.t
-val add_capability : udi -> string -> unit Lwt.t
-val query_capability : udi -> string -> bool Lwt.t
-val lock : udi -> string -> bool Lwt.t
-val unlock : udi -> bool Lwt.t
-val acquire_interface_lock : udi -> string -> bool -> unit Lwt.t
-val release_interface_lock : udi -> string -> unit Lwt.t
-val is_caller_locked_out : udi -> string -> string -> bool Lwt.t
-val is_caller_privileged : udi -> string -> string list -> string -> string Lwt.t
-val is_locked_by_others : udi -> string -> bool Lwt.t
-val string_list_append : udi -> string -> string -> unit Lwt.t
-val string_list_prepend : udi -> string -> string -> unit Lwt.t
-val string_list_remove : udi -> string -> string -> unit Lwt.t
-val emit_condition : udi -> string -> string -> bool Lwt.t
-val rescan : udi -> bool Lwt.t
-val reprobe : udi -> bool Lwt.t
-val claim_interface : udi -> string -> string -> bool Lwt.t
-val addon_is_ready : udi -> bool Lwt.t
+val get_all_properties : t -> (string * property) list Lwt.t
+val set_multiple_properties : t -> (string * property) list -> unit Lwt.t
+val get_property : t -> string -> property Lwt.t
+val get_property_string : t -> string -> string Lwt.t
+val get_property_string_list : t -> string -> string list Lwt.t
+val get_property_integer : t -> string -> int Lwt.t
+val get_property_boolean : t -> string -> bool Lwt.t
+val get_property_double : t -> string -> float Lwt.t
+val set_property : t -> string -> property -> unit Lwt.t
+val set_property_string : t -> string -> string -> unit Lwt.t
+val set_property_string_list : t -> string -> string list -> unit Lwt.t
+val set_property_integer : t -> string -> int -> unit Lwt.t
+val set_property_boolean : t -> string -> bool -> unit Lwt.t
+val set_property_double : t -> string -> float -> unit Lwt.t
+val remove_property : t -> string -> unit Lwt.t
+val get_property_type : t -> string -> int Lwt.t
+val property_exists : t -> string -> bool Lwt.t
+val add_capability : t -> string -> unit Lwt.t
+val query_capability : t -> string -> bool Lwt.t
+val lock : t -> string -> bool Lwt.t
+val unlock : t -> bool Lwt.t
+val acquire_interface_lock : t -> string -> bool -> unit Lwt.t
+val release_interface_lock : t -> string -> unit Lwt.t
+val is_caller_locked_out : t -> string -> string -> bool Lwt.t
+val is_caller_privileged : t -> string -> string list -> string -> string Lwt.t
+val is_locked_by_others : t -> string -> bool Lwt.t
+val string_list_append : t -> string -> string -> unit Lwt.t
+val string_list_prepend : t -> string -> string -> unit Lwt.t
+val string_list_remove : t -> string -> string -> unit Lwt.t
+val emit_condition : t -> string -> string -> bool Lwt.t
+val rescan : t -> bool Lwt.t
+val reprobe : t -> bool Lwt.t
+val claim_interface : t -> string -> string -> bool Lwt.t
+val addon_is_ready : t -> bool Lwt.t
 
-val property_modified : udi -> (int * (string * bool * bool) list) OBus_signal.t
-val condition : udi -> (string * string) OBus_signal.t
-val interface_lock_acquired : udi -> (string * string * int) OBus_signal.t
-val interface_lock_released : udi -> (string * string * int) OBus_signal.t
+val property_modified : t -> (int * (string * bool * bool) list) OBus_signal.t
+val condition : t -> (string * string) OBus_signal.t
+val interface_lock_acquired : t -> (string * string * int) OBus_signal.t
+val interface_lock_released : t -> (string * string * int) OBus_signal.t
 
 (** {6 Specifics interfaces} *)
 
 module Volume : sig
-  val mount : udi -> string -> string -> string list -> int Lwt.t
-  val unmount : udi -> string list -> int Lwt.t
-  val eject : udi -> string list -> int Lwt.t
+  val mount : t -> string -> string -> string list -> int Lwt.t
+  val unmount : t -> string list -> int Lwt.t
+  val eject : t -> string list -> int Lwt.t
 end
 
 module Storage : sig
-  val eject : udi -> string list -> int Lwt.t
-  val close_tray : udi -> string list -> int Lwt.t
+  val eject : t -> string list -> int Lwt.t
+  val close_tray : t -> string list -> int Lwt.t
 end
 
 module Storage_removable : sig
-  val check_for_media : udi -> bool Lwt.t
+  val check_for_media : t -> bool Lwt.t
 end
 
 module Wake_on_lan : sig
-  val get_supported : udi -> int Lwt.t
-  val get_enabled : udi -> int Lwt.t
-  val set_enabled : udi -> bool -> int Lwt.t
+  val get_supported : t -> int Lwt.t
+  val get_enabled : t -> int Lwt.t
+  val set_enabled : t -> bool -> int Lwt.t
 end
 
 module System_power_management : sig
-  val suspend : udi -> int -> int Lwt.t
-  val suspend_hybrid : udi -> int -> int Lwt.t
-  val hibernate : udi -> int Lwt.t
-  val shutdown : udi -> int Lwt.t
-  val reboot : udi -> int Lwt.t
-  val set_power_save : udi -> bool -> int Lwt.t
+  val suspend : t -> int -> int Lwt.t
+  val suspend_hybrid : t -> int -> int Lwt.t
+  val hibernate : t -> int Lwt.t
+  val shutdown : t -> int Lwt.t
+  val reboot : t -> int Lwt.t
+  val set_power_save : t -> bool -> int Lwt.t
 end
 
 module Cpufreq : sig
-  val set_cpufreq_governor : udi -> string -> unit Lwt.t
-  val set_cpufreq_performance : udi -> int -> unit Lwt.t
-  val set_cpufreq_consider_nice : udi -> bool -> unit Lwt.t
-  val get_cpufreq_governor : udi -> string Lwt.t
-  val get_cpufreq_performance : udi -> int Lwt.t
-  val get_cpufreq_consider_nice : udi -> bool Lwt.t
-  val get_cpufreq_available_governors : udi -> string list Lwt.t
+  val set_cpufreq_governor : t -> string -> unit Lwt.t
+  val set_cpufreq_performance : t -> int -> unit Lwt.t
+  val set_cpufreq_consider_nice : t -> bool -> unit Lwt.t
+  val get_cpufreq_governor : t -> string Lwt.t
+  val get_cpufreq_performance : t -> int Lwt.t
+  val get_cpufreq_consider_nice : t -> bool Lwt.t
+  val get_cpufreq_available_governors : t -> string list Lwt.t
 end
 
 module Laptop_panel : sig
-  val set_brightness : udi -> int -> int Lwt.t
-  val get_brightness : udi -> int Lwt.t
+  val set_brightness : t -> int -> int Lwt.t
+  val get_brightness : t -> int Lwt.t
 end
 
 module Dock_station : sig
-  val undock : udi -> int Lwt.t
+  val undock : t -> int Lwt.t
 end
 
 module Kill_switch : sig
-  val set_power : udi -> bool -> int Lwt.t
-  val get_power : udi -> int Lwt.t
+  val set_power : t -> bool -> int Lwt.t
+  val get_power : t -> int Lwt.t
 end

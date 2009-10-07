@@ -388,10 +388,9 @@ let dispatch_message connection message = match message with
       match Object_map.lookup path connection.exported_objects with
         | Some obj ->
             begin try
-              obj#obus_handle_call connection.packed message
-            with
-                exn ->
-                  FAILURE(exn, "method call handler failed with")
+              obj.oo_handle obj.oo_object connection.packed message
+            with exn ->
+              FAILURE(exn, "method call handler failed with")
             end
         | None ->
             (* Handle introspection for missing intermediate object:
@@ -400,27 +399,26 @@ let dispatch_message connection message = match message with
                path "/a/b/c", we need to add introspection support for
                virtual objects with path "/", "/a", "/a/b",
                "/a/b/c". *)
-            match
-              match interface_opt, member with
-                | None, "Introspect"
-                | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
-                    begin match children connection path with
-                      | [] -> false
-                      | l ->
-                          ignore
-                            (send_reply connection.packed message <:obus_type< OBus_introspect.document >>
-                               ([("org.freedesktop.DBus.Introspectable",
-                                  [OBus_introspect.Method("Introspect", [],
-                                                          [(None, Tbasic Tstring)], [])],
-                                  [])], l));
-                          true
-                    end
-                | _ -> false
-            with
-              | true -> ()
-              | false ->
-                  ignore_send_exn connection.packed message
-                    (Failure (sprintf "No such object: %S" (OBus_path.to_string path)))
+            if match interface_opt, member with
+              | None, "Introspect"
+              | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
+                  begin match children connection path with
+                    | [] ->
+                        true
+                    | l ->
+                        ignore
+                          (send_reply connection.packed message <:obus_type< OBus_introspect.document >>
+                             ([("org.freedesktop.DBus.Introspectable",
+                                [OBus_introspect.Method("Introspect", [],
+                                                        [(None, Tbasic Tstring)], [])],
+                                [])], l));
+                        false
+                  end
+              | _ ->
+                  true
+            then
+              ignore_send_exn connection.packed message
+                (Failure (sprintf "No such object: %S" (OBus_path.to_string path)))
 
 let read_dispatch connection =
   lwt message =
@@ -508,7 +506,7 @@ class packed_connection = object(self)
         (* Wakeup all reply handlers so they will not wait forever *)
         Serial_map.iter (fun _ w -> wakeup_exn w exn) connection.reply_waiters;
 
-        (* Remove all objects *)
+        (* Remove all objects *)(*
         Object_map.iter begin fun p obj ->
           try
             obj#obus_connection_closed connection.packed
@@ -518,7 +516,7 @@ class packed_connection = object(self)
                    method *)
                 FAILURE(exn, "obus_connection_closed on object with path %S failed with"
                           (OBus_path.to_string p))
-        end connection.exported_objects;
+        end connection.exported_objects;*)
 
         (* If the connection is closed normally, flush it *)
         lwt () =

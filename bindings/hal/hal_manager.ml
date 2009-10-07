@@ -11,39 +11,41 @@ open Lwt
 open OBus_value
 open OBus_type.Perv
 
-let get_manager =
+type t = OBus_proxy.t with obus
+
+let manager =
   lazy(lwt bus = Lazy.force OBus_bus.system in
-       return (OBus_proxy.make (OBus_peer.make bus "org.freedesktop.Hal")
+       return (OBus_proxy.make
+                 (OBus_peer.make bus "org.freedesktop.Hal")
                  [ "org"; "freedesktop"; "Hal"; "Manager" ]))
 
-module OBUS_interface = OBus_interface.Make_single
-  (struct
-     let proxy = get_manager
-   end)
-  (struct
-     let name = "org.freedesktop.Hal.Manager"
-   end)
+include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Manager" end)
 
-OBUS_method GetAllDevices : unit -> Hal_device.udi list
-OBUS_method GetAllDevicesWithProperties : unit -> (Hal_device.udi * (string, Hal_device.property) dict) structure list
-OBUS_method DeviceExists : Hal_device.udi -> bool
-OBUS_method FindDeviceStringMatch : string -> string -> Hal_device.udi list
+OP_method GetAllDevices : Hal_device.t list
+OP_method GetAllDevicesWithProperties : (Hal_device.t * (string, Hal_device.property) dict) structure list
+OP_method DeviceExists : Hal_device.t -> bool
+OP_method FindDeviceStringMatch : string -> string -> Hal_device.t list
 
-let obus_broken_udi = OBus_type.map obus_string
-  (fun x -> OBus_path.of_string x)
-  (fun x -> OBus_path.to_string x)
+let obus_broken_device = OBus_type.map_with_context obus_string
+  (fun context path -> match context with
+     | OBus_connection.Context(connection, message) ->
+         { OBus_proxy.peer = { OBus_peer.connection = connection;
+                               OBus_peer.name = OBus_message.sender message };
+           OBus_proxy.path = OBus_path.of_string path }
+     | _ ->
+         raise OBus_type.Cast_failure)
+  (fun proxy -> OBus_path.to_string (OBus_proxy.path proxy))
 
 (* Signature from introsection seems to be wrong for this method. So
    we temporary use this ugly hack: *)
-let find_device_by_capability capability =
-  lwt proxy = Lazy.force get_manager in
+let find_device_by_capability proxy capability =
   lwt v = OBus_proxy.dyn_method_call proxy
-    ~interface:OBUS_interface.interface
+    ~interface:op_interface
     ~member:"FindDeviceByCapability" [sstring capability] in
-  match OBus_type.opt_cast_sequence <:obus_type< Hal_device.udi list >> v with
+  match OBus_type.opt_cast_sequence <:obus_type< Hal_device.t list >> v with
     | Some x -> return x
     | None ->
-        match OBus_type.opt_cast_sequence <:obus_type< broken_udi list >> v with
+        match OBus_type.opt_cast_sequence <:obus_type< broken_device list >> v with
           | Some x -> return x
           | None ->
               fail
@@ -52,15 +54,15 @@ let find_device_by_capability capability =
                              on interface \"org.freedesktop.Hal.Manager\", expected: \"ao\", got: %S"
                             (string_of_signature (type_of_sequence v))))
 
-OBUS_method NewDevice : unit -> string
-OBUS_method Remove : string -> unit
-OBUS_method CommitToGdl : string -> string -> unit
-OBUS_method AcquireGlobalInterfaceLock : string -> bool -> unit
-OBUS_method ReleaseGlobalInterfaceLock : string -> unit
-OBUS_method SingletonAddonIsReady : string -> unit
+OP_method NewDevice : string
+OP_method Remove : string -> unit
+OP_method CommitToGdl : string -> string -> unit
+OP_method AcquireGlobalInterfaceLock : string -> bool -> unit
+OP_method ReleaseGlobalInterfaceLock : string -> unit
+OP_method SingletonAddonIsReady : string -> unit
 
-OBUS_signal DeviceAdded : broken_udi
-OBUS_signal DeviceRemoved : broken_udi
-OBUS_signal NewCapability : broken_udi * string
-OBUS_signal GlobalInterfaceLockAcquired : string * string * int
-OBUS_signal GlobalInterfaceLockReleased : string * string * int
+OP_signal DeviceAdded : broken_device
+OP_signal DeviceRemoved : broken_device
+OP_signal NewCapability : broken_device * string
+OP_signal GlobalInterfaceLockAcquired : string * string * int
+OP_signal GlobalInterfaceLockReleased : string * string * int

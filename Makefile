@@ -13,8 +13,8 @@ endif
 OF = ocamlfind
 
 # Targets
-EXAMPLES = hello bus_functions eject notify monitor signals list_services
-#	  ping pong progress_server progress_client
+EXAMPLES = hello bus_functions eject notify monitor signals list_services \
+	  ping pong #progress_server progress_client
 LIB = obus
 SYNTAX = pa_obus
 BINDINGS = hal notification

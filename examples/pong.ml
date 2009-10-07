@@ -10,29 +10,34 @@
 (* Very simple service with one object have a ping method *)
 
 open Lwt
+open Lwt_io
+open OBus_type.Perv
 
-class virtual pong = OBUS_interface "org.plop.foo"
-  OBUS_method ping : string -> string
-end
+module M = OBus_object.Make(struct
+                              type obj = OBus_object.t
+                              let get x = x
+                            end)
 
-let obj = object(self)
-  inherit OBus_object.t
-  inherit pong
+include M.MakeInterface(struct let name = "org.plop.foo" end)
 
-  method obus_path = [ "plip" ]
+let ping obj msg =
+  lwt () = printlf "received: %s" msg in
+  return msg
 
-  method ping m = return ("pong in reply to: " ^ m)
-end
+OL_method Ping : string -> string
 
-let _ = Lwt_unix.run
-  (perform
-     bus <-- Lazy.force OBus_bus.session;
+let _ = Lwt_main.run (
+  lwt bus = Lazy.force OBus_bus.session in
 
-     (* Request a name *)
-     OBus_bus.request_name bus "org.plop";
+  (* Request a name *)
+  lwt _ = OBus_bus.request_name bus "org.plop" in
 
-     (* Export the object on the connection *)
-     let _ = obj#obus_export bus in
+  (* Create the object *)
+  let obj = OBus_object.make ["plip"] in
 
-     (* Wait forever *)
-     wait ())
+  (* Export the object on the connection *)
+  M.export bus obj;
+
+  (* Wait forever *)
+  fst (wait ())
+)

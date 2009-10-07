@@ -13,10 +13,11 @@ open Lwt
 open Lwt_io
 
 let () = Lwt_main.run (
-  lwt cdroms = Hal_manager.find_device_by_capability "storage.cdrom" in
+  lwt manager = Lazy.force Hal_manager.manager in
+  lwt cdroms = Hal_manager.find_device_by_capability manager "storage.cdrom" in
   lwt () = printlf "cdrom(s) found: %d" (List.length cdroms) in
   Lwt_util.iter begin function cdrom ->
-    lwt () = printlf "eject on device %s" (OBus_path.to_string cdrom) in
+    lwt () = printlf "eject on device %s" (OBus_path.to_string (OBus_proxy.path cdrom)) in
     lwt _ = Hal_device.Storage.eject cdrom [] in
     return ()
   end cdroms

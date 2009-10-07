@@ -52,7 +52,7 @@ type t = {
     and use unique name for objects for which the path is retreived
     from a method call.
 
-    By the way, the type combinator {!OBus_proxy.tt} will awlays
+    By the way, the type combinator {!OBus_proxy.obus_t} will awlays
     return a proxy using a peer using a unique name, so you do not
     have to care about this if you use it.
 *)

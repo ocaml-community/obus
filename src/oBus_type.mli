@@ -41,7 +41,7 @@ type ('a, 'b, 'c) func
 
 type context = exn
     (** The context is used to pass extra informations to
-        combinators. See {!OBus_connection.context}.
+        combinators. See {!OBus_connection.Context}.
 
         Note: [context = exn] because [exn] is the only extensible
         type, and recursive dependencies are not allowed in ocaml. *)

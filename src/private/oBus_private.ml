@@ -17,25 +17,18 @@ module Object_map = OBus_util.Make_map(struct type t = OBus_path.t end)
 module Name_map = OBus_util.Make_map(struct type t = OBus_name.bus end)
 
 (* +-----------------------------------------------------------------+
-   | DBus objects                                                    |
+   | Objects                                                         |
    +-----------------------------------------------------------------+ *)
 
-type member_info =
-  | MI_method of OBus_name.member * OBus_value.tsequence * (packed_connection -> OBus_message.t -> unit)
-  | MI_signal
-  | MI_property of OBus_name.member * (unit -> OBus_value.single Lwt.t) option * (OBus_value.single -> unit Lwt.t) option
+type packed_object = exn
 
-and member_desc = OBus_introspect.declaration * member_info
+type obus_object = {
+  oo_handle : packed_object -> packed_connection -> OBus_message.t -> unit;
+  (* Method call handler *)
 
-(* Signature that [OBus_connection] need to known for handling
-   objects *)
-and dbus_object = <
-  obus_handle_call : packed_connection -> OBus_message.t -> unit;
-  (* Handle a method call *)
-
-  obus_connection_closed : packed_connection -> unit;
-  (* Do wathever needed when the connection is closed *)
->
+  oo_object : packed_object;
+  (* The object, hidden in an exception *)
+}
 
 (* +-----------------------------------------------------------------+
    | Name resolvers                                                  |
@@ -147,9 +140,9 @@ and connection = {
   mutable outgoing_m : Lwt_mutex.t;
   (* Mutex used to serialise message sending *)
 
-  mutable exported_objects : dbus_object Object_map.t;
-  (* Mapping path -> objects for all objects exported on the
-     connection *)
+  mutable exported_objects : obus_object Object_map.t;
+  (* Mapping path -> objects method call handler for all objects
+     exported on the connection *)
 
   incoming_filters : filter Lwt_sequence.t;
   outgoing_filters : filter Lwt_sequence.t;

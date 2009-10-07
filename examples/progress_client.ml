@@ -15,7 +15,7 @@ type closed_reason =
   | Explicitly_closed
   | Killed
 
-let obus_closed_reason = OBus_type.map obus_uint
+let obus_closed_reason = OBus_type.mapping obus_uint
   [(Cancel, 0);
    (OK, 1);
    (Explicitly_closed, 2);

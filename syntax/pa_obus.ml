@@ -256,106 +256,6 @@ EXTEND Gram
           (dbus_name, translate_lid dbus_name)
       ] ];
 
-  (* +---------------------------------------------------------------+
-     | Extension for DBus interfaces as virtual classes              |
-     +---------------------------------------------------------------+ *)
-
-  obus_class_str_item:
-    [ [ "OBUS_method"; names = obus_member; ":"; typ = ctyp ->
-          `Method(names, typ)
-      | "OBUS_signal"; names = obus_member; ":"; typ = ctyp ->
-          `Signal(names, typ)
-      | "OBUS_val_r"; m = opt_mutable; names = obus_member; ":"; typ = ctyp ->
-          `Val_r(names, typ, m)
-      | "OBUS_val_w"; m = opt_mutable; names = obus_member; ":"; typ = ctyp ->
-          `Val_w(names, typ, m)
-      | "OBUS_val_rw"; m = opt_mutable; names = obus_member; ":"; typ = ctyp ->
-          `Val_rw(names, typ, m)
-      | "OBUS_property_r"; names = obus_member; ":"; typ = ctyp ->
-          `Prop_r(names, typ)
-      | "OBUS_property_w"; names = obus_member; ":"; typ = ctyp ->
-          `Prop_w(names, typ)
-      | "OBUS_property_rw"; names = obus_member; ":"; typ = ctyp ->
-          `Prop_rw(names, typ)
-      ] ];
-
-  obus_class_structure:
-    [ [ l = LIST0 [ cst = obus_class_str_item; semi -> cst ] -> l
-
-      ] ];
-
-  class_expr:
-    [ "simple"
-      [ "OBUS_interface"; iface = expr; defs = obus_class_structure; "end" ->
-        <:class_expr<
-          object(self)
-            inherit OBus_object.interface;;
-
-            (* Virtual methods and signals *)
-            $Ast.crSem_of_list
-              (List.map (function
-                           | `Method((dname, cname), typ) ->
-                               <:class_str_item< method virtual $lid:cname$ : $map_ctyp typ$ >>
-                           | `Signal((dname, cname), typ) ->
-                               <:class_str_item< method $lid:cname$ = self#obus_emit_signal $iface$ $str:dname$ $type_combinator_of_ctyp typ$ >>
-                           | `Val_r((dname, cname), typ, m)
-                           | `Val_w((dname, cname), typ, m)
-                           | `Val_rw((dname, cname), typ, m) ->
-                               <:class_str_item< val virtual $mutable:m$ $lid:cname$ : $typ$ >>
-                           | `Prop_r((dname, cname), typ) ->
-                               <:class_str_item< method virtual $lid:cname ^ "_get"$ : $typ$ Lwt.t >>
-                           | `Prop_w((dname, cname), typ) ->
-                               <:class_str_item< method virtual $lid:cname ^ "_set"$ : $typ$ -> unit Lwt.t >>
-                           | `Prop_rw((dname, cname), typ) ->
-                               <:class_str_item< method virtual $lid:cname ^ "_get"$ : $typ$ Lwt.t;;
-                                                 method virtual $lid:cname ^ "_set"$ : $typ$ -> unit Lwt.t >>)
-                 defs)$
-
-            initializer
-
-              (* Interface informations *)
-              self#obus_add_interface $iface$
-                $Gen.mk_expr_lst _loc
-                   (List.map
-                      (function
-                         | `Method((dname, cname), typ) ->
-                             let vars = vars_of_func_ctyp typ and typ = func_combinator_of_ctyp typ in
-                             if vars = [] then
-                               <:expr< OBus_object.md_method $str:dname$ (OBus_type.abstract OBus_type.OBus_pervasives.obus_unit $typ$)
-                                         (fun _ -> self#$lid:cname$) >>
-                             else
-                               <:expr< OBus_object.md_method $str:dname$ $typ$
-                                         $Gen.abstract _loc (pvars vars) (Gen.apply _loc <:expr< self#$lid:cname$ >> (evars vars))$ >>
-                         | `Signal((dname, cname), typ) ->
-                             <:expr< OBus_object.md_signal $str:dname$ $type_combinator_of_ctyp typ$ >>
-                         | `Val_r((dname, cname), typ, m) ->
-                             <:expr< OBus_object.md_property_r $str:dname$ $type_combinator_of_ctyp typ$
-                               (fun _ -> Lwt.return $lid:cname$) >>
-                         | `Val_w((dname, cname), typ, m) ->
-                             <:expr< OBus_object.md_property_w $str:dname$ $type_combinator_of_ctyp typ$
-                               (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) >>
-                         | `Val_rw((dname, cname), typ, m) ->
-                             <:expr< OBus_object.md_property_rw $str:dname$ $type_combinator_of_ctyp typ$
-                               (fun _ -> Lwt.return $lid:cname$)
-                               (fun $lid:"_"^cname$ -> $lid:cname$ <- $lid:"_"^cname$; Lwt.return ()) >>
-                         | `Prop_r((dname, cname), typ) ->
-                             <:expr< OBus_object.md_property_r $str:dname$ $type_combinator_of_ctyp typ$
-                               (fun _ -> self#$lid:cname ^ "_get"$) >>
-                         | `Prop_w((dname, cname), typ) ->
-                             <:expr< OBus_object.md_property_w $str:dname$ $type_combinator_of_ctyp typ$
-                               (fun x -> self#$lid:cname ^ "_set"$ x) >>
-                         | `Prop_rw((dname, cname), typ) ->
-                             <:expr< OBus_object.md_property_rw $str:dname$ $type_combinator_of_ctyp typ$
-                               (fun _ -> self#$lid:cname ^ "_get"$)
-                               (fun x -> self#$lid:cname ^ "_set"$ x) >>)
-                      defs)$
-          end >>
-      ] ];
-
-  (* +---------------------------------------------------------------+
-     | Extension for proxy code                                      |
-     +---------------------------------------------------------------+ *)
-
   obus_type:
     [ [ t = ctyp -> type_combinator_of_ctyp t ] ];
 
@@ -371,21 +271,45 @@ EXTEND Gram
           end;
           <:str_item< >>
 
-      | "OBUS_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
-          <:str_item< let $lid:cname$ = OBUS_interface.method_call $str:dname$ $typ$ >>
+  (* +---------------------------------------------------------------+
+     | Extension for proxy code                                      |
+     +---------------------------------------------------------------+ *)
 
-      | "OBUS_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBUS_interface.signal $str:dname$ $typ$ >>
+      | "OP_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
+          <:str_item< let $lid:cname$ = op_method_call $str:dname$ $typ$ >>
 
-      | "OBUS_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBUS_interface.property_reader $str:dname$ $typ$ >>
+      | "OP_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:cname$ = op_signal $str:dname$ $typ$ >>
 
-      | "OBUS_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:prepend_lid "set" cname$ = property_writer $str:dname$ $typ$ >>
+      | "OP_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:cname$ = op_property_reader $str:dname$ $typ$ >>
 
-      | "OBUS_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBUS_interface.property_reader $str:dname$ $typ$;;
-                      let $lid:prepend_lid "set" cname$ = OBUS_interface.property_writer $str:dname$ $typ$ >>
+      | "OP_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:prepend_lid "set" cname$ = op_property_writer $str:dname$ $typ$ >>
+
+      | "OP_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:cname$ = op_property_reader $str:dname$ $typ$;;
+                      let $lid:prepend_lid "set" cname$ = op_property_writer $str:dname$ $typ$ >>
+
+  (* +---------------------------------------------------------------+
+     | Extension for local code                                      |
+     +---------------------------------------------------------------+ *)
+
+      | "OL_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
+          <:str_item< let () = ol_method_call $str:dname$ $typ$ $lid:cname$ >>
+
+      | "OL_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let $lid:cname$ = ol_signal $str:dname$ $typ$ >>
+
+      | "OL_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let () = ol_property $str:dname$ $typ$ (Some $lid:cname$) None >>
+
+      | "OL_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let () = ol_property $str:dname$ $typ$ None (Some $lid:prepend_lid "set" cname$) >>
+
+      | "OL_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
+          <:str_item< let () = ol_property $str:dname$ $typ$ (Some $lid:cname$) (Some $lid:prepend_lid "set" cname$) >>
+
       ] ];
 END
 

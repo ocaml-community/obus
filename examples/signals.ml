@@ -18,7 +18,7 @@ let handle_multimedia_keys device =
   Lwt_event.always_notify_p
     (fun (action, key) ->
        lwt () = printlf "from Hal: action %S on key %S!" action key in
-       lwt () = printlf "          the signal come from the device %S" (OBus_path.to_string (device :> OBus_path.t)) in
+       lwt () = printlf "          the signal come from the device %S" (OBus_path.to_string (Hal_device.udi device)) in
        return ())
     (Hal_device.condition device)#event
 
@@ -51,20 +51,22 @@ let () = Lwt_main.run (
      | Some Hal signals                                              |
      +---------------------------------------------------------------+ *)
 
+  lwt manager = Lazy.force Hal_manager.manager in
+
   Lwt_event.always_notify_p
     (fun device ->
-       lwt () = printlf "from Hal: device added: %S" (OBus_path.to_string device) in
+       lwt () = printlf "from Hal: device added: %S" (OBus_path.to_string (Hal_device.udi device)) in
 
        (* Handle the adding of keyboards *)
        Hal_device.query_capability device "input.keyboard" >>= function
          | true -> handle_multimedia_keys device; return ()
          | false -> return ())
-    (Hal_manager.device_added ())#event;
+    (Hal_manager.device_added manager)#event;
 
   (* Find all keyboards and handle events on them *)
-  lwt keyboards = Hal_manager.find_device_by_capability "input.keyboard" in
+  lwt keyboards = Hal_manager.find_device_by_capability manager "input.keyboard" in
   lwt () = printlf "keyboard founds: %d" (List.length keyboards) in
-  lwt () = Lwt_util.iter (fun udi -> printlf "  %s" (OBus_path.to_string udi)) keyboards in
+  lwt () = Lwt_util.iter (fun dev -> printlf "  %s" (OBus_path.to_string (Hal_device.udi dev))) keyboards in
 
   List.iter handle_multimedia_keys keyboards;
 

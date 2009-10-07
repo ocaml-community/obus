@@ -14,7 +14,7 @@ open OBus_type.Perv
 let server_name = "org.freedesktop.Notifications"
 let server_path = ["org"; "freedesktop"; "Notifications"]
 
-module OBUS_interface = OBus_interface.Make(struct let name = "org.freedesktop.Notifications" end)
+include OBus_interface.Make(struct let name = "org.freedesktop.Notifications" end)
 
 type server_info = {
   server_name : string;
@@ -118,14 +118,14 @@ let desktop_entry = ref None
 
 open Lwt
 
-OBUS_method GetServerInformation : server_info
-OBUS_method GetCapabilities : string list
+OP_method GetServerInformation : server_info
+OP_method GetCapabilities : string list
 
-OBUS_method Notify : string -> uint32 -> string -> string -> string -> string list -> hints -> int -> id
-OBUS_method CloseNotification : server_id -> unit
+OP_method Notify : string -> uint32 -> string -> string -> string -> string list -> hints -> int -> id
+OP_method CloseNotification : server_id -> unit
 
-OBUS_signal NotificationClosed : id * uint
-OBUS_signal ActionInvoked : id * string
+OP_signal NotificationClosed : id * uint
+OP_signal ActionInvoked : id * string
 
 let monitored_peers : OBus_peer.t list ref = ref []
   (* List of daemon which are monitored *)

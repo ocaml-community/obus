@@ -77,15 +77,15 @@ let print_proxy_implem pp (name, content, annots) =
   p "  module OBUS_interface = OBus_interface.Make(struct let name = %S end)\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        p "  OBUS_method %s : %a\n" name (print_func (tuple (im_term_of_args  outs))) (im_term_of_args ins)
+        p "  OP_method %s : %a\n" name (print_func (tuple (im_term_of_args  outs))) (im_term_of_args ins)
     | Signal(name, args, annots) ->
         let args = match args with
           | [] -> unit
           | _ -> tuple (im_term_of_args args)
         in
-        p "  OBUS_signal %s : %a\n" name (print_term false) args
+        p "  OP_signal %s : %a\n" name (print_term false) args
     | Property(name, typ, access, annots) ->
-        p "  OBUS_property_%s %s : %a\n" (str_of_access access) name (print_term false) (implem_term_of_single typ)
+        p "  OP_property_%s %s : %a\n" (str_of_access access) name (print_term false) (implem_term_of_single typ)
   end content;
   p "end\n"
 
