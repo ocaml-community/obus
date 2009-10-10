@@ -6,7 +6,7 @@
 # Use camlp4 for all files
 <**/*.ml{,i}>: syntax_camlp4o, pkg_camlp4
 <syntax/pa_{obus,projection,constructor}.*>: pkg_type-conv
-<{src,tools,test,examples,bindings,benchmark}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
+<{src,tools,test,examples,bindings}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
 <oBus_config.ml>: pkg_type-conv.syntax
 <src/oBus_introspect.ml>: pa_monad
 
@@ -27,16 +27,13 @@
 <syntax/pa_monad.ml>: pkg_camlp4.quotations.r
 
 # Common dependencies
-<{src,src/private,tools,test,examples,benchmark}/*>: pkg_lwt.unix, pkg_xml-light, pkg_react
+<{src,src/private,tools,test,examples}/*>: pkg_lwt.unix, pkg_xml-light, pkg_react
 
 # Examples
 <examples/*>: use_obus
 <examples/{eject,signals}.*>: use_hal
 <examples/notify.*>: use_notification
 <examples/avahi_list_workstations.*>: use_avahi
-
-# Benchmarks
-<benchmark/*>: use_obus
 
 # Tools
 <tools/*>: use_obus, pkg_xml-light, pkg_str

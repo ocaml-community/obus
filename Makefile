@@ -114,10 +114,6 @@ test-syntax:
 	  `ocamlfind query -predicates syntax,preprocessor -a-format type-conv.syntax` \
 	  $(SYNTAX:%=_build/%.cma) test/syntax_extension.ml
 
-.PHONY: benchmark
-benchmark:
-	$(OC) benchmark/benchmark_ocaml.native
-
 # +------------------------------------------------------------------+
 # | Documentation                                                    |
 # +------------------------------------------------------------------+
