@@ -74,7 +74,7 @@ let im_term_of_args = List.map (fun (name, typ) -> implem_term_of_single typ)
 let print_proxy_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
-  p "  module OBUS_interface = OBus_interface.Make(struct let name = %S end)\n" name;
+  p "  include OBus_interface.Make(struct let name = %S end)\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  OP_method %s : %a\n" name (print_func (tuple (im_term_of_args  outs))) (im_term_of_args ins)
@@ -95,24 +95,48 @@ let print_proxy_implem pp (name, content, annots) =
 
 let print_service_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
-  p "class virtual %a = OBUS_interface %S\n" plid name name;
+  p "include M.MakeInterface(struct let name = %S end)\n" name;
   List.iter begin function
-    | Method(name, ins, outs, annots) ->
-        p "  OBUS_method %s : %a\n" name
-          (print_func (tuple (if_term_of_args  outs)))
-          (if_term_of_args ins)
     | Signal(name, args, annots) ->
         let args = match args with
           | [] -> unit
           | _ -> tuple (if_term_of_args args)
         in
-        p "  OBUS_signal %s : %a\n" name
+        p "OL_signal %s : %a\n" name
           (print_term true) args
+    | _ ->
+        ()
+  end content;
+  List.iter begin function
+    | Method(name, ins, outs, annots) ->
+        p "let %a obj" plid name;
+        ignore (List.fold_left (fun i (name, typ) ->
+                                  match name with
+                                    | Some name ->
+                                        p " %a" plid name;
+                                        i
+                                    | None ->
+                                        p " x%d" i;
+                                        i + 1) 0 ins);
+        p " = Lwt.fail (Failure \"not imlemented\")\n";
     | Property(name, typ, access, annots) ->
-        p "  OBUS_property_%s %s : %a\n" (match access with
+        p "let %a obj = Lwt.fail (Failure \"not imlemented\")\n" plid name;
+        p "let %a obj x = Lwt.fail (Failure \"not imlemented\")\n" plid ("set" ^ name)
+    | _ ->
+        ()
+  end content;
+  List.iter begin function
+    | Method(name, ins, outs, annots) ->
+        p "OL_method %s : %a\n" name
+          (print_func (tuple (if_term_of_args  outs)))
+          (if_term_of_args ins)
+    | Property(name, typ, access, annots) ->
+        p "OL_property_%s %s : %a\n" (match access with
                                                | Read -> "r"
                                                | Write -> "w"
                                                | Read_write -> "rw")
           name (print_term true) (interf_term_of_single typ)
+    | _ ->
+        ()
   end content;
   p "end\n"

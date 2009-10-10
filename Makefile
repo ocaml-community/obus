@@ -171,3 +171,6 @@ uninstall: prefix
 	$(OF) remove obus
 	rm -vf $(TOOLS:%=$(PREFIX)/bin/%)
 	rm -rvf $(PREFIX)/share/doc/obus
+
+.PHONY: reinstall
+reinstall: uninstall install

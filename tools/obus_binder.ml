@@ -96,7 +96,21 @@ let _ =
       (fun pp -> Interf_set.iter (Print.print_proxy_interf pp) interfaces);
 
   with_pp (output_file_prefix ^ ".ml")
-    (fun pp -> Interf_set.iter (if !service_mode then
-                                  Print.print_service_implem pp
-                                else
-                                  Print.print_proxy_implem pp) interfaces)
+    (fun pp ->
+       pp_print_string pp "open OBus_type.Perv\n";
+       if !service_mode then
+         pp_print_string pp "
+type t = {
+  obus : OBus_object.t;
+}
+
+module M = OBus_object.Make(struct
+                              type obj = t
+                              let get x = x.obus
+                            end)
+
+";
+       Interf_set.iter (if !service_mode then
+                          Print.print_service_implem pp
+                        else
+                          Print.print_proxy_implem pp) interfaces)
