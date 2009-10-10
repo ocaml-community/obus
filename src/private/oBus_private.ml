@@ -12,9 +12,18 @@
 
 open Lwt
 
-module Serial_map = OBus_util.Make_map(struct type t = OBus_message.serial end)
-module Object_map = OBus_util.Make_map(struct type t = OBus_path.t end)
-module Name_map = OBus_util.Make_map(struct type t = OBus_name.bus end)
+module SerialMap = OBus_util.MakeMap(struct
+                                       type t = OBus_message.serial
+                                       let compare : int32 -> int32 -> int = compare
+                                     end)
+module ObjectMap = OBus_util.MakeMap(struct
+                                       type t = OBus_path.t
+                                       let compare = Pervasives.compare
+                                     end)
+module NameMap = OBus_util.MakeMap(struct
+                                     type t = OBus_name.bus
+                                     let compare = String.compare
+                                   end)
 
 (* +-----------------------------------------------------------------+
    | Objects                                                         |
@@ -127,7 +136,7 @@ and connection = {
   watch : unit Lwt.t;
   (* Thread returned by [OBus_connection.watch] *)
 
-  mutable name_resolvers : name_resolver Name_map.t;
+  mutable name_resolvers : name_resolver NameMap.t;
   (* Mapping bus-name <-> resolver *)
 
   exited_peers : OBus_name.bus OBus_cache.t;
@@ -140,14 +149,14 @@ and connection = {
   mutable outgoing_m : Lwt_mutex.t;
   (* Mutex used to serialise message sending *)
 
-  mutable exported_objects : obus_object Object_map.t;
+  mutable exported_objects : obus_object ObjectMap.t;
   (* Mapping path -> objects method call handler for all objects
      exported on the connection *)
 
   incoming_filters : filter Lwt_sequence.t;
   outgoing_filters : filter Lwt_sequence.t;
 
-  mutable reply_waiters : OBus_message.t Lwt.u Serial_map.t;
+  mutable reply_waiters : OBus_message.t Lwt.u SerialMap.t;
   (* Mapping serial -> thread waiting for a reply *)
 
   signal_receivers : signal_receiver Lwt_sequence.t;
@@ -193,7 +202,7 @@ let unknown_method_exn message = match message with
       invalid_arg "OBus_internals.unknown_mehtod_exn"
 
 let children connection path =
-  Object_map.fold
+  ObjectMap.fold
     (fun p obj acc -> match OBus_path.after path p with
        | Some(elt :: _) -> if List.mem elt acc then acc else elt :: acc
        | _ -> acc)

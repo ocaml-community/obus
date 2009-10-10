@@ -27,7 +27,7 @@ let list n lbus =
     (* Select only names which are not connection unique names *)
     (List.filter (fun s -> s.[0] <> ':') names)
 
-let _ = Lwt_main.run (
+let () = Lwt_main.run begin
   lwt () = list "session" OBus_bus.session in
   list "system" OBus_bus.system
-)
+end

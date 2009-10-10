@@ -30,9 +30,9 @@ let str_of_access = function
   | Write -> "w"
   | Read_write -> "rw"
 
-(* +----------------------------------+
-   | Printing of proxy code signature |
-   +----------------------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Printing of proxy code signature                                |
+   +-----------------------------------------------------------------+ *)
 
 let if_term_of_args = List.map (fun (name, typ) -> interf_term_of_single typ)
 
@@ -65,9 +65,9 @@ let print_proxy_interf pp (name, content, annots) =
   end content;
   p "end\n"
 
-(* +----------------------------------+
-   | Printing of proxy code structure |
-   +----------------------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Printing of proxy code structure                                |
+   +-----------------------------------------------------------------+ *)
 
 let im_term_of_args = List.map (fun (name, typ) -> implem_term_of_single typ)
 
@@ -89,9 +89,9 @@ let print_proxy_implem pp (name, content, annots) =
   end content;
   p "end\n"
 
-(* +------------------------------------------+
-   | Printing of service code virtual classes |
-   +------------------------------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Printing of service code virtual classes                        |
+   +-----------------------------------------------------------------+ *)
 
 let print_service_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in

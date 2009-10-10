@@ -17,9 +17,9 @@ let intern_syntaxes = [ "pa_obus", "pa_obus.cma";
                         "pa_log", "syntax/pa_log.cmo";
                         "pa_monad", "syntax/pa_monad.cmo" ]
 
-(* +-----------------------------------+
-   | Packages installed with ocamlfind |
-   +-----------------------------------+ *)
+(* +-----------------------------------------------------------------+
+   | Ocamlfind                                                       |
+   +-----------------------------------------------------------------+ *)
 
 let packages = [ "type-conv";
                  "type-conv.syntax";
@@ -39,9 +39,9 @@ let packages = [ "type-conv";
 let syntaxes = [ "camlp4o";
                  "camlp4r" ]
 
-(* +-------+
-   | Utils |
-   +-------+ *)
+(* +-----------------------------------------------------------------+
+   | Utils                                                           |
+   +-----------------------------------------------------------------+ *)
 
 let flag_all_stages_except_link tag f =
   flag ["ocaml"; "compile"; tag] f;
@@ -60,10 +60,10 @@ let define_lib ?dir name =
 let substitute env text =
   List.fold_left (fun text (patt, repl) -> String.subst patt repl text) text env
 
-let get_public_modules _ =
+let get_public_modules () =
   List.filter (fun s -> not (String.is_prefix "src/private/" s)) (string_list_of_file "obus.mllib")
 
-let get_version _ =
+let get_version () =
   match string_list_of_file "VERSION" with
     | version :: _ -> version
     | _ -> failwith "invalid VERSION file"
@@ -91,25 +91,25 @@ let _ =
            some of its modules *)
         Pathname.define_context "syntax" [ "src" ];
 
-        (* +-----------+
-           | Libraries |
-           +-----------+ *)
+        (* +---------------------------------------------------------+
+           | Libraries                                               |
+           +---------------------------------------------------------+ *)
 
         define_lib ~dir:"src" "obus";
         define_lib ~dir:"bindings/hal" "hal";
         define_lib ~dir:"bindings/notification" "notification";
 
-        (* +------------------+
-           | Shared libraries |
-           +------------------+ *)
+        (* +---------------------------------------------------------+
+           | Shared libraries                                        |
+           +---------------------------------------------------------+ *)
 
         rule "shared libraries (cmxs)"
           ~dep:"%.cmxa" ~prod:"%.cmxs"
           (fun env _ -> Cmd(S[!(Options.ocamlopt); A"-shared"; A"-linkall"; A(env "%.cmxa"); A"-o"; A(env "%.cmxs")]));
 
-        (* +-----------------+
-           | Ocamlfind stuff |
-           +-----------------+ *)
+        (* +---------------------------------------------------------+
+           | Ocamlfind stuff                                         |
+           +---------------------------------------------------------+ *)
 
         (* When one link an OCaml binary, one should use -linkpkg *)
         flag ["ocaml"; "link"; "program"] & A"-linkpkg";
@@ -127,9 +127,9 @@ let _ =
           (fun syntax -> flag_all_stages_except_link ("syntax_" ^ syntax) (S[A"-syntax"; A syntax]))
           syntaxes;
 
-        (* +-------------------+
-           | Internal syntaxes |
-           +-------------------+ *)
+        (* +---------------------------------------------------------+
+           | Internal syntaxes                                       |
+           +---------------------------------------------------------+ *)
 
         List.iter
           (fun (tag, file) ->
@@ -137,9 +137,9 @@ let _ =
              dep ["ocaml"; "ocamldep"; tag] [file])
           intern_syntaxes;
 
-        (* +-------+
-           | Other |
-           +-------+ *)
+        (* +---------------------------------------------------------+
+           | Other                                                   |
+           +---------------------------------------------------------+ *)
 
         (* Generation of the OBus_version.ml file *)
         rule "version" ~prod:"src/private/OBus_version.ml" ~dep:"VERSION"
@@ -152,12 +152,7 @@ let _ =
         (* Generation of "META" *)
         rule "META" ~deps:["META.in"; "obus.mllib"; "VERSION"] ~prod:"META"
           (fun _ _ ->
-             Echo([substitute [("@VERSION@", get_version ());
-                               ("@MODULES@", String.concat " "
-                                  (List.map
-                                     (fun s -> String.after s (String.length "src/"))
-                                     (get_public_modules ())))]
-                     (read_file "META.in")], "META"))
+             Echo([substitute [("@VERSION@", get_version ())] (read_file "META.in")], "META"))
 
     | _ -> ()
   end

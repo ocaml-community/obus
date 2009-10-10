@@ -12,7 +12,7 @@
 open Lwt
 open Lwt_io
 
-let () = Lwt_main.run (
+let () = Lwt_main.run begin
   lwt manager = Lazy.force Hal_manager.manager in
   lwt cdroms = Hal_manager.find_device_by_capability manager "storage.cdrom" in
   lwt () = printlf "cdrom(s) found: %d" (List.length cdroms) in
@@ -21,4 +21,4 @@ let () = Lwt_main.run (
     lwt _ = Hal_device.Storage.eject cdrom [] in
     return ()
   end cdroms
-)
+end

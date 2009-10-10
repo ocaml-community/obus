@@ -71,9 +71,11 @@ let parse_file fname =
         OBus_introspect.print_error Format.err_formatter err;
         exit 1
 
-(***** Entry point *****)
+(* +-----------------------------------------------------------------+
+   | Entry point                                                     |
+   +-----------------------------------------------------------------+ *)
 
-let _ =
+let () =
   Arg.parse args
     (fun s -> xml_files := s :: !xml_files)
     usage_msg;

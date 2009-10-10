@@ -22,7 +22,7 @@ let handle_multimedia_keys device =
        return ())
     (Hal_device.condition device)#event
 
-let () = Lwt_main.run (
+let () = Lwt_main.run begin
   lwt session = Lazy.force OBus_bus.session in
 
   (* +---------------------------------------------------------------+
@@ -72,4 +72,4 @@ let () = Lwt_main.run (
 
   lwt () = printf "type Ctrl+C to stop\n%!" in
   fst (wait ())
-)
+end

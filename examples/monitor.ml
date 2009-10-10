@@ -27,8 +27,8 @@ let add_filter what_bus lbus =
     (fun typ -> OBus_bus.add_match bus (OBus_match.rule ~typ ()))
     [ `method_call; `method_return; `error; `signal ]
 
-let () = Lwt_main.run (
+let () = Lwt_main.run begin
   lwt () = add_filter "session" OBus_bus.session <&> add_filter "system" OBus_bus.system in
   lwt () = Lwt_io.printlf "type Ctrl+C to stop" in
   fst (wait ())
-)
+end

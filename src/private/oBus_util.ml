@@ -242,9 +242,9 @@ let sha_1 s =
   i2s h 16 !h4;
   h
 
-module Make_map(T : sig type t end) =
+module MakeMap(Key : Map.OrderedType) =
 struct
-  include Map.Make(struct type t = T.t let compare = compare end)
+  include Map.Make(Key)
 
   let lookup key map =
     try

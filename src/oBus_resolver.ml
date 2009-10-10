@@ -35,7 +35,7 @@ let make connection name =
                   end)
         else
           let name_resolver =
-            match Name_map.lookup name connection.name_resolvers with
+            match NameMap.lookup name connection.name_resolvers with
               | Some name_resolver ->
                   (* add a reference to the resolver *)
                   name_resolver.nr_ref_count <- name_resolver.nr_ref_count + 1;
@@ -64,7 +64,7 @@ let make connection name =
 
                   (* Immediatly add the resolver to be sure no other
                      thread will do it: *)
-                  connection.name_resolvers <- Name_map.add name name_resolver connection.name_resolvers;
+                  connection.name_resolvers <- NameMap.add name name_resolver connection.name_resolvers;
 
                   (* Initialization *)
                   ignore_result
@@ -93,7 +93,7 @@ let make connection name =
             if name_resolver.nr_ref_count = 0 then
               match connection.packed#get with
                 | Running connection ->
-                    connection.name_resolvers <- Name_map.remove name connection.name_resolvers;
+                    connection.name_resolvers <- NameMap.remove name connection.name_resolvers;
                     React.S.stop name_resolver.nr_owner;
                     OBus_private_bus.remove_match connection.packed name_resolver.nr_match_rule
                 | Crashed _ ->

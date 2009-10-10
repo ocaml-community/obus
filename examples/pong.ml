@@ -26,7 +26,7 @@ let ping obj msg =
 
 OL_method Ping : string -> string
 
-let _ = Lwt_main.run (
+let _ = Lwt_main.run begin
   lwt bus = Lazy.force OBus_bus.session in
 
   (* Request a name *)
@@ -40,4 +40,4 @@ let _ = Lwt_main.run (
 
   (* Wait forever *)
   fst (wait ())
-)
+end

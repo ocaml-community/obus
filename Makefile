@@ -5,16 +5,26 @@
 #
 # This file is a part of obus, an ocaml implemtation of dbus.
 
+# +------------------------------------------------------------------+
+# | Configuration                                                    |
+# +------------------------------------------------------------------+
+
+OC := ocamlbuild
+OF := ocamlfind
+
+# Use classic-display when compiling under a terminal which does not
+# support ANSI sequence:
 ifeq ($(TERM),dumb)
-OC = ocamlbuild -classic-display
-else
-OC = ocamlbuild
+OC += -classic-display
 endif
-OF = ocamlfind
+
+# Avoid compilation of native plugin if ocamlopt is not available
+ifeq ($(shell if which ocamlopt >/dev/null; then echo yes; fi),)
+OC += -byte-plugin
+endif
 
 # Targets
-EXAMPLES = hello bus_functions eject notify monitor signals list_services \
-	  ping pong
+EXAMPLES = hello bus_functions eject notify monitor signals list_services ping pong
 LIB = obus
 SYNTAX = pa_obus
 BINDINGS = hal notification
@@ -165,7 +175,9 @@ install: prefix
 .PHONY: uninstall
 uninstall: prefix
 	$(OF) remove obus
-	rm -vf $(TOOLS:%=$(PREFIX)/bin/%)
+	for tool in $(TOOLS); do \
+	  rm -vf $(PREFIX)/bin/`echo $$tool|sed s/_/-/`; \
+	done
 	rm -rvf $(PREFIX)/share/doc/obus
 
 .PHONY: reinstall

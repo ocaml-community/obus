@@ -59,9 +59,9 @@ let () =
   let oc = open_out !out in
   let pp = Format.formatter_of_out_channel oc in
 
-  Lwt_main.run (
+  Lwt_main.run begin
     lwt () = launch pp "session" OBus_address.session <&> launch pp "system" OBus_address.system in
     lwt _ = Lwt_unix.waitpid [] (Unix.create_process cmd (Array.of_list cmd_args) Unix.stdin Unix.stdout Unix.stderr) in
     close_out oc;
     return ()
-)
+  end

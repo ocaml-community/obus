@@ -16,7 +16,7 @@ open Lwt_io
 let service = "org.freedesktop.Notifications"
 let name = "org.ocamlcore.forge.obus"
 
-let () = Lwt_main.run (
+let () = Lwt_main.run begin
   lwt bus = Lazy.force OBus_bus.session in
 
   lwt id = OBus_bus.get_id bus in
@@ -49,4 +49,4 @@ let () = Lwt_main.run (
   in
 
   printlf "my names are: %s" (String.concat ", " (OBus_bus.acquired_names bus))
-)
+end

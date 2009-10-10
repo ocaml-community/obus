@@ -16,8 +16,14 @@ open OBus_private
 open OBus_connection
 open OBus_type.Perv
 
-module Method_map = OBus_util.Make_map(struct type t = OBus_name.interface option * OBus_name.member * tsequence end)
-module Property_map = OBus_util.Make_map(struct type t = OBus_name.interface * OBus_name.member end)
+module MethodMap = OBus_util.MakeMap(struct
+                                       type t = OBus_name.interface option * OBus_name.member * tsequence
+                                       let compare = Pervasives.compare
+                                     end)
+module PropertyMap = OBus_util.MakeMap(struct
+                                         type t = OBus_name.interface * OBus_name.member
+                                         let compare = Pervasives.compare
+                                       end)
 
 type t = {
   path : OBus_path.t;
@@ -46,7 +52,7 @@ struct
              | Crashed _ ->
                  raise OBus_type.Cast_failure
              | Running connection ->
-                 match Object_map.lookup path connection.exported_objects with
+                 match ObjectMap.lookup path connection.exported_objects with
                    | Some{ oo_object = Pack obj } ->
                        obj
                    | _ ->
@@ -56,13 +62,13 @@ struct
            raise OBus_type.Cast_failure)
     (fun obj -> (Object.get obj).path)
 
-  let methods = ref Method_map.empty
-  let properties = ref Property_map.empty
+  let methods = ref MethodMap.empty
+  let properties = ref PropertyMap.empty
   let interfaces = ref []
 
   let handle_call pack connection message = match message, pack with
     | { typ = Method_call(path, interface, member) }, Pack obj ->
-        begin match Method_map.lookup (interface, member, type_of_sequence message.body) !methods with
+        begin match MethodMap.lookup (interface, member, type_of_sequence message.body) !methods with
           | Some f -> f obj connection message
           | None -> ignore_result (send_exn connection message (unknown_method_exn message))
         end
@@ -76,7 +82,7 @@ struct
           raise exn
       | Running connection ->
           let o = Object.get obj in
-          connection.exported_objects <- Object_map.add o.path { oo_handle = handle_call; oo_object = Pack obj }
+          connection.exported_objects <- ObjectMap.add o.path { oo_handle = handle_call; oo_object = Pack obj }
             connection.exported_objects;
           o.exports <- connection.packed :: o.exports
 
@@ -109,8 +115,8 @@ struct
              (send_exn connection message))
       in
       let isig = OBus_type.isignature typ and osig = OBus_type.osignature typ in
-      methods := Method_map.add (Some Name.name, member, isig) handler
-        (Method_map.add (None, member, isig) handler !methods);
+      methods := MethodMap.add (Some Name.name, member, isig) handler
+        (MethodMap.add (None, member, isig) handler !methods);
       members := Method(member, with_names isig, with_names osig, []) :: !members
 
     let ol_signal member typ =
@@ -119,7 +125,7 @@ struct
 
     let ol_property member typ reader writer mode =
       let ty = OBus_type.type_single typ in
-      properties := Property_map.add (Name.name, member)
+      properties := PropertyMap.add (Name.name, member)
         ((match reader with
             | None ->
                 None
@@ -158,7 +164,7 @@ struct
   include MakeInterface(struct let name = "org.freedesktop.DBus.Properties" end)
 
   let get obj iface name =
-    match Property_map.lookup (iface, name) !properties with
+    match PropertyMap.lookup (iface, name) !properties with
       | Some(Some reader, _) ->
           reader obj
       | Some(None, _) ->
@@ -167,7 +173,7 @@ struct
           fail (Failure (sprintf "no such property: %S on interface %S" name iface))
 
   let set obj iface name x =
-    match Property_map.lookup (iface, name) !properties with
+    match PropertyMap.lookup (iface, name) !properties with
       | Some(_, Some writer) ->
           writer obj x
       | Some(_, None) ->
@@ -176,14 +182,14 @@ struct
           fail (Failure (sprintf "no such property: %S on interface %S" name iface))
 
   let get_all obj iface =
-    Property_map.fold (fun (iface', member) (reader, writer) acc ->
-                         if iface = iface' then
-                           match reader with
-                             | Some f ->
-                                 lwt x = f obj and l = acc in
-                                 return ((member, x) :: l)
-                             | None -> acc
-                         else acc) !properties (return [])
+    PropertyMap.fold (fun (iface', member) (reader, writer) acc ->
+                        if iface = iface' then
+                          match reader with
+                            | Some f ->
+                                lwt x = f obj and l = acc in
+                                return ((member, x) :: l)
+                            | None -> acc
+                        else acc) !properties (return [])
 
   OL_method Get : string -> string -> variant
   OL_method Set : string -> string -> variant -> unit

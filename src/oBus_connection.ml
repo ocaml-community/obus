@@ -37,8 +37,11 @@ let obus_context = OBus_type.map_with_context obus_unit
   (fun _ -> ())
 
 (* Mapping from server guid to connection. *)
-module Guid_map = OBus_util.Make_map(struct type t = OBus_address.guid end)
-let guid_connection_map = ref Guid_map.empty
+module GuidMap = OBus_util.MakeMap(struct
+                                     type t = OBus_address.guid
+                                     let compare = Pervasives.compare
+                                   end)
+let guid_connection_map = ref GuidMap.empty
 
 (* Apply a list of filter on a message, logging failure *)
 let apply_filters typ message filters =
@@ -89,7 +92,7 @@ let send_message_backend connection reply_waiter_opt return_thread message =
                 begin
                   match reply_waiter_opt with
                     | Some wakener ->
-                        connection.reply_waiters <- Serial_map.add message.serial wakener connection.reply_waiters
+                        connection.reply_waiters <- SerialMap.add message.serial wakener connection.reply_waiters
                     | None ->
                         ()
                 end;
@@ -260,9 +263,9 @@ let dispatch_message connection message = match message with
      dropped. *)
   | { typ = Method_return(reply_serial) }
   | { typ = Error(reply_serial, _) } ->
-      begin match Serial_map.lookup reply_serial connection.reply_waiters with
+      begin match SerialMap.lookup reply_serial connection.reply_waiters with
         | Some w ->
-            connection.reply_waiters <- Serial_map.remove reply_serial connection.reply_waiters;
+            connection.reply_waiters <- SerialMap.remove reply_serial connection.reply_waiters;
             wakeup w message
 
         | None ->
@@ -308,7 +311,7 @@ let dispatch_message connection message = match message with
                        this information here. *)
                     OBus_cache.add connection.exited_peers name;
 
-                  begin match Name_map.lookup name connection.name_resolvers with
+                  begin match NameMap.lookup name connection.name_resolvers with
                     | Some nr ->
                         DEBUG("updating internal name resolver: %S -> %S" name (match owner with
                                                                                   | Some n -> n
@@ -385,7 +388,7 @@ let dispatch_message connection message = match message with
     end
 
   | { typ = Method_call(path, interface_opt, member) } ->
-      match Object_map.lookup path connection.exported_objects with
+      match ObjectMap.lookup path connection.exported_objects with
         | Some obj ->
             begin try
               obj.oo_handle obj.oo_object connection.packed message
@@ -491,7 +494,7 @@ class packed_connection = object(self)
         end;
 
         begin match connection.guid with
-          | Some guid -> guid_connection_map := Guid_map.remove guid !guid_connection_map
+          | Some guid -> guid_connection_map := GuidMap.remove guid !guid_connection_map
           | None -> ()
         end;
 
@@ -504,10 +507,10 @@ class packed_connection = object(self)
         end;
 
         (* Wakeup all reply handlers so they will not wait forever *)
-        Serial_map.iter (fun _ w -> wakeup_exn w exn) connection.reply_waiters;
+        SerialMap.iter (fun _ w -> wakeup_exn w exn) connection.reply_waiters;
 
         (* Remove all objects *)(*
-        Object_map.iter begin fun p obj ->
+        ObjectMap.iter begin fun p obj ->
           try
             obj#obus_connection_closed connection.packed
           with
@@ -566,14 +569,14 @@ let of_transport ?guid ?(up=true) transport =
                with
                  | Connection_closed -> return ()
                  | exn -> fail exn);
-      name_resolvers = Name_map.empty;
+      name_resolvers = NameMap.empty;
       exited_peers = OBus_cache.create 100;
       outgoing_m = Lwt_mutex.create ();
       next_serial = 1l;
-      exported_objects = Object_map.empty;
+      exported_objects = ObjectMap.empty;
       incoming_filters = Lwt_sequence.create ();
       outgoing_filters = Lwt_sequence.create ();
-      reply_waiters = Serial_map.empty;
+      reply_waiters = SerialMap.empty;
       signal_receivers = Lwt_sequence.create ();
       packed = (packed_connection :> t);
     } in
@@ -585,11 +588,11 @@ let of_transport ?guid ?(up=true) transport =
   match guid with
     | None -> make ()
     | Some guid ->
-        match Guid_map.lookup guid !guid_connection_map with
+        match GuidMap.lookup guid !guid_connection_map with
           | Some connection -> connection
           | None ->
               let connection = make () in
-              guid_connection_map := Guid_map.add guid connection !guid_connection_map;
+              guid_connection_map := GuidMap.add guid connection !guid_connection_map;
               connection
 
 let of_addresses ?(shared=true) addresses = match shared with
@@ -599,7 +602,7 @@ let of_addresses ?(shared=true) addresses = match shared with
   | true ->
       (* Try to find a guid that we already have *)
       let guids = OBus_util.filter_map OBus_address.guid addresses in
-      match OBus_util.find_map (fun guid -> Guid_map.lookup guid !guid_connection_map) guids with
+      match OBus_util.find_map (fun guid -> GuidMap.lookup guid !guid_connection_map) guids with
         | Some connection -> return connection
         | None ->
             (* We ask again a shared connection even if we know that

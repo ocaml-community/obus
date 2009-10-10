@@ -2,7 +2,6 @@
 
 description = "Pure OCaml implementation of DBus"
 version = "@VERSION@"
-browse_interfaces = "@MODULES@"
 requires = "lwt xml-light"
 archive(byte) = "obus.cma"
 archive(native) = "obus.cmxa"
@@ -20,7 +19,6 @@ package "syntax" (
 package "hal" (
   version = "[distrubuted with OBus]"
   description = "Freedesktop hal service binding"
-  browse_interfaces = "Hal_manager Hal_device"
   requires = "obus"
   archive(byte) = "hal.cma"
   archive(native) = "hal.cmxa"
@@ -31,7 +29,6 @@ package "hal" (
 package "notification" (
   version = "[distrubuted with OBus]"
   description = "Freedesktop notification service binding"
-  browse_interfaces = "Notification"
   requires = "obus"
   archive(byte) = "notification.cma"
   archive(native) = "notification.cmxa"

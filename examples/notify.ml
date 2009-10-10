@@ -9,7 +9,7 @@
 
 open Lwt
 
-let _ = Lwt_unix.run (
+let _ = Lwt_main.run begin
   lwt _ = Notification.notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" () in
   lwt () = Lwt_unix.sleep 0.5 in
 
@@ -28,4 +28,4 @@ let _ = Lwt_unix.run (
     | `closed -> print_endline "notification closed"
   end;
   return ()
-)
+end

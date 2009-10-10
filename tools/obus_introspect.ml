@@ -81,7 +81,7 @@ let main service path =
   end;
   return ()
 
-let _ =
+let () =
   Arg.parse args
     (fun arg -> anons := arg :: !anons)
     usage_msg;
@@ -91,7 +91,7 @@ let _ =
     | _ -> Arg.usage args usage_msg; exit 1
   in
   try
-    Lwt_unix.run (main service path)
+    Lwt_main.run (main service path)
   with
     | Xml.Error _
     | OBus_introspect.Parse_failure _ ->
