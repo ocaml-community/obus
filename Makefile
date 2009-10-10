@@ -23,22 +23,21 @@ ifeq ($(shell if which ocamlopt >/dev/null; then echo yes; fi),)
 OC += -byte-plugin
 endif
 
-# Targets
-EXAMPLES = hello bus_functions eject notify monitor signals list_services ping pong
-LIB = obus
-SYNTAX = pa_obus
-BINDINGS = hal notification
-TOOLS = obus_introspect obus_binder obus_dump
-TEST = test_serialization test_printing test_communication valid auth server errors logging
+# +------------------------------------------------------------------+
+# | General rules                                                    |
+# +------------------------------------------------------------------+
 
 .PHONY: all
 all:
-	$(OC) \
-	  $(LIB:=.cma) $(LIB:=.cmxa) $(LIB:=.cmxs) \
-	  $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) $(BINDINGS:=.cmxs) \
-	  $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native) \
-	  $(EXAMPLES:%=examples/%.byte) $(EXAMPLES:%=examples/%.native) \
-	  $(SYNTAX:=.cma) obus.docdir/index.html META
+	$(OC) all
+
+.PHONY: byte
+byte:
+	$(OC) byte
+
+.PHONY: native
+native:
+	$(OC) native
 
 .PHONY: dist
 dist:
@@ -53,76 +52,17 @@ clean:
 list-deps:
 	@grep -o 'pkg_[^ ,]*' _tags | cut -c 5- | sort | uniq
 
-# +------------------------------------------------------------------+
-# | Specific targets                                                 |
-# +------------------------------------------------------------------+
-
-.PHONY: lib-byte
-lib-byte:
-	$(OC) $(LIB:=.cma)
-
-.PHONY: lib-native
-lib-native:
-	$(OC) $(LIB:=.cmxa)
-
-.PHONY: lib-shared
-lib-shared:
-	$(OC) $(LIB:=.cmxs)
-
-.PHONY: lib
-lib:
-	$(OC) $(LIB:=.cma) $(LIB:=.cmxa) $(LIB:=.cmxs)
-
-.PHONY: bindings-byte
-bindings-byte:
-	$(OC) $(BINDINGS:=.cma)
-
-.PHONY: bindings-native
-bindings-native:
-	$(OC) $(BINDINGS:=.cmxa)
-
-.PHONY: bindings-shared
-bindings-shared:
-	$(OC) $(BINDINGS:=.cmxs)
-
-.PHONY: bindings
-bindings:
-	$(OC) $(BINDINGS:=.cma) $(BINDINGS:=.cmxa) $(BINDINGS:=.cmxs)
-
-.PHONY: examples-byte
-examples-byte:
-	$(OC) $(EXAMPLES:%=examples/%.byte)
-
-.PHONY: examples-native
-examples-native:
-	$(OC) $(EXAMPLES:%=examples/%.native)
-
-.PHONY: examples
-examples:
-	$(OC) $(EXAMPLES:%=examples/%.byte) $(EXAMPLES:%=examples/%.native)
-
-.PHONY: tools-byte
-tools-byte:
-	$(OC) $(TOOLS:%=tools/%.byte)
-
-.PHONY: tools-native
-tools-native:
-	$(OC) $(TOOLS:%=tools/%.native)
-
-.PHONY: tools
-tools:
-	$(OC) $(TOOLS:%=tools/%.byte) $(TOOLS:%=tools/%.native)
-
-.PHONY: test
-test:
-	$(OC) $(TEST:%=test/%.d.byte)
+.PHONY: tests
+tests:
+	$(OC) tests
 
 .PHONY: test-syntax
 test-syntax:
-	$(OC) $(SYNTAX:=.cma)
-	camlp4o `ocamlfind query -i-format type-conv.syntax` \
+	$(OC) pa_obus.cma
+	camlp4o \
+	  `ocamlfind query -i-format type-conv.syntax` \
 	  `ocamlfind query -predicates syntax,preprocessor -a-format type-conv.syntax` \
-	  $(SYNTAX:%=_build/%.cma) test/syntax_extension.ml
+	  pa_obus.cma test/syntax_extension.ml
 
 # +------------------------------------------------------------------+
 # | Documentation                                                    |
@@ -148,22 +88,20 @@ prefix:
 .PHONY: install
 install: prefix
 	$(OF) install obus _build/META \
-	 $(SYNTAX:%=_build/%.cma) \
+	 _build/pa_obus.cma \
 	 src/*.mli \
+	 bindings/*/*.mli \
 	 _build/src/*.cmi \
-	 $(LIB:%=_build/%.cma) \
-	 $(LIB:%=_build/%.cmxa) \
-	 $(LIB:%=_build/%.cmxs) \
-	 $(LIB:%=_build/%.a) \
-	 $(BINDINGS:%=bindings/%/*.mli) \
-	 $(BINDINGS:%=_build/bindings/%/*.cmi) \
-	 $(BINDINGS:%=_build/%.cma) \
-	 $(BINDINGS:%=_build/%.cmxa) \
-	 $(BINDINGS:%=_build/%.cmxs) \
-	 $(BINDINGS:%=_build/%.a)
-	for tool in $(TOOLS); do \
-	  install -vm 0755 _build/tools/$$tool.native $(PREFIX)/bin/`echo $$tool|sed s/_/-/`; \
-	done
+	 _build/bindings/*/*.cmi \
+	 _build/src/*.cmx \
+	 _build/bindings/*/*.cmx \
+	 _build/*.cma \
+	 _build/*.cmxa \
+	 _build/*.cmxs \
+	 _build/*.a
+	install -vm 755 _build/tools/obus_introspect.best $(PREFIX)/bin/obus-introspect
+	install -vm 755 _build/tools/obus_binder.best $(PREFIX)/bin/obus-binder
+	install -vm 755 _build/tools/obus_dump.best $(PREFIX)/bin/obus-dump
 	mkdir -p $(PREFIX)/share/doc/obus/examples
 	mkdir -p $(PREFIX)/share/doc/obus/html
 	mkdir -p $(PREFIX)/share/doc/obus/scripts
@@ -175,9 +113,9 @@ install: prefix
 .PHONY: uninstall
 uninstall: prefix
 	$(OF) remove obus
-	for tool in $(TOOLS); do \
-	  rm -vf $(PREFIX)/bin/`echo $$tool|sed s/_/-/`; \
-	done
+	rm -vf $(PREFIX)/bin/obus-introspect
+	rm -vf $(PREFIX)/bin/obus-binder
+	rm -vf $(PREFIX)/bin/obus-dump
 	rm -rvf $(PREFIX)/share/doc/obus
 
 .PHONY: reinstall

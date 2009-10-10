@@ -22,23 +22,14 @@ type toto = {
   d : (int * byte_array * (int, string) dict_entry set) structure * int;
 } with obus
 
-
-class virtual dbus = OBUS_interface "org.freedesktop.DBus"
-  OBUS_method ListNames : string list
-  OBUS_method Truc : string list * int -> string
-  OBUS_signal NameOwnerChanged : string * string * string
-  OBUS_val_rw mutable x : int
-  OBUS_property_r y : string
-end
-
-OBUS_method Plop : int -> string
-OBUS_signal HaHaHa : string
-OBUS_property_r Foo : int list
+OP_method Plop : int -> string
+OP_signal HaHaHa : string
+OP_property_r Foo : int list
 
 OBUS_name_translator "ocaml"
 
-OBUS_method SetCPUFreqGovernor : string
+OP_method SetCPUFreqGovernor : string
 
 OBUS_name_translator "haskell"
 
-OBUS_method SetCPUFreqGovernor : string
+OP_method SetCPUFreqGovernor : string

@@ -10,34 +10,95 @@
 open Printf
 open Ocamlbuild_plugin
 
+(* +-----------------------------------------------------------------+
+   | Configuration                                                   |
+   +-----------------------------------------------------------------+ *)
+
+let try_exec command =
+  try
+    let _ = run_and_read command in
+    true
+  with _ ->
+    false
+
+let () =
+  if not (try_exec "ocamlfind printconf") then begin
+    prerr_endline "ocamlfind is not available, please install it";
+    exit 1
+  end
+
+let have_native = try_exec "ocamlfind ocamlopt -version"
+
+let examples = [
+  "hello";
+  "bus_functions";
+  "eject";
+  "notify";
+  "monitor";
+  "signals";
+  "list_services";
+  "ping";
+  "pong";
+]
+
+let bindings = [
+  "hal";
+  "notification";
+]
+
+let libs = "obus" :: bindings
+
+let tools = [
+  "obus_introspect";
+  "obus_binder";
+  "obus_dump";
+]
+
+let tests = [
+  "test_serialization";
+  "test_printing";
+  "test_communication";
+  "valid";
+  "auth";
+  "server";
+  "errors";
+  "logging";
+]
+
 (* Syntax extensions used internally, (tag and the byte-code file). *)
-let intern_syntaxes = [ "pa_obus", "pa_obus.cma";
-                        "pa_projection", "syntax/pa_projection.cmo";
-                        "pa_constructor", "syntax/pa_constructor.cmo";
-                        "pa_log", "syntax/pa_log.cmo";
-                        "pa_monad", "syntax/pa_monad.cmo" ]
+let intern_syntaxes = [
+  "pa_obus", "pa_obus.cma";
+  "pa_projection", "syntax/pa_projection.cmo";
+  "pa_constructor", "syntax/pa_constructor.cmo";
+  "pa_log", "syntax/pa_log.cmo";
+  "pa_monad", "syntax/pa_monad.cmo";
+]
 
 (* +-----------------------------------------------------------------+
    | Ocamlfind                                                       |
    +-----------------------------------------------------------------+ *)
 
-let packages = [ "type-conv";
-                 "type-conv.syntax";
-                 "camlp4";
-                 "camlp4.extend";
-                 "camlp4.lib";
-                 "camlp4.macro";
-                 "camlp4.quotations.o";
-                 "camlp4.quotations.r";
-                 "lwt";
-                 "lwt.unix";
-                 "lwt.syntax";
-                 "str";
-                 "xml-light";
-                 "react" ]
+let packages = [
+  "type-conv";
+  "type-conv.syntax";
+  "camlp4";
+  "camlp4.extend";
+  "camlp4.lib";
+  "camlp4.macro";
+  "camlp4.quotations.o";
+  "camlp4.quotations.r";
+  "lwt";
+  "lwt.unix";
+  "lwt.syntax";
+  "str";
+  "xml-light";
+  "react";
+]
 
-let syntaxes = [ "camlp4o";
-                 "camlp4r" ]
+let syntaxes = [
+  "camlp4o";
+  "camlp4r";
+]
 
 (* +-----------------------------------------------------------------+
    | Utils                                                           |
@@ -77,7 +138,9 @@ let _ =
         Options.ocamlc   := ocamlfind "ocamlc";
         Options.ocamlopt := ocamlfind "ocamlopt";
         Options.ocamldep := ocamlfind "ocamldep";
-        Options.ocamldoc := ocamlfind "ocamldoc"
+        (* FIXME: sometimes ocamldoc say that elements are not found
+           even if they are present: *)
+        Options.ocamldoc := S[A"ocamlfind"; A"ocamldoc"; A"-hide-warnings"]
 
     | After_rules ->
         (* Tests must see everything *)
@@ -90,6 +153,38 @@ let _ =
         (* The syntax extension need to see the library because it use
            some of its modules *)
         Pathname.define_context "syntax" [ "src" ];
+
+        (* +---------------------------------------------------------+
+           | Virtual targets                                         |
+           +---------------------------------------------------------+ *)
+
+        let virtual_rule name deps =
+          rule name ~stamp:name ~deps (fun _ _ -> Nop)
+        in
+
+        if have_native then
+          rule "best" ~dep:"%.native" ~prod:"%.best"
+            (fun env _ -> cp (env "%.native") (env "%.best"))
+        else
+          rule "best" ~dep:"%.byte" ~prod:"%.best"
+            (fun env _ -> cp (env "%.byte") (env "%.best"));
+
+        let byte = "syntax/pa_obus.cma" :: List.concat [
+          List.map (sprintf "%s.cma") libs;
+          List.map (sprintf "examples/%s.byte") examples;
+          List.map (sprintf "tools/%s.byte") tools;
+        ]
+        and native = List.concat [
+          List.map (sprintf "%s.cmxa") libs;
+          List.map (sprintf "%s.cmxs") libs;
+          List.map (sprintf "examples/%s.native") examples;
+          List.map (sprintf "tools/%s.native") tools;
+        ]
+        and common = [ "META"; "obus.docdir/index.html" ] in
+
+        virtual_rule "all" & common @ byte @ (if have_native then native else []) @ List.map (sprintf "tools/%s.best") tools;
+        virtual_rule "byte" & common @ byte;
+        virtual_rule "native" & common @ native;
 
         (* +---------------------------------------------------------+
            | Libraries                                               |
