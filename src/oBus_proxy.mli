@@ -37,6 +37,9 @@ val introspect : t -> (OBus_introspect.interface list * t list) Lwt.t
 val raw_introspect : t -> OBus_introspect.document Lwt.t
   (** Same as [introspect] but do not creates proxies for sub-nodes *)
 
+val children : t -> t list Lwt.t
+  (** [children proxy] returns the children of a proxy *)
+
 (** {6 Method calls} *)
 
 val method_call : t ->

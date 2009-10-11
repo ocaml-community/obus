@@ -84,3 +84,5 @@ let introspect proxy =
   lwt (ifaces, sub_nodes) = raw_introspect proxy in
   return (ifaces, List.map (fun node -> { peer = proxy.peer;
                                           path = proxy.path @ [node] }) sub_nodes)
+
+let children proxy = introspect proxy >|= snd
