@@ -7,31 +7,18 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Xml
-open Format
+open Printf
 
 type attributes = (string * string) list
-type stack = (string * attributes) list
-type error = stack * string
-exception Parse_failure of error
+exception Parse_failure of Xmlm.pos * string
 
-let print_error pp (stack, msg) =
-  match stack with
-    | [] ->
-        fprintf pp "at the root of the document:\n-> %s\n" msg
-    | _ ->
-        fprintf pp "in the following element:\n";
-        ignore (List.fold_left
-                  (fun indent (name, attrs) ->
-                     fprintf pp "%s<%s" indent name;
-                     List.iter (fun (k, v) -> fprintf pp " %s=\"%s\"" k v) attrs;
-                     fprintf pp ">\n";
-                     indent ^ "  ") "" stack);
-        fprintf pp "-> %s\n" msg
+type xml =
+  | Element of Xmlm.pos * string * (string * string) list * xml list
+  | PCData of Xmlm.pos * string
 
 type 'a result =
   | Value of 'a
-  | Error of stack * string
+  | Error of Xmlm.pos * string
 
 type node_type =
   | NT_element of string
@@ -39,87 +26,90 @@ type node_type =
   | NT_any
   | NT_union of node_type list
 
-type 'a node = node_type * (Xml.xml -> 'a result option)
+type 'a node = node_type * (xml -> 'a result option)
 
-type 'a t = Xml.xml list -> attributes -> Xml.xml list * 'a result
-let bind m f xmls attrs =
-  let rest, result = m xmls attrs in
+type 'a t = Xmlm.pos -> xml list -> attributes -> xml list * 'a result
+let bind m f pos xmls attrs =
+  let rest, result = m pos xmls attrs in
   match result with
-    | Value v -> f v rest attrs
+    | Value v -> f v pos rest attrs
     | Error _ as e -> (rest, e)
-let return v xmls attrs = (xmls, Value v)
-let failwith msg xmls attrs = (xmls, Error([], msg))
+let return v pos xmls attrs = (xmls, Value v)
+let failwith msg pos xmls attrs = (xmls, Error(pos, msg))
 
 let (>>=) = bind
 
-let ao name xmls attrs =
-  (xmls, Value (OBus_util.assoc name attrs))
+let ao name pos xmls attrs =
+  (xmls, Value(OBus_util.assoc name attrs))
 
 let ar name =
-  ao name >>= (function
-                 | Some v -> return v
-                 | None -> Printf.ksprintf failwith "attribute '%s' missing" name)
+  ao name >>= function
+    | Some v -> return v
+    | None -> ksprintf failwith  "attribute '%s' missing" name
 
 let ad name default =
-  ao name >>= (function
-                 | Some v -> return v
-                 | None -> return default)
+  ao name >>= function
+    | Some v -> return v
+    | None -> return default
 
-let af name field value = match OBus_util.assoc value field with
-  | Some v -> return v
-  | None -> Printf.ksprintf failwith "unexpected value for '%s' (%s), must be one of %s"
-      name value (String.concat ", " (List.map fst field))
+let afo name field pos xmls attrs = match OBus_util.assoc name attrs with
+  | None ->
+      (xmls, Value None)
+  | Some v ->
+      match OBus_util.assoc v field with
+        | Some v ->
+            (xmls, Value(Some v))
+        | None ->
+            (xmls, Error(pos, sprintf "unexpected value for '%s' (%s), must be one of %s"
+                           name v (String.concat ", " (List.map (fun (name, v) -> "'" ^ name ^ "'") field))))
 
-let afr name field = ar name >>= af name field
-let afo name field = ao name >>= function
-  | Some v -> af name field v >>= (fun x -> return (Some x))
-  | None -> return None
+let afr name field =
+  afo name field >>= function
+    | Some v -> return v
+    | None -> ksprintf failwith  "attribute '%s' missing" name
 
 let afd name default field =
-  ao name >>= (function
-                 | Some v -> af name field v
-                 | None -> return default)
+  afo name field >>= function
+    | Some v -> return v
+    | None -> return default
 
-let execute xml_parser xmls attrs =
+let execute xml_parser pos xmls attrs =
   try
-    match xml_parser xmls attrs with
-      | [], result -> result
-      | _, (Error _ as err) -> err
-      | x :: _, _ -> Error([], "unknown element: " ^
-                             match x with
-                               | Element(n, _, _) -> n
-                               | PCData _ -> "<pcdata>")
-  with
-      exn -> Error([], Printexc.to_string exn)
+    match xml_parser pos xmls attrs with
+      | [], result ->
+          result
+      | _, (Error _ as error) ->
+          error
+      | Element(pos, name, _, _) :: _, _ ->
+          Error(pos, sprintf "unknown element '%s'" name)
+      | PCData(pos, _) :: _, _ ->
+          Error(pos, "trailing pc-data")
+  with exn ->
+    Error(pos, Printexc.to_string exn)
 
 let elt name elt_parser =
   (NT_element name,
    function
-     | Element(name', attrs, children) when name = name' ->
-         Some(match execute elt_parser children attrs with
-                | Error(stack, error) ->
-                    Error((name, attrs) :: stack, error)
-                | x -> x)
-    | _ -> None)
+     | Element(pos, name', attrs, children) when name = name' ->
+         Some(execute elt_parser pos children attrs)
+     | _ ->
+         None)
 
 let pcdata =
   (NT_pcdata,
    function
      | Element _ -> None
-     | PCData x -> Some(Value x))
-
-let raw =
-  (NT_any, (fun x -> Some(Value x)))
+     | PCData(_, x) -> Some(Value x))
 
 let union nodes =
   let types, fl = List.split nodes in
   (NT_union types, fun node -> OBus_util.find_map (fun f -> f node) fl)
 
-let wrap (typ, f) g = (typ, fun node ->
-                         OBus_util.wrap_option (f node)
-                           (function
-                              | Value v -> Value (g v)
-                              | Error _ as e -> e))
+let map (typ, f) g = (typ, fun node ->
+                        OBus_util.map_option (f node)
+                          (function
+                             | Value v -> Value (g v)
+                             | Error _ as e -> e))
 
 let string_of_type typ =
   let rec flat acc = function
@@ -133,19 +123,19 @@ let string_of_type typ =
     | [x] -> x
     | l -> String.concat " or " l
 
-let opt (typ, f) xmls attrs =
+let opt (typ, f) pos xmls attrs =
   match OBus_util.part_map f xmls with
     | [], rest -> (rest, Value None)
     | [Value x], rest -> (rest, Value (Some x))
     | [Error _ as err], rest -> (rest, err)
-    | _, rest -> (rest, Error([], "too many nodes of type: " ^ string_of_type typ))
+    | _, rest -> (rest, Error(pos, "too many nodes of type: " ^ string_of_type typ))
 
 let one (typ, f) =
   opt (typ, f) >>= function
     | Some x -> return x
-    | None -> Printf.ksprintf failwith "element missing: %s" (string_of_type typ)
+    | None -> ksprintf failwith "element missing: %s" (string_of_type typ)
 
-let rec any (typ, f) xmls attrs =
+let rec any (typ, f) pos xmls attrs =
   let success, rest = OBus_util.part_map f xmls in
   (rest,
    List.fold_right
@@ -154,7 +144,42 @@ let rec any (typ, f) xmls attrs =
         | (Error _ as err), _ -> err
         | _, (Error _ as err) -> err) success (Value []))
 
+let pos_of_xml = function
+  | Element(pos, _, _, _) -> pos
+  | PCData(pos, _) -> pos
+
 let parse node xml =
-  match execute (one node) [xml] [] with
+  match execute (one node) (pos_of_xml xml) [xml] [] with
     | Value x -> x
-    | Error(stack, msg) -> raise (Parse_failure(stack, msg))
+    | Error(pos, msg) -> raise (Parse_failure(pos, msg))
+
+let input input node =
+  let rec make () =
+    let pos = Xmlm.pos input in
+    match Xmlm.input input with
+      | `El_start((uri, name), attrs) ->
+          Element(pos, name, List.map (fun ((uri, name), value) -> (name, value)) attrs, make_list ())
+      | `El_end ->
+          raise (Parse_failure(pos, "unexpected end of element"))
+      | `Data str ->
+          PCData(pos, str)
+      | `Dtd _ ->
+          make ()
+  and make_list () =
+    let pos = Xmlm.pos input in
+    match Xmlm.input input with
+      | `El_start((uri, name), attrs) ->
+          let xml = Element(pos, name, List.map (fun ((uri, name), value) -> (name, value)) attrs, make_list ()) in
+          xml :: make_list ()
+      | `El_end ->
+          []
+      | `Data str ->
+          let xml = PCData(pos, str) in
+          xml :: make_list ()
+      | `Dtd _ ->
+          make_list ()
+  in
+  try
+    parse node (make ())
+  with Xmlm.Error(pos, error) ->
+    raise (Parse_failure(pos, Xmlm.error_message error))

@@ -14,12 +14,7 @@
     It is intended to make it easy to write XML document parsers. In
     OBus it is used to parse introspection document. *)
 
-type error
-
-val print_error : Format.formatter -> error -> unit
-  (** Print an error message. It can take multiple lines. *)
-
-exception Parse_failure of error
+exception Parse_failure of Xmlm.pos * string
 
 type 'a t
   (** Type of an xml parser *)
@@ -38,8 +33,8 @@ val (>>=) : 'a t -> ('a -> 'b t) -> 'b t
 val failwith : string -> 'a t
   (** Fail at current position with this error message *)
 
-val parse : 'a node -> Xml.xml -> 'a
-  (** Run a parser on an xml document. If it fail it raise a
+val input : Xmlm.input -> 'a node -> 'a
+  (** Run a parser on a xml input. If it fail it raises a
       [Parse_failure] *)
 
 (** {6 Parsing of attributes} *)
@@ -72,12 +67,8 @@ val elt : string -> 'a t -> 'a node
 val pcdata : string node
   (** [pcdata f] parse one PCData *)
 
-val raw : Xml.xml node
-  (** Return an unparsed node. [any raw] will always consume all the
-      input. *)
-
-val wrap : 'a node -> ('a -> 'b) -> 'b node
-  (** [wrap node f] wrap the result of a node parser with [f] *)
+val map : 'a node -> ('a -> 'b) -> 'b node
+  (** [map node f] wrap the result of a node parser with [f] *)
 
 val union : 'a node list -> 'a node
   (** [union nodes] Node parser which parse any node matched by one of

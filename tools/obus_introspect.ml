@@ -64,9 +64,8 @@ let main service path =
       | false ->
           begin match !mli with
             | false ->
-                print_endline (Xml.to_string_fmt
-                                 (OBus_introspect.to_xml
-                                    (Interf_map.fold (fun name (content, annots) acc -> (name, content, annots) :: acc) map [], [])))
+                OBus_introspect.output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel Pervasives.stdout))
+                  (Interf_map.fold (fun name (content, annots) acc -> (name, content, annots) :: acc) map [], [])
             | true ->
                 Interf_map.iter (fun name (content, annots) ->
                                    Print.print_proxy_interf Format.std_formatter (name, content, annots))
@@ -93,7 +92,6 @@ let () =
   try
     Lwt_main.run (main service path)
   with
-    | Xml.Error _
-    | OBus_introspect.Parse_failure _ ->
-        prerr_endline "invalid introspection document returned by the service!";
+    | OBus_introspect.Parse_failure((line, column), msg) ->
+        ignore_result (Lwt_io.eprintlf "invalid introspection document returned by the service!:%d:%d: %s" line column msg);
         exit 1

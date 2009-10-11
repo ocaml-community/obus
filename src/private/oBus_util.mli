@@ -35,7 +35,7 @@ type ('a, 'b) either =
 val split : ('a -> ('b, 'c) either) -> 'a list -> 'b list * 'c list
   (** Split a list *)
 
-val wrap_option : 'a option -> ('a -> 'b) -> 'b option
+val map_option : 'a option -> ('a -> 'b) -> 'b option
 
 val sha_1 : string -> string
   (** Compute the sha1 of a string *)

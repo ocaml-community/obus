@@ -7,7 +7,6 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-open Xml
 open OBus_xml_parser
 
 type name = string
@@ -26,10 +25,7 @@ type interface = name * declaration list * annotation list
 type node = OBus_path.element
 type document = interface list * node list
 
-type parsing_error = OBus_xml_parser.error
 exception Parse_failure = OBus_xml_parser.Parse_failure
-
-let print_error = OBus_xml_parser.print_error
 
 let annotations =
   any (elt "annotation"
@@ -71,8 +67,8 @@ let method_decl =
        name <-- amember;
        (ins, outs) <-- arguments >>= (fun args ->
                                         return (OBus_util.split (function
-                                                                           | (In, x) -> OBus_util.Left x
-                                                                           | (Out, x) -> OBus_util.Right x) args));
+                                                                   | (In, x) -> OBus_util.Left x
+                                                                   | (Out, x) -> OBus_util.Right x) args));
        annots <-- annotations;
        return (Method(name, ins, outs, annots)))
 
@@ -117,7 +113,9 @@ let document =
        subs <-- any node;
        return (interfs, subs))
 
-let of_xml = parse document
+let input xi = OBus_xml_parser.input xi document
+
+type xml = Element of string * (string * string) list * xml list
 
 let to_xml (ifaces, nodes) =
   let pannots = List.map (fun (n, v) -> Element("annotation", [("name", n); ("value", v)], [])) in
@@ -158,9 +156,20 @@ let to_xml (ifaces, nodes) =
                               @ pannots annots)) ifaces
           @ List.map (fun n -> Element("node", [("name", n)], [])) nodes)
 
+let output xo doc =
+  let rec aux (Element(name, attrs, children)) =
+    Xmlm.output xo (`El_start(("", name), List.map (fun (name, value) -> (("", name), value)) attrs));
+    List.iter aux children;
+    Xmlm.output xo `El_end
+  in
+  Xmlm.output xo (`Dtd(Some "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n\
+                             \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">"));
+  aux (to_xml doc)
+
 let obus_document = OBus_type.map OBus_type.Perv.obus_string
   (fun x ->
-     let p = XmlParser.make () in
-     XmlParser.prove p false;
-     of_xml (XmlParser.parse p (XmlParser.SString x)))
-  (fun x -> Xml.to_string_fmt (to_xml x))
+     input (Xmlm.make_input ~strip:true (`String(0, x))))
+  (fun x ->
+     let buf = Buffer.create 42 in
+     output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Buffer buf)) x;
+     Buffer.contents buf)

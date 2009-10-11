@@ -51,7 +51,7 @@ let rec split f l =
                      | Left x -> (x :: a, b)
                      | Right x -> (a, x :: b)) l ([], [])
 
-let wrap_option x f = match x with
+let map_option x f = match x with
   | Some x -> Some(f x)
   | None -> None
 

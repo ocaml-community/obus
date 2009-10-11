@@ -2,7 +2,7 @@
 
 description = "Pure OCaml implementation of DBus"
 version = "@VERSION@"
-requires = "lwt xml-light"
+requires = "lwt xmlm"
 archive(byte) = "obus.cma"
 archive(native) = "obus.cmxa"
 archive(plugin,byte) = "obus.cma"

@@ -58,17 +58,14 @@ module Interf_set = Set.Make(struct type t = interface let compare = compare end
 
 (* Parse an xml file and handle possible errors *)
 let parse_file fname =
-  let p = XmlParser.make () in
-  XmlParser.prove p false;
+  let ic = open_in fname in
   try
-    OBus_introspect.of_xml (XmlParser.parse p (XmlParser.SFile fname))
+    let doc = OBus_introspect.input (Xmlm.make_input ~strip:true (`Channel ic)) in
+    close_in ic;
+    doc
   with
-    | Xml.Error err ->
-        Printf.eprintf "%s: %s\n%!" fname (Xml.error err);
-        exit 1
-    | OBus_introspect.Parse_failure err ->
-        Printf.eprintf "%s is an invalid introspection document.\n" fname;
-        OBus_introspect.print_error Format.err_formatter err;
+    | OBus_introspect.Parse_failure((line, column), msg) ->
+        Printf.eprintf "%s:%d:%d: %s.\n%!" fname line column msg;
         exit 1
 
 (* +-----------------------------------------------------------------+

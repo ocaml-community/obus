@@ -91,7 +91,7 @@ let packages = [
   "lwt.unix";
   "lwt.syntax";
   "str";
-  "xml-light";
+  "xmlm";
   "react";
 ]
 

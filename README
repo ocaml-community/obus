@@ -8,7 +8,7 @@ url: https://forge.ocamlcore.org/projects/obus/
 
   lwt:        http://www.ocsigen.org/install/lwt
   type-conv:  http://www.ocaml.info/home/ocaml_sources.html#type-conv
-  xml-light:  http://tech.motion-twin.com/xmllight.html
+  xmlm:       http://erratique.ch/software/xmlm
 
 * Installation:
 

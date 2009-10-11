@@ -27,7 +27,7 @@
 <syntax/pa_monad.ml>: pkg_camlp4.quotations.r
 
 # Common dependencies
-<{src,src/private,tools,test,examples}/*>: pkg_lwt.unix, pkg_xml-light, pkg_react
+<{src,src/private,tools,test,examples}/*>: pkg_lwt.unix, pkg_xmlm, pkg_react
 
 # Examples
 <examples/*>: use_obus
@@ -36,10 +36,10 @@
 <examples/avahi_list_workstations.*>: use_avahi
 
 # Tools
-<tools/*>: use_obus, pkg_xml-light, pkg_str
+<tools/*>: use_obus, pkg_xmlm, pkg_str
 
 # Tests
-<test/**/*>: pkg_str, pkg_xml-light
+<test/**/*>: pkg_str, pkg_xmlm
 
 # Bindings distributed with obus
 <bindings/**/*>: use_obus, pkg_lwt
