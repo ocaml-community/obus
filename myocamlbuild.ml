@@ -122,7 +122,8 @@ let substitute env text =
   List.fold_left (fun text (patt, repl) -> String.subst patt repl text) text env
 
 let get_public_modules () =
-  List.filter (fun s -> not (String.is_prefix "src/private/" s)) (string_list_of_file "obus.mllib")
+  List.filter (fun s -> not (String.is_prefix "src/private/" s) && String.is_prefix "src/" s)
+    (string_list_of_file "obus.mllib")
 
 let get_version () =
   match string_list_of_file "VERSION" with
