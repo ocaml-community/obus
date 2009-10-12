@@ -55,13 +55,10 @@ let print_proxy_interf pp (name, content, annots) =
     | Property(name, typ, access, annots) ->
         p "  val %a : t -> %a\n" plid name
           (print_term true)
-          (term "OBus_property.t"
-             [interf_term_of_single typ;
-              term
-                (match access with
-                   | Read -> "[ `readable ]"
-                   | Write -> "[ `writable ]"
-                   | Read_write -> "[ `readable | `writable ]") []])
+          (term "Lwt.t" [interf_term_of_single typ]);
+        p "  val %a : t -> %a -> unit Lwt.t\n" plid ("set" ^ name)
+          (print_term true)
+          (interf_term_of_single typ)
   end content;
   p "end\n"
 
