@@ -8,9 +8,12 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-Ocaml.packs := ["obus.hal"]
+Ocaml.packs := ["obus.hal"; "lwt.syntax"]
 --
 
 (* Make the computer to suspend to ram *)
 
-let _ = Lwt_unix.run (Hal_device.System_power_management.suspend Hal_device.computer 0)
+let _ = Lwt_main.run begin
+  lwt computer = Lazy.force Hal_device.computer in
+  Hal_device.System_power_management.suspend computer 0
+end

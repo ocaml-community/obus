@@ -23,7 +23,7 @@ let commands = [
   ("volume-down", "amixer -q set Master 5%-");
 ]
 
-let _ = Lwt_unix.run (
+let () = Lwt_main.run begin
   lwt bus = Lazy.force OBus_bus.system in
 
   (* Tell the message bus we want to receive ButtonPressed events from
@@ -32,30 +32,30 @@ let _ = Lwt_unix.run (
                                      ~sender:"org.freedesktop.Hal"
                                      ~interface:"org.freedesktop.Hal.Device"
                                      ~member:"Condition"
-                                     ~args:[(0, "ButtonPressed")] ()) in
+                                     ~arguments:[(0, "ButtonPressed")] ()) in
 
   (* Add a message filter. We use that instead of adding a signal
      receiver because we do not care about which object send the
      event. *)
-  OBus_connection.add_incoming_filter bus
-    (function
-       | { OBus_message.typ = OBus_message.Signal(_, "org.freedesktop.Hal.Device", "Condition");
-           OBus_message.body = [String "ButtonPressed"; String button] } ->
+  ignore (Lwt_sequence.add_l
+            (function
+               | { OBus_message.typ = OBus_message.Signal(_, "org.freedesktop.Hal.Device", "Condition");
+                   OBus_message.body = [Basic(String "ButtonPressed"); Basic(String button)] } ->
 
-           begin
-             try
-               ignore (Lwt_unix.system (List.assoc button commands))
-             with
-                 _ -> ()
-           end;
+                   begin
+                     try
+                       ignore_result (Lwt_unix.system (List.assoc button commands))
+                     with _ -> ()
+                   end;
 
-           (* Drop the message *)
-           None
+                   (* Drop the message *)
+                   None
 
-       | msg ->
-           Some msg);
+               | msg ->
+                   Some msg)
+            (OBus_connection.incoming_filters bus));
 
   (* Wait forever, the program will exit when the connection is
      closed *)
   fst (wait ())
-)
+end
