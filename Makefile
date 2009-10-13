@@ -109,6 +109,10 @@ install: prefix
 	install -vm 0644 _build/obus.docdir/* $(PREFIX)/share/doc/obus/html
 	install -vm 0644 examples/*.ml $(PREFIX)/share/doc/obus/examples
 	install -vm 0755 utils/scripts/* $(PREFIX)/share/doc/obus/scripts
+	mkdir -p $(PREFIX)/share/man/man1
+	install -vm 0644 _build/man/obus-introspect.1.gz $(PREFIX)/share/man/man1
+	install -vm 0644 _build/man/obus-binder.1.gz $(PREFIX)/share/man/man1
+	install -vm 0644 _build/man/obus-dump.1.gz $(PREFIX)/share/man/man1
 
 .PHONY: uninstall
 uninstall: prefix
@@ -117,6 +121,9 @@ uninstall: prefix
 	rm -vf $(PREFIX)/bin/obus-binder
 	rm -vf $(PREFIX)/bin/obus-dump
 	rm -rvf $(PREFIX)/share/doc/obus
+	rm -vf $(PREFIX)/share/man/man1/obus-introspect.1.gz
+	rm -vf $(PREFIX)/share/man/man1/obus-binder.1.gz
+	rm -vf $(PREFIX)/share/man/man1/obus-dump.1.gz
 
 .PHONY: reinstall
 reinstall: uninstall install

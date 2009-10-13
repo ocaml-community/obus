@@ -181,7 +181,7 @@ let _ =
           List.map (sprintf "examples/%s.native") examples;
           List.map (sprintf "tools/%s.native") tools;
         ]
-        and common = [ "META"; "obus.docdir/index.html" ] in
+        and common = "META" :: "obus.docdir/index.html" :: List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools in
 
         virtual_rule "all" & common @ byte @ (if have_native then native else []) @ List.map (sprintf "tools/%s.best") tools;
         virtual_rule "byte" & common @ byte;
@@ -248,7 +248,9 @@ let _ =
         (* Generation of "META" *)
         rule "META" ~deps:["META.in"; "obus.mllib"; "VERSION"] ~prod:"META"
           (fun _ _ ->
-             Echo([substitute [("@VERSION@", get_version ())] (read_file "META.in")], "META"))
+             Echo([substitute [("@VERSION@", get_version ())] (read_file "META.in")], "META"));
 
+        rule "gzip" ~dep:"%" ~prod:"%.gz"
+          (fun env _ -> Cmd(S[A"gzip"; A"-c"; A(env "%"); Sh">"; A(env "%.gz")]))
     | _ -> ()
   end

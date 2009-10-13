@@ -1,0 +1,44 @@
+\" obus-dump.1
+\" -----------
+\" Copyright : (c) 2009, Jeremie Dimino <jeremie@dimino.org>
+\" Licence   : BSD3
+\"
+\" This file is a part of obus, an ocaml implemtation of dbus.
+
+.TH OBUS-DUMP 1
+
+.SH NAME
+obus-dump \- a DBus message dumper
+
+.SH SYNOPSIS
+.B obus-dump
+[
+.I options
+]
+.I command
+[
+.I arguments
+]
+
+.SH DESCRIPTION
+
+.B obus-dump
+allow you to run a command and dumps all messages it tries to send
+through the session or system bus.
+
+.SH OPTIONS
+
+.IP "-o output-file"
+Uses
+.I output-file
+as output file instead of stderr.
+
+.IP "-help or --help"
+Display a short usage summary and exit.
+
+.SH AUTHOR
+Jérémie Dimino <jeremie@dimino.org>
+
+.SH "SEE ALSO"
+.BR obus-introspect (1),
+.BR obus-binder (1).
