@@ -39,7 +39,7 @@ let if_term_of_args = List.map (fun (name, typ) -> interf_term_of_single typ)
 let print_proxy_interf pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a : sig\n" puid name;
-  p "  type t = OBus_proxy.t\n";
+  p "  type t = OBus_proxy.t with obus(basic)\n";
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  val %a : %a\n" plid name
@@ -53,11 +53,13 @@ let print_proxy_interf pp (name, content, annots) =
                 | [] -> unit
                 | _ -> tuple (if_term_of_args args)])
     | Property(name, typ, access, annots) ->
-        p "  val %a : t -> %a\n" plid name
-          (print_term true)
-          (term "Lwt.t" [interf_term_of_single typ]);
-        p "  val %a : t -> %a -> unit Lwt.t\n" plid ("set" ^ name)
-          (print_term true)
+        if access <> Write then
+          p "  val %a : t -> %a\n" plid name
+            (print_term true)
+            (term "Lwt.t" [interf_term_of_single typ]);
+        if access <> Read then
+          p "  val %a : t -> %a -> unit Lwt.t\n" plid ("set" ^ name)
+            (print_term true)
           (interf_term_of_single typ)
   end content;
   p "end\n"
@@ -72,6 +74,7 @@ let print_proxy_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
   p "  include OBus_interface.Make(struct let name = %S end)\n" name;
+  p "  type t = OBus_proxy.t with obus\n";
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  OP_method %s : %a\n" name (print_func (tuple (im_term_of_args  outs))) (im_term_of_args ins)
