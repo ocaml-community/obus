@@ -54,7 +54,7 @@ url: https://forge.ocamlcore.org/projects/obus/
   $ obus-binder notif.xml
 
   Note that for some service you can not retrieve all interface
-  definitions at run-time, so you have too look at the source or the
+  definitions at run-time, so you have to look at the source or the
   documentation to find them.
 
 * Development:
