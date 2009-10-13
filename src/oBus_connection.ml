@@ -607,7 +607,7 @@ let of_addresses ?(shared=true) addresses = match shared with
         | None ->
             (* We ask again a shared connection even if we know that
                there is no other connection to a server with the same
-               guid, because during the authentification another
+               guid, because during the authentication another
                thread can add a new connection. *)
             lwt guid, transport = OBus_transport.of_addresses addresses in
             return (of_transport ~guid transport)

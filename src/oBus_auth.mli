@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implemtation of dbus.
  *)
 
-(** Handle authentification mechanisms *)
+(** Handle authentication mechanisms *)
 
 type data = string
     (** Data for an authentication mechanism *)
@@ -29,13 +29,13 @@ val make_stream :
 val stream_of_channels : Lwt_io.input_channel -> Lwt_io.output_channel -> stream
   (** Creates a stream from a pair of lwt channels *)
 
-(** Client-side authentification *)
+(** Client-side authentication *)
 module Client : sig
 
   type mechanism_return =
       (** Value returned by the client-side of an auth mechanism *)
     | Mech_continue of data
-        (** Continue the authentification with this response *)
+        (** Continue the authentication with this response *)
     | Mech_ok of data
         (** Authentification done *)
     | Mech_error of string
@@ -69,13 +69,13 @@ module Client : sig
         address. *)
 end
 
-(** Server-side authentification *)
+(** Server-side authentication *)
 module Server : sig
 
   type mechanism_return =
       (** Value returned by the server-side of an auth mechanism *)
     | Mech_continue of data
-        (** Continue the authentification with this challenge *)
+        (** Continue the authentication with this challenge *)
     | Mech_ok
         (** The client is authentified *)
     | Mech_reject

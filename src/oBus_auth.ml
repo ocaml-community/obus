@@ -481,7 +481,7 @@ struct
           lwt () = client_send stream Client_begin in
           return guid
       | Failure ->
-          auth_failure "authentification failure"
+          auth_failure "authentication failure"
     in
     lwt () = stream.put_char '\000' in
     initial mechanisms >>= loop
@@ -692,7 +692,7 @@ struct
         | Accept ->
             return ()
         | Failure ->
-            auth_failure "authentification failure"
+            auth_failure "authentication failure"
     in
     stream.get_char () >>= function
       | '\000' ->
