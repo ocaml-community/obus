@@ -4,7 +4,7 @@
  * Copyright : (c) 2009, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 open Unix
@@ -80,7 +80,7 @@ let of_addresses ?mechanisms addresses =
       fallback x
   in
   let rec aux = function
-    | [] -> failwith "no working DBus address found"
+    | [] -> failwith "no working D-Bus address found"
     | { OBus_address.address = address } :: rest ->
         match address with
           | Unix_path path ->

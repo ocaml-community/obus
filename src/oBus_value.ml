@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 open Format
@@ -25,7 +25,7 @@ let print_list f = print_seq "[" "]" ";" f
 let print_tuple f = print_seq "(" ")" "," f
 
 (* +-----------------------------------------------------------------+
-   | DBus type definitions                                           |
+   | D-Bus type definitions                                          |
    +-----------------------------------------------------------------+ *)
 
 type tbasic =
@@ -56,7 +56,7 @@ type tsequence = tsingle list
 type signature = tsequence
 
 (* +-----------------------------------------------------------------+
-   | DBus types pretty-printing                                      |
+   | D-Bus types pretty-printing                                     |
    +-----------------------------------------------------------------+ *)
 
 let string_of_tbasic = function
@@ -268,7 +268,7 @@ let string_of_signature signature =
   str
 
 (* +-----------------------------------------------------------------+
-   | DBus value definitions                                          |
+   | D-Bus value definitions                                         |
    +-----------------------------------------------------------------+ *)
 
 type basic =

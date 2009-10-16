@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 (** OBus type combinators *)
@@ -49,7 +49,7 @@ type context = exn
 exception No_context
   (** Value used when there is no context *)
 
-(** {6 DBus types} *)
+(** {6 D-Bus types} *)
 
 val isignature : ('a, 'b, 'c) func -> OBus_value.signature
   (** "in" signature, it describe types of the method/signal
@@ -62,7 +62,7 @@ val osignature : ('a, 'b, 'c) func -> OBus_value.signature
 val type_basic : ('a, _) cl_basic -> OBus_value.tbasic
 val type_single : ('a, _) cl_single -> OBus_value.tsingle
 val type_sequence : ('a, _) cl_sequence -> OBus_value.tsequence
-  (** Return the DBus type of a type description *)
+  (** Return the D-Bus type of a type description *)
 
 (** {6 Dynamic values operations} *)
 

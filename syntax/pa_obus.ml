@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 open Camlp4
@@ -245,7 +245,7 @@ let _ =
 EXTEND Gram
   GLOBAL:str_item class_expr;
 
-  (* A member name, the DBus name is always specified, and the caml name
+  (* A member name, the D-Bus name is always specified, and the caml name
      may be sepecified with the "as" keyword *)
   obus_member:
     [ [ dbus_name = a_ident; "as"; caml_name = a_ident ->

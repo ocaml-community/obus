@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 open Term
@@ -29,7 +29,7 @@ let args = [
 ]
 
 let usage_msg = Printf.sprintf "Usage: %s <options> <xml-files>
-Generate an ocaml module from DBus introspection files.
+Generate an ocaml module from D-Bus introspection files.
 options are:" (Filename.basename (Sys.argv.(0)))
 
 let choose_output_file_prefix () = match !output_file_prefix with

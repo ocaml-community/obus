@@ -4,12 +4,12 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** DBus names *)
+(** D-Bus names *)
 
-(** For specific restrictions on DBus names, see
+(** For specific restrictions on D-Bus names, see
     @see <http://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names> the specification
 
     General restrisction include:
@@ -48,7 +48,7 @@ type error = OBus_string.t
 
 val validate_error : OBus_string.validator
 
-(** {6 DBus name translation} *)
+(** {6 D-Bus name translation} *)
 
 val split : string -> string list
   (** Split a name into longest blocks matched by the regular
@@ -58,21 +58,21 @@ val split : string -> string list
       [split "org.freedesktop.DBus" = ["org"; "freedesktop"; "DBus"]] *)
 
 val ocaml_lid : string -> string
-  (** Translate a DBus name into an ocaml-style lower-identifier:
+  (** Translate a D-Bus name into an ocaml-style lower-identifier:
 
       [caml_lid "SetCPUFreqGovernor" = "set_cpufreq_governor"] *)
 
 val ocaml_uid : string -> string
-  (** Translate a DBus name into an ocaml-style upper-identifier:
+  (** Translate a D-Bus name into an ocaml-style upper-identifier:
 
       [caml_uid "org.freedesktop.DBus" = "Org_freedesktop_dbus"] *)
 
 val haskell_lid : string -> string
-  (** Translate a DBus name into an haskell-style lower-identifier:
+  (** Translate a D-Bus name into an haskell-style lower-identifier:
 
       [haskell_lid "SetCPUFreqGovernor" = "setCPUFreqGovernor"] *)
 
 val haskell_uid : string -> string
-  (** Translate a DBus name into an haskell-style upper-identifier:
+  (** Translate a D-Bus name into an haskell-style upper-identifier:
 
       [haskell_uid "org.freedesktop.DBus" = "OrgFreedesktopDBus" *)

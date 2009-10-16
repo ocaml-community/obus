@@ -4,13 +4,13 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 (** A dbus peer *)
 
-(** A DBus peer represent an application which can be reach though a
-    DBus connection. It is the application at the end-point of the
+(** A D-Bus peer represent an application which can be reach though a
+    D-Bus connection. It is the application at the end-point of the
     connection or, if the end-point is a message bus, any application
     connected to it. *)
 

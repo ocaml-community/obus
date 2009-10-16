@@ -4,14 +4,14 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Inerface to DBus connection *)
+(** Inerface to D-Bus connection *)
 
-(** This module implement manipulation of a DBus connection. A DBus
+(** This module implement manipulation of a D-Bus connection. A D-Bus
     connection is a channel opened with another application which also
-    implement the DBus protocol. It is used to exchange DBus
+    implement the D-Bus protocol. It is used to exchange D-Bus
     messages. *)
 
 type t = OBus_private.packed_connection
@@ -28,7 +28,7 @@ type t = OBus_private.packed_connection
     [OBus_bus.register_connection] after the creation. *)
 
 val of_addresses : ?shared:bool -> OBus_address.t list -> t Lwt.t
-  (** [of_addresses shared addresses] try to get a working DBus
+  (** [of_addresses shared addresses] try to get a working D-Bus
       connection from a list of addresses. The server must be
       accessible from at least one of these addresses.
 
@@ -198,8 +198,8 @@ val send_exn : t -> OBus_message.t -> exn -> unit Lwt.t
       [send_error].
 
       It send the dbus error ["ocaml.Exception"] with the exception as
-      message if it is not registred as a DBus exception. Note that
-      this is bad thing since DBus errors are supposed to be user
+      message if it is not registred as a D-Bus exception. Note that
+      this is bad thing since D-Bus errors are supposed to be user
       readable. *)
 
 (** {6 Filters} *)
@@ -244,7 +244,7 @@ val on_disconnect : t -> (exn -> unit) ref
 (** {6 Low-level} *)
 
 val of_transport : ?guid : OBus_address.guid -> ?up : bool -> OBus_transport.t -> t
-  (** Create a DBus connection on the given transport. If [guid] is
+  (** Create a D-Bus connection on the given transport. If [guid] is
       provided the connection will be shared.
 
       [up] tell weather the connection is initially up or down,

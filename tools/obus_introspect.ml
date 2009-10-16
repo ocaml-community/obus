@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 open OBus_interface
@@ -25,7 +25,7 @@ let args = [
 ]
 
 let usage_msg = Printf.sprintf "Usage: %s <option> <destination> <path>
-Introspect a DBus service (print only interfaces).
+Introspect a D-Bus service (print only interfaces).
 options are:" (Filename.basename (Sys.argv.(0)))
 
 open Lwt

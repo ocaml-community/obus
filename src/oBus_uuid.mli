@@ -4,12 +4,12 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** DBus universally-unique IDs *)
+(** D-Bus universally-unique IDs *)
 
-(** DBus uuid are used to distinguish message buses, addresses, and
+(** D-Bus uuid are used to distinguish message buses, addresses, and
     machines.
 
     Note that they are not compatible with RFC4122. *)

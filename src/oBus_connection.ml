@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 open Printf
@@ -208,7 +208,7 @@ let send_exn connection method_call exn =
     | Some(name, msg) ->
         send_error connection method_call name msg
     | None ->
-        FAILURE(exn, "sending an unregistred ocaml exception as a DBus error");
+        FAILURE(exn, "sending an unregistred ocaml exception as a D-Bus error");
         send_error connection method_call "ocaml.Exception" (Printexc.to_string exn)
 
 let ignore_send_exn connection method_call exn = ignore(send_exn connection method_call exn)

@@ -4,12 +4,12 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Restriction on strings used with DBus *)
+(** Restriction on strings used with D-Bus *)
 
-(** There are a lot a various restrictions for strings used in DBus.
+(** There are a lot a various restrictions for strings used in D-Bus.
     Obus only verify strings when a message is sent or received *)
 
 type error = {

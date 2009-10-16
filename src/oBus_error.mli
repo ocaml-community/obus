@@ -4,10 +4,10 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** DBus errors *)
+(** D-Bus errors *)
 
 type name = OBus_name.error
     (** An error name. It can contains multiple components, for
@@ -46,7 +46,7 @@ exception No_reply of message
 
 val register : name -> (message -> exn) -> (exn -> message option) -> unit
   (** [register_exception name construct desctruct] register a
-      exception as a DBus exception.
+      exception as a D-Bus exception.
 
       [construct] is a function which take an error message and create
       an exception and [desctruct] take an exception and return an
@@ -72,8 +72,8 @@ val register : name -> (message -> exn) -> (exn -> message option) -> unit
   *)
 
 val make : name -> message -> exn
-  (** Make an exception from a DBus error name and message. It return
+  (** Make an exception from a D-Bus error name and message. It return
       [DBus(name, message)] if [name] has not been registred *)
 
 val unmake : exn -> (name * message) option
-  (** Return the DBus error name and message of a caml exception. *)
+  (** Return the D-Bus error name and message of a caml exception. *)

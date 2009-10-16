@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 (* This sample illustrate the use of signals *)
@@ -35,16 +35,16 @@ let () = Lwt_main.run begin
          | Some s -> s
          | None -> ""
        in
-       printlf "from DBus: the owner of the name %S changed: %S -> %S"
+       printlf "from D-Bus: the owner of the name %S changed: %S -> %S"
          name (opt old_owner) (opt new_owner))
     (OBus_bus.name_owner_changed session)#event;
 
   Lwt_event.always_notify_p
-    (printlf "from DBus: i lost the name %S!")
+    (printlf "from D-Bus: i lost the name %S!")
     (OBus_bus.name_lost session)#event;
 
   Lwt_event.always_notify_p
-    (printf "from DBus: i got the name '%S!")
+    (printf "from D-Bus: i got the name '%S!")
     (OBus_bus.name_acquired session)#event;
 
   (* +---------------------------------------------------------------+

@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 open Lwt
@@ -29,16 +29,16 @@ OP_method Hello : string
 
 let error_handler = function
   | OBus_wire.Protocol_error msg ->
-      ERROR("the DBus connection with the message bus has been closed due to a protocol error: %s" msg);
+      ERROR("the D-Bus connection with the message bus has been closed due to a protocol error: %s" msg);
       exit 1
   | OBus_connection.Connection_lost ->
-      LOG("disconnected from DBus message bus");
+      LOG("disconnected from D-Bus message bus");
       exit 0
   | OBus_connection.Transport_error exn ->
-      ERROR("the DBus connection with the message bus has been closed due to a transport error: %s" (OBus_util.string_of_exn exn));
+      ERROR("the D-Bus connection with the message bus has been closed due to a transport error: %s" (OBus_util.string_of_exn exn));
       exit 1
   | exn ->
-      FAILURE(exn, "the DBus connection with the message bus has been closed due to this uncaught exception");
+      FAILURE(exn, "the D-Bus connection with the message bus has been closed due to this uncaught exception");
       exit 1
 
 let register_connection connection = match connection#get with

@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 (** Proxy interface definition *)
@@ -14,7 +14,7 @@ module type Name = sig
   val name : OBus_name.interface
 end
 
-(** This is the ocaml version of a DBus interface for proxy code.
+(** This is the ocaml version of a D-Bus interface for proxy code.
 
     Note that interface contained in XML introspection files can be
     automatically converted with [obus-binder] *)

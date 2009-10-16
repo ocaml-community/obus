@@ -4,10 +4,10 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Manipulation of DBus addresses *)
+(** Manipulation of D-Bus addresses *)
 
 type guid = OBus_uuid.t
     (** A unique address identifier. Each server listenning address'

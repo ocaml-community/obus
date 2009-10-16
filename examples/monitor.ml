@@ -4,10 +4,10 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(* This sample illustrate the use of threads in DBus + use of
+(* This sample illustrate the use of threads in D-Bus + use of
    filters. Filters are part of the lowlevel api. *)
 
 open Lwt

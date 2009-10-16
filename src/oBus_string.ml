@@ -4,7 +4,7 @@
  * Copyright : (c) 2008, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
- * This file is a part of obus, an ocaml implemtation of dbus.
+ * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
 type t = string
@@ -22,9 +22,9 @@ exception Invalid_string of error
 
 let error_message error =
   if error.ofs < 0 then
-    Printf.sprintf "invalid DBus %s(%S): %s" error.typ error.str error.msg
+    Printf.sprintf "invalid D-Bus %s(%S): %s" error.typ error.str error.msg
   else
-    Printf.sprintf "invalid DBus %s(%S), at position %d: %s" error.typ error.str error.ofs error.msg
+    Printf.sprintf "invalid D-Bus %s(%S), at position %d: %s" error.typ error.str error.ofs error.msg
 
 let validate s =
   let fail i msg = Some{ typ = "string"; str = s; ofs = i; msg = msg } in
