@@ -91,14 +91,14 @@ install: prefix
 	 _build/pa_obus.cma \
 	 src/*.mli \
 	 bindings/*/*.mli \
-	 _build/src/*.cmi \
-	 _build/bindings/*/*.cmi \
-	 _build/src/*.cmx \
-	 _build/bindings/*/*.cmx \
-	 _build/*.cma \
-	 _build/*.cmxa \
-	 _build/*.cmxs \
-	 _build/*.a
+	 $(wildcard _build/src/*.cmi) \
+	 $(wildcard _build/bindings/*/*.cmi) \
+	 $(wildcard _build/src/*.cmx) \
+	 $(wildcard _build/bindings/*/*.cmx) \
+	 $(wildcard _build/*.cma) \
+	 $(wildcard _build/*.cmxa) \
+	 $(wildcard _build/*.cmxs) \
+	 $(wildcard _build/*.a)
 	install -vm 755 _build/tools/obus_introspect.best $(PREFIX)/bin/obus-introspect
 	install -vm 755 _build/tools/obus_binder.best $(PREFIX)/bin/obus-binder
 	install -vm 755 _build/tools/obus_dump.best $(PREFIX)/bin/obus-dump
