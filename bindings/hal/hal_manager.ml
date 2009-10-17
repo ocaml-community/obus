@@ -21,11 +21,7 @@ let manager =
 
 include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Manager" end)
 
-OP_method GetAllDevices : Hal_device.t list
-OP_method GetAllDevicesWithProperties : (Hal_device.t * (string, Hal_device.property) dict) structure list
-OP_method DeviceExists : Hal_device.t -> bool
-OP_method FindDeviceStringMatch : string -> string -> Hal_device.t list
-
+(* Hal seems to returns string instead of object path... *)
 let obus_broken_device = OBus_type.map_with_context obus_string
   (fun context path -> match context with
      | OBus_connection.Context(connection, message) ->
@@ -36,24 +32,11 @@ let obus_broken_device = OBus_type.map_with_context obus_string
          raise OBus_type.Cast_failure)
   (fun proxy -> OBus_path.to_string (OBus_proxy.path proxy))
 
-(* Signature from introsection seems to be wrong for this method. So
-   we temporary use this ugly hack: *)
-let find_device_by_capability proxy capability =
-  lwt v = OBus_proxy.dyn_method_call proxy
-    ~interface:op_interface
-    ~member:"FindDeviceByCapability" [sstring capability] in
-  match OBus_type.opt_cast_sequence <:obus_type< Hal_device.t list >> v with
-    | Some x -> return x
-    | None ->
-        match OBus_type.opt_cast_sequence <:obus_type< broken_device list >> v with
-          | Some x -> return x
-          | None ->
-              fail
-                (Failure (Printf.sprintf
-                            "unexpected signature for reply of method \"FindDeviceByCapability\"\
-                             on interface \"org.freedesktop.Hal.Manager\", expected: \"ao\", got: %S"
-                            (string_of_signature (type_of_sequence v))))
-
+OP_method GetAllDevices : broken_device list
+OP_method GetAllDevicesWithProperties : (broken_device * (string, Hal_device.property) dict) structure list
+OP_method DeviceExists : broken_device -> bool
+OP_method FindDeviceStringMatch : string -> string -> broken_device list
+OP_method FindDeviceByCapability : string -> broken_device list
 OP_method NewDevice : string
 OP_method Remove : string -> unit
 OP_method CommitToGdl : string -> string -> unit
