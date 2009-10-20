@@ -509,17 +509,8 @@ class packed_connection = object(self)
         (* Wakeup all reply handlers so they will not wait forever *)
         SerialMap.iter (fun _ w -> wakeup_exn w exn) connection.reply_waiters;
 
-        (* Remove all objects *)(*
-        ObjectMap.iter begin fun p obj ->
-          try
-            obj#obus_connection_closed connection.packed
-          with
-              exn ->
-                (* This may happen if the programmer has overridden the
-                   method *)
-                FAILURE(exn, "obus_connection_closed on object with path %S failed with"
-                          (OBus_path.to_string p))
-        end connection.exported_objects;*)
+        (* Remove all objects *)
+        ObjectMap.iter (fun path obj -> obj.oo_connection_closed connection.packed) connection.exported_objects;
 
         (* If the connection is closed normally, flush it *)
         lwt () =

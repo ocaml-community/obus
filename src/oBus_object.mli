@@ -15,10 +15,21 @@ type t
 val path : t -> OBus_path.t
   (** [path obj] returns the path of the object *)
 
-val make : OBus_path.t -> t
-  (** [make path] creates a new object with path [path] *)
+val owner : t -> OBus_peer.t option
+  (** [owner obj] returns the owner of the object, if any *)
 
-val make' : unit -> t
+val exports : t -> OBus_connection.t list
+  (** [exports obj] is the list of connection on which the object is
+      exported *)
+
+val make : ?owner : OBus_peer.t -> OBus_path.t -> t
+  (** [make ?owner path] creates a new object with path [path].
+
+      If [owner] is specified, then all signals will be sent to it by
+      default, and it will be removed from all its exports when the
+      owner exit. *)
+
+val make' : ?owner : OBus_peer.t -> unit -> t
   (** Same as [make] but generate a unique path *)
 
 (** Signature of custom objects *)
@@ -54,6 +65,13 @@ module Make(Object : Object) : sig
 
   val export : OBus_connection.t -> Object.obj -> unit
     (** [export connection obj] exports [obj] on [connection] *)
+
+  val remove : OBus_connection.t -> Object.obj -> unit
+    (** [remove connection obj] removes [obj] from [connection] *)
+
+  val destroy : Object.obj -> unit
+    (** [destroy obj] removes [obj] from all connection it is exported
+        on *)
 
   val emit : Object.obj ->
     interface : OBus_name.interface ->

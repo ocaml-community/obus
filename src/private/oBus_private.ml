@@ -35,6 +35,9 @@ type obus_object = {
   oo_handle : packed_object -> packed_connection -> OBus_message.t -> unit;
   (* Method call handler *)
 
+  oo_connection_closed : packed_connection -> unit;
+  (* Hook for when a connection is closed *)
+
   oo_object : packed_object;
   (* The object, hidden in an exception *)
 }

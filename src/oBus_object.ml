@@ -28,13 +28,38 @@ module PropertyMap = OBus_util.MakeMap(struct
 type t = {
   path : OBus_path.t;
   mutable exports : OBus_connection.t list;
+  owner : OBus_peer.t option;
 }
 
 let path obj = obj.path
-let make path = { path = path; exports = [] }
+let owner obj = obj.owner
+let exports obj = obj.exports
+
+let destroy obj =
+  List.iter
+    (fun connection -> match connection#get with
+       | Crashed exn ->
+           ()
+       | Running connection ->
+           connection.exported_objects <- ObjectMap.remove obj.path connection.exported_objects)
+    obj.exports;
+  obj.exports <- []
+
+let make ?owner path =
+  let obj = { path = path; exports = []; owner = owner } in
+  begin
+    match owner with
+      | None ->
+          ()
+      | Some peer ->
+          ignore_result (lwt () = OBus_peer.wait_for_exit peer in
+                         destroy obj;
+                         return ())
+  end;
+  obj
 
 let id = ref(-1)
-let make' () = incr id; make ["ocaml"; string_of_int !id]
+let make' ?owner () = incr id; make ?owner ["ocaml"; string_of_int !id]
 
 module type Object = sig
   type obj
@@ -82,16 +107,33 @@ struct
           raise exn
       | Running connection ->
           let o = Object.get obj in
-          connection.exported_objects <- ObjectMap.add o.path { oo_handle = handle_call; oo_object = Pack obj }
-            connection.exported_objects;
+          connection.exported_objects <- ObjectMap.add o.path {
+            oo_handle = handle_call;
+            oo_object = Pack obj;
+            oo_connection_closed = (fun connection ->
+                                      o.exports <- List.filter ((<>) connection) o.exports);
+          } connection.exported_objects;
           o.exports <- connection.packed :: o.exports
+
+  let remove connection obj =
+    match connection#get with
+      | Crashed exn ->
+          raise exn
+      | Running connection ->
+          let o = Object.get obj in
+          connection.exported_objects <- ObjectMap.remove o.path connection.exported_objects;
+          o.exports <- List.filter ((<>) connection.packed) o.exports
+
+  let destroy obj =
+    destroy (Object.get obj)
 
   let emit obj ~interface ~member typ ?peer x =
     let body = OBus_type.make_sequence typ x and obj = Object.get obj in
-    match peer with
-      | Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
+    match peer, obj.owner with
+      | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
+      | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
           dyn_emit_signal connection ?destination ~interface ~member ~path:obj.path body
-      | None ->
+      | None, None ->
           Lwt_util.iter
             (fun connection ->
                dyn_emit_signal connection ~interface ~member ~path:obj.path body)
