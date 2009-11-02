@@ -54,6 +54,7 @@ let socket fd ic oc =
 let accept server listen =
   try_lwt
     lwt fd, addr = Lwt_unix.accept listen.listen_fd in
+    (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
     return (Event_connection(fd, addr))
   with Unix_error(err, _, _) ->
     if server.server_up then ERROR("uncaught error: %s" (error_message err));
@@ -108,6 +109,7 @@ let rec listen_loop server listen =
 
 let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in
+  (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
   try
     Lwt_unix.bind fd addr;
     Lwt_unix.listen fd 10;

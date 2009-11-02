@@ -47,6 +47,7 @@ let loopback _ =
 
 let make_socket domain typ addr =
   let fd = Lwt_unix.socket domain typ 0 in
+  (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
   try_lwt
     lwt () = Lwt_unix.connect fd addr in
     return fd
