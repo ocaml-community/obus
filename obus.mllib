@@ -7,7 +7,6 @@ src/private/OBus_private_bus
 src/private/OBus_util
 src/private/OBus_xml_parser
 src/private/OBus_version
-src/private/OBus_log
 src/OBus_address
 src/OBus_auth
 src/OBus_bus

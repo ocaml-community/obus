@@ -57,7 +57,7 @@ let accept server listen =
     (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
     return (Event_connection(fd, addr))
   with Unix_error(err, _, _) ->
-    if server.server_up then ERROR("uncaught error: %s" (error_message err));
+    if server.server_up then Log#error "uncaught error: %s" (error_message err);
     return Event_shutdown
 
 let rec listen_loop server listen =
@@ -67,7 +67,7 @@ let rec listen_loop server listen =
           try
             Lwt_unix.close listen.listen_fd
           with Unix_error(err, _, _) ->
-            ERROR("cannot close listenning socket: %s" (error_message err));
+            Log#error "cannot close listenning socket: %s" (error_message err);
         end;
         begin
           match listen.listen_address with
@@ -76,7 +76,7 @@ let rec listen_loop server listen =
                   try
                     Unix.unlink path
                   with Unix_error(err, _, _) ->
-                    ERROR("cannot unlink %S: %s" path (error_message err))
+                    Log#error "cannot unlink %S: %s" path (error_message err)
                 end
             | _ ->
                 ()
@@ -93,17 +93,17 @@ let rec listen_loop server listen =
               listen.listen_guid
               (OBus_auth.stream_of_channels ic oc)
           with exn ->
-            LOG("authentication failure for client from %s"
-                  (match addr with
-                     | ADDR_UNIX path -> path
-                     | ADDR_INET(ia, port) -> Printf.sprintf "%s:%d" (string_of_inet_addr ia) port));
+            Log#info "authentication failure for client from %s"
+              (match addr with
+                 | ADDR_UNIX path -> path
+                 | ADDR_INET(ia, port) -> Printf.sprintf "%s:%d" (string_of_inet_addr ia) port);
             return ()
         in
         let () =
           try
             server.server_push (socket fd ic oc)
           with exn ->
-            FAILURE(exn, "failed to push new transport with")
+            Log#exn exn "failed to push new transport with"
         in
         listen_loop server listen
 
@@ -115,17 +115,17 @@ let make_socket domain typ addr =
     Lwt_unix.listen fd 10;
     return fd
   with Unix_error(err, _, _) as exn ->
-    ERROR("failed to create listenning socket with %s: %s"
-            (match addr with
-               | ADDR_UNIX path ->
-                   let len = String.length path in
-                   if len > 0 && path.[0] = '\x00' then
-                     Printf.sprintf "unix abstract path %S" (String.sub path 1 (len - 1))
-                   else
-                     Printf.sprintf "unix path %S" path
-               | ADDR_INET(ia, port) ->
-                   Printf.sprintf "address %s:%d" (string_of_inet_addr ia) port)
-            (Unix.error_message err));
+    Log#error "failed to create listenning socket with %s: %s"
+      (match addr with
+         | ADDR_UNIX path ->
+             let len = String.length path in
+             if len > 0 && path.[0] = '\x00' then
+               Printf.sprintf "unix abstract path %S" (String.sub path 1 (len - 1))
+             else
+               Printf.sprintf "unix path %S" path
+         | ADDR_INET(ia, port) ->
+             Printf.sprintf "address %s:%d" (string_of_inet_addr ia) port)
+      (Unix.error_message err);
     Lwt_unix.close fd;
     fail exn
 

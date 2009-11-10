@@ -39,6 +39,10 @@ byte:
 native:
 	$(OC) native
 
+.PHONY: debug
+debug:
+	$(OC) debug
+
 .PHONY: dist
 dist:
 	DARCS_REPO=$(PWD) darcs dist --dist-name obus-`head -n 1 VERSION`

@@ -64,20 +64,20 @@ let of_addresses ?mechanisms addresses =
       lwt guid = OBus_auth.Client.authenticate ?mechanisms (OBus_auth.stream_of_channels ic oc) in
       return (guid, socket fd ic oc)
     with exn ->
-      LOG("transport creation failed for address: domain=%s typ=%s addr=%s: %s"
-            (match domain with
-               | PF_UNIX -> "unix"
-               | PF_INET -> "inet"
-               | PF_INET6 -> "inet6")
-            (match typ with
-               | SOCK_STREAM -> "stream"
-               | SOCK_DGRAM -> "dgram"
-               | SOCK_RAW -> "raw"
-               | SOCK_SEQPACKET -> "seqpacket")
-            (match addr with
-               | ADDR_UNIX path -> sprintf "unix(%s)" path
-               | ADDR_INET(addr, port) -> sprintf "inet(%s,%d)" (string_of_inet_addr addr) port)
-            (OBus_util.string_of_exn exn));
+      Log#error "transport creation failed for address: domain=%s typ=%s addr=%s: %s"
+        (match domain with
+           | PF_UNIX -> "unix"
+           | PF_INET -> "inet"
+           | PF_INET6 -> "inet6")
+        (match typ with
+           | SOCK_STREAM -> "stream"
+           | SOCK_DGRAM -> "dgram"
+           | SOCK_RAW -> "raw"
+           | SOCK_SEQPACKET -> "seqpacket")
+        (match addr with
+           | ADDR_UNIX path -> sprintf "unix(%s)" path
+           | ADDR_INET(addr, port) -> sprintf "inet(%s,%d)" (string_of_inet_addr addr) port)
+        (OBus_util.string_of_exn exn);
       fallback x
   in
   let rec aux = function
@@ -93,7 +93,7 @@ let of_addresses ?mechanisms addresses =
                 aux rest
 
           | Unix_tmpdir _ ->
-              ERROR("unix tmpdir can only be used as a listening address");
+              Log#error "unix tmpdir can only be used as a listening address";
               aux rest
 
           | Tcp { tcp_host = host; tcp_port = port; tcp_family = family } ->
@@ -117,7 +117,7 @@ let of_addresses ?mechanisms addresses =
                       Lwt_process.pread_line ("dbus-launch",
                                               [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
                     with exn ->
-                      ERROR("autolaunch failed: %s" (OBus_util.string_of_exn exn));
+                      Log#error "autolaunch failed: %s" (OBus_util.string_of_exn exn);
                       fail exn
                   in
                   let line = try String.sub line 0 (String.index line '\000') with _ -> line in

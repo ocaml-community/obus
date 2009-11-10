@@ -25,15 +25,3 @@ val max_name_length : int
 val max_message_size : int
   (** Maximum size of a message. In this version of the protocol this
       is 2^27 bytes (128MB). *)
-
-val verbose : bool ref
-  (** [true] is the environment variable OBUS_LOG is set. This will
-      make obus verbose. *)
-
-val debug : bool ref
-  (** [true] is the environment variable OBUS_LOG is set to
-      "debug". This will make obus more verbose. *)
-
-val logger : ([ `VERBOSE | `DEBUG | `ERROR ] -> string list -> unit) ref
-  (** The function used to log a list of lines. The default one prints
-      them on [stderr] and flush it. *)

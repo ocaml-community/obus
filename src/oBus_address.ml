@@ -48,7 +48,7 @@ let of_string str =
                          | None, Some abst, None -> Unix_abstract abst
                          | None, None, Some tmpd -> Unix_tmpdir tmpd
                          | _ ->
-                             ERROR("invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\"");
+                             Log#error "invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\"";
                              Unknown(name, params)
                      end
                    | "tcp" ->
@@ -59,7 +59,7 @@ let of_string str =
                               | Some "ipv4" -> Some `Ipv4
                               | Some "ipv6" -> Some `Ipv4
                               | Some f ->
-                                  ERROR("unknown address family: %S" f);
+                                  Log#error "unknown address family: %S" f;
                                   None
                               | None -> None }
                    | "autolaunch" ->
@@ -71,7 +71,7 @@ let of_string str =
                 | None -> None);
     } end addresses
   with Failure msg ->
-    DEBUG("failed to parse address %S: %s" str msg);
+    Log#debug "failed to parse address %S: %s" str msg;
     raise (Parse_failure msg)
 
 let to_string l =
@@ -135,31 +135,31 @@ let default_system_bus_addresses = { address = Unix_path "/var/run/dbus/system_b
 
 open Lwt
 
-let system = lazy (
+let system = lazy(
   match
     try Some (Sys.getenv system_bus_variable) with
         Not_found ->
-          DEBUG("environment variable %s not found, using internal default" system_bus_variable);
+          Log#debug "environment variable %s not found, using internal default" system_bus_variable;
           None
   with
     | Some str -> try_lwt return (of_string str)
     | None -> return [default_system_bus_addresses]
 )
 
-let session = lazy (
+let session = lazy(
   match try Some(Sys.getenv session_bus_variable) with Not_found -> None with
     | Some line ->
         try_lwt return (of_string line)
     | None ->
-        LOG("environment variable %s not found" session_bus_variable);
+        Log#notice "environment variable %s not found" session_bus_variable;
         try_lwt
           (* Try with the root window property, this is bit ugly and
              it depends on the presence of xprop... *)
           lwt line = Lwt_process.pread_line ("xprop", [|"xprop"; "-root"; session_bus_property|]) in
           Scanf.sscanf line "_DBUS_SESSION_BUS_ADDRESS(STRING) = %S" (fun x -> try_lwt return (of_string x))
         with exn ->
-          LOG("can not get session bus address from property %s \
-               on root window (maybe x11 is not running), error is: %s"
-                session_bus_property (OBus_util.string_of_exn exn));
+          Log#notice "can not get session bus address from property %s \
+                      on root window (maybe x11 is not running), error is: %s"
+            session_bus_property (OBus_util.string_of_exn exn);
           return [default_session_bus_addresses]
 )

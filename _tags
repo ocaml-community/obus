@@ -9,10 +9,11 @@
 <{src,tools,test,examples,bindings}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
 <oBus_config.ml>: pkg_type-conv.syntax
 <src/oBus_introspect.ml>: pa_monad
+<**/*.d.*>: debug
 
 # Use pa_obus for all files except pa_obus itself
 <**/*.ml{,i}>: pkg_lwt.syntax, pa_obus
-<src/**/*.ml>: pa_log
+<src/**/*.ml>: pkg_lwt.syntax.log
 <src/oBus_connection.ml>: pkg_camlp4.macro
 <syntax/*.ml{,i}>: -pkg_lwt.syntax, -pa_obus
 

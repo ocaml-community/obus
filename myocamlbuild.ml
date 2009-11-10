@@ -70,7 +70,6 @@ let intern_syntaxes = [
   "pa_obus", "pa_obus.cma";
   "pa_projection", "syntax/pa_projection.cmo";
   "pa_constructor", "syntax/pa_constructor.cmo";
-  "pa_log", "syntax/pa_log.cmo";
   "pa_monad", "syntax/pa_monad.cmo";
 ]
 
@@ -90,6 +89,7 @@ let packages = [
   "lwt";
   "lwt.unix";
   "lwt.syntax";
+  "lwt.syntax.log";
   "str";
   "xmlm";
   "react";
@@ -104,14 +104,14 @@ let syntaxes = [
    | Utils                                                           |
    +-----------------------------------------------------------------+ *)
 
-let flag_all_stages_except_link tag f =
-  flag ["ocaml"; "compile"; tag] f;
-  flag ["ocaml"; "ocamldep"; tag] f;
-  flag ["ocaml"; "doc"; tag] f
+let flag_all_stages_except_link tags f =
+  flag ("ocaml" :: "compile" :: tags) f;
+  flag ("ocaml" :: "ocamldep" :: tags) f;
+  flag ("ocaml" :: "doc" :: tags) f
 
-let flag_all_stages tag f =
-  flag_all_stages_except_link tag f;
-  flag ["ocaml"; "link"; tag] f
+let flag_all_stages tags f =
+  flag_all_stages_except_link tags f;
+  flag ("ocaml" :: "link" :: tags) f
 
 let define_lib ?dir name =
   ocaml_lib ?dir name;
@@ -181,11 +181,17 @@ let _ =
           List.map (sprintf "examples/%s.native") examples;
           List.map (sprintf "tools/%s.native") tools;
         ]
+        and debug = List.concat [
+          List.map (sprintf "%s.d.cma") libs;
+          List.map (sprintf "examples/%s.d.byte") examples;
+          List.map (sprintf "tools/%s.d.byte") tools;
+        ]
         and common = "META" :: "obus.docdir/index.html" :: List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools in
 
         virtual_rule "all" & common @ byte @ (if have_native then native else []) @ List.map (sprintf "tools/%s.best") tools;
         virtual_rule "byte" & common @ byte;
         virtual_rule "native" & common @ native;
+        virtual_rule "debug" & common @ debug;
 
         (* +---------------------------------------------------------+
            | Libraries                                               |
@@ -214,13 +220,13 @@ let _ =
            when compiling, computing dependencies, generating
            documentation and linking. *)
         List.iter
-          (fun package -> flag_all_stages ("pkg_" ^ package) (S[A"-package"; A package]))
+          (fun package -> flag_all_stages ["pkg_" ^ package] (S[A"-package"; A package]))
           packages;
 
         (* Like -package but for extensions syntax. Morover -syntax is
            useless when linking. *)
         List.iter
-          (fun syntax -> flag_all_stages_except_link ("syntax_" ^ syntax) (S[A"-syntax"; A syntax]))
+          (fun syntax -> flag_all_stages_except_link ["syntax_" ^ syntax] (S[A"-syntax"; A syntax]))
           syntaxes;
 
         (* +---------------------------------------------------------+
@@ -229,13 +235,16 @@ let _ =
 
         List.iter
           (fun (tag, file) ->
-             flag_all_stages_except_link tag & S[A"-ppopt"; A file];
+             flag_all_stages_except_link [tag] & S[A"-ppopt"; A file];
              dep ["ocaml"; "ocamldep"; tag] [file])
           intern_syntaxes;
 
         (* +---------------------------------------------------------+
            | Other                                                   |
            +---------------------------------------------------------+ *)
+
+        (* Keep debugging message if compiling in debug mode *)
+        flag_all_stages_except_link ["pkg_lwt.syntax.log"; "debug"] & S[A"-ppopt"; A"-lwt-debug"];
 
         (* Generation of the OBus_version.ml file *)
         rule "version" ~prod:"src/private/OBus_version.ml" ~dep:"VERSION"

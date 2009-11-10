@@ -91,7 +91,7 @@ end = struct
       try_lwt
         Lwt_stream.get_while (fun _ -> true) (Lwt_stream.map parse_line (Lwt_io.lines_of_file fname))
       with exn ->
-        ERROR("failed to load cookie file %s: %s" (keyring_file_name context) (OBus_util.string_of_exn exn));
+        Log#error "failed to load cookie file %s: %s" (keyring_file_name context) (OBus_util.string_of_exn exn);
         fail exn
     else
       return []
@@ -107,22 +107,22 @@ end = struct
       | 0 ->
           (try
              Unix.unlink fname;
-             LOG("stale lock file %s removed" fname)
+             Log#info "stale lock file %s removed" fname
            with Unix.Unix_error(error, _, _) as exn ->
-             ERROR("failed to remove stale lock file %s: %s" fname (Unix.error_message error));
+             Log#error "failed to remove stale lock file %s: %s" fname (Unix.error_message error);
              raise exn);
           (try
              really_lock ();
              return ()
            with Unix.Unix_error(error, _, _) as exn ->
-             ERROR("failed to lock file %s after removing it: %s" fname (Unix.error_message error));
+             Log#error "failed to lock file %s after removing it: %s" fname (Unix.error_message error);
              raise exn)
       | n ->
           try
             really_lock ();
             return ()
           with exn ->
-            LOG("waiting for lock file (%d) %s" n fname);
+            Log#info "waiting for lock file (%d) %s" n fname;
             lwt () = Lwt_unix.sleep 0.250 in
             aux (n - 1)
     in
@@ -132,7 +132,7 @@ end = struct
     try
       Unix.unlink fname
     with Unix.Unix_error(error, _, _) as exn ->
-      ERROR("failed to unlink file %s: %s" fname (Unix.error_message error));
+      Log#error "failed to unlink file %s: %s" fname (Unix.error_message error);
       raise exn
 
   let save context cookies =
@@ -145,7 +145,7 @@ end = struct
       try
         Unix.mkdir dir 0o700
       with Unix.Unix_error(error, _, _) as exn ->
-        ERROR("failed to create directory %s with permissions 0600: %s" dir (Unix.error_message error));
+        Log#error "failed to create directory %s with permissions 0600: %s" dir (Unix.error_message error);
         raise exn
     end;
     lwt () = lock_file lock_fname in
@@ -154,14 +154,14 @@ end = struct
         try_lwt
           Lwt_io.lines_to_file tmp_fname (Lwt_stream.map print_line (Lwt_stream.of_list cookies))
         with exn ->
-          ERROR("unable to write temporary keyring file %s: %s" tmp_fname (OBus_util.string_of_exn exn));
+          Log#error "unable to write temporary keyring file %s: %s" tmp_fname (OBus_util.string_of_exn exn);
           fail exn
       in
       try
         Unix.rename tmp_fname fname;
         return ()
       with Unix.Unix_error(error, _, _) as exn ->
-        ERROR("unable to rename file %s to %s: %s" tmp_fname fname (Unix.error_message error));
+        Log#error "unable to rename file %s to %s: %s" tmp_fname fname (Unix.error_message error);
         fail exn
       finally
         unlock_file lock_fname;
@@ -191,7 +191,7 @@ let stream_of_channels ic oc = {
 }
 
 let send_line mode stream line =
-  DEBUG("%s: sending: %S" mode line);
+  Log#debug "%s: sending: %S" mode line;
   let rec aux i =
     if i = String.length line then
       lwt () = stream.put_char '\r' in
@@ -260,7 +260,7 @@ let preprocess_line line =
 
 let rec recv mode command_parser stream =
   lwt line = recv_line (Buffer.create 42) stream 0 in
-  DEBUG("%s: received: %S" mode line);
+  Log#debug "%s: received: %S" mode line;
 
   (* If a parse failure occur, return an error and try again *)
   match
@@ -351,7 +351,7 @@ struct
   class mech_dbus_cookie_sha1_handler = object
     method init = return (Mech_continue(string_of_int (Unix.getuid ())))
     method data chal =
-      DEBUG("client: dbus_cookie_sha1: chal: %s" chal);
+      Log#debug "client: dbus_cookie_sha1: chal: %s" chal;
       let context, id, chal = Scanf.sscanf chal "%[^/\\ \n\r.] %ld %[a-fA-F0-9]%!" (fun context id chal -> (context, id, chal)) in
       lwt keyring = Keyring.load context in
       let cookie =
@@ -362,7 +362,7 @@ struct
       in
       let rand = hex_encode (OBus_util.random_string 16) in
       let resp = sprintf "%s %s" rand (hex_encode (OBus_util.sha_1 (sprintf "%s:%s:%s" chal rand cookie.Cookie.cookie))) in
-      DEBUG("client: dbus_cookie_sha1: resp: %s" resp);
+      Log#debug "client: dbus_cookie_sha1: resp: %s" resp;
       return (Mech_ok resp)
     method abort = ()
   end
@@ -533,7 +533,7 @@ struct
 
     method data resp =
       try
-        DEBUG("server: dbus_cookie_sha1: resp: %s" resp);
+        Log#debug "server: dbus_cookie_sha1: resp: %s" resp;
         match state with
           | `State1 ->
               lwt keyring = Keyring.load context in
@@ -554,7 +554,7 @@ struct
               in
               let rand = hex_encode (OBus_util.random_string 16) in
               let chal = sprintf "%s %ld %s" context id rand in
-              DEBUG("server: dbus_cookie_sha1: chal: %s" chal);
+              Log#debug "server: dbus_cookie_sha1: chal: %s" chal;
               state <- `State2(cookie, rand);
               return (Mech_continue chal)
 
