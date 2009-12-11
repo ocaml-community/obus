@@ -58,10 +58,10 @@ let tests = [
   "test_serialization";
   "test_printing";
   "test_communication";
-  "valid";
-  "auth";
-  "server";
-  "errors";
+  "test_valid";
+  "test_auth";
+  "test_server";
+  "test_errors";
 ]
 
 (* Syntax extensions used internally, (tag and the byte-code file). *)
