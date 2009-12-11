@@ -143,7 +143,7 @@ let rule_of_string str =
                 Printf.ksprintf failwith "OBus_match.rule_of_string: invalid key (%s)" key
   end mr l
 
-let obus_rule = OBus_type.map OBus_type.Perv.obus_string rule_of_string string_of_rule
+let obus_rule = OBus_type.map OBus_type.Pervasives.obus_string rule_of_string string_of_rule
 
 let match_key matcher value = match matcher with
   | None -> true

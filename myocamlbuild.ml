@@ -62,7 +62,6 @@ let tests = [
   "auth";
   "server";
   "errors";
-  "logging";
 ]
 
 (* Syntax extensions used internally, (tag and the byte-code file). *)
@@ -192,6 +191,7 @@ let _ =
         virtual_rule "byte" & common @ byte;
         virtual_rule "native" & common @ native;
         virtual_rule "debug" & common @ debug;
+        virtual_rule "tests" & (List.map (sprintf "test/%s.d.byte") tests);
 
         (* +---------------------------------------------------------+
            | Libraries                                               |

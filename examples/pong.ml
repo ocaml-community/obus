@@ -11,7 +11,7 @@
 
 open Lwt
 open Lwt_io
-open OBus_type.Perv
+open OBus_type.Pervasives
 
 module M = OBus_object.Make(struct
                               type obj = OBus_object.t

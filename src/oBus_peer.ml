@@ -8,7 +8,7 @@
  *)
 
 open Lwt
-open OBus_type.Perv
+open OBus_type.Pervasives
 
 type t = {
   connection : OBus_connection.t;

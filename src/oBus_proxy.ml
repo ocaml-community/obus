@@ -9,7 +9,7 @@
 
 open Lwt
 open OBus_peer
-open OBus_type.Perv
+open OBus_type.Pervasives
 
 type t = {
   peer : OBus_peer.t;

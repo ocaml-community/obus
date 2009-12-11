@@ -8,7 +8,7 @@
  *)
 
 open Lwt
-open OBus_type.Perv
+open OBus_type.Pervasives
 
 let op_method_call member typ proxy = OBus_proxy.method_call proxy ~interface:"org.freedesktop.DBus.Properties" ~member typ
 

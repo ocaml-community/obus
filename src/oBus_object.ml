@@ -14,7 +14,7 @@ open OBus_introspect
 open OBus_value
 open OBus_private
 open OBus_connection
-open OBus_type.Perv
+open OBus_type.Pervasives
 
 module MethodMap = OBus_util.MakeMap(struct
                                        type t = OBus_name.interface option * OBus_name.member * tsequence
@@ -70,7 +70,7 @@ module Make(Object : Object) =
 struct
   exception Pack of Object.obj
 
-  let obus_t = OBus_type.map_with_context OBus_type.Perv.obus_path
+  let obus_t = OBus_type.map_with_context OBus_type.Pervasives.obus_path
     (fun context path -> match context with
        | Context(connection, message) -> begin
            match connection#get with

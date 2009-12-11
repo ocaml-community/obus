@@ -166,7 +166,7 @@ let output xo doc =
                              \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">"));
   aux (to_xml doc)
 
-let obus_document = OBus_type.map OBus_type.Perv.obus_string
+let obus_document = OBus_type.map OBus_type.Pervasives.obus_string
   (fun x ->
      input (Xmlm.make_input ~strip:true (`String(0, x))))
   (fun x ->

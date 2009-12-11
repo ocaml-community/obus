@@ -8,7 +8,7 @@
  *)
 
 open OBus_name
-open OBus_type.Perv
+open OBus_type.Pervasives
 open Lwt
 
 let test f s =

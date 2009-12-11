@@ -127,7 +127,7 @@ val bitwise64 : (int64, 'cl) t -> ('a * int) list -> ('a list, 'cl) t
 
 (** {6 Default type combinators} *)
 
-module Perv : sig
+module Pervasives : sig
 
   (** This module is automatically opened by the syntax extension *)
 

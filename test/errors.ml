@@ -14,8 +14,6 @@ let filter message = assert false
 let handler x = failwith "plop"
 
 let _ =
-  OBus_info.verbose := true;
-  OBus_info.debug := true;
   Printexc.record_backtrace true;
   ignore (Lwt_sequence.add_r filter (incoming_filters loopback));
   Lwt_event.always_notify handler (OBus_signal.dyn_connect (OBus_proxy.make (OBus_peer.anonymous loopback) []) "aa" "plop")#event;

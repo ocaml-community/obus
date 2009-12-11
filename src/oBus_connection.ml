@@ -11,7 +11,7 @@ open Printf
 open OBus_message
 open OBus_private
 open OBus_value
-open OBus_type.Perv
+open OBus_type.Pervasives
 open Lwt
 
 exception Connection_closed

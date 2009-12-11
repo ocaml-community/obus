@@ -251,7 +251,7 @@ let bitwise64 t bits =
    | Predefined types                                                |
    +-----------------------------------------------------------------+ *)
 
-module Perv =
+module Pervasives =
 struct
 
   let obus_byte = Btype {

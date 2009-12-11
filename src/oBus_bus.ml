@@ -9,7 +9,7 @@
 
 open Lwt
 open OBus_private
-open OBus_type.Perv
+open OBus_type.Pervasives
 
 let op_interface = "org.freedesktop.DBus"
 
