@@ -152,7 +152,8 @@ module Pervasives : sig
   val obus_object_path : OBus_path.t basic
   val obus_path : OBus_path.t basic
 
-  val obus_list : ('a, _) cl_single -> ('a list) container
+  val obus_list : ('a, _) cl_single -> 'a list container
+  val obus_array : ('a, _) cl_single -> 'a array container
   val obus_dict : ('a, _) cl_basic -> ('b, _) cl_single -> (('a * 'b) list) container
   val obus_structure : ('a, _) cl_sequence -> 'a container
   val obus_variant : OBus_value.single container

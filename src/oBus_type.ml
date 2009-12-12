@@ -390,6 +390,8 @@ struct
                   | _ -> raise Cast_failure)
     }
 
+  let obus_array elt = map (obus_list elt) Array.of_list Array.to_list
+
   let obus_byte_array = Ctype {
     c_type = Tarray(Tbasic Tbyte);
     c_make = (fun str -> byte_array str);
