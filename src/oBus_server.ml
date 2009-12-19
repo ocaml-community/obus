@@ -234,8 +234,9 @@ let make_server ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) ()
 
           Lwt_sequence.set exit_hook (fun () -> Lazy.force shutdown);
 
-          (* Launch waiting loops *)
-          List.iter (fun listen -> listener_threads := listen_loop server listen :: !listener_threads) listeners;
+          (* Launch waiting loops. Yield so the user have the time to
+             bind the event before the first connection: *)
+          List.iter (fun listen -> listener_threads := (Lwt_unix.yield () >> listen_loop server listen) :: !listener_threads) listeners;
 
           let addresses = List.map2 (fun (fds, addr) guid -> { address = addr; guid = Some guid }) l guids in
           return (event, addresses, shutdown)
