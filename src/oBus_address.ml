@@ -151,15 +151,15 @@ let session = lazy(
     | Some line ->
         try_lwt return (of_string line)
     | None ->
-        Log#notice "environment variable %s not found" session_bus_variable;
+        Log#warning "environment variable %s not found" session_bus_variable;
         try_lwt
           (* Try with the root window property, this is bit ugly and
              it depends on the presence of xprop... *)
           lwt line = Lwt_process.pread_line ("xprop", [|"xprop"; "-root"; session_bus_property|]) in
           Scanf.sscanf line "_DBUS_SESSION_BUS_ADDRESS(STRING) = %S" (fun x -> try_lwt return (of_string x))
         with exn ->
-          Log#notice "can not get session bus address from property %s \
-                      on root window (maybe x11 is not running), error is: %s"
+          Log#info "can not get session bus address from property %s \
+                    on root window (maybe x11 is not running), error is: %s"
             session_bus_property (OBus_util.string_of_exn exn);
           return [default_session_bus_addresses]
 )
