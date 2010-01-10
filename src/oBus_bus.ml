@@ -80,6 +80,12 @@ exception Service_unknown of string
 exception Name_has_no_owner of string
  with obus(prefix ^ "NameHasNoOwner")
 
+exception Adt_audit_data_unknown of string
+ with obus(prefix ^ "AdtAuditDataUnknown")
+
+exception SELinux_security_context_unknown of string
+ with obus(prefix ^ "SELinuxSecurityContextUnknown")
+
 let acquired_names bus = match bus#get with
   | Crashed exn -> raise exn
   | Running connection -> connection.acquired_names
@@ -122,9 +128,11 @@ OP_method ListQueuedOwners : string -> string list
 OP_method AddMatch : OBus_match.rule -> unit
 OP_method RemoveMatch : OBus_match.rule -> unit
 
-OP_method GetConnectionUnixUser : string -> int
-OP_method GetConnectionUnixProcessId : string -> int
-OP_method GetConnectionSelinuxSecurityContext : string -> byte_array
+OP_method UpdateActivationEnvironment : (string, string) dict -> unit
+OP_method GetConnectionUnixUser : string -> uint
+OP_method GetConnectionUnixProcessID : string -> uint
+OP_method GetAdtAuditSessionData : string -> byte_array
+OP_method GetConnectionSELinuxSecurityContext : string -> byte_array
 OP_method ReloadConfig : unit
 OP_method GetId : OBus_uuid.t
 

@@ -162,9 +162,14 @@ val remove_match : t -> OBus_match.rule -> unit Lwt.t
 
 (** These functions are also offered by the message bus *)
 
-val get_connection_unix_user : t -> string -> int Lwt.t
-val get_connection_unix_process_id : t -> string -> int Lwt.t
-val get_connection_selinux_security_context : t -> string -> string Lwt.t
+exception Adt_audit_data_unknown of string
+exception SELinux_security_context_unknown of string
+
+val update_activation_environment : t -> (string * string) list -> unit Lwt.t
+val get_connection_unix_user : t -> OBus_name.bus -> int Lwt.t
+val get_connection_unix_process_id : t -> OBus_name.bus -> int Lwt.t
+val get_adt_audit_session_data : t -> OBus_name.bus -> string Lwt.t
+val get_connection_selinux_security_context : t -> OBus_name.bus -> string Lwt.t
 val reload_config : t -> unit Lwt.t
 val get_id : t -> OBus_uuid.t Lwt.t
 
