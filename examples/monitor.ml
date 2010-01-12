@@ -23,12 +23,11 @@ let filter what_bus message =
 let add_filter what_bus lbus =
   lwt bus = Lazy.force lbus in
   let _ = Lwt_sequence.add_r (filter what_bus) (OBus_connection.incoming_filters bus) in
-  Lwt_util.iter
+  Lwt_list.iter_p
     (fun typ -> OBus_bus.add_match bus (OBus_match.rule ~typ ()))
     [ `method_call; `method_return; `error; `signal ]
 
-let () = Lwt_main.run begin
+lwt () =
   lwt () = add_filter "session" OBus_bus.session <&> add_filter "system" OBus_bus.system in
   lwt () = Lwt_io.printlf "type Ctrl+C to stop" in
   fst (wait ())
-end

@@ -16,7 +16,7 @@ open Lwt_io
 let service = "org.freedesktop.Notifications"
 let name = "org.ocamlcore.forge.obus"
 
-let () = Lwt_main.run begin
+lwt () =
   lwt bus = Lazy.force OBus_bus.session in
 
   lwt id = OBus_bus.get_id bus in
@@ -24,11 +24,11 @@ let () = Lwt_main.run begin
 
   lwt names = OBus_bus.list_names bus in
   lwt () = printlf "names on the session bus:" in
-  lwt () = Lwt_util.iter (printlf "  %s") names in
+  lwt () = Lwt_list.iter_p (printlf "  %s") names in
 
   lwt names = OBus_bus.list_activatable_names bus in
   lwt () = printlf "these names are activatable:" in
-  lwt () = Lwt_util.iter (printlf "  %s") names in
+  lwt () = Lwt_list.iter_p (printlf "  %s") names in
 
   lwt () = printf "trying to start service %S: " service in
   lwt result = OBus_bus.start_service_by_name bus service in
@@ -49,4 +49,3 @@ let () = Lwt_main.run begin
   in
 
   printlf "my names are: %s" (String.concat ", " (OBus_bus.acquired_names bus))
-end

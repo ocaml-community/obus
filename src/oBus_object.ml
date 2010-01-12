@@ -134,7 +134,7 @@ struct
       | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
           dyn_emit_signal connection ?destination ~interface ~member ~path:obj.path body
       | None, None ->
-          Lwt_util.iter
+          Lwt_list.iter_p
             (fun connection ->
                dyn_emit_signal connection ~interface ~member ~path:obj.path body)
             obj.exports

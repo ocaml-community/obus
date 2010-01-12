@@ -22,7 +22,7 @@ let handle_multimedia_keys device =
        return ())
     (Hal_device.condition device)#event
 
-let () = Lwt_main.run begin
+lwt () =
   lwt session = Lazy.force OBus_bus.session in
 
   (* +---------------------------------------------------------------+
@@ -66,10 +66,9 @@ let () = Lwt_main.run begin
   (* Find all keyboards and handle events on them *)
   lwt keyboards = Hal_manager.find_device_by_capability manager "input.keyboard" in
   lwt () = printlf "keyboard founds: %d" (List.length keyboards) in
-  lwt () = Lwt_util.iter (fun dev -> printlf "  %s" (OBus_path.to_string (Hal_device.udi dev))) keyboards in
+  lwt () = Lwt_list.iter_p (fun dev -> printlf "  %s" (OBus_path.to_string (Hal_device.udi dev))) keyboards in
 
   List.iter handle_multimedia_keys keyboards;
 
   lwt () = printf "type Ctrl+C to stop\n%!" in
   fst (wait ())
-end

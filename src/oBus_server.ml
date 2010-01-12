@@ -161,7 +161,7 @@ let fds_of_address addr = match addr with
         | Some `Ipv4 -> AI_FAMILY PF_INET :: opts
         | Some `Ipv6 -> AI_FAMILY PF_INET6 :: opts
         | None -> opts in
-      lwt fds = Lwt_util.fold_left
+      lwt fds = Lwt_list.fold_left_s
         (fun fds ai ->
            try_lwt
              lwt fd = make_socket ai.ai_family ai.ai_socktype ai.ai_addr in
@@ -183,7 +183,7 @@ let make_server ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) ()
   match addresses with
     | [] -> fail (Invalid_argument "OBus_server.make: no addresses given")
     | addresses ->
-        lwt l = Lwt_util.fold_left
+        lwt l = Lwt_list.fold_left_s
           (fun acc address ->
              try_lwt
                lwt x = fds_of_address address in

@@ -19,7 +19,7 @@ let list n lbus =
   (* Get the list of all names on the session bus *)
   lwt names = OBus_bus.list_names bus in
 
-  Lwt_util.iter
+  Lwt_list.iter_p
     (fun name ->
        lwt owner = OBus_bus.get_name_owner bus name in
        printlf "  %s -> %s" owner name)
@@ -27,7 +27,6 @@ let list n lbus =
     (* Select only names which are not connection unique names *)
     (List.filter (fun s -> s.[0] <> ':') names)
 
-let () = Lwt_main.run begin
+lwt () =
   lwt () = list "session" OBus_bus.session in
   list "system" OBus_bus.system
-end
