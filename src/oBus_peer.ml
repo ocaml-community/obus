@@ -8,7 +8,7 @@
  *)
 
 open Lwt
-open OBus_type.Pervasives
+open OBus_pervasives
 
 type t = {
   connection : OBus_connection.t;
@@ -16,12 +16,10 @@ type t = {
 } with projection
 
 let obus_t = OBus_type.map_with_context <:obus_type< unit >>
-  (fun context () -> match context with
-     | OBus_connection.Context(connection, message) ->
-         { connection = connection; name = OBus_message.sender message }
-     | _ ->
-         raise OBus_type.Cast_failure)
-  (fun _ -> ())
+  (fun context () ->
+     let connection, message = OBus_connection.cast_context context in
+     { connection = connection; name = OBus_message.sender message })
+  ignore
 
 let make c n = { connection = c; name = Some n }
 let anonymous c = { connection = c; name = None }

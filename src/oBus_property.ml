@@ -8,7 +8,7 @@
  *)
 
 open Lwt
-open OBus_type.Pervasives
+open OBus_pervasives
 
 let op_method_call member typ proxy = OBus_proxy.method_call proxy ~interface:"org.freedesktop.DBus.Properties" ~member typ
 
@@ -24,7 +24,7 @@ let dyn_get_all proxy ~interface = _dyn_get_all proxy interface
 
 let get proxy ~interface ~member typ =
   lwt value, (connection, message) = dyn_get_with_context proxy interface member in
-  return (OBus_type.cast_single typ ~context:(OBus_connection.Context(connection, message)) value)
+  return (OBus_type.cast_single typ ~context:(OBus_connection.make_context (connection, message)) value)
 
 let set proxy ~interface ~member typ x =
   dyn_set proxy ~interface ~member (OBus_type.make_single typ x)

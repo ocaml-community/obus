@@ -77,7 +77,7 @@ let dyn_connect proxy ~interface ~member =
 
 let cast interface member typ (connection, message) =
   try
-    Some(OBus_type.cast_sequence typ ~context:(OBus_connection.Context(connection, message)) (OBus_message.body message))
+    Some(OBus_type.cast_sequence typ ~context:(OBus_connection.make_context (connection, message)) (OBus_message.body message))
   with exn ->
     Log#exn exn "failed to cast signal from %S, interface %S, member %S with signature %S to %S"
       (match OBus_message.sender message with None -> "" | Some n -> n) interface member

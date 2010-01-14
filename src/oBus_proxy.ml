@@ -9,7 +9,7 @@
 
 open Lwt
 open OBus_peer
-open OBus_type.Pervasives
+open OBus_pervasives
 
 type t = {
   peer : OBus_peer.t;
@@ -25,13 +25,11 @@ let connection proxy = proxy.peer.connection
 let name proxy = proxy.peer.name
 
 let obus_t = OBus_type.map_with_context <:obus_type< object_path >>
-  (fun context path -> match context with
-     | OBus_connection.Context(connection, message) ->
-         { peer = { connection = connection;
-                    name = OBus_message.sender message };
-           path = path }
-     | _ ->
-         raise OBus_type.Cast_failure)
+  (fun context path ->
+     let connection, message = OBus_connection.cast_context context in
+     { peer = { connection = connection;
+                name = OBus_message.sender message };
+       path = path })
   (fun proxy -> proxy.path)
 
 let method_call proxy ?interface ~member typ =

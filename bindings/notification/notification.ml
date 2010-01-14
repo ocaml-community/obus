@@ -9,7 +9,7 @@
 
 open Lwt
 open OBus_value
-open OBus_type.Pervasives
+open OBus_pervasives
 
 let server_name = "org.freedesktop.Notifications"
 let server_path = ["org"; "freedesktop"; "Notifications"]

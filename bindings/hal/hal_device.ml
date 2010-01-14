@@ -9,7 +9,7 @@
 
 open Lwt
 open OBus_value
-open OBus_type.Pervasives
+open OBus_pervasives
 
 type t = OBus_proxy.t
   with obus

@@ -11,7 +11,7 @@
 
 open Lwt
 open Lwt_io
-open OBus_type.Pervasives
+open OBus_pervasives
 
 include OBus_interface.Make(struct let name = "org.plop.foo" end)
 

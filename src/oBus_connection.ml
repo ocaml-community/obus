@@ -8,10 +8,10 @@
  *)
 
 open Printf
+open OBus_private_type
 open OBus_message
 open OBus_private
 open OBus_value
-open OBus_type.Pervasives
 open Lwt
 
 exception Connection_closed
@@ -22,19 +22,30 @@ type t = OBus_private.packed_connection
 
 type filter = OBus_private.filter
 
-exception Context of t * OBus_message.t
+type context = t * OBus_message.t
 
-let obus_t = OBus_type.map_with_context obus_unit
-  (fun context () -> match context with
-     | Context(connection, message) -> connection
-     | _ -> raise OBus_type.Cast_failure)
-  (fun _ -> ())
+exception Context of context
 
-let obus_context = OBus_type.map_with_context obus_unit
-  (fun context () -> match context with
-     | Context(connection, message) -> (connection, message)
-     | _ -> raise OBus_type.Cast_failure)
-  (fun _ -> ())
+let make_context context = Context context
+let cast_context = function
+  | Context context -> context
+  | _ -> raise OBus_type.Cast_failure
+
+let obus_t = Stype {
+  s_type = Tnil;
+  s_make = (fun _ -> Tnil);
+  s_cast = (fun context l -> match context with
+              | Context(connection, message) -> (connection, l)
+              | _ -> raise OBus_type.Cast_failure);
+}
+
+let obus_context = Stype {
+  s_type = Tnil;
+  s_make = (fun _ -> Tnil);
+  s_cast = (fun context l -> match context with
+              | Context context -> (context, l)
+              | _ -> raise OBus_type.Cast_failure);
+}
 
 (* Mapping from server guid to connection. *)
 module GuidMap = OBus_util.MakeMap(struct
@@ -379,7 +390,7 @@ let dispatch_message connection message = match message with
         | "GetMachineId", [] ->
             ignore
               (try_bind (fun _ -> Lazy.force OBus_info.machine_uuid)
-                 (fun machine_uuid -> send_reply connection.packed message <:obus_type< string >> (OBus_uuid.to_string machine_uuid))
+                 (fun machine_uuid -> dyn_send_reply connection.packed message [basic(string (OBus_uuid.to_string machine_uuid))])
                  (fun exn ->
                     lwt () = send_exn connection.packed message (Failure "cannot get machine uuuid") in
                     fail exn))

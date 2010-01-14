@@ -27,4 +27,4 @@ let generate () =
   uuid.[15] <- (Char.unsafe_chr (Int32.to_int v));
   uuid
 
-let obus_t = OBus_type.map OBus_type.Pervasives.obus_string of_string to_string
+let obus_t = OBus_type.map OBus_private_type.obus_string of_string to_string

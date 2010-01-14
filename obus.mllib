@@ -4,6 +4,7 @@ src/private/OBus_match_rule_lexer
 src/private/OBus_cache
 src/private/OBus_private
 src/private/OBus_private_bus
+src/private/OBus_private_type
 src/private/OBus_util
 src/private/OBus_xml_parser
 src/private/OBus_version
@@ -32,4 +33,5 @@ src/OBus_value
 src/OBus_match
 src/OBus_server
 src/OBus_object
+src/OBus_pervasives
 OBus_config

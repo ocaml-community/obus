@@ -174,13 +174,13 @@ and connection_state =
 
 (* Connections are packed into objects to make them comparable *)
 and packed_connection = <
-    get : connection_state;
+  get : connection_state;
   (* Get the connection state *)
 
   set_crash : exn -> exn Lwt.t;
   (* Put the connection in a 'crashed' state if not already
      done. Returns the exception to which the connection is set to. *)
->;;
+>
 
 (* +-----------------------------------------------------------------+
    | OBus_utils                                                           |

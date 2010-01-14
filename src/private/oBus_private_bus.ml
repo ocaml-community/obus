@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open OBus_type.Pervasives
+open OBus_pervasives
 open Lwt
 
 let destination = "org.freedesktop.DBus"

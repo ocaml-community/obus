@@ -9,7 +9,7 @@
 
 open Lwt
 open OBus_value
-open OBus_type.Pervasives
+open OBus_pervasives
 
 type t = OBus_proxy.t with obus
 
@@ -23,13 +23,11 @@ include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Manager" end)
 
 (* Hal seems to returns string instead of object path... *)
 let obus_broken_device = OBus_type.map_with_context obus_string
-  (fun context path -> match context with
-     | OBus_connection.Context(connection, message) ->
-         { OBus_proxy.peer = { OBus_peer.connection = connection;
-                               OBus_peer.name = OBus_message.sender message };
-           OBus_proxy.path = OBus_path.of_string path }
-     | _ ->
-         raise OBus_type.Cast_failure)
+  (fun context path ->
+     let connection, message = OBus_connection.cast_context context in
+     { OBus_proxy.peer = { OBus_peer.connection = connection;
+                           OBus_peer.name = OBus_message.sender message };
+       OBus_proxy.path = OBus_path.of_string path })
   (fun proxy -> OBus_path.to_string (OBus_proxy.path proxy))
 
 OP_method GetAllDevices : broken_device list

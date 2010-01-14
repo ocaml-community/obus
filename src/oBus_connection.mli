@@ -90,11 +90,17 @@ val name : t -> OBus_name.bus option
 
 (** {6 Contextes} *)
 
-exception Context of t * OBus_message.t
-  (** The context used to cast messages *)
+type context = t * OBus_message.t
+ with obus(sequence)
+     (** The context contains the necessary informations to cast a
+         message body *)
 
-val obus_context : (t * OBus_message.t) OBus_type.sequence
-  (** Returns the context of a message *)
+val make_context : context -> OBus_type.context
+  (** [context context] creates an obus-type context *)
+
+val cast_context : OBus_type.context -> context
+  (** [get_context context] extract informations from an obus-type
+      context. *)
 
 (** {6 Sending messages} *)
 
