@@ -50,48 +50,53 @@ type t = {
     relevant, it is overridden at sending-time *)
 
 val make :
-  ?flags:flags ->
-  ?serial:serial ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  typ:typ ->
+  ?flags : flags ->
+  ?fds : Unix.file_descr array ->
+  ?serial : serial ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  typ : typ ->
   body -> t
 
 val method_call :
-  ?flags:flags ->
-  ?serial:serial ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  ?interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : flags ->
+  ?fds : Unix.file_descr array ->
+  ?serial : serial ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
   body -> t
 
 val method_return :
-  ?flags:flags ->
-  ?serial:serial ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  reply_serial:serial ->
+  ?flags : flags ->
+  ?fds : Unix.file_descr array ->
+  ?serial : serial ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  reply_serial : serial ->
   body -> t
 
 val error :
-  ?flags:flags ->
-  ?serial:serial ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  reply_serial:serial ->
-  error_name:OBus_name.error ->
+  ?flags : flags ->
+  ?fds : Unix.file_descr array ->
+  ?serial : serial ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  reply_serial : serial ->
+  error_name : OBus_name.error ->
   body -> t
 
 val signal :
-  ?flags:flags ->
-  ?serial:serial ->
-  ?sender:OBus_name.bus ->
-  ?destination:OBus_name.bus ->
-  path:OBus_path.t ->
-  interface:OBus_name.interface ->
-  member:OBus_name.member ->
+  ?flags : flags ->
+  ?fds : Unix.file_descr array ->
+  ?serial : serial ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
   body -> t
 
 (** {6 Pretty-printing} *)
