@@ -187,10 +187,10 @@ let _ =
         ]
         and common = "META" :: "obus.docdir/index.html" :: List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools in
 
-        virtual_rule "all" & common @ byte @ (if have_native then native else []) @ List.map (sprintf "tools/%s.best") tools;
-        virtual_rule "byte" & common @ byte;
-        virtual_rule "native" & common @ native;
-        virtual_rule "debug" & common @ debug;
+        virtual_rule "all" & byte @ (if have_native then native else []) @ List.map (sprintf "tools/%s.best") tools @ common;
+        virtual_rule "byte" & byte @ common;
+        virtual_rule "native" & native @ common;
+        virtual_rule "debug" & debug @ common;
         virtual_rule "tests" & (List.map (sprintf "test/%s.d.byte") tests);
 
         (* +---------------------------------------------------------+
