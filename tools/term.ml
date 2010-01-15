@@ -47,6 +47,7 @@ let implem_term_of_basic = function
   | Tstring -> term "string" []
   | Tsignature -> term "signature" []
   | Tobject_path -> term "OBus_proxy.t" []
+  | Tunix_fd -> term "file_descr" []
 
 let rec implem_term_of_single = function
   | Tbasic t -> implem_term_of_basic t
@@ -70,6 +71,7 @@ let interf_term_of_basic = function
   | Tstring -> term "string" []
   | Tsignature -> term "OBus_value.signature" []
   | Tobject_path -> term "OBus_proxy.t" []
+  | Tunix_fd -> term "Lwt_unix.file_descr" []
 
 let rec interf_term_of_single = function
   | Tbasic t -> interf_term_of_basic t

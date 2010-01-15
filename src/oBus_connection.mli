@@ -88,6 +88,10 @@ val name : t -> OBus_name.bus option
 
       In other cases it is [None]. *)
 
+val support_unix_fd : t -> bool
+  (** Tell whether the underlying transport support file descriptors
+      passing. *)
+
 (** {6 Contextes} *)
 
 type context = t * OBus_message.t

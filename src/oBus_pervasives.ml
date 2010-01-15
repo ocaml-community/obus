@@ -128,14 +128,24 @@ let obus_object_path = Btype {
 
 let obus_path = obus_object_path
 
+let obus_unix_file_descr = Btype {
+  b_type = Tunix_fd;
+  b_make = unix_fd;
+  b_cast = (fun context -> function
+              | Unix_fd fd -> Unix.dup fd
+              | _ -> raise Cast_failure);
+}
+
+let obus_file_descr = map obus_unix_file_descr Lwt_unix.of_unix_file_descr Lwt_unix.unix_file_descr
+
 let obus_list elt =
-  let typ = type_single elt
-  and make = make_single elt
-  and cast = _cast_single elt in
+  let typ = type_single elt in
   Ctype {
     c_type = Tarray typ;
-    c_make = (fun l -> array typ (List.map make l));
-    c_cast = (fun context -> function
+    c_make = (let make = make_single elt in
+              fun l -> array typ (List.map make l));
+    c_cast = (let cast = _cast_single elt in
+              fun context -> function
                 | Array(typ', l) when typ' = typ ->
                     List.map (fun x -> cast context x) l
                 | Byte_array s when typ = Tbasic Tbyte ->
@@ -151,23 +161,20 @@ let obus_array elt = map (obus_list elt) Array.of_list Array.to_list
 
 let obus_byte_array = Ctype {
   c_type = Tarray(Tbasic Tbyte);
-  c_make = (fun str -> byte_array str);
+  c_make = byte_array;
   c_cast = (fun context -> function
               | Byte_array s -> s
               | _ -> raise Cast_failure);
 }
 
 let obus_dict tyk tyv =
-  let typk = type_basic tyk
-  and typv = type_single tyv
-  and makek = make_basic tyk
-  and makev = make_single tyv
-  and castk = _cast_basic tyk
-  and castv = _cast_single tyv in
+  let typk = type_basic tyk and typv = type_single tyv in
   Ctype {
-    c_type = Tdict(typk,  typv);
-    c_make = (fun l -> dict typk typv (List.map (fun (k, v) -> (makek k, makev v)) l));
-    c_cast = (fun context -> function
+    c_type = Tdict(typk, typv);
+    c_make = (let makek = make_basic tyk and makev = make_single tyv in
+              fun l -> dict typk typv (List.map (fun (k, v) -> (makek k, makev v)) l));
+    c_cast = (let castk = _cast_basic tyk and castv = _cast_single tyv in
+              fun context -> function
                 | Dict(typk', typv', l) when typk' = typk && typv' = typv ->
                     List.map (fun (k, v) -> (castk context k, castv context v)) l
                 | _ ->
@@ -176,11 +183,11 @@ let obus_dict tyk tyv =
 
 let obus_structure ty = Ctype {
   c_type = Tstructure(type_sequence ty);
-  c_make = (let f = make_sequence ty in
-            fun x -> structure (f x));
-  c_cast = (let f = _cast_sequence ty in
+  c_make = (let make = make_sequence ty in
+            fun x -> structure (make x));
+  c_cast = (let cast = _cast_sequence ty in
             fun context -> function
-              | Structure l -> f context l
+              | Structure l -> cast context l
               | _ -> raise Cast_failure);
 }
 
@@ -215,3 +222,5 @@ type ('a, 'b) dict = ('a * 'b) list
 type 'a structure = 'a
 type variant = OBus_value.single
 type byte_array = string
+type file_descr = Lwt_unix.file_descr
+type unix_file_descr = Unix.file_descr

@@ -24,6 +24,7 @@ type tbasic =
   | Tstring
   | Tsignature
   | Tobject_path
+  | Tunix_fd
  with constructor
 
 type tsingle =
@@ -68,6 +69,7 @@ type basic =
   | String of string
   | Signature of signature
   | Object_path of OBus_path.t
+  | Unix_fd of Unix.file_descr
  with constructor
 
 type single =
@@ -121,6 +123,9 @@ val ssignature : signature -> single
 
 val sobject_path : OBus_path.t -> single
   (** [sobject_path x = basic (object_path x)] *)
+
+val sunix_fd : Unix.file_descr -> single
+  (** [sunix_fd x = basic (unix_fd x)] *)
 
 (** {6 OBus_utils} *)
 

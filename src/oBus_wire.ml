@@ -8,6 +8,7 @@
  *)
 
 open Printf
+open Lwt
 open OBus_constant
 open OBus_value
 open OBus_message
@@ -55,6 +56,7 @@ type raw_fields = {
   mutable rf_destination : OBus_name.bus option;
   mutable rf_sender : OBus_name.bus option;
   mutable rf_signature : signature;
+  mutable rf_unix_fds : int;
 }
 
 let path = ("path", fun x -> x.rf_path)
@@ -113,102 +115,159 @@ let protocol_error msg = Protocol_error msg
    | Message size calculation                                        |
    +-----------------------------------------------------------------+ *)
 
-module Size =
+module FDSet = Set.Make(struct type t = Unix.file_descr let compare = compare end)
+
+module Count =
 struct
+  (* The goal of this module is to compute the marshaled size of a
+     message, and the number of different file descriptors it
+     contains. *)
+
+  type counter = {
+    mutable ofs : int;
+    (* Simulate an offset *)
+    mutable fds : FDSet.t;
+    (* Set used to collect all file descriptors *)
+  }
+
   let path_length = function
     | [] -> 1
     | l -> List.fold_left (fun acc x -> 1 + String.length x + acc) 0 l
 
-  (* Each function takes an argument [i] which represent an offset, it
-     computes the offset after writing what they have to then return
-     it. *)
+  let rec iter f c = function
+    | [] -> ()
+    | x :: l -> f c x; iter f c l
 
-  let rec tsingle i = function
-    | Tbasic _ -> i + 1
-    | Tarray t -> tsingle (i + 1) t
-    | Tdict(tk, tv) -> tsingle (i + 4) tv
-    | Tstructure l -> List.fold_left tsingle (i + 2) l
-    | Tvariant -> i + 1
+  let rec tsingle c = function
+    | Tbasic _ ->
+        c.ofs <- c.ofs + 1
+    | Tarray t ->
+        c.ofs <- c.ofs + 1;
+        tsingle c t
+    | Tdict(tk, tv) ->
+        c.ofs <- c.ofs + 4;
+        tsingle c tv
+    | Tstructure l ->
+        c.ofs <- c.ofs + 2;
+        iter tsingle c l
+    | Tvariant ->
+        c.ofs <- c.ofs + 1
 
-  let tsequence i l = List.fold_left tsingle i l
+  let tsequence c l =
+    iter tsingle c l
 
-  let rec tsingle_of_single i = function
-    | Basic x -> i + 1
-    | Array(t, x) -> tsingle (i + 1) t
-    | Byte_array _ -> i + 2
-    | Dict(tk, tv, x) -> tsingle (i + 4) tv
-    | Structure l -> List.fold_left tsingle_of_single (i + 2) l
-    | Variant x -> i + 1
+  let rec tsingle_of_single c = function
+    | Basic x ->
+        c.ofs <- c.ofs + 1
+    | Array(t, x) ->
+        c.ofs <- c.ofs + 1;
+        tsingle c t
+    | Byte_array _ ->
+        c.ofs <- c.ofs + 2
+    | Dict(tk, tv, x) ->
+        c.ofs <- c.ofs + 4;
+        tsingle c tv
+    | Structure l ->
+        c.ofs <- c.ofs + 2;
+        iter tsingle_of_single c l
+    | Variant x ->
+        c.ofs <- c.ofs + 1
 
-  let tsequence_of_sequence i l = List.fold_left tsingle_of_single i l
+  let tsequence_of_sequence c l =
+    iter tsingle_of_single c l
 
-  let rec basic i = function
-    | Byte _ -> i + 1
+  let rec basic c = function
+    | Byte _ ->
+        c.ofs <- c.ofs + 1
     | Int16 _
-    | Uint16 _ -> pad2 i + 2
+    | Uint16 _ ->
+        c.ofs <- pad2 c.ofs + 2
     | Boolean _
     | Int32 _
-    | Uint32 _ -> pad4 i + 4
+    | Uint32 _ ->
+        c.ofs <- pad4 c.ofs + 4
     | Int64 _
     | Uint64 _
-    | Double _ -> pad8 i + 8
-    | String s -> pad4 i + String.length s + 5
-    | Signature s -> tsequence (i + 2) s
-    | Object_path p -> pad4 i + path_length p + 5
+    | Double _ ->
+        c.ofs <- pad8 c.ofs + 8
+    | String s ->
+        c.ofs <- pad4 c.ofs + String.length s + 5
+    | Signature s ->
+        c.ofs <- c.ofs + 2;
+        tsequence c s
+    | Object_path p ->
+        c.ofs <- pad4 c.ofs + path_length p + 5
+    | Unix_fd fd ->
+        c.ofs <- pad4 c.ofs+ 4;
+        c.fds <- FDSet.add fd c.fds
 
-  let rec single i = function
+  let rec single c = function
     | Basic x ->
-        basic i x
+        basic c x
     | Array(t, l) ->
-        let i = pad4 i + 4 in
-        let i = if pad8_p t then pad8 i else i in
-        List.fold_left single i l
+        c.ofs <- pad4 c.ofs + 4;
+        if pad8_p t then c.ofs <- pad8 c.ofs;
+        iter single c l
     | Byte_array bytes ->
-        pad4 i + 4 + String.length bytes
+        c.ofs <- pad4 c.ofs + 4 + String.length bytes
     | Dict(tk, tv, l) ->
-        let i = pad4 i + 4 in
-        let i = pad8 i in
-        List.fold_left (fun i (k, v) -> single (basic (pad8 i) k) v) i l
+        c.ofs <- pad8 (pad4 c.ofs + 4);
+        iter dict_entry c l
     | Structure l ->
-        List.fold_left single (pad8 i) l
+        c.ofs <- pad8 c.ofs;
+        iter single c l
     | Variant x ->
-        let i = 1 + tsingle_of_single i x + 1 in
-        single i x
+        c.ofs <- c.ofs + 2;
+        tsingle_of_single c x;
+        single c x
 
-  let sequence i l = List.fold_left single i l
+  and dict_entry c (k, v) =
+    c.ofs <- pad8 c.ofs;
+    basic c k;
+    single c v
+
+  let sequence c l =
+    iter single c l
 
   let message msg =
-    let i = 16 in
-    let i = match msg.typ with
+    let c = { ofs = 16; fds = FDSet.empty } in
+    begin match msg.typ with
       | Method_call(path, None, member) ->
           (* +9 for:
              - the code (1)
              - the signature of one basic type code (3)
              - the string length (4)
              - the null byte (1) *)
-          let i = pad8 i + 9 + path_length path in
-          pad8 i + 9 + String.length member
+          c.ofs <- pad8 c.ofs + 9 + path_length path;
+          c.ofs <- pad8 c.ofs + 9 + String.length member
       | Method_call(path, Some interface, member)
       | Signal(path, interface, member) ->
-          let i = pad8 i + 9 + path_length path in
-          let i = pad8 i + 9 + String.length interface in
-          pad8 i + 9 + String.length member
+          c.ofs <- pad8 c.ofs + 9 + path_length path;
+          c.ofs <- pad8 c.ofs + 9 + String.length interface;
+          c.ofs <- pad8 c.ofs + 9 + String.length member
       | Method_return serial ->
-          pad8 i + 4
+          c.ofs <- pad8 c.ofs + 8
       | Error(serial, name) ->
-          let i = pad8 i + 9 + String.length name in
-          pad8 i + 4
-    in
-    let i = match msg.destination with
-      | None -> i
-      | Some destination -> pad8 i + 9 + String.length destination
-    in
-    let i = match msg.sender with
-      | None -> i
-      | Some sender -> pad8 i + 9 + String.length sender
-    in
-    let i = tsequence_of_sequence (pad8 i + 6) msg.body in
-    sequence (pad8 i) msg.body
+          c.ofs <- pad8 c.ofs + 9 + String.length name;
+          c.ofs <- pad8 c.ofs + 8
+    end;
+    begin match msg.destination with
+      | None ->
+          ()
+      | Some destination ->
+          c.ofs <- pad8 c.ofs + 9 + String.length destination
+    end;
+    begin match msg.sender with
+      | None ->
+          ()
+      | Some sender ->
+          c.ofs <- pad8 c.ofs + 9 + String.length sender
+    end;
+    c.ofs <- pad8 c.ofs + 6;
+    tsequence_of_sequence c msg.body;
+    c.ofs <- pad8 c.ofs + 8;
+    sequence c msg.body;
+    c
 end
 
 (* +-----------------------------------------------------------------+
@@ -439,16 +498,21 @@ struct
     (v0 lor (v1 lsl 8) lor (v2 lsl 16) lor (v3 lsl 24))
 end
 
-(* A pointer, used to serialize or unserialize data *)
-type pointer = {
-  buf : string;
-  mutable ofs : int;
-  max : int;
-}
-
 (* +---------------------------------------------------------------+
    | Common writing functions                                      |
    +---------------------------------------------------------------+ *)
+
+module FDMap = Map.Make(struct type t = Unix.file_descr let compare = Pervasives.compare end)
+
+(* A pointer for serializing data *)
+type wpointer = {
+  buf : string;
+  mutable ofs : int;
+  max : int;
+  fds : int FDMap.t;
+  (* Maps file descriptros to their index in the resulting fds
+     array *)
+}
 
 let write_padding2 ptr =
   if pad2 ptr.ofs = 1 then begin
@@ -537,6 +601,7 @@ struct
       end
     | Signature x -> write_signature ptr x
     | Object_path x -> write_object_path ptr x
+    | Unix_fd fd -> write4 put_uint ptr (FDMap.find fd ptr.fds)
 
   let rec write_array ptr padded_on_8 write_element values =
     (* Array are serialized as follow:
@@ -636,7 +701,7 @@ struct
 
   (* Serialize one complete message *)
   let write_message byte_order_char msg =
-    let size = Size.message msg in
+    let { Count.ofs = size; Count.fds = fds } = Count.message msg in
     if size > max_message_size then raise (Data_error(message_too_big size));
 
     let buffer = String.create size in
@@ -644,8 +709,10 @@ struct
       buf = buffer;
       ofs = 16;
       max = size;
+      fds = snd (FDSet.fold (fun fd (n, map) -> (n + 1, FDMap.add fd n map)) fds (0, FDMap.empty));
     } in
 
+    let fd_count = FDSet.cardinal fds in
     (* Compute ``raw'' headers *)
     let code, fields = match msg.typ with
       | Method_call(path, interface, member) ->
@@ -657,7 +724,8 @@ struct
              rf_reply_serial = None;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
-             rf_signature = type_of_sequence msg.body })
+             rf_signature = type_of_sequence msg.body;
+             rf_unix_fds = fd_count })
       | Method_return reply_serial ->
           (2,
            { rf_path = None;
@@ -667,7 +735,8 @@ struct
              rf_reply_serial = Some reply_serial;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
-             rf_signature = type_of_sequence msg.body })
+             rf_signature = type_of_sequence msg.body;
+             rf_unix_fds = fd_count })
       | Error(reply_serial, error_name) ->
           (3,
            { rf_path = None;
@@ -677,7 +746,8 @@ struct
              rf_reply_serial = Some reply_serial;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
-             rf_signature = type_of_sequence msg.body })
+             rf_signature = type_of_sequence msg.body;
+             rf_unix_fds = fd_count })
       | Signal(path, interface, member) ->
           (4,
            { rf_path = Some path;
@@ -687,7 +757,8 @@ struct
              rf_reply_serial = None;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
-             rf_signature = type_of_sequence msg.body })
+             rf_signature = type_of_sequence msg.body;
+             rf_unix_fds = fd_count })
     in
 
     write_field ptr 1 Tobject_path write_object_path fields.rf_path;
@@ -698,6 +769,7 @@ struct
     write_name_field ptr 6 OBus_name.validate_bus fields.rf_destination;
     write_name_field ptr 7 OBus_name.validate_bus fields.rf_sender;
     write_field_real ptr 8 Tsignature write_signature fields.rf_signature;
+    write_field_real ptr 9 Tuint32 (write4 put_uint) fields.rf_unix_fds;
 
     let fields_length = ptr.ofs - 16 in
 
@@ -732,7 +804,11 @@ struct
     (* byte #12-15 : fields length *)
     put_uint buffer 12 fields_length;
 
-    ptr.buf
+    (* Create the array of file descriptors *)
+    let fds = Array.create fd_count Unix.stdin in
+    FDMap.iter (fun fd index -> Array.unsafe_set fds index fd) ptr.fds;
+
+    (ptr.buf, fds)
 end
 
 module LE_writer = Make_writer(LE_integer_writers)
@@ -746,11 +822,46 @@ let string_of_message ?(byte_order=native_byte_order) msg =
         BE_writer.write_message 'B' msg
 
 let write_message oc ?byte_order msg =
-  Lwt_io.write oc (string_of_message ?byte_order msg)
+  match string_of_message ?byte_order msg with
+    | str, [||] ->
+        Lwt_io.write oc str
+    | _ ->
+        fail (Data_error "Cannot send a message with file descriptros on a channel")
+
+type writer = Lwt_unix.file_descr
+let writer fd = fd
+
+let write_message_with_fds fd ?byte_order msg =
+  let buf, fds = string_of_message ?byte_order msg in
+  let rec loop ofs len =
+    lwt n = Lwt_unix.write fd buf ofs len in
+    if n < len then
+      loop (ofs + n) (len - n)
+    else
+      return ()
+  in
+  let len = String.length buf in
+  Lwt_unix.send_msg fd [Lwt_unix.io_vector buf 0 len] (Array.to_list fds) >>= function
+    | 0 ->
+        fail End_of_file
+    | n ->
+        if n < len then
+          loop n (len - n)
+        else
+          return ()
 
 (* +-----------------------------------------------------------------+
    | Common reading operations                                       |
    +-----------------------------------------------------------------+ *)
+
+(* A pointer for unserializing data *)
+type rpointer = {
+  buf : string;
+  mutable ofs : int;
+  max : int;
+  fds : Unix.file_descr array;
+  (* The array of file descriptors received with the message *)
+}
 
 let out_of_bounds () = raise (Protocol_error "out of bounds")
 let unitialized_padding () = raise (Protocol_error "unitialized padding")
@@ -860,6 +971,12 @@ struct
       | Some error -> raise (Protocol_error(OBus_string.error_message error))
   let read_vsignature ptr = Signature(read_signature ptr)
   let read_vobject_path ptr = Object_path(read_object_path ptr)
+  let read_unix_fd ptr =
+    let index = read4 get_uint ptr in
+    if index < 0 || index >= Array.length ptr.fds then
+      raise (Protocol_error "fd index out of bounds")
+    else
+      Unix_fd(Array.unsafe_get ptr.fds index)
 
   let basic_reader = function
     | Tbyte -> read_vbyte
@@ -874,6 +991,7 @@ struct
     | Tstring -> read_vstring
     | Tsignature -> read_vsignature
     | Tobject_path -> read_vobject_path
+    | Tunix_fd -> read_unix_fd
 
   let read_array padded_on_8 read_element ptr =
     let len = read_uint ptr in
@@ -990,6 +1108,7 @@ struct
         rf_destination = None;
         rf_sender = None;
         rf_signature = [];
+        rf_unix_fds = 0;
       } in
       let limit = ptr.ofs + fields_length in
       (* Reading of fields *)
@@ -1004,8 +1123,15 @@ struct
           | 6 -> fields.rf_destination <- Some(read_name_field 6 OBus_name.validate_bus ptr)
           | 7 -> fields.rf_sender <- Some(read_name_field 7 OBus_name.validate_bus ptr)
           | 8 -> fields.rf_signature <- read_field 8 Tsignature read_signature ptr
+          | 9 -> fields.rf_unix_fds <- read_field 9 Tuint32 (read4 get_uint) ptr
           | _ -> ignore (read_variant ptr) (* Unsupported header field *)
       done;
+
+      if fields.rf_unix_fds <> Array.length ptr.fds then
+        raise (Protocol_error(sprintf
+                                "invalid number of file descriptor, %d expected, %d received"
+                                fields.rf_unix_fds
+                                (Array.length ptr.fds)));
 
       read_padding8 ptr;
       let body = sequence_reader fields.rf_signature ptr in
@@ -1036,10 +1162,10 @@ let read_message ic =
          let length = length - 16 in
          let buffer = String.create length in
          lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
-         f { buf = buffer; ofs = 0; max = length } Lwt.return)
+         f { buf = buffer; ofs = 0; max = length; fds = [||] } return)
   end ic
 
-let message_of_string buffer =
+let message_of_string buffer fds =
   if String.length buffer < 16 then invalid_arg "OBus_wire.message_of_string: buffer too small";
   (match get_char buffer 0 with
      | 'l' -> LE_reader.read_message
@@ -1048,7 +1174,45 @@ let message_of_string buffer =
     buffer
     (fun length f ->
        if length <> String.length buffer then raise (Protocol_error "invalid message size");
-       f { buf = buffer; ofs = 16; max = length } (fun x -> x))
+       f { buf = buffer; ofs = 16; max = length; fds = fds } (fun x -> x))
+
+type reader = Lwt_unix.file_descr
+let reader fd = fd
+
+let rec loop_read16 fd buf ofs len fds =
+  if len = 0 then
+    return (Array.of_list fds)
+  else
+    lwt n, fds' = Lwt_unix.recv_msg fd [Lwt_unix.io_vector buf ofs len] in
+    if n = 0 then
+      fail End_of_file
+    else
+      loop_read16 fd buf (ofs + n) (len - n) (fds @ fds')
+
+let rec loop_read fd buf ofs len =
+  if len = 0 then
+    return ()
+  else
+    Lwt_unix.read fd buf ofs len >>= function
+      | 0 ->
+          fail End_of_file
+      | n ->
+          loop_read fd buf (ofs + n) (len - n)
+
+let read_message_with_fds fd =
+  let buf = String.create 16 in
+  lwt fds = loop_read16 fd buf 0 16 [] in
+  Array.iter (fun fd -> try Unix.set_close_on_exec fd with _ -> ()) fds;
+  (match get_char buf 0 with
+     | 'l' -> LE_reader.read_message
+     | 'B' -> BE_reader.read_message
+     | ch -> raise (Protocol_error(invalid_byte_order ch)))
+    buf
+    (fun len f ->
+       let len = len - 16 in
+       let buf = String.create len in
+       lwt () = loop_read fd buf 0 len in
+       f { buf = buf; ofs = 0; max = len; fds = fds } return)
 
 (* +-----------------------------------------------------------------+
    | Size computation                                                |

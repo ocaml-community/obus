@@ -31,6 +31,8 @@ val obus_string : string basic
 val obus_signature : OBus_value.signature basic
 val obus_object_path : OBus_path.t basic
 val obus_path : OBus_path.t basic
+val obus_file_descr : Lwt_unix.file_descr basic
+val obus_unix_file_descr : Unix.file_descr basic
 
 val obus_list : ('a, _) cl_single -> 'a list container
 val obus_array : ('a, _) cl_single -> 'a array container
@@ -60,6 +62,8 @@ type ('a, 'b) dict = ('a * 'b) list
 type 'a structure = 'a
 type variant = OBus_value.single
 type byte_array = string
+type file_descr = Lwt_unix.file_descr
+type unix_file_descr = Unix.file_descr
     (** Dummy type definition, they should be used in combination with
         the syntax extension, to define the dbus type and the caml
         type at the same time *)

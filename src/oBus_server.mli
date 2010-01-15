@@ -37,6 +37,7 @@ class type lowlevel = object
 end
 
 val make :
+  ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Server.mechanism list ->
   ?addresses : OBus_address.address list -> unit -> t Lwt.t
   (** [make ?mechanisms ?addresses] Create a server which will listen
@@ -50,5 +51,6 @@ val make :
       @raise Invalid_argument if [addresses] is empty *)
 
 val make_lowlevel :
+  ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Server.mechanism list ->
   ?addresses : OBus_address.address list -> unit -> lowlevel Lwt.t

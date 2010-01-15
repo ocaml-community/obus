@@ -52,7 +52,7 @@ let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ body =
     body = body }
 
 let method_call ?flags ?serial ?sender ?destination ~path ?interface ~member body =
-  make ?flags ?serial ?sender ?destination ~typ:(Method_call(path, interface, member)) body
+  make ?flags  ?serial ?sender ?destination ~typ:(Method_call(path, interface, member)) body
 
 let method_return ?flags ?serial ?sender ?destination ~reply_serial body =
   make ?flags ?serial ?sender ?destination ~typ:(Method_return(reply_serial)) body

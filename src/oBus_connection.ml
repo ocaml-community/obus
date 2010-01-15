@@ -87,6 +87,49 @@ DEFINE LEXEC(code) = (match connection#get with
                             code)
 
 (* +-----------------------------------------------------------------+
+   | FDs closing                                                     |
+   +-----------------------------------------------------------------+ *)
+
+(* After a message has been dispatched, all file descriptors it
+   contains are closed *)
+
+let tbasic_contains_fds = function
+  | Tunix_fd -> true
+  | _ -> false
+
+let rec tsingle_contains_fds = function
+  | Tbasic t -> tbasic_contains_fds t
+  | Tarray t -> tsingle_contains_fds t
+  | Tdict(tk, tv) -> tbasic_contains_fds tk && tsingle_contains_fds tv
+  | Tstructure t -> tsequence_contains_fds t
+  | Tvariant -> false
+
+and tsequence_contains_fds t = List.exists tsingle_contains_fds t
+
+let basic_close_fds = function
+  | Unix_fd fd -> Unix.close fd
+  | _ -> ()
+
+let rec single_close_fds = function
+  | Basic v ->
+      basic_close_fds v
+  | Array(t, l) ->
+      if tsingle_contains_fds t then
+        List.iter single_close_fds l
+      else
+        ()
+  | Dict(tk, tv, l) ->
+      if tbasic_contains_fds tk || tsingle_contains_fds tv then
+        List.iter (fun (k, v) -> basic_close_fds k; single_close_fds v) l
+  | Structure l ->
+      sequence_close_fds l
+  | Byte_array _ | Variant _ ->
+      ()
+
+and sequence_close_fds l =
+  List.iter single_close_fds l
+
+(* +-----------------------------------------------------------------+
    | Sending messages                                                |
    +-----------------------------------------------------------------+ *)
 
@@ -452,6 +495,7 @@ let read_dispatch connection =
         return ()
     | Some message ->
         dispatch_message connection message;
+        sequence_close_fds (OBus_message.body message);
         return ()
 
 let rec dispatch_forever connection =
@@ -597,21 +641,25 @@ let of_transport ?guid ?(up=true) transport =
               guid_connection_map := GuidMap.add guid connection !guid_connection_map;
               connection
 
+(* Capabilities turned on bu default: *)
+let capabilities = [`Unix_fd]
+
 let of_addresses ?(shared=true) addresses = match shared with
   | false ->
-      lwt guid, transport = OBus_transport.of_addresses addresses in
+      lwt guid, transport = OBus_transport.of_addresses ~capabilities addresses in
       return (of_transport transport)
   | true ->
       (* Try to find a guid that we already have *)
       let guids = OBus_util.filter_map OBus_address.guid addresses in
       match OBus_util.find_map (fun guid -> GuidMap.lookup guid !guid_connection_map) guids with
-        | Some connection -> return connection
+        | Some connection ->
+            return connection
         | None ->
             (* We ask again a shared connection even if we know that
                there is no other connection to a server with the same
                guid, because during the authentication another
                thread can add a new connection. *)
-            lwt guid, transport = OBus_transport.of_addresses addresses in
+            lwt guid, transport = OBus_transport.of_addresses ~capabilities addresses in
             return (of_transport ~guid transport)
 
 let loopback = of_transport (OBus_transport.loopback ())
@@ -631,6 +679,8 @@ DEFINE GET(param) = (fun connection -> EXEC(connection.param))
 let guid = GET(guid)
 let transport = GET(transport)
 let name = GET(name)
+let support_unix_fd connection =
+  EXEC(List.mem `Unix_fd (OBus_transport.capabilities connection.transport))
 let on_disconnect = GET(on_disconnect)
 let close connection = match connection#get with
   | Crashed _ ->

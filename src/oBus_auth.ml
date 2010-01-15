@@ -10,6 +10,8 @@
 open Printf
 open Lwt
 
+type capability = [ `Unix_fd ]
+
 (* Maximum line length, if line greated are received, authentication
    will fail *)
 let max_line_length = 42 * 1024
@@ -36,12 +38,14 @@ type client_command =
   | Client_begin
   | Client_data of data
   | Client_error of string
+  | Client_negotiate_unix_fd
 
 type server_command =
   | Server_rejected of string list
   | Server_ok of OBus_address.guid
   | Server_data of data
   | Server_error of string
+  | Server_agree_unix_fd
 
 (* +-----------------------------------------------------------------+
    | Keyring for the SHA-1 method                                    |
@@ -282,6 +286,7 @@ let client_recv = recv "client"
      | "OK" -> Server_ok(try OBus_uuid.of_string args with _ -> failwith "invalid hex-encoded guid")
      | "DATA" -> Server_data(hex_decode args)
      | "ERROR" -> Server_error args
+     | "AGREE_UNIX_FD" -> Server_agree_unix_fd
      | _ -> failwith "invalid command")
 
 let server_recv = recv "server"
@@ -295,6 +300,7 @@ let server_recv = recv "server"
      | "BEGIN" -> Client_begin
      | "DATA" -> Client_data(hex_decode args)
      | "ERROR" -> Client_error args
+     | "NEGOTIATE_UNIX_FD" -> Client_negotiate_unix_fd
      | _ -> failwith "invalid command")
 
 let client_send chans cmd = send_line "client" chans
@@ -305,14 +311,16 @@ let client_send chans cmd = send_line "client" chans
      | Client_cancel -> "CANCEL"
      | Client_begin -> "BEGIN"
      | Client_data data -> sprintf "DATA %s" (hex_encode data)
-     | Client_error msg -> sprintf "ERROR \"%s\"" msg)
+     | Client_error msg -> sprintf "ERROR \"%s\"" msg
+     | Client_negotiate_unix_fd -> "NEGOTIATE_UNIX_FD")
 
 let server_send chans cmd = send_line "server" chans
   (match cmd with
      | Server_rejected mechs -> String.concat " " ("REJECTED" :: mechs)
      | Server_ok guid -> sprintf "OK %s" (OBus_uuid.to_string guid)
      | Server_data data -> sprintf "DATA %s" (hex_encode data)
-     | Server_error msg -> sprintf "ERROR \"%s\"" msg)
+     | Server_error msg -> sprintf "ERROR \"%s\"" msg
+     | Server_agree_unix_fd -> "AGREE_UNIX_FD")
 
 (* +-----------------------------------------------------------------+
    | Client side authentication                                      |
@@ -454,15 +462,27 @@ struct
         | Server_ok guid ->
             mech#abort;
             return (Success guid)
+        | Server_agree_unix_fd ->
+            mech#abort;
+            return (Transition(Client_error "command not expected here",
+                               Waiting_for_data mech,
+                               mechs))
       end
 
     | Waiting_for_ok -> begin match cmd with
-        | Server_ok guid -> return (Success guid)
-        | Server_rejected am -> next mechs am
+        | Server_ok guid ->
+            return (Success guid)
+        | Server_rejected am ->
+            next mechs am
         | Server_data _
-        | Server_error _ -> return (Transition(Client_cancel,
-                                               Waiting_for_reject,
-                                               mechs))
+        | Server_error _ ->
+            return (Transition(Client_cancel,
+                               Waiting_for_reject,
+                               mechs))
+        | Server_agree_unix_fd ->
+            return (Transition(Client_error "command not expected here",
+                               Waiting_for_ok,
+                               mechs))
       end
 
     | Waiting_for_reject -> begin match cmd with
@@ -470,16 +490,30 @@ struct
         | _ -> return Failure
       end
 
-
-  let authenticate ?(mechanisms=default_mechanisms) stream =
+  let authenticate ?(capabilities=[]) ?(mechanisms=default_mechanisms) stream =
     let rec loop = function
       | Transition(cmd, state, mechs) ->
           lwt () = client_send stream cmd in
           lwt cmd = client_recv stream in
           transition mechs state cmd >>= loop
       | Success guid ->
+          lwt caps =
+            if List.mem `Unix_fd capabilities then
+              lwt () = client_send stream Client_negotiate_unix_fd in
+              client_recv stream >>= function
+                | Server_agree_unix_fd ->
+                    return [`Unix_fd]
+                | Server_error _ ->
+                    return []
+                | _ ->
+                    (* This case is not covered by the
+                       specification *)
+                    return []
+            else
+              return []
+          in
           lwt () = client_send stream Client_begin in
-          return guid
+          return (guid, caps)
       | Failure ->
           auth_failure "authentication failure"
     in
@@ -587,11 +621,11 @@ struct
   type state =
     | Waiting_for_auth
     | Waiting_for_data of mechanism_handler
-    | Waiting_for_begin
+    | Waiting_for_begin of capability list
 
   type server_machine_transition =
     | Transition of server_command * state
-    | Accept
+    | Accept of capability list
     | Failure
 
   let reject mechs =
@@ -602,7 +636,7 @@ struct
     return (Transition(Server_error msg,
                        Waiting_for_auth))
 
-  let transition guid mechs state cmd = match state with
+  let transition guid capabilities mechs state cmd = match state with
     | Waiting_for_auth -> begin match cmd with
         | Client_auth None ->
             reject mechs
@@ -630,7 +664,7 @@ struct
                                                    Waiting_for_data mech))
                             | Mech_ok ->
                                 return (Transition(Server_ok guid,
-                                                   Waiting_for_begin))
+                                                   Waiting_for_begin []))
                             | Mech_reject ->
                                 reject mechs
                   with exn ->
@@ -653,7 +687,7 @@ struct
                                        Waiting_for_data mech))
                 | Mech_ok ->
                     return (Transition(Server_ok guid,
-                                       Waiting_for_begin))
+                                       Waiting_for_begin []))
                 | Mech_reject ->
                     reject mechs
             with exn ->
@@ -665,17 +699,31 @@ struct
         | _ -> mech#abort; error "DATA command expected"
       end
 
-    | Waiting_for_begin -> begin match cmd with
-        | Client_begin -> return Accept
-        | Client_cancel -> reject mechs
-        | Client_error _ -> reject mechs
-        | _ -> error "BEGIN command expected"
+    | Waiting_for_begin caps -> begin match cmd with
+        | Client_begin ->
+            return (Accept caps)
+        | Client_cancel ->
+            reject mechs
+        | Client_error _ ->
+            reject mechs
+        | Client_negotiate_unix_fd ->
+            if List.mem `Unix_fd capabilities then
+              return(Transition(Server_agree_unix_fd,
+                                Waiting_for_begin (if List.mem `Unix_fd caps then
+                                                     caps
+                                                   else
+                                                     `Unix_fd :: caps)))
+            else
+              return(Transition(Server_error "Unix fd passing is not supported by this server",
+                                Waiting_for_begin caps))
+        | _ ->
+            error "BEGIN command expected"
       end
 
-  let authenticate ?(mechanisms=default_mechanisms) guid stream =
+  let authenticate ?(capabilities=[]) ?(mechanisms=default_mechanisms) guid stream =
     let rec loop state count =
       lwt cmd = server_recv stream in
-      transition guid mechanisms state cmd >>= function
+      transition guid capabilities mechanisms state cmd >>= function
         | Transition(cmd, state) ->
             let count =
               match cmd with
@@ -689,8 +737,8 @@ struct
             else
               lwt () = server_send stream cmd in
               loop state count
-        | Accept ->
-            return ()
+        | Accept caps ->
+            return caps
         | Failure ->
             auth_failure "authentication failure"
     in

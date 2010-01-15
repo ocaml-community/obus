@@ -15,34 +15,50 @@ open OBus_address
 type t = {
   recv : unit -> OBus_message.t Lwt.t;
   send : OBus_message.t -> unit Lwt.t;
+  capabilities : OBus_auth.capability list;
   shutdown : unit -> unit Lwt.t;
 }
 
-let make_transport ~recv ~send ~shutdown = { recv = recv; send = send; shutdown = shutdown }
-
-let recv { recv = recv } = recv ()
-let send { send = send } message = send message
-let shutdown { shutdown = shutdown } = shutdown ()
-
-let make ~recv ~send ~shutdown = {
+let make ~recv ~send ?(capabilities=[]) ~shutdown () = {
   recv = recv;
   send = send;
+  capabilities = capabilities;
   shutdown = shutdown;
 }
 
-let socket fd ic oc =
-  { recv = (fun _ -> OBus_wire.read_message ic);
-    send = (fun msg -> OBus_wire.write_message oc msg);
-    shutdown = (fun _ ->
-                  lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
-                  Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                  Lwt_unix.close fd;
-                  return ()) }
+let recv t = t.recv ()
+let send t message = t.send message
+let capabilities t = t.capabilities
+let shutdown t = t.shutdown ()
 
-let loopback _ =
+let socket ?(capabilities=[]) fd =
+  if List.mem `Unix_fd capabilities then
+    let reader = OBus_wire.reader fd
+    and writer = OBus_wire.writer fd in
+    { recv = (fun _ -> OBus_wire.read_message_with_fds reader);
+      send = (fun msg -> OBus_wire.write_message_with_fds writer msg);
+      capabilities = capabilities;
+      shutdown = (fun _ ->
+                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                    Lwt_unix.close fd;
+                    return ()) }
+  else
+    let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_unix.read fd)
+    and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_unix.write fd) in
+    { recv = (fun _ -> OBus_wire.read_message ic);
+      send = (fun msg -> OBus_wire.write_message oc msg);
+      capabilities = capabilities;
+      shutdown = (fun _ ->
+                    lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
+                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                    Lwt_unix.close fd;
+                    return ()) }
+
+let loopback () =
   let mvar = Lwt_mvar.create_empty () in
   { recv = (fun _ -> Lwt_mvar.take mvar);
     send = (fun m -> Lwt_mvar.put mvar m);
+    capabilities = [`Unix_fd];
     shutdown = return }
 
 let make_socket domain typ addr =
@@ -55,14 +71,16 @@ let make_socket domain typ addr =
     Lwt_unix.close fd;
     fail exn
 
-let of_addresses ?mechanisms addresses =
+let of_addresses ?(capabilities=[]) ?mechanisms addresses =
   let rec try_one domain typ addr fallback x =
     try_lwt
       lwt fd = make_socket domain typ addr in
-      let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_unix.read fd)
-      and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_unix.write fd) in
-      lwt guid = OBus_auth.Client.authenticate ?mechanisms (OBus_auth.stream_of_channels ic oc) in
-      return (guid, socket fd ic oc)
+      let ic = Lwt_io.make ~buffer_size:256 ~mode:Lwt_io.input (Lwt_unix.read fd)
+      and oc = Lwt_io.make ~buffer_size:256 ~mode:Lwt_io.output (Lwt_unix.write fd) in
+      lwt guid, caps = OBus_auth.Client.authenticate
+        ~capabilities:(List.filter (function `Unix_fd -> domain = PF_UNIX) capabilities)
+        ?mechanisms (OBus_auth.stream_of_channels ic oc) in
+      return (guid, socket ~capabilities:caps fd)
     with exn ->
       Log#error "transport creation failed for address: domain=%s typ=%s addr=%s: %s"
         (match domain with

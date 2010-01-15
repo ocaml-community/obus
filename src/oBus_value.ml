@@ -41,6 +41,7 @@ type tbasic =
   | Tstring
   | Tsignature
   | Tobject_path
+  | Tunix_fd
  with constructor
 
 type tsingle =
@@ -72,6 +73,7 @@ let string_of_tbasic = function
   | Tstring -> "Tstring"
   | Tsignature -> "Tsignature"
   | Tobject_path -> "Tobject_path"
+  | Tunix_fd -> "Tunix_fd"
 
 let print_tbasic pp t = pp_print_string pp (string_of_tbasic t)
 
@@ -164,6 +166,7 @@ let signature_of_string str =
     | 's' -> Tstring
     | 'o' -> Tobject_path
     | 'g' -> Tsignature
+    | 'h' -> Tunix_fd
     | chr -> fail msg chr
   in
 
@@ -243,7 +246,8 @@ let string_of_signature signature =
                 | Tdouble -> 'd'
                 | Tstring -> 's'
                 | Tobject_path -> 'o'
-                | Tsignature -> 'g')
+                | Tsignature -> 'g'
+                | Tunix_fd -> 'h')
   in
   let rec write_single = function
     | Tbasic t ->
@@ -284,6 +288,7 @@ type basic =
   | String of string
   | Signature of signature
   | Object_path of OBus_path.t
+  | Unix_fd of Unix.file_descr
  with constructor
 
 type single =
@@ -309,6 +314,7 @@ let sdouble x = Basic(Double x)
 let sstring x = Basic(String x)
 let ssignature x = Basic(Signature x)
 let sobject_path x = Basic(Object_path x)
+let sunix_fd x = Basic(Unix_fd x)
 
 (* +-----------------------------------------------------------------+
    | Value typing                                                    |
@@ -327,6 +333,7 @@ let type_of_basic = function
   | String _ -> Tstring
   | Signature _ -> Tsignature
   | Object_path _ -> Tobject_path
+  | Unix_fd _ -> Tunix_fd
 
 let rec type_of_single = function
   | Basic x -> Tbasic(type_of_basic x)
@@ -378,6 +385,7 @@ let print_basic pp = function
   | String x -> fprintf pp "%S" x
   | Signature x -> print_tsequence pp x
   | Object_path x -> print_list (fun pp elt -> fprintf pp "%S" elt) pp x
+  | Unix_fd x -> pp_print_string pp "<fd>"
 
 let explode str =
   let rec aux acc = function

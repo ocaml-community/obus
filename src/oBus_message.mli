@@ -51,7 +51,6 @@ type t = {
 
 val make :
   ?flags : flags ->
-  ?fds : Unix.file_descr array ->
   ?serial : serial ->
   ?sender : OBus_name.bus ->
   ?destination : OBus_name.bus ->
@@ -60,7 +59,6 @@ val make :
 
 val method_call :
   ?flags : flags ->
-  ?fds : Unix.file_descr array ->
   ?serial : serial ->
   ?sender : OBus_name.bus ->
   ?destination : OBus_name.bus ->
@@ -71,7 +69,6 @@ val method_call :
 
 val method_return :
   ?flags : flags ->
-  ?fds : Unix.file_descr array ->
   ?serial : serial ->
   ?sender : OBus_name.bus ->
   ?destination : OBus_name.bus ->
@@ -80,7 +77,6 @@ val method_return :
 
 val error :
   ?flags : flags ->
-  ?fds : Unix.file_descr array ->
   ?serial : serial ->
   ?sender : OBus_name.bus ->
   ?destination : OBus_name.bus ->
@@ -90,7 +86,6 @@ val error :
 
 val signal :
   ?flags : flags ->
-  ?fds : Unix.file_descr array ->
   ?serial : serial ->
   ?sender : OBus_name.bus ->
   ?destination : OBus_name.bus ->

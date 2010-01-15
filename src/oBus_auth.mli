@@ -29,6 +29,11 @@ val make_stream :
 val stream_of_channels : Lwt_io.input_channel -> Lwt_io.output_channel -> stream
   (** Creates a stream from a pair of lwt channels *)
 
+(** List of capatilities clients/servers may support *)
+type capability =
+    [ `Unix_fd
+        (** The transport support unix fd passing *) ]
+
 (** Client-side authentication *)
 module Client : sig
 
@@ -62,11 +67,18 @@ module Client : sig
   val mech_dbus_cookie_sha1 : mechanism
   val default_mechanisms : mechanism list
 
-  val authenticate : ?mechanisms : mechanism list -> stream -> OBus_address.guid Lwt.t
-    (** Launch client-side authentication on the given stream.
+  val authenticate :
+    ?capabilities : capability list ->
+    ?mechanisms : mechanism list ->
+    stream -> (OBus_address.guid * capability list) Lwt.t
+    (** Launch client-side authentication on the given stream. On
+        success it returns the unique identifier of the server address
+        and capabilities that were successfully negotiated with the
+        server.
 
-        If it succeed return the unique identifier of the server
-        address. *)
+        @param capabilities defaults to []
+        @param mechanisms defualts to {!default_mechanisms}
+    *)
 end
 
 (** Server-side authentication *)
@@ -98,6 +110,12 @@ module Server : sig
   val mech_dbus_cookie_sha1 : mechanism
   val default_mechanisms : mechanism list
 
-  val authenticate : ?mechanisms : mechanism list -> OBus_address.guid -> stream -> unit Lwt.t
-    (** Launch server-side authentication on the given stream. *)
+  val authenticate : ?capabilities : capability list -> ?mechanisms : mechanism list -> OBus_address.guid -> stream -> capability list Lwt.t
+    (** Launch server-side authentication on the given stream. On
+        success it returns the capabilities the client successfully
+        negotiated.
+
+        @param capabilities defaults to [[]]
+        @param mechanisms default to {!default_mechanisms}
+    *)
 end

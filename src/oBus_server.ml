@@ -32,6 +32,7 @@ type listener = {
   listen_fd : Lwt_unix.file_descr;
   listen_address : OBus_address.t;
   listen_guid : OBus_address.guid;
+  listen_capabilities : OBus_auth.capability list;
 }
 
 type server = {
@@ -40,16 +41,6 @@ type server = {
   server_mechanisms : OBus_auth.Server.mechanism list option;
   server_push : OBus_transport.t -> unit;
 }
-
-let socket fd ic oc =
-  OBus_transport.make
-    ~recv:(fun () -> OBus_wire.read_message ic)
-    ~send:(fun msg -> OBus_wire.write_message oc msg)
-    ~shutdown:(fun () ->
-                 lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
-                 Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                 Lwt_unix.close fd;
-                 return ())
 
 let accept server listen =
   try_lwt
@@ -84,26 +75,30 @@ let rec listen_loop server listen =
         return ()
 
     | Event_connection(fd, addr) ->
-        let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_unix.read fd)
-        and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_unix.write fd) in
+        let ic = Lwt_io.make ~buffer_size:256 ~mode:Lwt_io.input (Lwt_unix.read fd)
+        and oc = Lwt_io.make ~buffer_size:256 ~mode:Lwt_io.output (Lwt_unix.write fd) in
         lwt () =
           try_lwt
-            OBus_auth.Server.authenticate
-              ?mechanisms:server.server_mechanisms
-              listen.listen_guid
-              (OBus_auth.stream_of_channels ic oc)
-          with exn ->
-            Log#info "authentication failure for client from %s"
+            lwt capabilities =
+              OBus_auth.Server.authenticate
+                ~capabilities:listen.listen_capabilities
+                ?mechanisms:server.server_mechanisms
+                listen.listen_guid
+                (OBus_auth.stream_of_channels ic oc)
+            in
+            begin try
+              server.server_push (OBus_transport.socket ~capabilities fd)
+            with exn ->
+              Log#exn exn "failed to push new transport with"
+            end;
+            return ();
+          with OBus_auth.Auth_failure msg ->
+            Log#info "authentication failure for client from %s: %s"
               (match addr with
                  | ADDR_UNIX path -> path
-                 | ADDR_INET(ia, port) -> Printf.sprintf "%s:%d" (string_of_inet_addr ia) port);
+                 | ADDR_INET(ia, port) -> Printf.sprintf "%s:%d" (string_of_inet_addr ia) port)
+              msg;
             return ()
-        in
-        let () =
-          try
-            server.server_push (socket fd ic oc)
-          with exn ->
-            Log#exn exn "failed to push new transport with"
         in
         listen_loop server listen
 
@@ -179,7 +174,7 @@ let fds_of_address addr = match addr with
   | Unknown(name, params) ->
       fail (Failure ("OBus_server.make_server: listening on " ^ name ^ " addresses is not implemented"))
 
-let make_server ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) () =
+let make_server ?(capabilities=[]) ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) () =
   match addresses with
     | [] -> fail (Invalid_argument "OBus_server.make: no addresses given")
     | addresses ->
@@ -209,6 +204,11 @@ let make_server ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) ()
                (fun (fds, addr) guid ->
                   List.map (fun fd -> { listen_fd = fd;
                                         listen_address = { address = addr; guid = Some guid };
+                                        listen_capabilities = (List.filter
+                                                                 (fun `Unix_fd -> match addr with
+                                                                    | Unix_path _ | Unix_abstract _ -> true
+                                                                    | _ -> false)
+                                                                 capabilities);
                                         listen_guid = guid })
                     fds) l guids)
           and listener_threads = ref [] in
@@ -242,16 +242,16 @@ let make_server ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) ()
           return (event, addresses, shutdown)
         end
 
-let make_lowlevel ?mechanisms ?addresses () =
-  lwt event, addresses, shutdown = make_server ?mechanisms ?addresses () in
+let make_lowlevel ?capabilities ?mechanisms ?addresses () =
+  lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses () in
   return (object
             method event = event
             method addresses = addresses
             method shutdown = Lazy.force shutdown
           end)
 
-let make ?mechanisms ?addresses () =
-  lwt event, addresses, shutdown = make_server ?mechanisms ?addresses () in
+let make ?capabilities ?mechanisms ?addresses () =
+  lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses () in
   let event = React.E.map (OBus_connection.of_transport ~up:false) event in
   return (object
             method event = event
