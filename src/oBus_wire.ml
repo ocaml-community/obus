@@ -828,27 +828,32 @@ let write_message oc ?byte_order msg =
     | _ ->
         fail (Data_error "Cannot send a message with file descriptros on a channel")
 
-type writer = Lwt_unix.file_descr
-let writer fd = fd
+type writer = {
+  channel : Lwt_io.output_channel;
+  file_descr : Lwt_unix.file_descr;
+}
 
-let write_message_with_fds fd ?byte_order msg =
-  let buf, fds = string_of_message ?byte_order msg in
-  let rec loop ofs len =
-    lwt n = Lwt_unix.write fd buf ofs len in
-    if n < len then
-      loop (ofs + n) (len - n)
-    else
-      return ()
-  in
-  let len = String.length buf in
-  Lwt_unix.send_msg fd [Lwt_unix.io_vector buf 0 len] (Array.to_list fds) >>= function
-    | 0 ->
-        fail End_of_file
-    | n ->
-        if n < len then
-          loop n (len - n)
-        else
-          return ()
+let writer fd = {
+  channel = Lwt_io.of_fd ~mode:Lwt_io.output fd;
+  file_descr = fd;
+}
+
+let write_message_with_fds writer ?byte_order msg =
+  match string_of_message ?byte_order msg with
+    | buf, [||] ->
+        (* No file descriptor to send, simply use the channel *)
+        Lwt_io.write writer.channel buf
+    | buf, fds ->
+        Lwt_io.atomic begin fun oc ->
+          (* Ensures there is nothing left to send: *)
+          lwt () = Lwt_io.flush oc in
+          let len = String.length buf in
+          (* Send the file descriptors and the message: *)
+          lwt n = Lwt_unix.send_msg writer.file_descr [Lwt_unix.io_vector buf 0 len] (Array.to_list fds) in
+          assert (n >= 0 && n <= len);
+          (* Write what is remaining: *)
+          Lwt_io.write_from_exactly oc buf n (len - n)
+        end writer.channel
 
 (* +-----------------------------------------------------------------+
    | Common reading operations                                       |
@@ -859,7 +864,7 @@ type rpointer = {
   buf : string;
   mutable ofs : int;
   max : int;
-  fds : Unix.file_descr array;
+  mutable fds : Unix.file_descr array;
   (* The array of file descriptors received with the message *)
 }
 
@@ -1098,7 +1103,7 @@ struct
     if body_length < 0 || total_length > max_message_size then
       raise (Protocol_error(message_too_big total_length));
 
-    get_message total_length begin fun ptr cont ->
+    get_message total_length begin fun ptr pending_fds cont ->
       let fields = {
         rf_path = None;
         rf_member = None;
@@ -1127,11 +1132,22 @@ struct
           | _ -> ignore (read_variant ptr) (* Unsupported header field *)
       done;
 
-      if fields.rf_unix_fds <> Array.length ptr.fds then
-        raise (Protocol_error(sprintf
-                                "invalid number of file descriptor, %d expected, %d received"
-                                fields.rf_unix_fds
-                                (Array.length ptr.fds)));
+      begin
+        match pending_fds with
+          | None ->
+              if fields.rf_unix_fds <> Array.length ptr.fds then
+                raise (Protocol_error(sprintf
+                                        "invalid number of file descriptor, %d expected, %d received"
+                                        fields.rf_unix_fds
+                                        (Array.length ptr.fds)));
+          | Some queue ->
+              ptr.fds <- Array.init fields.rf_unix_fds
+                (fun i ->
+                   if Queue.is_empty queue then
+                     raise (Protocol_error "file descriptor missing")
+                   else
+                     Queue.take queue)
+      end;
 
       read_padding8 ptr;
       let body = sequence_reader fields.rf_signature ptr in
@@ -1162,7 +1178,7 @@ let read_message ic =
          let length = length - 16 in
          let buffer = String.create length in
          lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
-         f { buf = buffer; ofs = 0; max = length; fds = [||] } return)
+         f { buf = buffer; ofs = 0; max = length; fds = [||] } None return)
   end ic
 
 let message_of_string buffer fds =
@@ -1174,45 +1190,42 @@ let message_of_string buffer fds =
     buffer
     (fun length f ->
        if length <> String.length buffer then raise (Protocol_error "invalid message size");
-       f { buf = buffer; ofs = 16; max = length; fds = fds } (fun x -> x))
+       f { buf = buffer; ofs = 16; max = length; fds = fds } None (fun x -> x))
 
-type reader = Lwt_unix.file_descr
-let reader fd = fd
+type reader = {
+  channel : Lwt_io.input_channel;
+  pending_fds : Unix.file_descr Queue.t;
+  (* File descriptors received and not yet taken *)
+}
 
-let rec loop_read16 fd buf ofs len fds =
-  if len = 0 then
-    return (Array.of_list fds)
-  else
-    lwt n, fds' = Lwt_unix.recv_msg fd [Lwt_unix.io_vector buf ofs len] in
-    if n = 0 then
-      fail End_of_file
-    else
-      loop_read16 fd buf (ofs + n) (len - n) (fds @ fds')
+let reader fd =
+  let pending_fds = Queue.create () in
+  {
+    channel = Lwt_io.make ~mode:Lwt_io.input
+      (fun buf ofs len ->
+         lwt n, fds = Lwt_unix.recv_msg fd [Lwt_unix.io_vector buf ofs len] in
+         List.iter (fun fd ->
+                      (try Unix.set_close_on_exec fd with _ -> ());
+                      Queue.push fd pending_fds) fds;
+         return n);
+    pending_fds = pending_fds;
+  }
 
-let rec loop_read fd buf ofs len =
-  if len = 0 then
-    return ()
-  else
-    Lwt_unix.read fd buf ofs len >>= function
-      | 0 ->
-          fail End_of_file
-      | n ->
-          loop_read fd buf (ofs + n) (len - n)
-
-let read_message_with_fds fd =
-  let buf = String.create 16 in
-  lwt fds = loop_read16 fd buf 0 16 [] in
-  Array.iter (fun fd -> try Unix.set_close_on_exec fd with _ -> ()) fds;
-  (match get_char buf 0 with
-     | 'l' -> LE_reader.read_message
-     | 'B' -> BE_reader.read_message
-     | ch -> raise (Protocol_error(invalid_byte_order ch)))
-    buf
-    (fun len f ->
-       let len = len - 16 in
-       let buf = String.create len in
-       lwt () = loop_read fd buf 0 len in
-       f { buf = buf; ofs = 0; max = len; fds = fds } return)
+let read_message_with_fds reader  =
+  Lwt_io.atomic begin fun ic ->
+    let buffer = String.create 16 in
+    lwt () = Lwt_io.read_into_exactly ic buffer 0 16 in
+    (match get_char buffer 0 with
+       | 'l' -> LE_reader.read_message
+       | 'B' -> BE_reader.read_message
+       | ch -> raise (Protocol_error(invalid_byte_order ch)))
+      buffer
+      (fun length f ->
+         let length = length - 16 in
+         let buffer = String.create length in
+         lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
+         f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some reader.pending_fds) return)
+  end reader.channel
 
 (* +-----------------------------------------------------------------+
    | Size computation                                                |
