@@ -225,28 +225,32 @@ let stream_of_channels (ic, oc) =
              lwt () = Lwt_io.write oc line in
              Lwt_io.flush oc)
 
-
 let stream_of_fd fd =
   make_stream
     ~recv:(fun () ->
-             let buf = Buffer.create 42 and tmp = String.create 42 in
-             let rec loop () =
+             (* Note: we cannot use buffering here. Indeed, if we use
+                buffereing then when the "BEGIN\r\n" command is
+                received, it may be followed be the first message
+                which may contains file descriptors that would be
+                dropped. *)
+             let buf = Buffer.create 42 and tmp = String.create 1  in
+             let rec loop last =
                if Buffer.length buf > max_line_length then
                  fail (Auth_failure "input: line too long")
                else
-                 Lwt_unix.read fd tmp 0 42 >>= function
+                 Lwt_unix.read fd tmp 0 1 >>= function
                    | 0 ->
                        fail (Auth_failure "input: premature end of input")
                    | n ->
-                       assert (n > 0 && n <= 42);
-                       Buffer.add_substring buf tmp 0 n;
-                       let len = Buffer.length buf in
-                       if len >= 2 && Buffer.sub buf (len - 2) 2 = "\r\n" then
+                       assert (n = 1);
+                       let ch = tmp.[0] in
+                       Buffer.add_char buf ch;
+                       if last = '\r' && ch = '\n' then
                          return (Buffer.contents buf)
                        else
-                         loop ()
+                         loop ch
              in
-             loop ())
+             loop '\x00')
     ~send:(fun line ->
              let rec loop ofs len =
                if len = 0 then
