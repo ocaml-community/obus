@@ -44,7 +44,8 @@ type result = {
 
 let run_one_test byte_order msg acc =
   try
-    let msg' = OBus_wire.message_of_string (OBus_wire.string_of_message ~byte_order msg) in
+    let str, fds = OBus_wire.string_of_message ~byte_order msg in
+    let msg' = OBus_wire.message_of_string str fds in
     if msg' = msg then
       { acc with success = acc.success + 1 }
     else begin

@@ -13,14 +13,26 @@ let server_ic, client_oc = Lwt_io.pipe ()
 let client_ic, server_oc = Lwt_io.pipe ()
 
 let guid = OBus_uuid.generate ()
+let user_id = Unix.getuid ()
 
 let test mech =
   try_lwt
-    lwt () = Lwt.join [OBus_auth.Client.authenticate (OBus_auth.stream_of_channels client_ic client_oc) >> return ();
-                       OBus_auth.Server.authenticate ~mechanisms:[mech] guid (OBus_auth.stream_of_channels server_ic server_oc)] in
-    Lwt_io.eprintlf "authentication %s works!" (fst mech)
-  with _ ->
-    Lwt_io.eprintlf "authentication %s do not works :(" (fst mech)
+    lwt () = Lwt.join [OBus_auth.Client.authenticate
+                         ~stream:(OBus_auth.stream_of_channels (client_ic, client_oc)) ()
+                       >> return ();
+                       OBus_auth.Server.authenticate
+                         ~user_id
+                         ~mechanisms:[mech]
+                         ~guid
+                         ~stream:(OBus_auth.stream_of_channels (server_ic, server_oc)) ()
+                       >> return ()] in
+    Lwt_io.eprintlf "authentication %s works!" (OBus_auth.Server.mech_name mech)
+  with exn ->
+    Log#exn exn "authentication %s do not works" (OBus_auth.Server.mech_name mech);
+    return ()
 
 lwt () =
-  test OBus_auth.Server.mech_dbus_cookie_sha1
+  lwt () = test OBus_auth.Server.mech_external in
+  lwt () = test OBus_auth.Server.mech_dbus_cookie_sha1 in
+  lwt () = test OBus_auth.Server.mech_anonymous in
+  return ()

@@ -120,6 +120,7 @@ let basic count deep = function
   | Tstring -> count + 1, String(string 100)
   | Tsignature -> count + 1, Signature(snd (tsequence 0 0))
   | Tobject_path -> count + 1, Object_path(path ())
+  | Tunix_fd -> count + 1, Unix_fd Unix.stdin
 
 let rec single count deep = function
   | Tbasic t ->

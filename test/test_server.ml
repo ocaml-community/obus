@@ -8,7 +8,7 @@
  *)
 
 open Lwt
-open OBus_type.Pervasives
+open OBus_pervasives
 
 let () = Lwt_main.run (
   lwt server = OBus_server.make () in

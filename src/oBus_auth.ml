@@ -177,47 +177,101 @@ end
    +-----------------------------------------------------------------+ *)
 
 type stream = {
-  get_char : unit -> char Lwt.t;
-  put_char : char -> unit Lwt.t;
-  flush : unit -> unit Lwt.t;
+  recv : unit -> string Lwt.t;
+  send : string -> unit Lwt.t;
 }
 
-let make_stream ~get_char ~put_char ~flush = {
-  get_char = get_char;
-  put_char = put_char;
-  flush = flush;
+let make_stream ~recv ~send = {
+  recv = (fun () ->
+            try_lwt
+              recv ()
+            with
+              | Auth_failure _ as exn ->
+                  fail exn
+              | End_of_file ->
+                  fail (Auth_failure("input: premature end of input"))
+              | exn ->
+                  fail (Auth_failure("input: " ^ OBus_util.string_of_exn exn)));
+  send = (fun line ->
+            try_lwt
+              send line
+            with
+              | Auth_failure _ as exn ->
+                  fail exn
+              | exn ->
+                  fail (Auth_failure("output: " ^ OBus_util.string_of_exn exn)));
 }
 
-let stream_of_channels ic oc = {
-  get_char = (fun _ -> Lwt_io.read_char ic);
-  put_char = (fun c -> Lwt_io.write_char oc c);
-  flush = (fun _ -> Lwt_io.flush oc);
-}
+let stream_of_channels (ic, oc) =
+  make_stream
+    ~recv:(fun () ->
+             let buf = Buffer.create 42 in
+             let rec loop last =
+               if Buffer.length buf > max_line_length then
+                 fail (Auth_failure "input: line too long")
+               else
+                 Lwt_io.read_char_opt ic >>= function
+                   | None ->
+                       fail (Auth_failure "input: premature end of input")
+                   | Some ch ->
+                       Buffer.add_char buf ch;
+                       if last = '\r' && ch = '\n' then
+                         return (Buffer.contents buf)
+                       else
+                         loop ch
+             in
+             loop '\x00')
+    ~send:(fun line ->
+             lwt () = Lwt_io.write oc line in
+             Lwt_io.flush oc)
+
+
+let stream_of_fd fd =
+  make_stream
+    ~recv:(fun () ->
+             let buf = Buffer.create 42 and tmp = String.create 42 in
+             let rec loop () =
+               if Buffer.length buf > max_line_length then
+                 fail (Auth_failure "input: line too long")
+               else
+                 Lwt_unix.read fd tmp 0 42 >>= function
+                   | 0 ->
+                       fail (Auth_failure "input: premature end of input")
+                   | n ->
+                       assert (n > 0 && n <= 42);
+                       Buffer.add_substring buf tmp 0 n;
+                       let len = Buffer.length buf in
+                       if len >= 2 && Buffer.sub buf (len - 2) 2 = "\r\n" then
+                         return (Buffer.contents buf)
+                       else
+                         loop ()
+             in
+             loop ())
+    ~send:(fun line ->
+             let rec loop ofs len =
+               if len = 0 then
+                 return ()
+               else
+                 Lwt_unix.write fd line ofs len >>= function
+                   | 0 ->
+                       fail (Auth_failure "output: zero byte written")
+                   | n ->
+                       assert (n > 0 && n <= len);
+                       loop (ofs + n) (len - n)
+             in
+             loop 0 (String.length line))
 
 let send_line mode stream line =
   Log#debug "%s: sending: %S" mode line;
-  let rec aux i =
-    if i = String.length line then
-      lwt () = stream.put_char '\r' in
-      lwt () = stream.put_char '\n' in
-      stream.flush ()
-    else
-      lwt () = stream.put_char line.[i] in
-      aux (i + 1)
-  in
-  aux 0
+  stream.send (line ^ "\r\n")
 
-let rec recv_line buffer stream eol_state =
-  (* We need a limit to avoid consuming all the ram... *)
-  if Buffer.length buffer > max_line_length then
-    auth_failure "line too long received (>%d)" max_line_length
+let rec recv_line stream =
+  lwt line = stream.recv () in
+  let len = String.length line in
+  if len < 2 || not (line.[len - 2] = '\r' && line.[len - 1] = '\n') then
+    fail (Auth_failure("input: invalid line received"))
   else
-    lwt ch = stream.get_char () in
-    Buffer.add_char buffer ch;
-    match eol_state, ch with
-      | 0, '\r' -> recv_line buffer stream 1
-      | 1, '\n' -> return (Buffer.sub buffer 0 (Buffer.length buffer - 2))
-      | _ -> recv_line buffer stream 0
+    return (String.sub line 0 (len - 2))
 
 let rec first f str pos =
   if pos = String.length str then
@@ -263,7 +317,7 @@ let preprocess_line line =
   (String.sub line 0 i, sub_strip line i (String.length line))
 
 let rec recv mode command_parser stream =
-  lwt line = recv_line (Buffer.create 42) stream 0 in
+  lwt line = recv_line stream in
   Log#debug "%s: received: %S" mode line;
 
   (* If a parse failure occur, return an error and try again *)
@@ -340,7 +394,10 @@ struct
     method abort = ()
   end
 
-  type mechanism = string * (unit -> mechanism_handler)
+  type mechanism = {
+    mech_name : string;
+    mech_exec : unit -> mechanism_handler;
+  } with projection
 
   (* +---------------------------------------------------------------+
      | Predefined client mechanisms                                  |
@@ -375,9 +432,18 @@ struct
     method abort = ()
   end
 
-  let mech_external = ("EXTERNAL", fun _ -> new mech_external_handler)
-  let mech_anonymous = ("ANONYMOUS", fun _ -> new mech_anonymous_handler)
-  let mech_dbus_cookie_sha1 = ("DBUS_COOKIE_SHA1", fun _ -> new mech_dbus_cookie_sha1_handler)
+  let mech_external = {
+    mech_name = "EXTERNAL";
+    mech_exec = (fun () -> new mech_external_handler);
+  }
+  let mech_anonymous = {
+    mech_name = "ANONYMOUS";
+    mech_exec = (fun () -> new mech_anonymous_handler);
+  }
+  let mech_dbus_cookie_sha1 = {
+    mech_name = "DBUS_COOKIE_SHA1";
+    mech_exec = (fun () -> new mech_dbus_cookie_sha1_handler);
+  }
 
   let default_mechanisms = [mech_external;
                             mech_dbus_cookie_sha1;
@@ -402,7 +468,7 @@ struct
     let rec aux = function
       | [] ->
           return Failure
-      | (name, f) :: mechs ->
+      | { mech_name = name; mech_exec =  f } :: mechs ->
           match available_mechanisms with
             | Some l when not (List.mem name l) ->
                 aux mechs
@@ -490,7 +556,7 @@ struct
         | _ -> return Failure
       end
 
-  let authenticate ?(capabilities=[]) ?(mechanisms=default_mechanisms) stream =
+  let authenticate ?(capabilities=[]) ?(mechanisms=default_mechanisms) ~stream () =
     let rec loop = function
       | Transition(cmd, state, mechs) ->
           lwt () = client_send stream cmd in
@@ -517,7 +583,6 @@ struct
       | Failure ->
           auth_failure "authentication failure"
     in
-    lwt () = stream.put_char '\000' in
     initial mechanisms >>= loop
 end
 
@@ -530,7 +595,7 @@ struct
 
   type mechanism_return =
     | Mech_continue of data
-    | Mech_ok
+    | Mech_ok of int option
     | Mech_reject
 
   class virtual mechanism_handler = object
@@ -539,37 +604,43 @@ struct
     method abort = ()
   end
 
-  type mechanism = string * (unit -> mechanism_handler)
+  type mechanism = {
+    mech_name : string;
+    mech_exec : int option -> mechanism_handler;
+  } with projection
 
   (* +---------------------------------------------------------------+
      | Predefined server mechanisms                                  |
      +---------------------------------------------------------------+ *)
 
-  (* This two mechanisms do not work since we need to get credentials
-     using functions that are not available in ocaml.
+  class mech_external_handler user_id = object
+    inherit mechanism_handler
+    method data data =
+      match user_id, try Some(int_of_string data) with _ -> None with
+        | Some user_id, Some user_id' when user_id = user_id' ->
+            return (Mech_ok(Some user_id))
+        | _ ->
+            return Mech_reject
+  end
 
-     class server_mech_external_handler = object
-       inherit server_mechanism_handler
-       method data _ = return Mech_ok
-     end
-
-     class server_mech_anonymous_handler = object
-       inherit server_mechanism_handler
-       method data _ = return Mech_ok
-     end
-  *)
+  class mech_anonymous_handler = object
+    inherit mechanism_handler
+    method data _ = return (Mech_ok None)
+  end
 
   class mech_dbus_cookie_sha1_handler = object
     inherit mechanism_handler
 
     val context = "org_freedesktop_general"
     val mutable state = `State1
+    val mutable user_id = None
 
     method data resp =
       try
         Log#debug "server: dbus_cookie_sha1: resp: %s" resp;
         match state with
           | `State1 ->
+              user_id <- (try Some(int_of_string resp) with _ -> None);
               lwt keyring = Keyring.load context in
               let cur_time = Int64.of_float (Unix.time ()) in
               (* Filter old and future keys *)
@@ -596,7 +667,7 @@ struct
               Scanf.sscanf resp "%s %s"
                 (fun its_rand comp_sha1 ->
                    if OBus_util.sha_1 (sprintf "%s:%s:%s" my_rand its_rand cookie) = hex_decode comp_sha1 then
-                     return Mech_ok
+                     return (Mech_ok user_id)
                    else
                      return Mech_reject)
 
@@ -606,13 +677,22 @@ struct
     method abort = ()
   end
 
-  (*
-    let server_mech_external = ("EXTERNAL", fun _ -> new server_mech_external_handler)
-    let server_mech_anonymous = ("ANONYMOUS", fun _ -> new server_mech_anonymous_handler)
-  *)
-  let mech_dbus_cookie_sha1 = ("DBUS_COOKIE_SHA1", fun _ -> new mech_dbus_cookie_sha1_handler)
+  let mech_anonymous = {
+    mech_name = "ANONYMOUS";
+    mech_exec = (fun uid -> new mech_anonymous_handler);
+  }
+  let mech_external = {
+    mech_name = "EXTERNAL";
+    mech_exec = (fun uid -> new mech_external_handler uid);
+  }
+  let mech_dbus_cookie_sha1 = {
+    mech_name = "DBUS_COOKIE_SHA1";
+    mech_exec = (fun uid -> new mech_dbus_cookie_sha1_handler);
+  }
 
-  let default_mechanisms = [mech_dbus_cookie_sha1]
+  let default_mechanisms = [mech_external;
+                            mech_dbus_cookie_sha1;
+                            mech_anonymous]
 
   (* +---------------------------------------------------------------+
      | Server-side protocol                                          |
@@ -621,31 +701,31 @@ struct
   type state =
     | Waiting_for_auth
     | Waiting_for_data of mechanism_handler
-    | Waiting_for_begin of capability list
+    | Waiting_for_begin of int option * capability list
 
   type server_machine_transition =
     | Transition of server_command * state
-    | Accept of capability list
+    | Accept of int option * capability list
     | Failure
 
   let reject mechs =
-    return (Transition(Server_rejected (List.map fst mechs),
+    return (Transition(Server_rejected (List.map mech_name mechs),
                        Waiting_for_auth))
 
   let error msg =
     return (Transition(Server_error msg,
                        Waiting_for_auth))
 
-  let transition guid capabilities mechs state cmd = match state with
+  let transition user_id guid capabilities mechs state cmd = match state with
     | Waiting_for_auth -> begin match cmd with
         | Client_auth None ->
             reject mechs
         | Client_auth(Some(name, resp)) ->
-            begin match OBus_util.assoc name mechs with
+            begin match OBus_util.find_map (fun m -> if m.mech_name = name then Some m.mech_exec else None) mechs with
               | None ->
                   reject mechs
               | Some f ->
-                  let mech = f () in
+                  let mech = f user_id in
                   try_lwt
                     lwt init = mech#init in
                     match init, resp with
@@ -662,9 +742,9 @@ struct
                             | Mech_continue chal ->
                                 return (Transition(Server_data chal,
                                                    Waiting_for_data mech))
-                            | Mech_ok ->
+                            | Mech_ok uid ->
                                 return (Transition(Server_ok guid,
-                                                   Waiting_for_begin []))
+                                                   Waiting_for_begin(uid, [])))
                             | Mech_reject ->
                                 reject mechs
                   with exn ->
@@ -685,9 +765,9 @@ struct
                 | Mech_continue chal ->
                     return (Transition(Server_data chal,
                                        Waiting_for_data mech))
-                | Mech_ok ->
+                | Mech_ok uid ->
                     return (Transition(Server_ok guid,
-                                       Waiting_for_begin []))
+                                       Waiting_for_begin(uid, [])))
                 | Mech_reject ->
                     reject mechs
             with exn ->
@@ -699,9 +779,9 @@ struct
         | _ -> mech#abort; error "DATA command expected"
       end
 
-    | Waiting_for_begin caps -> begin match cmd with
+    | Waiting_for_begin(uid, caps) -> begin match cmd with
         | Client_begin ->
-            return (Accept caps)
+            return (Accept(uid, caps))
         | Client_cancel ->
             reject mechs
         | Client_error _ ->
@@ -709,21 +789,22 @@ struct
         | Client_negotiate_unix_fd ->
             if List.mem `Unix_fd capabilities then
               return(Transition(Server_agree_unix_fd,
-                                Waiting_for_begin (if List.mem `Unix_fd caps then
-                                                     caps
-                                                   else
-                                                     `Unix_fd :: caps)))
+                                Waiting_for_begin(uid,
+                                                  if List.mem `Unix_fd caps then
+                                                    caps
+                                                  else
+                                                    `Unix_fd :: caps)))
             else
               return(Transition(Server_error "Unix fd passing is not supported by this server",
-                                Waiting_for_begin caps))
+                                Waiting_for_begin(uid, caps)))
         | _ ->
             error "BEGIN command expected"
       end
 
-  let authenticate ?(capabilities=[]) ?(mechanisms=default_mechanisms) guid stream =
+  let authenticate ?(capabilities=[]) ?(mechanisms=default_mechanisms) ?user_id ~guid ~stream () =
     let rec loop state count =
       lwt cmd = server_recv stream in
-      transition guid capabilities mechanisms state cmd >>= function
+      transition user_id guid capabilities mechanisms state cmd >>= function
         | Transition(cmd, state) ->
             let count =
               match cmd with
@@ -737,14 +818,10 @@ struct
             else
               lwt () = server_send stream cmd in
               loop state count
-        | Accept caps ->
-            return caps
+        | Accept(uid, caps) ->
+            return (uid, caps)
         | Failure ->
             auth_failure "authentication failure"
     in
-    stream.get_char () >>= function
-      | '\000' ->
-          loop Waiting_for_auth 0
-      | _ ->
-          auth_failure "initial null byte missing"
+    loop Waiting_for_auth 0
 end

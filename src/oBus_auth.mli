@@ -15,24 +15,28 @@ type data = string
 exception Auth_failure of string
   (** Exception raise when authentication fail *)
 
-(** {6 Communication} *)
-
-type stream
-  (** Way of communication for a mechanism *)
-
-val make_stream :
-  get_char : (unit -> char Lwt.t) ->
-  put_char : (char -> unit Lwt.t) ->
-  flush : (unit -> unit Lwt.t) -> stream
-  (** Creates a stream from lowlevel functions. *)
-
-val stream_of_channels : Lwt_io.input_channel -> Lwt_io.output_channel -> stream
-  (** Creates a stream from a pair of lwt channels *)
-
 (** List of capatilities clients/servers may support *)
 type capability =
     [ `Unix_fd
         (** The transport support unix fd passing *) ]
+
+(** {6 Communication} *)
+
+type stream
+  (** A stream is a way of communication for an authentication
+      procedure *)
+
+val make_stream : recv : (unit -> string Lwt.t) -> send : (string -> unit Lwt.t) -> stream
+  (** Creates a stream for authentication.
+
+      @param recv must reads a complete line, ending with ["\r\n"],
+      @param send must sends the given line. *)
+
+val stream_of_channels : Lwt_io.input_channel * Lwt_io.output_channel -> stream
+  (** Creates a stream from a pair of channels *)
+
+val stream_of_fd : Lwt_unix.file_descr -> stream
+  (** Creates a stream from a file descriptor *)
 
 (** Client-side authentication *)
 module Client : sig
@@ -58,9 +62,13 @@ module Client : sig
       (** Must abort the mechanism. *)
   end
 
-  type mechanism = string * (unit -> mechanism_handler)
-      (** A mechiansm consist on a mechanism name and a function to
-          create the handlers *)
+  (** An client-side authentication mechanism *)
+  type mechanism = {
+    mech_name : string;
+    (** Name of the mechanism *)
+    mech_exec : unit -> mechanism_handler;
+    (** Mechanism creator *)
+  } with projection
 
   val mech_external : mechanism
   val mech_anonymous : mechanism
@@ -70,11 +78,14 @@ module Client : sig
   val authenticate :
     ?capabilities : capability list ->
     ?mechanisms : mechanism list ->
-    stream -> (OBus_address.guid * capability list) Lwt.t
+    stream : stream -> unit -> (OBus_address.guid * capability list) Lwt.t
     (** Launch client-side authentication on the given stream. On
         success it returns the unique identifier of the server address
         and capabilities that were successfully negotiated with the
         server.
+
+        Note: [authenticate] does not sends the initial null byte. You
+        have to handle it before calling [authenticate].
 
         @param capabilities defaults to []
         @param mechanisms defualts to {!default_mechanisms}
@@ -88,8 +99,9 @@ module Server : sig
       (** Value returned by the server-side of an auth mechanism *)
     | Mech_continue of data
         (** Continue the authentication with this challenge *)
-    | Mech_ok
-        (** The client is authentified *)
+    | Mech_ok of int option
+        (** The client is authentified. The argument is the user id
+            the client is authenticated with. *)
     | Mech_reject
         (** The client is rejected by the mechanism *)
 
@@ -105,16 +117,36 @@ module Server : sig
       (** Must abort the mechanism *)
   end
 
-  type mechanism = string * (unit -> mechanism_handler)
+  (** A server-size authentication mechanism *)
+  type mechanism = {
+    mech_name : string;
+    (** The mechanism name *)
+    mech_exec : int option -> mechanism_handler;
+    (** The mechanism creator. It receive the user id of the client,
+        if available. *)
+  } with projection
 
+  val mech_anonymous : mechanism
+  val mech_external : mechanism
   val mech_dbus_cookie_sha1 : mechanism
   val default_mechanisms : mechanism list
 
-  val authenticate : ?capabilities : capability list -> ?mechanisms : mechanism list -> OBus_address.guid -> stream -> capability list Lwt.t
+  val authenticate :
+    ?capabilities : capability list ->
+    ?mechanisms : mechanism list ->
+    ?user_id : int ->
+    guid : OBus_address.guid ->
+    stream : stream -> unit -> (int option * capability list) Lwt.t
     (** Launch server-side authentication on the given stream. On
-        success it returns the capabilities the client successfully
-        negotiated.
+        success it returns the client uid and the list of capabilities
+        that were successfully negotiated. A client uid of {!None}
+        means that the clinet used anonymous authentication, and may
+        be disconnected according to server policy.
 
+        Note: [authenticate] does not read the first zero byte. You
+        must read it by hand, and maybe use it to receive credentials.
+
+        @param user_id is the user id determined by external method
         @param capabilities defaults to [[]]
         @param mechanisms default to {!default_mechanisms}
     *)

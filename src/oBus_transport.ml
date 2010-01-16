@@ -71,35 +71,52 @@ let make_socket domain typ addr =
     Lwt_unix.close fd;
     fail exn
 
+let string_of_socket_params domain typ addr =
+  Printf.sprintf "domain=%s typ=%s addr=%s"
+    (match domain with
+       | PF_UNIX -> "unix"
+       | PF_INET -> "inet"
+       | PF_INET6 -> "inet6")
+    (match typ with
+       | SOCK_STREAM -> "stream"
+       | SOCK_DGRAM -> "dgram"
+       | SOCK_RAW -> "raw"
+       | SOCK_SEQPACKET -> "seqpacket")
+    (match addr with
+       | ADDR_UNIX path -> sprintf "unix(%s)" path
+       | ADDR_INET(addr, port) -> sprintf "inet(%s,%d)" (string_of_inet_addr addr) port)
+
 let of_addresses ?(capabilities=[]) ?mechanisms addresses =
   let rec try_one domain typ addr fallback x =
     try_lwt
       lwt fd = make_socket domain typ addr in
-      let ic = Lwt_io.make ~buffer_size:256 ~mode:Lwt_io.input (Lwt_unix.read fd)
-      and oc = Lwt_io.make ~buffer_size:256 ~mode:Lwt_io.output (Lwt_unix.write fd) in
-      lwt guid, caps = OBus_auth.Client.authenticate
-        ~capabilities:(List.filter (function `Unix_fd -> domain = PF_UNIX) capabilities)
-        ?mechanisms (OBus_auth.stream_of_channels ic oc) in
-      return (guid, socket ~capabilities:caps fd)
-    with exn ->
-      Log#error "transport creation failed for address: domain=%s typ=%s addr=%s: %s"
-        (match domain with
-           | PF_UNIX -> "unix"
-           | PF_INET -> "inet"
-           | PF_INET6 -> "inet6")
-        (match typ with
-           | SOCK_STREAM -> "stream"
-           | SOCK_DGRAM -> "dgram"
-           | SOCK_RAW -> "raw"
-           | SOCK_SEQPACKET -> "seqpacket")
-        (match addr with
-           | ADDR_UNIX path -> sprintf "unix(%s)" path
-           | ADDR_INET(addr, port) -> sprintf "inet(%s,%d)" (string_of_inet_addr addr) port)
-        (OBus_util.string_of_exn exn);
-      fallback x
+      Lwt_unix.write fd "\x00" 0 1 >>= function
+        | 0 ->
+            fail (OBus_auth.Auth_failure "failed to send the initial null byte")
+        | 1 ->
+            lwt guid, capabilities =
+              OBus_auth.Client.authenticate
+                ~capabilities:(List.filter (function `Unix_fd -> domain = PF_UNIX) capabilities)
+                ?mechanisms
+                ~stream:(OBus_auth.stream_of_fd fd)
+                ()
+            in
+            return (guid, socket ~capabilities fd)
+        | n ->
+            assert false
+    with
+      | OBus_auth.Auth_failure msg ->
+          Log#error "authentication failed for address: domain=%s: %s"
+            (string_of_socket_params domain typ addr) msg;
+          fallback x
+      | exn ->
+          Log#exn exn "transport creation failed for address: %s"
+            (string_of_socket_params domain typ addr);
+          fallback x
   in
   let rec aux = function
-    | [] -> failwith "no working D-Bus address found"
+    | [] ->
+        fail (Failure "no working D-Bus address found")
     | { OBus_address.address = address } :: rest ->
         match address with
           | Unix_path path ->

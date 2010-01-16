@@ -13,7 +13,7 @@
 
 # Use pa_obus for all files except pa_obus itself
 <**/*.ml{,i}>: pkg_lwt.syntax, pa_obus
-<src/**/*.ml>: pkg_lwt.syntax.log
+<{src,test}/**/*.ml>: pkg_lwt.syntax.log
 <src/oBus_connection.ml>: pkg_camlp4.macro
 <syntax/*.ml{,i}>: -pkg_lwt.syntax, -pa_obus
 

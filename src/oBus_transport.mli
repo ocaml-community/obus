@@ -56,5 +56,5 @@ val of_addresses :
     (** Try to make a working transport from a list of
         addresses. Return also the guid of the server address.
 
-        @param support_unix_fd defaults to [[]].  If set, obus will
-        try to negotiate features it contains. *)
+        @param capabilities defaults to [[]]. If set, obus will try to
+        negotiate features it contains. *)

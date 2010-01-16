@@ -40,6 +40,7 @@ type server = {
   server_abort : event Lwt.t;
   server_mechanisms : OBus_auth.Server.mechanism list option;
   server_push : OBus_transport.t -> unit;
+  server_allow_anonymous : bool;
 }
 
 let accept server listen =
@@ -50,6 +51,12 @@ let accept server listen =
   with Unix_error(err, _, _) ->
     if server.server_up then Log#error "uncaught error: %s" (error_message err);
     return Event_shutdown
+
+let string_of_addr = function
+  | ADDR_UNIX path ->
+      path
+  | ADDR_INET(ia, port) ->
+      Printf.sprintf "%s:%d" (string_of_inet_addr ia) port
 
 let rec listen_loop server listen =
   choose [server.server_abort; accept server listen] >>= function
@@ -75,30 +82,52 @@ let rec listen_loop server listen =
         return ()
 
     | Event_connection(fd, addr) ->
-        let ic = Lwt_io.make ~buffer_size:256 ~mode:Lwt_io.input (Lwt_unix.read fd)
-        and oc = Lwt_io.make ~buffer_size:256 ~mode:Lwt_io.output (Lwt_unix.write fd) in
         lwt () =
           try_lwt
-            lwt capabilities =
-              OBus_auth.Server.authenticate
-                ~capabilities:listen.listen_capabilities
-                ?mechanisms:server.server_mechanisms
-                listen.listen_guid
-                (OBus_auth.stream_of_channels ic oc)
-            in
-            begin try
-              server.server_push (OBus_transport.socket ~capabilities fd)
-            with exn ->
-              Log#exn exn "failed to push new transport with"
-            end;
-            return ();
-          with OBus_auth.Auth_failure msg ->
-            Log#info "authentication failure for client from %s: %s"
-              (match addr with
-                 | ADDR_UNIX path -> path
-                 | ADDR_INET(ia, port) -> Printf.sprintf "%s:%d" (string_of_inet_addr ia) port)
-              msg;
-            return ()
+            let buf = String.create 1 in
+            Lwt_unix.read fd buf 0 1 >>= function
+              | 0 ->
+                  fail (OBus_auth.Auth_failure "did not receive the initial null byte")
+              | 1 ->
+                  let user_id =
+                    try
+                      Some((Lwt_unix.get_credentials fd).Lwt_unix.cred_uid)
+                    with Unix.Unix_error(error, _, _) ->
+                      Log#info "cannot read credential: %s" (Unix.error_message error);
+                      None
+                  in
+                  lwt user_id, capabilities =
+                    OBus_auth.Server.authenticate
+                      ~capabilities:listen.listen_capabilities
+                      ?mechanisms:server.server_mechanisms
+                      ?user_id
+                      ~guid:listen.listen_guid
+                      ~stream:(OBus_auth.stream_of_fd fd)
+                      ()
+                  in
+                  if user_id = None && not server.server_allow_anonymous then begin
+                    Log#info "client from %s rejected because anonymous connection are not allowed" (string_of_addr addr);
+                    try
+                      Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                      Lwt_unix.close fd
+                    with exn ->
+                      Log#exn exn "shutdown socket failed with"
+                  end else begin
+                    try
+                      server.server_push (OBus_transport.socket ~capabilities fd)
+                    with exn ->
+                      Log#exn exn "failed to push new transport with"
+                  end;
+                  return ()
+              | _ ->
+                  assert false
+          with
+            | OBus_auth.Auth_failure msg ->
+                Log#info "authentication failure for client from %s: %s" (string_of_addr addr) msg;
+                return ()
+            | exn ->
+                Log#exn exn "authentication for client from %s failed with" (string_of_addr addr);
+                return ()
         in
         listen_loop server listen
 
@@ -174,7 +203,7 @@ let fds_of_address addr = match addr with
   | Unknown(name, params) ->
       fail (Failure ("OBus_server.make_server: listening on " ^ name ^ " addresses is not implemented"))
 
-let make_server ?(capabilities=[]) ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) () =
+let make_server ?(capabilities=[]) ?mechanisms ?(addresses=[Unix_tmpdir Filename.temp_dir_name]) ?(allow_anonymous=false) () =
   match addresses with
     | [] -> fail (Invalid_argument "OBus_server.make: no addresses given")
     | addresses ->
@@ -218,6 +247,7 @@ let make_server ?(capabilities=[]) ?mechanisms ?(addresses=[Unix_tmpdir Filename
             server_abort = abort_waiter;
             server_mechanisms = mechanisms;
             server_push = push;
+            server_allow_anonymous = allow_anonymous;
           } in
 
           let exit_hook = Lwt_sequence.add_l return Lwt_main.exit_hooks in
@@ -242,16 +272,16 @@ let make_server ?(capabilities=[]) ?mechanisms ?(addresses=[Unix_tmpdir Filename
           return (event, addresses, shutdown)
         end
 
-let make_lowlevel ?capabilities ?mechanisms ?addresses () =
-  lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses () in
+let make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
+  lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
   return (object
             method event = event
             method addresses = addresses
             method shutdown = Lazy.force shutdown
           end)
 
-let make ?capabilities ?mechanisms ?addresses () =
-  lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses () in
+let make ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
+  lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
   let event = React.E.map (OBus_connection.of_transport ~up:false) event in
   return (object
             method event = event
