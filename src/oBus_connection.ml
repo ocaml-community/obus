@@ -662,7 +662,7 @@ let of_addresses ?(shared=true) addresses = match shared with
             lwt guid, transport = OBus_transport.of_addresses ~capabilities addresses in
             return (of_transport ~guid transport)
 
-let loopback = of_transport (OBus_transport.loopback ())
+let loopback () = of_transport (OBus_transport.loopback ())
 
 (* +-----------------------------------------------------------------+
    | Other                                                           |

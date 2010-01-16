@@ -36,8 +36,8 @@ val of_addresses : ?shared:bool -> OBus_address.t list -> t Lwt.t
       already open, then it is used instead of [transport]. This is
       the default behaviour. *)
 
-val loopback : t
-  (** Connection with a loopback transport *)
+val loopback : unit -> t
+  (** Creates a connection with a loopback transport *)
 
 val close : t -> unit Lwt.t
   (** Close a connection.
