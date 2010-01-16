@@ -27,18 +27,17 @@ let rec loop pp action what_bus a b =
   lwt () = OBus_transport.send b message in
   loop pp action what_bus a b
 
-let events = ref []
-
 let launch pp what_bus laddresses =
   lwt addresses = Lazy.force laddresses in
-  lwt server = OBus_server.make_lowlevel () in
+  lwt server = OBus_server.make_lowlevel ~capabilities:[`Unix_fd] () in
   Unix.putenv (Printf.sprintf "DBUS_%s_BUS_ADDRESS" (String.uppercase what_bus))
     (OBus_address.to_string server#addresses);
-  events := React.E.map
+  Lwt_event.always_notify_p
     (fun transport ->
-       ignore (lwt (_, bus) = OBus_transport.of_addresses addresses in
-               choose [loop pp "message received" what_bus bus transport;
-                       loop pp "sending message" what_bus transport bus])) server#event :: !events;
+       lwt (_, bus) = OBus_transport.of_addresses ~capabilities:[`Unix_fd] addresses in
+       choose [loop pp "message received" what_bus bus transport;
+               loop pp "sending message" what_bus transport bus])
+    server#event;
   return ()
 
 let cmd_args = ref []
