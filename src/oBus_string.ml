@@ -22,9 +22,9 @@ exception Invalid_string of error
 
 let error_message error =
   if error.ofs < 0 then
-    Printf.sprintf "invalid D-Bus %s(%S): %s" error.typ error.str error.msg
+    Printf.sprintf "invalid D-Bus %s (%S): %s" error.typ error.str error.msg
   else
-    Printf.sprintf "invalid D-Bus %s(%S), at position %d: %s" error.typ error.str error.ofs error.msg
+    Printf.sprintf "invalid D-Bus %s (%S), at position %d: %s" error.typ error.str error.ofs error.msg
 
 let validate s =
   let fail i msg = Some{ typ = "string"; str = s; ofs = i; msg = msg } in

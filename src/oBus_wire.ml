@@ -100,11 +100,10 @@ let signal_of_raw fields =
    [Protocol_error]: *)
 
 let map_exn f = function
-  | Failure msg ->
-      let i = String.index msg ':' in
-      raise (f (String.sub msg (i + 1) (String.length msg - i - 1)))
   | OBus_string.Invalid_string err ->
       raise (f (OBus_string.error_message err))
+  | OBus_value.Invalid_signature(str, msg) ->
+      raise (f (Printf.sprintf "invalid signature (%S): %s" str msg))
   | exn ->
       raise exn
 
@@ -575,13 +574,13 @@ struct
 
   (* Serialize a signature. *)
   let write_signature ptr signature =
-    let string = try OBus_value.string_of_signature signature with exn -> map_exn data_error exn in
+    let string = OBus_value.string_of_signature signature in
     write_uint8 ptr (String.length string);
     write_bytes ptr string;
     write_uint8 ptr 0
 
   let write_object_path ptr path =
-    write_string_no_check ptr (try OBus_path.to_string path with exn -> map_exn data_error exn)
+    write_string_no_check ptr (OBus_path.to_string path)
 
   let write_basic ptr = function
     | Byte x -> write1 put_char ptr x
@@ -815,11 +814,14 @@ module LE_writer = Make_writer(LE_integer_writers)
 module BE_writer = Make_writer(BE_integer_writers)
 
 let string_of_message ?(byte_order=native_byte_order) msg =
-  match byte_order with
-    | Little_endian ->
-        LE_writer.write_message 'l' msg
-    | Big_endian ->
-        BE_writer.write_message 'B' msg
+  try
+    match byte_order with
+      | Little_endian ->
+          LE_writer.write_message 'l' msg
+      | Big_endian ->
+          BE_writer.write_message 'B' msg
+  with exn ->
+    raise (map_exn data_error exn)
 
 let write_message oc ?byte_order msg =
   match string_of_message ?byte_order msg with
@@ -951,11 +953,11 @@ struct
     let len = read_uint8 ptr in
     let x = read_bytes ptr len in
     if read_uint8 ptr <> 0 then raise (Protocol_error "missing signature terminating null byte");
-    try OBus_value.signature_of_string x with exn -> map_exn protocol_error exn
+    OBus_value.signature_of_string x
 
   let read_object_path ptr =
     let str = read_string_no_check ptr in
-    try OBus_path.of_string str with exn -> map_exn protocol_error exn
+    OBus_path.of_string str
 
   let read_vbyte ptr = Byte(read1 get_char ptr)
   let read_vboolean ptr = match read_uint ptr with
@@ -1166,31 +1168,37 @@ module LE_reader = Make_reader(LE_integer_readers)
 module BE_reader = Make_reader(BE_integer_readers)
 
 let read_message ic =
-  Lwt_io.atomic begin fun ic ->
-    let buffer = String.create 16 in
-    lwt () = Lwt_io.read_into_exactly ic buffer 0 16 in
+  try_lwt
+    Lwt_io.atomic begin fun ic ->
+      let buffer = String.create 16 in
+      lwt () = Lwt_io.read_into_exactly ic buffer 0 16 in
+      (match get_char buffer 0 with
+         | 'l' -> LE_reader.read_message
+         | 'B' -> BE_reader.read_message
+         | ch -> raise (Protocol_error(invalid_byte_order ch)))
+        buffer
+        (fun length f ->
+           let length = length - 16 in
+           let buffer = String.create length in
+           lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
+           f { buf = buffer; ofs = 0; max = length; fds = [||] } None return)
+    end ic
+  with exn ->
+    raise (map_exn protocol_error exn)
+
+let message_of_string buffer fds =
+  if String.length buffer < 16 then invalid_arg "OBus_wire.message_of_string: buffer too small";
+  try
     (match get_char buffer 0 with
        | 'l' -> LE_reader.read_message
        | 'B' -> BE_reader.read_message
        | ch -> raise (Protocol_error(invalid_byte_order ch)))
       buffer
       (fun length f ->
-         let length = length - 16 in
-         let buffer = String.create length in
-         lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
-         f { buf = buffer; ofs = 0; max = length; fds = [||] } None return)
-  end ic
-
-let message_of_string buffer fds =
-  if String.length buffer < 16 then invalid_arg "OBus_wire.message_of_string: buffer too small";
-  (match get_char buffer 0 with
-     | 'l' -> LE_reader.read_message
-     | 'B' -> BE_reader.read_message
-     | ch -> raise (Protocol_error(invalid_byte_order ch)))
-    buffer
-    (fun length f ->
-       if length <> String.length buffer then raise (Protocol_error "invalid message size");
-       f { buf = buffer; ofs = 16; max = length; fds = fds } None (fun x -> x))
+         if length <> String.length buffer then raise (Protocol_error "invalid message size");
+         f { buf = buffer; ofs = 16; max = length; fds = fds } None (fun x -> x))
+  with exn ->
+    raise (map_exn protocol_error exn)
 
 type reader = {
   channel : Lwt_io.input_channel;
@@ -1212,20 +1220,23 @@ let reader fd =
   }
 
 let read_message_with_fds reader  =
-  Lwt_io.atomic begin fun ic ->
-    let buffer = String.create 16 in
-    lwt () = Lwt_io.read_into_exactly ic buffer 0 16 in
-    (match get_char buffer 0 with
-       | 'l' -> LE_reader.read_message
-       | 'B' -> BE_reader.read_message
-       | ch -> raise (Protocol_error(invalid_byte_order ch)))
-      buffer
-      (fun length f ->
-         let length = length - 16 in
-         let buffer = String.create length in
-         lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
-         f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some reader.pending_fds) return)
-  end reader.channel
+  try_lwt
+    Lwt_io.atomic begin fun ic ->
+      let buffer = String.create 16 in
+      lwt () = Lwt_io.read_into_exactly ic buffer 0 16 in
+      (match get_char buffer 0 with
+         | 'l' -> LE_reader.read_message
+         | 'B' -> BE_reader.read_message
+         | ch -> raise (Protocol_error(invalid_byte_order ch)))
+        buffer
+        (fun length f ->
+           let length = length - 16 in
+           let buffer = String.create length in
+           lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
+           f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some reader.pending_fds) return)
+    end reader.channel
+  with exn ->
+    raise (map_exn protocol_error exn)
 
 (* +-----------------------------------------------------------------+
    | Size computation                                                |

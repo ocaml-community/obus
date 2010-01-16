@@ -90,9 +90,9 @@ and print_tsequence pp = print_list print_tsingle pp
    | Signature validation                                            |
    +-----------------------------------------------------------------+ *)
 
-type validate_part_result =
-  | OK of int
-  | Error of string
+exception Invalid_signature of string * string
+
+let invalid_signature str msg = raise (Invalid_signature(str, msg))
 
 let length_validate_signature l =
   let rec aux_single length depth_struct depth_array depth_dict_entry = function
@@ -130,6 +130,24 @@ let length_validate_signature l =
   in
   aux_sequence 0 0 0 0 l
 
+let signature_length l =
+  let rec aux_single length = function
+    | Tbasic _ | Tvariant ->
+        length + 1
+    | Tarray t ->
+        aux_single (length + 1) t
+    | Tdict(tk, tv) ->
+        aux_single (length + 4) tv
+    | Tstructure tl ->
+        aux_sequence (length + 2) tl
+  and aux_sequence length = function
+    | [] ->
+        length
+    | t :: tl ->
+        aux_sequence (aux_single length t) tl
+  in
+  aux_sequence 0 l
+
 let validate_signature l =
   try
     let _ = length_validate_signature l in
@@ -143,7 +161,7 @@ let validate_signature l =
 
 let signature_of_string str =
   let len = String.length str and i = ref 0 in
-  let fail fmt = Printf.ksprintf failwith ("OBus_value.signature_of_string: " ^^ fmt) in
+  let fail fmt = Printf.ksprintf (invalid_signature str) fmt in
   let get_char () =
     let j = !i in
     if j = len then
@@ -212,7 +230,7 @@ let signature_of_string str =
   let s = read_sequence () in
   match validate_signature s with
     | Some msg ->
-        Printf.ksprintf failwith "OBus_value.signature_of_string: invalid signature: %s" msg
+        invalid_signature str msg
     | None ->
         s
 
@@ -221,12 +239,7 @@ let signature_of_string str =
    +-----------------------------------------------------------------+ *)
 
 let string_of_signature signature =
-  let len =
-    try
-      length_validate_signature signature
-    with Failure msg ->
-      Printf.ksprintf failwith "OBus_value.string_of_signature: invalid signature: %s" msg
-  in
+  let len = signature_length signature in
   let str = String.create len and i = ref 0 in
   let put_char ch =
     let j = !i in
@@ -269,7 +282,11 @@ let string_of_signature signature =
         put_char 'v'
   in
   List.iter write_single signature;
-  str
+  try
+    let _ = length_validate_signature in
+    str
+  with Failure msg ->
+    raise (Invalid_signature(str, msg))
 
 (* +-----------------------------------------------------------------+
    | D-Bus value definitions                                         |

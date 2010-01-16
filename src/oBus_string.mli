@@ -16,8 +16,8 @@ type error = {
   (** Contains informations about invalid strings *)
 
   typ : string;
-    (** Type of string ("string", "bus name", "error name", "path",
-        ...) *)
+  (** Type of string ("string", "bus name", "error name", "path",
+      ...) *)
 
   str : string;
   (** The string which fail to validate *)

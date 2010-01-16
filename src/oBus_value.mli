@@ -41,13 +41,20 @@ type tsequence = tsingle list
 
 type signature = tsequence
 
+exception Invalid_signature of string * string
+  (** [Invalid_signature(signature, message)] is raised when a
+      signature is invalid. [signature] is a string representation of
+      the signature (using D-Bus type codes) and [message] is an error
+      message. *)
+
 val string_of_signature : signature -> string
   (** Returns a string representation of a signature using DBus type
-      codes *)
+      codes. If the signature is not valid (for example it is too
+      long), it raises {!Invalid_signature}. *)
 
 val signature_of_string : string -> signature
-  (** Parses a signature, raises [Failure] if the signature is not
-      correct *)
+  (** Parses a signature. Raises {!Invalid_signature} if the signature
+      is not correct *)
 
 val validate_signature : signature -> string option
   (** Not all signatures are valid. [validate] returns [None] if the
