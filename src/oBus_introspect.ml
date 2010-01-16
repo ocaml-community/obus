@@ -166,17 +166,16 @@ let output xo doc =
                              \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">"));
   aux (to_xml doc)
 
-open OBus_private_type
-
-let obus_document = Btype {
-  b_type = OBus_value.Tstring;
-  b_make = (fun x ->
-              let buf = Buffer.create 42 in
-              output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Buffer buf)) x;
-              OBus_value.String(Buffer.contents buf));
-  b_cast = (fun context -> function
-              | OBus_value.String x ->
-                  input (Xmlm.make_input ~strip:true (`String(0, x)))
-              | _ ->
-                  raise OBus_type.Cast_failure);
-}
+let obus_document = OBus_type.map OBus_pervasives.obus_string
+  (fun str ->
+     try
+       input (Xmlm.make_input ~strip:true (`String(0, str)))
+     with Xmlm.Error((line, column), err) ->
+       raise (OBus_type.Cast_failure("OBus_introspect.obus_document",
+                                     Printf.sprintf
+                                       "invalid document, at line %d: %s"
+                                       line (Xmlm.error_message err))))
+  (fun doc ->
+     let buf = Buffer.create 42 in
+     output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Buffer buf)) doc;
+     Buffer.contents buf)

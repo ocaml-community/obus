@@ -29,14 +29,14 @@ exception Context of context
 let make_context context = Context context
 let cast_context = function
   | Context context -> context
-  | _ -> raise OBus_type.Cast_failure
+  | _ -> raise (OBus_type.Cast_failure("OBus_connection.cast_context", "context missing"))
 
 let obus_t = Stype {
   s_type = Tnil;
   s_make = (fun _ -> Tnil);
   s_cast = (fun context l -> match context with
               | Context(connection, message) -> (connection, l)
-              | _ -> raise OBus_type.Cast_failure);
+              | _ -> raise (OBus_type.Cast_failure("OBus_connection.obus_t", "context missing")));
 }
 
 let obus_context = Stype {
@@ -44,7 +44,7 @@ let obus_context = Stype {
   s_make = (fun _ -> Tnil);
   s_cast = (fun context l -> match context with
               | Context context -> (context, l)
-              | _ -> raise OBus_type.Cast_failure);
+              | _ -> raise (OBus_type.Cast_failure("OBus_connection.obus_context", "context missing")));
 }
 
 (* Mapping from server guid to connection. *)
@@ -187,14 +187,14 @@ let method_call' connection ?flags ?sender ?destination ~path ?interface ~member
         begin
           try
             return (OBus_type.cast_sequence ty_reply ~context:(Context(connection, msg)) msg.body)
-          with OBus_type.Cast_failure ->
+          with OBus_type.Cast_failure _ as exn ->
             (* If not, check why the cast fail *)
             let expected_sig = OBus_type.type_sequence ty_reply
             and got_sig = type_of_sequence msg.body in
             if expected_sig = got_sig then
               (* If the signature match, this means that the user
                  defined a combinator raising a Cast_failure *)
-              fail OBus_type.Cast_failure
+              fail exn
             else
               (* In other case this means that the expected
                  signature is wrong *)

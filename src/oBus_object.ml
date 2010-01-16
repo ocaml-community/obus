@@ -75,13 +75,16 @@ struct
        let connection, message = OBus_connection.cast_context context in
        match connection#get with
          | Crashed _ ->
-             raise OBus_type.Cast_failure
+             raise (OBus_type.Cast_failure("OBus_object.Make.obus_t", "connection crashed"))
          | Running connection ->
              match ObjectMap.lookup path connection.exported_objects with
                | Some{ oo_object = Pack obj } ->
                    obj
                | _ ->
-                   raise OBus_type.Cast_failure)
+                   raise (OBus_type.Cast_failure("OBus_object.Make.obus_t",
+                                                 Printf.sprintf
+                                                   "cannot find object with path %S"
+                                                   (OBus_path.to_string path))))
     (fun obj -> (Object.get obj).path)
 
   let methods = ref MethodMap.empty

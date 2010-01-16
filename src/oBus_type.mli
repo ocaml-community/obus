@@ -65,8 +65,10 @@ val make_single : ('a, _) cl_single -> 'a -> OBus_value.single
 val make_sequence : ('a, _) cl_sequence -> 'a -> OBus_value.sequence
   (** Make a dynamically typed value from a statically typed one *)
 
-exception Cast_failure
-  (** Exception raised when a cast fail *)
+exception Cast_failure of string * string
+  (** Exception raised when a cast fail. Arguments are:
+      - the function which raised the exception
+      - an error message *)
 
 val cast_basic : ('a, _) cl_basic -> ?context : context -> OBus_value.basic -> 'a
 val cast_single : ('a, _) cl_single -> ?context : context -> OBus_value.single -> 'a

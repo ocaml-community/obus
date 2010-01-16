@@ -16,7 +16,7 @@ let obus_byte = Btype {
   b_make = byte;
   b_cast = (fun context -> function
               | Byte x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_byte", signature_mismatch)));
 }
 
 let obus_char = obus_byte
@@ -35,7 +35,7 @@ let obus_boolean = Btype {
   b_make = boolean;
   b_cast = (fun context -> function
               | Boolean x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_boolean", signature_mismatch)));
 }
 
 let obus_bool = obus_boolean
@@ -45,7 +45,7 @@ let obus_int16 = Btype {
   b_make = int16;
   b_cast = (fun context -> function
               | Int16 x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_int16", signature_mismatch)));
 }
 
 let obus_int32 = Btype {
@@ -53,7 +53,7 @@ let obus_int32 = Btype {
   b_make = int32;
   b_cast = (fun context -> function
               | Int32 x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_int32", signature_mismatch)));
 }
 
 let obus_int = map obus_int32 Int32.to_int Int32.of_int
@@ -63,7 +63,7 @@ let obus_int64 = Btype {
   b_make = int64;
   b_cast = (fun context -> function
               | Int64 x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_int64", signature_mismatch)));
 }
 
 let obus_uint16 = Btype {
@@ -71,7 +71,7 @@ let obus_uint16 = Btype {
   b_make = uint16;
   b_cast = (fun context -> function
               | Uint16 x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_uint16", signature_mismatch)));
 }
 
 let obus_uint32 = Btype {
@@ -79,7 +79,7 @@ let obus_uint32 = Btype {
   b_make = uint32;
   b_cast = (fun context -> function
               | Uint32 x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_uint32", signature_mismatch)));
 }
 
 let obus_uint = map obus_uint32 Int32.to_int Int32.of_int
@@ -89,7 +89,7 @@ let obus_uint64 = Btype {
   b_make = uint64;
   b_cast = (fun context -> function
               | Uint64 x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_uint64", signature_mismatch)));
 }
 
 let obus_double = Btype {
@@ -97,7 +97,7 @@ let obus_double = Btype {
   b_make = double;
   b_cast = (fun context -> function
               | Double x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_double", signature_mismatch)));
 }
 
 let obus_float = obus_double
@@ -107,7 +107,7 @@ let obus_string = Btype {
   b_make = string;
   b_cast = (fun context -> function
               | String x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_string", signature_mismatch)));
 }
 
 let obus_signature = Btype {
@@ -115,7 +115,7 @@ let obus_signature = Btype {
   b_make = signature;
   b_cast = (fun context -> function
               | Signature x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_signature", signature_mismatch)));
 }
 
 let obus_object_path = Btype {
@@ -123,7 +123,7 @@ let obus_object_path = Btype {
   b_make = object_path;
   b_cast = (fun context -> function
               | Object_path x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_object_path", signature_mismatch)));
 }
 
 let obus_path = obus_object_path
@@ -133,7 +133,7 @@ let obus_unix_file_descr = Btype {
   b_make = unix_fd;
   b_cast = (fun context -> function
               | Unix_fd fd -> Unix.dup fd
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_unix_file_descr", signature_mismatch)));
 }
 
 let obus_file_descr = map obus_unix_file_descr Lwt_unix.of_unix_file_descr Lwt_unix.unix_file_descr
@@ -154,7 +154,7 @@ let obus_list elt =
                       | i -> aux (cast context (sbyte (String.unsafe_get s i)) :: acc) (i - 1)
                     in
                     aux [] (String.length s - 1)
-                | _ -> raise Cast_failure)
+                | _ -> raise (Cast_failure("OBus_pervasives.obus_list", signature_mismatch)))
   }
 
 let obus_array elt = map (obus_list elt) Array.of_list Array.to_list
@@ -164,7 +164,7 @@ let obus_byte_array = Ctype {
   c_make = byte_array;
   c_cast = (fun context -> function
               | Byte_array s -> s
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_byte_array", signature_mismatch)));
 }
 
 let obus_dict tyk tyv =
@@ -178,7 +178,7 @@ let obus_dict tyk tyv =
                 | Dict(typk', typv', l) when typk' = typk && typv' = typv ->
                     List.map (fun (k, v) -> (castk context k, castv context v)) l
                 | _ ->
-                    raise Cast_failure)
+                    raise (Cast_failure("OBus_pervasives.obus_dict", signature_mismatch)))
   }
 
 let obus_structure ty = Ctype {
@@ -188,7 +188,7 @@ let obus_structure ty = Ctype {
   c_cast = (let cast = _cast_sequence ty in
             fun context -> function
               | Structure l -> cast context l
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_structure", signature_mismatch)));
 }
 
 let obus_variant = Ctype {
@@ -196,7 +196,7 @@ let obus_variant = Ctype {
   c_make = variant;
   c_cast = (fun context -> function
               | Variant v -> v
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_variant", signature_mismatch)));
 }
 
 let obus_unit = Stype {

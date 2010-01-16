@@ -40,7 +40,8 @@ let tree_get_boundary t =
 type context = exn
 exception No_context
 
-exception Cast_failure
+exception Cast_failure of string * string
+let signature_mismatch = "signature mismatch"
 
 (* Basic type combinator *)
 type 'a btype = {
@@ -91,27 +92,27 @@ let _cast_single = function
   | Btype { b_cast = f } ->
       (fun context -> function
          | Basic x -> f context x
-         | _ -> raise Cast_failure)
+         | _ -> raise (Cast_failure("OBus_type.cast_single", signature_mismatch)))
   | Ctype { c_cast = f } -> f
   | _ -> assert false
 let _cast_sequence = function
   | Btype { b_cast = f } ->
       (fun context -> function
          | [Basic x] -> f context x
-         | _ -> raise Cast_failure)
+         | _ -> raise (Cast_failure("OBus_type.cast_sequence", signature_mismatch)))
   | Ctype { c_cast = f } ->
       (fun context -> function
          | [x] -> f context x
-         | _ -> raise Cast_failure)
+         | _ -> raise (Cast_failure("OBus_type.cast_sequence", signature_mismatch)))
   | Stype { s_cast = f } ->
       (fun context -> fun l -> match f context l with
          | v, [] -> v
-         | _ -> raise Cast_failure)
+         | _ -> raise (Cast_failure("OBus_type.cast_sequence", signature_mismatch)))
 
 let obus_string = Btype {
   b_type = Tstring;
   b_make = string;
   b_cast = (fun context -> function
               | String x -> x
-              | _ -> raise Cast_failure);
+              | _ -> raise (Cast_failure("OBus_pervasives.obus_string", signature_mismatch)));
 }

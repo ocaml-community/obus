@@ -57,7 +57,7 @@ let cast_basic t ?(context=No_context) x = _cast_basic t context x
 let cast_single t ?(context=No_context) x = _cast_single t context x
 let cast_sequence t ?(context=No_context) x = _cast_sequence t context x
 
-let opt_cast f ?(context=No_context) x = try Some(f context x) with Cast_failure -> None
+let opt_cast f ?(context=No_context) x = try Some(f context x) with Cast_failure _ -> None
 let opt_cast_basic t = opt_cast (_cast_basic t)
 let opt_cast_single t = opt_cast (_cast_single t)
 let opt_cast_sequence t = opt_cast (_cast_sequence t)
@@ -68,7 +68,7 @@ let opt_cast_func { f_cast = f } ?(context=No_context) x g =
   try
     Some(f context x g)
   with
-      Cast_failure -> None
+      Cast_failure _ -> None
 
 let func_reply { f_reply = r } = r
 
@@ -117,7 +117,7 @@ let rec assocl key = function
       else
         assocl key l
   | [] ->
-      raise Cast_failure
+      raise (Cast_failure("OBus_type.assocl", "key not found"))
 
 let rec assocr key = function
   | (x, key') :: l ->
@@ -126,7 +126,7 @@ let rec assocr key = function
       else
         assocr key l
   | [] ->
-      raise Cast_failure
+      raise (Cast_failure("OBus_type.assocr", "key not found"))
 
 let mapping t l = map t (fun x -> assocr x l) (fun x -> assocl x l)
 
@@ -176,11 +176,11 @@ let cast = function
   | Btype { b_cast = f } ->
       (fun context -> function
          | Basic x :: l -> f context x, l
-         | _ -> raise Cast_failure)
+         | _ -> raise (Cast_failure("OBus_type.cast", signature_mismatch)))
   | Ctype { c_cast = f } ->
       (fun context -> function
          | x :: l -> f context x, l
-         | _ -> raise Cast_failure)
+         | _ -> raise (Cast_failure("OBus_type.cast", signature_mismatch)))
   | Stype { s_cast = f } -> f
 
 let reply ty = {
@@ -188,7 +188,7 @@ let reply ty = {
   f_make = (fun acc cont -> cont (tree_get_boundary acc));
   f_cast = (fun context -> function
              | [] -> (fun f -> f)
-             | _ -> raise Cast_failure);
+             | _ -> raise (Cast_failure("OBus_type.reply", signature_mismatch)));
   f_reply = (ty : (_, _) cl_sequence :> _ sequence);
 }
 
