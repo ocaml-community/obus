@@ -9,18 +9,15 @@
 
 (** D-Bus objects *)
 
+(** This module allow you to create D-Bus objects and export them on a
+    connection, allowing other programs to acccess them. *)
+
 type t
-  (** Type of obus object *)
+  (** Type of an obus object. It contains informations needed by obus
+      to export it on a connection and dispatch incomming method
+      calls. *)
 
-val path : t -> OBus_path.t
-  (** [path obj] returns the path of the object *)
-
-val owner : t -> OBus_peer.t option
-  (** [owner obj] returns the owner of the object, if any *)
-
-val exports : t -> OBus_connection.t list
-  (** [exports obj] is the list of connection on which the object is
-      exported *)
+(** {6 Creation} *)
 
 val make : ?owner : OBus_peer.t -> OBus_path.t -> t
   (** [make ?owner path] creates a new object with path [path].
@@ -31,6 +28,18 @@ val make : ?owner : OBus_peer.t -> OBus_path.t -> t
 
 val make' : ?owner : OBus_peer.t -> unit -> t
   (** Same as [make] but generate a unique path *)
+
+(** {6 Properties} *)
+
+val path : t -> OBus_path.t
+  (** [path obj] returns the path of the object *)
+
+val owner : t -> OBus_peer.t option
+  (** [owner obj] returns the owner of the object, if any *)
+
+val exports : t -> OBus_connection.t list
+  (** [exports obj] is the list of connection on which the object is
+      exported *)
 
 (** Signature of custom objects *)
 module type Object = sig
@@ -60,20 +69,22 @@ module type Object = sig
 end
 
 module Make(Object : Object) : sig
-  val obus_t : Object.obj OBus_type.basic
-    (** The type combinator *)
 
-  val export : OBus_connection.t -> Object.obj -> unit
+  type t = Object.obj
+    with obus(basic)
+    (** The type of objects, with its type combinator *)
+
+  val export : OBus_connection.t -> t -> unit
     (** [export connection obj] exports [obj] on [connection] *)
 
-  val remove : OBus_connection.t -> Object.obj -> unit
+  val remove : OBus_connection.t -> t -> unit
     (** [remove connection obj] removes [obj] from [connection] *)
 
-  val destroy : Object.obj -> unit
+  val destroy : t -> unit
     (** [destroy obj] removes [obj] from all connection it is exported
         on *)
 
-  val emit : Object.obj ->
+  val emit : t ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
     ('a, _) OBus_type.cl_sequence ->
@@ -82,32 +93,98 @@ module Make(Object : Object) : sig
         [peer] is specified then the signal is sent only to it, otherwise
         it is broadcasted. *)
 
-  (** This functor is aimed to be used with the syntax extension. *)
   module MakeInterface(Name : OBus_interface.Name) : sig
+
+    (** This module is aimed to be use with the [obus.syntax] syntax
+        extension.
+
+        It allow you to easily register members.
+
+        For example, instead of:
+
+        {[
+          module M = OBus_object.Make(...)
+
+          let foo a b c = return (a + b +c)
+
+          let () =
+            M.register_method
+              ~interface : "org.mydomain"
+              ~member : "Foo"
+              ~typ : <:obus_func< int -> int -> int -> int >>
+              ~handler : foo
+        ]}
+
+        You can simply write:
+
+        {[
+          module M = OBus_object.Make(...)
+
+          include M.MakeInterface(struct let name = "org.mydomain" end)
+
+          let foo a b c = return (a + b +c)
+          OL_method Foo : int -> int -> int -> int
+        ]}
+
+        or:
+
+        {[
+          module M = OBus_object.Make(...)
+
+          include M.MakeInterface(struct let name = "org.mydomain" end)
+
+          OL_method Foo : int -> int -> int -> int =
+            fun a b c -> return (a + b + c)
+        ]}
+
+        where [OL_method] stands for "OBus Local method".
+    *)
+
     val ol_interface : OBus_name.interface
       (** Name of the interface *)
 
-    val ol_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> (Object.obj -> 'a) -> unit
+    val ol_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> (t -> 'a) -> unit
       (** Registers a method call *)
 
-    val ol_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> (Object.obj -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t)
+    val ol_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> (t -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t)
       (** Registers a signal and define the signal emiting
-          function. *)
+          function.
+
+          Note: [ol_signal] has two effect, it register the signal for
+          introspection purpose, and returns the signal emiting
+          function. So it is an error to write something like that:
+
+          {[
+            let foo obj x y = ol_signal "Foo" <:obus_type< int * int >> obj (x, y)
+          ]}
+
+          The only valid use of [ol_signal] is:
+
+          {[
+            let foo = ol_signal "Foo" <:obus_type< int * int >>
+          ]}
+
+          or, with the syntax extension:
+
+          {[
+            OL_signal Foo : int * int
+          ]}
+      *)
 
     val ol_property_r : OBus_name.member ->
       ('a, _) OBus_type.cl_single ->
-      (Object.obj -> 'a Lwt.t) -> unit
+      (t -> 'a Lwt.t) -> unit
       (** Registers a read-only property *)
 
     val ol_property_w : OBus_name.member ->
       ('a, _) OBus_type.cl_single ->
-      (Object.obj -> 'a -> unit Lwt.t) -> unit
+      (t -> 'a -> unit Lwt.t) -> unit
       (** Registers a write-only property *)
 
     val ol_property_rw : OBus_name.member ->
       ('a, _) OBus_type.cl_single ->
-      (Object.obj -> 'a Lwt.t) ->
-      (Object.obj -> 'a -> unit Lwt.t) -> unit
+      (t -> 'a Lwt.t) ->
+      (t -> 'a -> unit Lwt.t) -> unit
       (** Registers a read and write property *)
   end
 end

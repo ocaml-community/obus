@@ -70,6 +70,8 @@ module Make(Object : Object) =
 struct
   exception Pack of Object.obj
 
+  type t = Object.obj
+
   let obus_t = OBus_type.map_with_context obus_path
     (fun context path ->
        let connection, message = OBus_connection.cast_context context in

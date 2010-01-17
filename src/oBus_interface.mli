@@ -36,6 +36,8 @@ module Make(Name : Name) : sig
         {[
           OP_method DBusName : method_call_type
         ]}
+
+        where [OP_method] stands for "OBus Proxy method".
     *)
 
   val op_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> OBus_proxy.t -> 'a OBus_signal.t
