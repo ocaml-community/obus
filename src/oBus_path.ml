@@ -113,9 +113,9 @@ let escape s =
   let len = length s in
   let r = create (len * 2) in
   for i = 0 to len - 1 do
-    let j = i * 2 in
-    r.[j] <- char_of_int (int_of_char s.[i] land 15 + int_of_char 'a');
-    r.[j] <- char_of_int (int_of_char s.[i + 1] lsr 4 + int_of_char 'a')
+    let j = i * 2 and n = int_of_char s.[i] in
+    r.[j] <- char_of_int (n land 15 + int_of_char 'a');
+    r.[j + 1] <- char_of_int (n lsr 4 + int_of_char 'a')
   done;
   r
 
