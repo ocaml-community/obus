@@ -41,6 +41,13 @@ val exports : t -> OBus_connection.t list
   (** [exports obj] is the list of connection on which the object is
       exported *)
 
+(** {6 Suppression} *)
+
+val remove_by_path : OBus_connection.t -> OBus_path.t -> unit
+  (** [remove_by_path connection path] removes the object with path
+      [path] on [connection]. Works for normal objects and dynamic
+      nodes. *)
+
 (** Signature of custom objects *)
 module type Object = sig
   type obj
@@ -83,6 +90,64 @@ module Make(Object : Object) : sig
   val destroy : t -> unit
     (** [destroy obj] removes [obj] from all connection it is exported
         on *)
+
+  val dynamic : connection : OBus_connection.t -> prefix : OBus_path.t -> handler : (OBus_path.t -> t Lwt.t) -> unit
+    (** [dynamic ~connection ~prefix ~handler] defines a dynamic node
+        it the tree of object. This means that objects with a path
+        prefixed by [prefix], will be created on the fly by [handler]
+        when a process try to access them.
+
+        [handler] receive the rest of path after the prefix.
+
+        Note: if you manually export an object with a path prefixed by
+        [prefix], it will be prefered to the one created by
+        [handler].
+
+        Here is an example (a very basic VFS):
+
+        {[
+          (* The type of a file *)
+          type file = {
+            obus : OBus_object.t;
+            name : string;
+            owner : int;
+            group : int;
+            ...
+          }
+
+          module File = OBus_object.Make(struct
+                                           type obj = file
+                                           let get obj = obj.obus
+                                         end)
+
+          (* Definition and implementation of interfaces *)
+          include File.MakeInterface(struct let name = "org.foo.File" end)
+
+          OL_method owner : uint = fun file -> return file.owner
+          OL_method group : uint = fun file -> return file.group
+
+          let size file = Lwt_io.file_length file.name
+          OL_method Size : uint64
+
+          ...
+
+          (* The prefix used for the VFS: *)
+          let prefix = ["org"; "foo"; "VFS"]
+
+          (* Registration *)
+          let () =
+            File.dynamic ~connection ~prefix
+              ~handler:(function
+                          | [escaped_name] ->
+                              return { obus = OBus_object.make (prefix @ [escaped_name]);
+                                       name = OBus_path.unescape escaped_name;
+                                       owner = ...;
+                                       group = ...;
+                                       ... }
+                          | _ ->
+                              fail (Failure "invalid path"))
+        ]}
+    *)
 
   val emit : t ->
     interface : OBus_name.interface ->

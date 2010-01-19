@@ -42,6 +42,14 @@ type obus_object = {
   (* The object, hidden in an exception *)
 }
 
+and dynamic_object = {
+  do_prefix : OBus_path.t;
+  (* The prefix of the dynamic node *)
+
+  do_create : OBus_path.t -> obus_object Lwt.t;
+  (* Function used to create the object on the fly *)
+}
+
 (* +-----------------------------------------------------------------+
    | Name resolvers                                                  |
    +-----------------------------------------------------------------+ *)
@@ -155,6 +163,9 @@ and connection = {
   mutable exported_objects : obus_object ObjectMap.t;
   (* Mapping path -> objects method call handler for all objects
      exported on the connection *)
+
+  mutable dynamic_objects : dynamic_object list;
+  (* List of dynamic object nodes *)
 
   incoming_filters : filter Lwt_sequence.t;
   outgoing_filters : filter Lwt_sequence.t;

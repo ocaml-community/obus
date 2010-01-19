@@ -61,6 +61,19 @@ let make ?owner path =
 let id = ref(-1)
 let make' ?owner () = incr id; make ?owner ["ocaml"; string_of_int !id]
 
+let remove_by_path connection path =
+  match connection#get with
+    | Crashed exn ->
+        raise exn
+    | Running connection ->
+        connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> path) connection.dynamic_objects;
+        match ObjectMap.lookup path connection.exported_objects with
+          | Some obj ->
+              connection.exported_objects <- ObjectMap.remove path connection.exported_objects;
+              obj.oo_connection_closed connection.packed
+          | None ->
+              ()
+
 module type Object = sig
   type obj
   val get : obj -> t
@@ -128,6 +141,23 @@ struct
 
   let destroy obj =
     destroy (Object.get obj)
+
+  let dynamic ~connection ~prefix ~handler =
+    match connection#get with
+      | Crashed exn ->
+          raise exn
+      | Running connection ->
+          (* Remove any dynamic node declared with the same prefix: *)
+          connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> prefix) connection.dynamic_objects;
+          let create path =
+            lwt obj = handler path in
+            return {
+              oo_handle = handle_call;
+              oo_object = Pack obj;
+              oo_connection_closed = ignore;
+            }
+          in
+          connection.dynamic_objects <- { do_prefix = prefix; do_create = create } :: connection.dynamic_objects
 
   let emit obj ~interface ~member typ ?peer x =
     let body = OBus_type.make_sequence typ x and obj = Object.get obj in

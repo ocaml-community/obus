@@ -442,40 +442,71 @@ let dispatch_message connection message = match message with
     end
 
   | { typ = Method_call(path, interface_opt, member) } ->
-      match ObjectMap.lookup path connection.exported_objects with
-        | Some obj ->
-            begin try
-              obj.oo_handle obj.oo_object connection.packed message
-            with exn ->
-              Log#exn exn "method call handler failed with"
-            end
-        | None ->
-            (* Handle introspection for missing intermediate object:
+      ignore begin
+        (* Look in static objects *)
+        let obj = ObjectMap.lookup path connection.exported_objects in
+        lwt obj =
+          if obj = None then
+            (* Look in dynamic objects *)
+            match
+              OBus_util.find_map
+                (fun dynobj ->
+                   match OBus_path.after dynobj.do_prefix path with
+                     | Some path ->
+                         Some(path, dynobj)
+                     | None ->
+                         None)
+                connection.dynamic_objects
+            with
+              | None ->
+                  return None
+              | Some(path, dynobj) ->
+                  try_lwt
+                    lwt obj = dynobj.do_create path in
+                    return (Some obj)
+                  with exn ->
+                    Log#exn exn "dynamic object handler failed with";
+                    return None
+          else
+            return obj
+        in
+        match obj with
+          | Some obj ->
+              begin try
+                obj.oo_handle obj.oo_object connection.packed message
+              with exn ->
+                Log#exn exn "method call handler failed with"
+              end;
+              return ()
+          | None ->
+              (* Handle introspection for missing intermediate object:
 
-               for example if we have only one exported object with
-               path "/a/b/c", we need to add introspection support for
-               virtual objects with path "/", "/a", "/a/b",
-               "/a/b/c". *)
-            if match interface_opt, member with
-              | None, "Introspect"
-              | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
-                  begin match children connection path with
-                    | [] ->
-                        true
-                    | l ->
-                        ignore
-                          (send_reply connection.packed message <:obus_type< OBus_introspect.document >>
-                             ([("org.freedesktop.DBus.Introspectable",
-                                [OBus_introspect.Method("Introspect", [],
-                                                        [(None, Tbasic Tstring)], [])],
-                                [])], l));
-                        false
-                  end
-              | _ ->
-                  true
-            then
-              ignore_send_exn connection.packed message
-                (Failure (sprintf "No such object: %S" (OBus_path.to_string path)))
+                 for example if we have only one exported object with
+                 path "/a/b/c", we need to add introspection support for
+                 virtual objects with path "/", "/a", "/a/b",
+                 "/a/b/c". *)
+              if match interface_opt, member with
+                | None, "Introspect"
+                | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
+                    begin match children connection path with
+                      | [] ->
+                          true
+                      | l ->
+                          ignore
+                            (send_reply connection.packed message <:obus_type< OBus_introspect.document >>
+                               ([("org.freedesktop.DBus.Introspectable",
+                                  [OBus_introspect.Method("Introspect", [],
+                                                          [(None, Tbasic Tstring)], [])],
+                                  [])], l));
+                          false
+                    end
+                | _ ->
+                    true
+              then
+                ignore_send_exn connection.packed message
+                  (Failure (sprintf "No such object: %S" (OBus_path.to_string path)));
+              return ()
+      end
 
 let read_dispatch connection =
   lwt message =
@@ -620,6 +651,7 @@ let of_transport ?guid ?(up=true) transport =
       outgoing_m = Lwt_mutex.create ();
       next_serial = 1l;
       exported_objects = ObjectMap.empty;
+      dynamic_objects = [];
       incoming_filters = Lwt_sequence.create ();
       outgoing_filters = Lwt_sequence.create ();
       reply_waiters = SerialMap.empty;
