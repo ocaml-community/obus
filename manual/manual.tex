@@ -30,11 +30,11 @@
 \maketitle
 
 \begin{abstract}
-  \dbus is an inter-processes communication protocol, or IPC for
+  D-Bus is an inter-processes communication protocol, or IPC for
   short, which is becomming a standard on desktop oriented
   computers. It is now possible to talk to a lot application using
-  \dbus. Moreover, it has many bindings/implementations for differents
-  languages, which make it easily accessible. \obus is a pure OCaml
+  D-Bus. Moreover, it has many bindings/implementations for differents
+  languages, which make it easily accessible. OBus is a pure OCaml
   implementation of it. What makes it different from other
   bindings/implementations is that it is the only one using
   cooperative threads, which make it very simple to fully exploit the
@@ -56,43 +56,160 @@
 %% +-----------------------------------------------------------------+
 \section{Introduction}
 
+OBus uses a syntax extension to ease its use, and make D-Bus method,
+signal and property definitions more readable. Of course it is
+possible not to use it. Code for both choices will be provided in this
+manual.
+
+\subsection{Overview of OBus}
+
+\subsubsection{Packages}
+
+OBus provides the folliwing packages (via findlib):
+
+\begin{itemize}
+\item ``\texttt{obus}'', which is the core library
+\item ``\texttt{obus.syntax}'', which contains the syntax extension
+\item ``\texttt{obus.hal}'', which is a binding to the Freedesktop
+  Hal service
+\item ``\texttt{obus.notification}'', which is a binding to the
+  Freedesktop pop-up notifications service
+\end{itemize}
+
+\texttt{obus.hal} and \texttt{obus.notification} could be made outside
+of OBus. They can be used as examples for writing bindings to D-Bus
+services.
+
 %% +-----------------------------------------------------------------+
 %% | Section                                                         |
 %% +-----------------------------------------------------------------+
-\section{Connections, message Buses}
+\section{D-Bus connections, message buses}
 
+% src/OBus_address
+% src/OBus_bus
+% src/OBus_connection
 
+% src/OBus_signal
+% src/OBus_property
+
+%% +-----------------------------------------------------------------+
+%% | Section                                                         |
+%% +-----------------------------------------------------------------+
+\section{The OBus type system}
+
+\subsection{D-Bus types and values}
+
+% src/OBus_value
+
+\subsection{OBus type combinators}
+
+% src/OBus_type
+% src/OBus_pervasives
+
+\begin{center}
+  \begin{tabular}{|c|c|c|}
+    \hline
+    \textbf{OBus type combinator} & \textbf{D-Bus type} & \textbf{Caml type} \\
+    \hline
+    \texttt{char, byte} & \texttt{BYTE} & \texttt{char} \\
+    \hline
+    \texttt{bool, boolean} & \texttt{BOOLEAN} & \texttt{bool} \\
+    \hline
+    \texttt{int8} & \texttt{INT8} & \texttt{int} \\
+    \hline
+    \texttt{uint8} & \texttt{UINT8} & \texttt{int} \\
+    \hline
+    \texttt{int16} & \texttt{INT16} & \texttt{int} \\
+    \hline
+    \texttt{uint16} & \texttt{UINT16} & \texttt{int} \\
+    \hline
+    \texttt{int32} & \texttt{INT32} & \texttt{int32} \\
+    \hline
+    \texttt{uint32} & \texttt{UINT32} & \texttt{int32} \\
+    \hline
+    \texttt{int64} & \texttt{INT64} & \texttt{int64} \\
+    \hline
+    \texttt{uint64} & \texttt{UINT64} & \texttt{int64} \\
+    \hline
+    \texttt{int} & \texttt{INT32} & \texttt{int} \\
+    \hline
+    \texttt{uint} & \texttt{UINT32} & \texttt{int} \\
+    \hline
+    \texttt{float, double} & \texttt{DOUBLE} & \texttt{float} \\
+    \hline
+    \texttt{string} & \texttt{STRING} & \texttt{string} \\
+    \hline
+    \texttt{signature} & \texttt{SIGNATURE} & \texttt{OBus\_value.signature} \\
+    \hline
+    \texttt{path, object\_path} & \texttt{OBJECT\_PATH} & \texttt{OBus\_path.t} \\
+    \hline
+    \texttt{file\_descr} & \texttt{UNIX\_FD} & \texttt{Lwt\_unix.file\_descr} \\
+    \hline
+    \texttt{unix\_file\_descr} & \texttt{UNIX\_FD} & \texttt{Unix.file\_descr} \\
+    \hline
+    \texttt{$'elt$ list} & \texttt{ARRAY of $elt$} & \texttt{$'elt$ list} \\
+    \hline
+    \texttt{$'elt$ array} & \texttt{ARRAY of $elt$} & \texttt{$'elt$ array} \\
+    \hline
+    \texttt{byte\_array} & \texttt{ARRAY of byte} & \texttt{string} \\
+    \hline
+    \texttt{($'key$, $'value$) dict} & \texttt{ARRAY of DICT\_ENTRY of $key$ and $value$} & \texttt{($'key$ * $'value$) list} \\
+    \hline
+    \texttt{$'elts$ structure} & \texttt{STRUCTURE of $elts$} & \texttt{$'elts$} \\
+    \hline
+    \texttt{variant} & \texttt{VARIANT} & \texttt{OBus\_value.single} \\
+    \hline
+    \texttt{unit} & \textit{(empty sequence)} & \texttt{unit} \\
+    \hline
+  \end{tabular}
+\end{center}
+
+%% +-----------------------------------------------------------------+
+%% | Section                                                         |
+%% +-----------------------------------------------------------------+
+\section{Writing bindings for D-Bus services}
+
+% src/OBus_interface
+% src/OBus_object
+
+%% +-----------------------------------------------------------------+
+%% | Section                                                         |
+%% +-----------------------------------------------------------------+
+\section{Tools}
+
+\subsection{obus-dump}
+\subsection{obus-introspect}
+\subsection{obus-binder}
+
+%% +-----------------------------------------------------------------+
+%% | Section                                                         |
+%% +-----------------------------------------------------------------+
+\section{Launching a D-Bus server}
+
+% src/OBus_server
 
 %% +-----------------------------------------------------------------+
 %% | Section                                                         |
 %% +-----------------------------------------------------------------+
 \section{Advanced}
 
-% src/OBus_address
-% src/OBus_auth
-% src/OBus_bus
-% src/OBus_connection
 % src/OBus_error
+
 % src/OBus_info
-% src/OBus_interface
 % src/OBus_introspect
-% src/OBus_wire
-% src/OBus_transport
 % src/OBus_message
 % src/OBus_name
 % src/OBus_path
 % src/OBus_peer
-% src/OBus_property
 % src/OBus_proxy
 % src/OBus_resolver
-% src/OBus_signal
 % src/OBus_string
-% src/OBus_type
 % src/OBus_uuid
-% src/OBus_value
+
 % src/OBus_match
-% src/OBus_server
-% src/OBus_object
-% src/OBus_pervasives
+
+% src/OBus_wire
+% src/OBus_auth
+% src/OBus_transport
 
 \end{document}
