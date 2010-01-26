@@ -1,0 +1,98 @@
+\documentclass{article}
+
+%% +-----------------------------------------------------------------+
+%% | Packages                                                        |
+%% +-----------------------------------------------------------------+
+
+\usepackage[utf8]{inputenc}
+\usepackage{xspace}
+\usepackage{verbatim}
+\usepackage[english]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+%% +-----------------------------------------------------------------+
+%% | Aliases                                                         |
+%% +-----------------------------------------------------------------+
+
+\newcommand{\obus}{\texttt{OBus}\xspace}
+\newcommand{\dbus}{\texttt{D-Bus}\xspace}
+
+%% +-----------------------------------------------------------------+
+%% | Headers                                                         |
+%% +-----------------------------------------------------------------+
+
+\title{OBus user manual}
+\author{Jérémie Dimino}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  \dbus is an inter-processes communication protocol, or IPC for
+  short, which is becomming a standard on desktop oriented
+  computers. It is now possible to talk to a lot application using
+  \dbus. Moreover, it has many bindings/implementations for differents
+  languages, which make it easily accessible. \obus is a pure OCaml
+  implementation of it. What makes it different from other
+  bindings/implementations is that it is the only one using
+  cooperative threads, which make it very simple to fully exploit the
+  asynchronous nature of the protocol.
+
+  \textbf{Note:} it is advised to have some knowledge about the
+  \texttt{lwt} library before reading this manual.
+\end{abstract}
+
+%% +-----------------------------------------------------------------+
+%% | Table of contents                                               |
+%% +-----------------------------------------------------------------+
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+
+%% +-----------------------------------------------------------------+
+%% | Section                                                         |
+%% +-----------------------------------------------------------------+
+\section{Introduction}
+
+%% +-----------------------------------------------------------------+
+%% | Section                                                         |
+%% +-----------------------------------------------------------------+
+\section{Connections, message Buses}
+
+
+
+%% +-----------------------------------------------------------------+
+%% | Section                                                         |
+%% +-----------------------------------------------------------------+
+\section{Advanced}
+
+% src/OBus_address
+% src/OBus_auth
+% src/OBus_bus
+% src/OBus_connection
+% src/OBus_error
+% src/OBus_info
+% src/OBus_interface
+% src/OBus_introspect
+% src/OBus_wire
+% src/OBus_transport
+% src/OBus_message
+% src/OBus_name
+% src/OBus_path
+% src/OBus_peer
+% src/OBus_property
+% src/OBus_proxy
+% src/OBus_resolver
+% src/OBus_signal
+% src/OBus_string
+% src/OBus_type
+% src/OBus_uuid
+% src/OBus_value
+% src/OBus_match
+% src/OBus_server
+% src/OBus_object
+% src/OBus_pervasives
+
+\end{document}
