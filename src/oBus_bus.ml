@@ -68,6 +68,9 @@ let system = lazy(of_laddresses OBus_address.system)
 
 let prefix = op_interface ^ ".Error."
 
+exception Access_denied of string
+ with obus(prefix ^ "AccessDenied")
+
 exception Service_unknown of string
  with obus(prefix ^ "ServiceUnknown")
 

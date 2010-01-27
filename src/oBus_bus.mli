@@ -68,6 +68,10 @@ val get_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t Lwt.t
 val acquired_names : t -> OBus_name.bus list
   (** Returns the list of names we currently own *)
 
+exception Access_denied of string
+  (** Exception raised when a name cannot be owned due to security
+      policies *)
+
 type request_name_result =
     [ `primary_owner
         (** You are now the primary owner of the connection *)
