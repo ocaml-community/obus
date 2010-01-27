@@ -20,7 +20,7 @@ type t = {
   (** Path of the object on the peer *)
 } with projection, obus(basic)
 
-val make : OBus_peer.t -> OBus_path.t -> t
+val make : peer : OBus_peer.t -> path : OBus_path.t -> t
   (** [make peer path] create a proxy *)
 
 val connection : t -> OBus_connection.t

@@ -16,7 +16,7 @@ type t = {
   path : OBus_path.t;
 } with projection
 
-let make peer path = {
+let make ~peer ~path = {
   peer = peer;
   path = path;
 }

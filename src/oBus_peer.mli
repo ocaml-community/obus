@@ -68,7 +68,7 @@ val obus_t : t OBus_type.sequence
       ]}
   *)
 
-val make : OBus_connection.t -> OBus_name.bus -> t
+val make : connection : OBus_connection.t -> name : OBus_name.bus -> t
   (** [make connection name] make a named peer *)
 
 val anonymous : OBus_connection.t -> t

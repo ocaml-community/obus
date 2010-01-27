@@ -21,7 +21,7 @@ let obus_t = OBus_type.map_with_context <:obus_type< unit >>
      { connection = connection; name = OBus_message.sender message })
   ignore
 
-let make c n = { connection = c; name = Some n }
+let make ~connection ~name = { connection = connection; name = Some name }
 let anonymous c = { connection = c; name = None }
 
 let op_method_call member typ peer = OBus_connection.method_call peer.connection
