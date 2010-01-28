@@ -835,6 +835,8 @@ type writer = {
   file_descr : Lwt_unix.file_descr;
 }
 
+let close_writer writer = Lwt_io.close writer.channel
+
 let writer fd = {
   channel = Lwt_io.of_fd ~mode:Lwt_io.output fd;
   file_descr = fd;
@@ -1205,6 +1207,8 @@ type reader = {
   pending_fds : Unix.file_descr Queue.t;
   (* File descriptors received and not yet taken *)
 }
+
+let close_reader reader = Lwt_io.close reader.channel
 
 let reader fd =
   let pending_fds = Queue.create () in

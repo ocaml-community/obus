@@ -564,8 +564,6 @@ class packed_connection = object(self)
 
   method get = state
 
-  val mutable exit_hook = None
-
   (* Put the connection in a "crashed" state. This means that all
      subsequent call using the connection will fail. *)
   method set_crash exn = match state with
@@ -573,12 +571,6 @@ class packed_connection = object(self)
         return exn
     | Running connection ->
         state <- Crashed exn;
-        begin match exit_hook with
-          | Some n ->
-              Lwt_sequence.remove n
-          | None ->
-              ()
-        end;
 
         begin match connection.guid with
           | Some guid -> guid_connection_map := GuidMap.remove guid !guid_connection_map
@@ -616,13 +608,6 @@ class packed_connection = object(self)
               return ()
         in
         return exn
-
-  initializer
-    exit_hook <- Some(Lwt_sequence.add_l
-                        (fun _ ->
-                           lwt _ = self#set_crash Connection_closed in
-                           return ())
-                        Lwt_main.exit_hooks)
 end
 
 (* +-----------------------------------------------------------------+

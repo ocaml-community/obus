@@ -250,10 +250,7 @@ let make_server ?(capabilities=[]) ?mechanisms ?(addresses=[Unix_tmpdir Filename
             server_allow_anonymous = allow_anonymous;
           } in
 
-          let exit_hook = Lwt_sequence.add_l return Lwt_main.exit_hooks in
-
           let rec shutdown = lazy(
-            Lwt_sequence.remove exit_hook;
             if server.server_up then begin
               server.server_up <- false;
               wakeup abort_wakener Event_shutdown
@@ -261,8 +258,6 @@ let make_server ?(capabilities=[]) ?mechanisms ?(addresses=[Unix_tmpdir Filename
             (* Wait for all listenners to exit: *)
             Lwt.join !listener_threads
           ) in
-
-          Lwt_sequence.set exit_hook (fun () -> Lazy.force shutdown);
 
           (* Launch waiting loops. Yield so the user have the time to
              bind the event before the first connection: *)

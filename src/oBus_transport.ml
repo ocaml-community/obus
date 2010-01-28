@@ -47,6 +47,7 @@ let socket ?(capabilities=[]) fd =
       send = (fun msg -> OBus_wire.write_message_with_fds writer msg);
       capabilities = capabilities;
       shutdown = (fun _ ->
+                    lwt () = OBus_wire.close_reader reader <&> OBus_wire.close_writer writer in
                     Lwt_unix.shutdown fd SHUTDOWN_ALL;
                     Lwt_unix.close fd;
                     return ()) }
