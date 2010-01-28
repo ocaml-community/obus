@@ -135,7 +135,7 @@ and sequence_close_fds l =
 
 (* Send a message, maybe adding a reply waiter and return
    [return_thread] *)
-let send_message_backend connection reply_waiter_opt return_thread message =
+let send_message_backend connection reply_waiter_opt message =
   LEXEC(Lwt_mutex.with_lock connection.outgoing_m begin fun () ->
           match apply_filters "outgoing" { message with serial = connection.next_serial } connection.outgoing_filters with
             | None ->
@@ -155,7 +155,7 @@ let send_message_backend connection reply_waiter_opt return_thread message =
                   lwt () = OBus_transport.send connection.transport message in
                   (* Everything went OK, continue with a new serial *)
                   connection.next_serial <- Int32.succ connection.next_serial;
-                  return_thread
+                  return ()
                 with
                   | OBus_wire.Data_error _ as exn ->
                       (* The message can not be marshaled for some
@@ -173,11 +173,12 @@ let send_message_backend connection reply_waiter_opt return_thread message =
         end)
 
 let send_message connection message =
-  send_message_backend connection None (return ()) message
+  send_message_backend connection None message
 
 let send_message_with_reply connection message =
   let waiter, wakener = wait () in
-  send_message_backend connection (Some wakener) waiter message
+  lwt () = send_message_backend connection (Some wakener) message in
+  waiter
 
 let method_call' connection ?flags ?sender ?destination ~path ?interface ~member body ty_reply =
   lwt msg = send_message_with_reply connection
