@@ -87,3 +87,21 @@ module Make(Name : Name) : sig
       ]}
   *)
 end
+
+(** Custom proxy type *)
+module type Custom = sig
+  type proxy
+    (** Type of proxy objects *)
+
+  val get : proxy -> OBus_proxy.t
+    (** Returns the underlying obus proxy *)
+end
+
+(** Custom interface *)
+module MakeCustom(Custom : Custom)(Name : Name) : sig
+  val op_interface : OBus_name.interface
+  val op_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> Custom.proxy -> 'a
+  val op_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> Custom.proxy -> 'a OBus_signal.t
+  val op_property_reader : OBus_name.member -> ('a, _) OBus_type.cl_single -> Custom.proxy -> 'a Lwt.t
+  val op_property_writer : OBus_name.member -> ('a, _) OBus_type.cl_single -> Custom.proxy -> 'a -> unit Lwt.t
+end

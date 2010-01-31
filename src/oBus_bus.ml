@@ -11,19 +11,18 @@ open Lwt
 open OBus_private
 open OBus_pervasives
 
-let op_interface = "org.freedesktop.DBus"
-
-let make bus =
-  { OBus_proxy.peer = { OBus_peer.connection = bus;
-                        OBus_peer.name = Some op_interface };
-    OBus_proxy.path = ["org"; "freedesktop"; "DBus"] }
-
-let op_method_call member typ bus = OBus_proxy.method_call (make bus) ~interface:op_interface ~member typ
-let op_signal member typ bus = OBus_signal.connect (make bus) ~interface:op_interface ~member typ
-let op_property_reader member typ bus = OBus_property.get (make bus) ~interface:op_interface ~member typ
-let op_property_writer member typ bus value = OBus_property.set (make bus) ~interface:op_interface ~member typ value
-
 type t = OBus_connection.t
+
+include OBus_interface.MakeCustom
+    (struct
+       type proxy = t
+       let get bus = { OBus_proxy.peer = { OBus_peer.connection = bus;
+                                           OBus_peer.name = Some "org.freedesktop.DBus" };
+                       OBus_proxy.path = ["org"; "freedesktop"; "DBus"] }
+     end)
+     (struct
+        let name = "org.freedesktop.DBus"
+      end)
 
 OP_method Hello : string
 
