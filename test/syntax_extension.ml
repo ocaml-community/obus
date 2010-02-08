@@ -33,3 +33,5 @@ OP_method SetCPUFreqGovernor : string
 OBUS_name_translator "haskell"
 
 OP_method SetCPUFreqGovernor : string
+
+OP_method MethodWithLabels : x : int -> y : int -> string -> unit

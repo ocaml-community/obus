@@ -80,17 +80,117 @@ OBus provides the folliwing packages (via findlib):
 of OBus. They can be used as examples for writing bindings to D-Bus
 services.
 
+\subsubsection{Modules}
+
+OBus contains 26 public modules. But do not be scared, most of the
+time you will use a very small subset of them. The modules can be
+divided in two categories:
+
+\begin{itemize}
+\item the high-level API
+\item the low-level API
+\end{itemize}
+
+Here is a small example of what you need to write for using a D-Bus
+service:
+
+\begin{verbatim}
+open OBus_pervasives
+
+include OBus_interface.Make(struct let name = "some.interface" end)
+
+OP_method Foo : int -> int
+OP_method Bar : string
+OP_signal Plop : string * string
+
+lwt () =
+  lwt bus = Lazy.force OBus_bus.session in
+  let proxy = Obus_proxy.make ~peer:(OBus_peer.make bus "some.destination") ~path:["some"; "path"] in
+  lwt x = foo proxy in
+  lwt y = bar proxy in
+  ...
+\end{verbatim}
+
+We will demystify the meanings of all this in the next sections.
+
+\subsection{How to read this manual}
+
+All example given can be executed in an ocaml toplevel. The first
+things you have to do is to start one and load the OBus library:
+
+\begin{verbatim}
+# #use "topfind";;
+# #require "obus";;
+\end{verbatim}
+
+And if you want to try the syntax extension:
+
+\begin{verbatim}
+# #require "obus.syntax";;
+\end{verbatim}
+
+You may also load the Lwt syntax extension, as examples of this manual
+use it:
+
+\begin{verbatim}
+# #require "lwt.syntax";;
+\end{verbatim}
+
 %% +-----------------------------------------------------------------+
 %% | Section                                                         |
 %% +-----------------------------------------------------------------+
-\section{D-Bus connections, message buses}
+\section{Basis}
+
+\subsection{Connections and message buses}
+
+There is two way to talk to another application speaking the D-Bus
+protocol: via a direct connection to the application or via a special
+application called a message bus. A message bus act as a router
+between several applications. On a desktop computer, there are two
+well-known instances: the system message bus, and the user session
+message bus.
+
+The first one is unique given a computer, and use security
+policies. The second is unique given a user session. Its goal is to
+allow programs running in the session to talk to each other.
+
+OBus offers have predefined connections for connecting to these
+message buses:
+
+\begin{verbatim}
+# OBus_bus.session;;
+- : OBus_bus.t Lwt.t Lazy.t = <lazy>
+# OBus_bus.system;;
+- : OBus_bus.t Lwt.t Lazy.t = <lazy>
+\end{verbatim}
+
+As you can see, both are lazy threads returing a message bus
+object. Let's connect to the message bus:
+
+\begin{verbatim}
+# lwt bus = Lazy.force OBus_bus.session;;
+val bus : OBus_bus.t = <abstr>
+\end{verbatim}
+
+Now, we have a connection to the session message bus. We try some of
+the methods of the message bus itself:
+
+\begin{verbatim}
+# lwt id = OBus_bus.get_id bus;;
+val id : OBus_uuid.t = <abstr>
+# OBus_uuid.to_string id;;
+- : string = "45364dda6ce1fbcfaa9484754b5da696"
+\end{verbatim}
+
+\subsection{D-Bus names}
+
+\subsection{D-Bus addresses}
+
+\subsection{Vocabulary}
 
 % src/OBus_address
 % src/OBus_bus
 % src/OBus_connection
-
-% src/OBus_signal
-% src/OBus_property
 
 %% +-----------------------------------------------------------------+
 %% | Section                                                         |
@@ -99,9 +199,52 @@ services.
 
 \subsection{D-Bus types and values}
 
-% src/OBus_value
+
+
+OCaml representation of D-Bus values are given by the
+\texttt{OBus\_value} module:
+
+\begin{verbatim}
+type tbasic =
+  | Tbyte
+  | Tboolean
+  | Tint16
+  | Tint32
+  | Tint64
+  | Tuint16
+  | Tuint32
+  | Tuint64
+  | Tdouble
+  | Tstring
+  | Tsignature
+  | Tobject_path
+  | Tunix_fd
+
+type tsingle =
+  | Tbasic of tbasic
+  | Tstructure of tsingle list
+  | Tarray of tsingle
+  | Tdict of tbasic * tsingle
+  | Tvariant
+
+type tsequence = tsingle list
+\end{verbatim}
+
+D-Bus has its own system of types and values.
+
+D-Bus basic types are \texttt{BYTE}, \texttt{BOOLEAN}, \texttt{INT8},
+\texttt{UINT8}, \texttt{INT16}, \texttt{UINT16}, \texttt{INT32},
+\texttt{UINT32}, \texttt{INT64}, \texttt{UINT64}, \texttt{DOUBLE},
+\texttt{STRING}, \texttt{SIGNATURE}, \texttt{OBJECT\_PATH} and
+\texttt{UNIX\_FD}.
+
+D-Bus container types are \texttt{ARRAY}, \texttt{DICT\_ENTRY},
+\texttt{STRUCTURE} and \texttt{VARIANT}
 
 \subsection{OBus type combinators}
+
+OBus type combinators are a way to convert OCaml values into D-Bus
+values and from D-Bus types to OCaml values.
 
 % src/OBus_type
 % src/OBus_pervasives

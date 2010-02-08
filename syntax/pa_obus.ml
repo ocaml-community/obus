@@ -40,7 +40,7 @@ let prepend_lid str id = match !name_translator with
    location from elements of [l] *)
 let gen_vars get_loc l =
   snd (List.fold_left (fun (n, l) e ->
-                         (n - 1, (get_loc e, Printf.sprintf "x%d" n) :: l))
+                         (n - 1, (get_loc e, Printf.sprintf "__x%d" n) :: l))
          (List.length l - 1, []) l)
 
 (* Build a list of patterns/expressions from a list of variables *)
@@ -214,8 +214,17 @@ let rec type_combinator_of_ctyp = function
 
 (* Build a functionnal type combinator from a caml type *)
 let rec func_combinator_of_ctyp = function
-  | <:ctyp@_loc< $x$ -> $y$ >> -> <:expr< OBus_type.abstract $type_combinator_of_ctyp x$ $func_combinator_of_ctyp y$ >>
-  | t -> let _loc = Ast.loc_of_ctyp t in <:expr< OBus_type.reply $type_combinator_of_ctyp t$ >>
+  | Ast.TyArr(_loc, Ast.TyLab(_, name, x), y) ->
+      let y, names = func_combinator_of_ctyp y in
+      (<:expr< OBus_type.abstract $type_combinator_of_ctyp x$ $y$ >>,
+       (_loc, Some name) :: names)
+  | <:ctyp@_loc< $x$ -> $y$ >> ->
+      let y, names = func_combinator_of_ctyp y in
+      (<:expr< OBus_type.abstract $type_combinator_of_ctyp x$ $y$ >>,
+       (_loc, None) :: names)
+  | t ->
+      let _loc = Ast.loc_of_ctyp t in
+      (<:expr< OBus_type.reply $type_combinator_of_ctyp t$ >>, [])
 
 (* +-----------------------------------------------------------------+
    | Type combinator quotations                                      |
@@ -232,7 +241,7 @@ let expand_type loc _loc_name_opt quotation_contents =
   type_combinator_of_ctyp (Gram.parse_string ctyp_eoi loc quotation_contents)
 
 let expand_func loc _loc_name_opt quotation_contents =
-  func_combinator_of_ctyp (Gram.parse_string ctyp_eoi loc quotation_contents)
+  fst (func_combinator_of_ctyp (Gram.parse_string ctyp_eoi loc quotation_contents))
 
 let _ =
   Quotation.add "obus_type" Quotation.DynAst.expr_tag expand_type;
@@ -275,8 +284,23 @@ EXTEND Gram
      | Extension for proxy code                                      |
      +---------------------------------------------------------------+ *)
 
-      | "OP_method"; (dname, cname) = obus_member; ":"; typ = obus_func ->
-          <:str_item< let $lid:cname$ = op_method_call $str:dname$ $typ$ >>
+      | "OP_method"; (dname, cname) = obus_member; ":"; (typ, names) = obus_func ->
+          if List.exists (fun (_loc, name) -> name <> None) names then
+            let anonymous_names = gen_vars fst names in
+            let pnames = List.map2 (fun (_, anon) (_loc, label) ->
+                                      match label with
+                                        | Some label -> Ast.PaLab(_loc, label, Ast.PaNil _loc)
+                                        | None -> Gen.idp _loc anon) anonymous_names names
+            and enames = List.map2 (fun (_, anon) (_loc, label) ->
+                                      match label with
+                                        | Some label -> Gen.ide _loc label
+                                        | None -> Gen.ide _loc anon) anonymous_names names in
+            <:str_item< let $lid:cname$ =
+                          let __obus_type = $typ$ in
+                          $Gen.abstract _loc (<:patt< __obus_proxy >> :: pnames)
+                            (Gen.apply _loc <:expr< op_method_call $str:dname$ __obus_type __obus_proxy >> enames)$ >>
+          else
+            <:str_item< let $lid:cname$ = op_method_call $str:dname$ $typ$ >>
 
       | "OP_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
           <:str_item< let $lid:cname$ = op_signal $str:dname$ $typ$ >>
@@ -295,7 +319,7 @@ EXTEND Gram
      | Extension for local code                                      |
      +---------------------------------------------------------------+ *)
 
-      | "OL_method"; (dname, cname) = obus_member; ":"; typ = obus_func; e = equal_expr ->
+      | "OL_method"; (dname, cname) = obus_member; ":"; (typ, names) = obus_func; e = equal_expr ->
           (match e with
              | Some e ->
                  <:str_item< let () = ol_method_call $str:dname$ $typ$ $e$ >>
