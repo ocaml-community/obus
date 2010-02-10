@@ -71,20 +71,12 @@ let get_error msg = match msg.body with
   | Basic String x :: _ -> x
   | _ -> ""
 
-(* Run [code] if [connection] contains a running connection, otherwise
-   raise the exception to which [packed_connection] is set. *)
-DEFINE EXEC(code) = (match connection#get with
-                       | Crashed exn ->
-                           raise exn
-                       | Running connection ->
-                           code)
-
-(* Same as [EXEC] but use with [Lwt.fail] instead of [raise] *)
-DEFINE LEXEC(code) = (match connection#get with
-                        | Crashed exn ->
-                            Lwt.fail exn
-                        | Running connection ->
-                            code)
+let get packed =
+  match packed#get with
+    | Crashed exn ->
+        raise exn
+    | Running connection ->
+        connection
 
 (* +-----------------------------------------------------------------+
    | FDs closing                                                     |
@@ -135,8 +127,12 @@ and sequence_close_fds l =
 
 (* Send a message, maybe adding a reply waiter and return
    [return_thread] *)
-let send_message_backend connection reply_waiter_opt message =
-  LEXEC(Lwt_mutex.with_lock connection.outgoing_m begin fun () ->
+let send_message_backend packed reply_waiter_opt message =
+  match packed#get with
+    | Crashed exn ->
+        fail exn
+    | Running connection ->
+        Lwt_mutex.with_lock connection.outgoing_m begin fun () ->
           match apply_filters "outgoing" { message with serial = connection.next_serial } connection.outgoing_filters with
             | None ->
                 Log#debug "outgoing message dropped by filters";
@@ -170,24 +166,24 @@ let send_message_backend connection reply_waiter_opt message =
                          broken *)
                       lwt exn = connection.packed#set_crash (Transport_error exn) in
                       fail exn
-        end)
+        end
 
-let send_message connection message =
-  send_message_backend connection None message
+let send_message packed message =
+  send_message_backend packed None message
 
-let send_message_with_reply connection message =
+let send_message_with_reply packed message =
   let waiter, wakener = wait () in
-  lwt () = send_message_backend connection (Some wakener) message in
+  lwt () = send_message_backend packed (Some wakener) message in
   waiter
 
-let method_call' connection ?flags ?sender ?destination ~path ?interface ~member body ty_reply =
-  lwt msg = send_message_with_reply connection
+let method_call' packed ?flags ?sender ?destination ~path ?interface ~member body ty_reply =
+  lwt msg = send_message_with_reply packed
     (OBus_message.method_call ?flags ?sender ?destination ~path ?interface ~member body) in
   match msg with
     | { typ = Method_return _ } ->
         begin
           try
-            return (OBus_type.cast_sequence ty_reply ~context:(Context(connection, msg)) msg.body)
+            return (OBus_type.cast_sequence ty_reply ~context:(Context(packed, msg)) msg.body)
           with OBus_type.Cast_failure _ as exn ->
             (* If not, check why the cast fail *)
             let expected_sig = OBus_type.type_sequence ty_reply
@@ -212,64 +208,64 @@ let method_call' connection ?flags ?sender ?destination ~path ?interface ~member
     | _ ->
         assert false
 
-let method_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member ty =
+let method_call_no_reply packed ?(flags=default_flags) ?sender ?destination ~path ?interface ~member ty =
   OBus_type.make_func ty begin fun body ->
-    send_message connection (OBus_message.method_call ~flags:{ flags with no_reply_expected = true }
+    send_message packed (OBus_message.method_call ~flags:{ flags with no_reply_expected = true }
                                ?sender ?destination ~path ?interface ~member body)
   end
 
-let dyn_method_call connection ?flags ?sender ?destination ~path ?interface ~member body =
-  lwt { body = x } = send_message_with_reply connection
+let dyn_method_call packed ?flags ?sender ?destination ~path ?interface ~member body =
+  lwt { body = x } = send_message_with_reply packed
     (OBus_message.method_call ?flags ?sender ?destination ~path ?interface ~member body) in
   return x
 
-let dyn_method_call_no_reply connection ?(flags=default_flags) ?sender ?destination ~path ?interface ~member body =
-  send_message connection
+let dyn_method_call_no_reply packed ?(flags=default_flags) ?sender ?destination ~path ?interface ~member body =
+  send_message packed
     (OBus_message.method_call ~flags:{ flags with no_reply_expected = true }
        ?sender ?destination ~path ?interface ~member body)
 
-let method_call connection ?flags ?sender ?destination ~path ?interface ~member ty =
+let method_call packed ?flags ?sender ?destination ~path ?interface ~member ty =
   OBus_type.make_func ty begin fun body ->
-    method_call' connection ?flags ?sender ?destination ~path ?interface ~member body (OBus_type.func_reply ty)
+    method_call' packed ?flags ?sender ?destination ~path ?interface ~member body (OBus_type.func_reply ty)
   end
 
-let emit_signal connection ?flags ?sender ?destination ~path ~interface ~member ty x =
-  send_message connection (OBus_message.signal ?flags ?sender ?destination ~path ~interface ~member (OBus_type.make_sequence ty x))
+let emit_signal packed ?flags ?sender ?destination ~path ~interface ~member ty x =
+  send_message packed (OBus_message.signal ?flags ?sender ?destination ~path ~interface ~member (OBus_type.make_sequence ty x))
 
-let dyn_emit_signal connection ?flags ?sender ?destination ~path ~interface ~member body =
-  send_message connection (OBus_message.signal ?flags ?sender ?destination ~path ~interface ~member body)
+let dyn_emit_signal packed ?flags ?sender ?destination ~path ~interface ~member body =
+  send_message packed (OBus_message.signal ?flags ?sender ?destination ~path ~interface ~member body)
 
-let dyn_send_reply connection { sender = sender; serial = serial } body =
-  send_message connection { destination = sender;
-                            sender = None;
-                            flags = { no_reply_expected = true; no_auto_start = true };
-                            serial = 0l;
-                            typ = Method_return(serial);
-                            body = body }
+let dyn_send_reply packed { sender = sender; serial = serial } body =
+  send_message packed { destination = sender;
+                        sender = None;
+                        flags = { no_reply_expected = true; no_auto_start = true };
+                        serial = 0l;
+                        typ = Method_return(serial);
+                        body = body }
 
-let send_reply connection mc typ v =
-  dyn_send_reply connection mc (OBus_type.make_sequence typ v)
+let send_reply packed mc typ v =
+  dyn_send_reply packed mc (OBus_type.make_sequence typ v)
 
-let send_error connection { sender = sender; serial = serial } name msg =
-  send_message connection { destination = sender;
-                            sender = None;
-                            flags = { no_reply_expected = true; no_auto_start = true };
-                            serial = 0l;
-                            typ = Error(serial, name);
-                            body = [basic(String msg)] }
+let send_error packed { sender = sender; serial = serial } name msg =
+  send_message packed { destination = sender;
+                        sender = None;
+                        flags = { no_reply_expected = true; no_auto_start = true };
+                        serial = 0l;
+                        typ = Error(serial, name);
+                        body = [basic(String msg)] }
 
-let send_exn connection method_call exn =
+let send_exn packed method_call exn =
   match OBus_error.unmake exn with
     | Some(name, msg) ->
-        send_error connection method_call name msg
+        send_error packed method_call name msg
     | None ->
         Log#exn exn "sending an unregistred ocaml exception as a D-Bus error";
-        send_error connection method_call "ocaml.Exception" (Printexc.to_string exn)
+        send_error packed method_call "ocaml.Exception" (Printexc.to_string exn)
 
-let ignore_send_exn connection method_call exn = ignore(send_exn connection method_call exn)
+let ignore_send_exn packed method_call exn = ignore(send_exn packed method_call exn)
 
-let unknown_method connection message =
-  ignore_send_exn connection message (unknown_method_exn message)
+let unknown_method packed message =
+  ignore_send_exn packed message (unknown_method_exn message)
 
 (* +-----------------------------------------------------------------+
    | Signal matching                                                 |
@@ -532,13 +528,15 @@ let read_dispatch connection =
 
 let rec dispatch_forever connection =
   try_bind
-    (fun _ -> match connection.down with
-       | Some(waiter, wakener) ->
-           lwt () = waiter in
-           read_dispatch connection
-       | None ->
-           read_dispatch connection)
-    (fun _ -> dispatch_forever connection)
+    (fun () ->
+       match connection.down with
+         | Some(waiter, wakener) ->
+             lwt () = waiter in
+             read_dispatch connection
+         | None ->
+             read_dispatch connection)
+    (fun () ->
+       dispatch_forever connection)
     (function
        | Connection_closed ->
            return ()
@@ -659,7 +657,7 @@ let of_transport ?guid ?(up=true) transport =
               guid_connection_map := GuidMap.add guid connection !guid_connection_map;
               connection
 
-(* Capabilities turned on bu default: *)
+(* Capabilities turned on by default: *)
 let capabilities = [`Unix_fd]
 
 let of_addresses ?(shared=true) addresses = match shared with
@@ -670,8 +668,8 @@ let of_addresses ?(shared=true) addresses = match shared with
       (* Try to find a guid that we already have *)
       let guids = OBus_util.filter_map OBus_address.guid addresses in
       match OBus_util.find_map (fun guid -> GuidMap.lookup guid !guid_connection_map) guids with
-        | Some connection ->
-            return connection
+        | Some packed ->
+            return packed
         | None ->
             (* We ask again a shared connection even if we know that
                there is no other connection to a server with the same
@@ -690,36 +688,37 @@ let running connection = match connection#get with
   | Running _ -> true
   | Crashed _ -> false
 
-let watch connection = LEXEC(connection.watch)
+let watch packed = (get packed).watch
 
-DEFINE GET(param) = (fun connection -> EXEC(connection.param))
-
-let guid = GET(guid)
-let transport = GET(transport)
-let name = GET(name)
-let support_unix_fd connection =
-  EXEC(List.mem `Unix_fd (OBus_transport.capabilities connection.transport))
-let on_disconnect = GET(on_disconnect)
-let close connection = match connection#get with
+let guid packed = (get packed).guid
+let transport packed = (get packed).transport
+let name packed = (get packed).name
+let support_unix_fd_passing packed =
+  List.mem `Unix_fd (OBus_transport.capabilities (get packed).transport)
+let on_disconnect packed = (get packed).on_disconnect
+let close packed = match packed#get with
   | Crashed _ ->
       return ()
   | Running _ ->
-      connection#set_crash Connection_closed >>= fun _ -> return ()
+      lwt _ = packed#set_crash Connection_closed in
+      return ()
 
-let is_up connection =
-  EXEC(connection.down = None)
+let is_up packed = (get packed).down = None
 
-let set_up connection =
-  EXEC(match connection.down with
-         | None -> ()
-         | Some(waiter, wakener) ->
-             connection.down <- None;
-             wakeup wakener ())
+let set_up packed =
+  let connection = get packed in
+  match connection.down with
+    | None -> ()
+    | Some(waiter, wakener) ->
+        connection.down <- None;
+        wakeup wakener ()
 
-let set_down connection =
-  EXEC(match connection.down with
-         | Some _ -> ()
-         | None -> connection.down <- Some(wait ()))
+let set_down packed =
+  let connection = get packed in
+  match connection.down with
+    | Some _ -> ()
+    | None -> connection.down <- Some(wait ())
 
-let incoming_filters = GET(incoming_filters)
-let outgoing_filters = GET(outgoing_filters)
+let incoming_filters packed = (get packed).incoming_filters
+let outgoing_filters packed = (get packed).outgoing_filters
+
