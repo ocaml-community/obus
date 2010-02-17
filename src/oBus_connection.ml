@@ -175,6 +175,11 @@ let send_message_backend packed reply_waiter_opt message =
                            reason. This is not a fatal error. *)
                         fail exn
 
+                    | Canceled ->
+                        (* Message sending have been canceled by the
+                           user. This is not a fatal error either. *)
+                        fail Canceled
+
                     | exn ->
                         (* All other errors are considered as
                            fatal. They are fatal because it is possible
