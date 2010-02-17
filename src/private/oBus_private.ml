@@ -139,10 +139,12 @@ and connection = {
   (* Waiting thread used to make the connection to stop dispatching
      messages. *)
 
-  abort_waiter : OBus_message.t Lwt.t;
-  abort_wakener : OBus_message.t Lwt.u;
-  (* Waiting thread which is wakeup when the connection is closed or
-     aborted. It is used to make the dispatcher to exit. *)
+  abort_recv_wakener : OBus_message.t Lwt.u;
+  abort_send_wakener : unit Lwt.u;
+  abort_recv : OBus_message.t Lwt.t;
+  abort_send : unit Lwt.t;
+  (* Waiting threads wakeup when the connection is closed or
+     aborted. It is used to make the dispatcher/writer to exit. *)
 
   watch : unit Lwt.t;
   (* Thread returned by [OBus_connection.watch] *)

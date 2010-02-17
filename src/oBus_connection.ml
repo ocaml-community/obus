@@ -133,47 +133,70 @@ let send_message_backend packed reply_waiter_opt message =
         fail exn
     | Running connection ->
         Lwt_mutex.with_lock connection.outgoing_m begin fun () ->
-          match apply_filters "outgoing" { message with serial = connection.next_serial } connection.outgoing_filters with
-            | None ->
-                Log#debug "outgoing message dropped by filters";
-                fail (Failure "message dropped by filters")
+          let send_it, closed = match packed#get with
+            | Running _ ->
+                (true, false)
+            | Crashed Connection_closed ->
+                (true, true)
+            | Crashed _ ->
+                (false, true)
+          in
+          if send_it then begin
+            match apply_filters "outgoing" { message with serial = connection.next_serial } connection.outgoing_filters with
+              | None ->
+                  Log#debug "outgoing message dropped by filters";
+                  fail (Failure "message dropped by filters")
 
-            | Some message ->
-                begin
-                  match reply_waiter_opt with
-                    | Some wakener ->
-                        connection.reply_waiters <- SerialMap.add message.serial wakener connection.reply_waiters
-                    | None ->
-                        ()
-                end;
+              | Some message ->
+                  if not closed then begin
+                    match reply_waiter_opt with
+                      | Some(waiter, wakener) ->
+                          connection.reply_waiters <- SerialMap.add message.serial wakener connection.reply_waiters;
+                          on_cancel waiter (fun () ->
+                                              match packed#get with
+                                                | Crashed _ ->
+                                                    ()
+                                                | Running connection ->
+                                                    connection.reply_waiters <- SerialMap.remove message.serial connection.reply_waiters)
+                      | None ->
+                          ()
+                  end;
 
-                try_lwt
-                  lwt () = OBus_transport.send connection.transport message in
-                  (* Everything went OK, continue with a new serial *)
-                  connection.next_serial <- Int32.succ connection.next_serial;
+                  try_lwt
+                    lwt () = choose [connection.abort_send;
+                                     (* Do not cancel a thread while it is marshaling message: *)
+                                     protected (OBus_transport.send connection.transport message)] in
+                    (* Everything went OK, continue with a new serial *)
+                    connection.next_serial <- Int32.succ connection.next_serial;
+                    return ()
+                  with
+                    | OBus_wire.Data_error _ as exn ->
+                        (* The message can not be marshaled for some
+                           reason. This is not a fatal error. *)
+                        fail exn
+
+                    | exn ->
+                        (* All other errors are considered as
+                           fatal. They are fatal because it is possible
+                           that a message has been partially sent on the
+                           connection, so the message stream is
+                           broken *)
+                        lwt exn = connection.packed#set_crash (Transport_error exn) in
+                        fail exn
+          end else
+            match packed#get with
+              | Crashed exn ->
+                  fail exn
+              | Running _ ->
                   return ()
-                with
-                  | OBus_wire.Data_error _ as exn ->
-                      (* The message can not be marshaled for some
-                         reason. This is not a fatal error. *)
-                      fail exn
-
-                  | exn ->
-                      (* All other errors are considered as
-                         fatal. They are fatal because it is possible
-                         that a message has been partially sent on the
-                         connection, so the message stream is
-                         broken *)
-                      lwt exn = connection.packed#set_crash (Transport_error exn) in
-                      fail exn
         end
 
 let send_message packed message =
   send_message_backend packed None message
 
 let send_message_with_reply packed message =
-  let waiter, wakener = wait () in
-  lwt () = send_message_backend packed (Some wakener) message in
+  let (waiter, wakener) as v = task () in
+  lwt () = send_message_backend packed (Some v) message in
   waiter
 
 let method_call' packed ?flags ?sender ?destination ~path ?interface ~member body ty_reply =
@@ -509,7 +532,7 @@ let read_dispatch connection =
   lwt message =
     try_lwt
       choose [OBus_transport.recv connection.transport;
-              connection.abort_waiter]
+              connection.abort_recv]
     with exn ->
       connection.packed#set_crash
         (match exn with
@@ -577,7 +600,7 @@ class packed_connection = object(self)
 
         (* This make the dispatcher to exit if it is waiting on
            [get_message] *)
-        wakeup_exn connection.abort_wakener exn;
+        wakeup_exn connection.abort_recv_wakener exn;
         begin match connection.down with
           | Some(waiter, wakener) -> wakeup_exn wakener exn
           | None -> ()
@@ -593,8 +616,10 @@ class packed_connection = object(self)
         lwt () =
           if exn = Connection_closed then
             Lwt_mutex.with_lock connection.outgoing_m return
-          else
+          else begin
+            wakeup_exn connection.abort_send_wakener exn;
             return ()
+          end
         in
 
         (* Shutdown the transport *)
@@ -614,7 +639,9 @@ end
 
 let of_transport ?guid ?(up=true) transport =
   let make _ =
-    let abort_waiter, abort_wakener = Lwt.wait () and packed_connection = new packed_connection in
+    let abort_recv, abort_recv_wakener = Lwt.wait ()
+    and abort_send, abort_send_wakener = Lwt.wait ()
+    and packed_connection = new packed_connection in
     let connection = {
       name = None;
       acquired_names = [];
@@ -622,10 +649,12 @@ let of_transport ?guid ?(up=true) transport =
       on_disconnect = ref (fun _ -> ());
       guid = guid;
       down = (if up then None else Some(Lwt.wait ()));
-      abort_waiter = abort_waiter;
-      abort_wakener = abort_wakener;
+      abort_recv = abort_recv;
+      abort_send = abort_send;
+      abort_recv_wakener = abort_recv_wakener;
+      abort_send_wakener = abort_send_wakener;
       watch = (try_lwt
-                 lwt _ = abort_waiter in
+                 lwt _ = abort_recv in
                  return ()
                with
                  | Connection_closed -> return ()
