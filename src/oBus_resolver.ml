@@ -76,10 +76,16 @@ let make connection name =
                        lwt () = OBus_private_bus.add_match connection.packed match_rule in
                        lwt owner = OBus_private_bus.get_name_owner connection.packed name in
                        name_resolver.nr_set owner;
-                       if not name_resolver.nr_init_done then Lwt.wakeup name_resolver.nr_init_wakener ();
+                       if not name_resolver.nr_init_done then begin
+                         name_resolver.nr_init_done <- true;
+                         Lwt.wakeup name_resolver.nr_init_wakener ()
+                       end;
                        return ()
                      with exn ->
-                       if not name_resolver.nr_init_done then Lwt.wakeup_exn name_resolver.nr_init_wakener exn;
+                       if not name_resolver.nr_init_done then begin
+                         name_resolver.nr_init_done <- true;
+                         Lwt.wakeup_exn name_resolver.nr_init_wakener exn
+                       end;
                        return ());
 
                   name_resolver
