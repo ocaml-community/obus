@@ -569,6 +569,12 @@ let rec dispatch_forever connection =
        | Connection_closed ->
            return ()
        | exn ->
+           (* At this state of the program the connection state should
+              have been already set to [Crashed].
+
+              The only possible error maybe an [Out_of_memory].
+           *)
+           lwt exn = connection.packed#set_crash exn in
            try
              !(connection.on_disconnect) exn;
              return ()
