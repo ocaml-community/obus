@@ -20,7 +20,9 @@ let machine_uuid = lazy(
     lwt line = Lwt_io.with_file ~mode:Lwt_io.input OBus_config.machine_uuid_file Lwt_io.read_line in
     return (OBus_uuid.of_string line)
   with exn ->
-    Log#error "failed to read the local machine uuid from file %S: %s"
-      OBus_config.machine_uuid_file (OBus_util.string_of_exn exn);
+    lwt () =
+      Log#error "failed to read the local machine uuid from file %S: %s"
+        OBus_config.machine_uuid_file (OBus_util.string_of_exn exn)
+    in
     fail exn
 )

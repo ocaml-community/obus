@@ -63,7 +63,7 @@ let apply_filters typ message filters =
          | None -> None)
       filters (Some message)
   with exn ->
-    Log#exn exn "an %s filter failed with" typ;
+    LogI#exn exn "an %s filter failed with" typ;
     None
 
 (* Get the error message of an error *)
@@ -287,7 +287,7 @@ let send_exn packed method_call exn =
     | Some(name, msg) ->
         send_error packed method_call name msg
     | None ->
-        Log#exn exn "sending an unregistred ocaml exception as a D-Bus error";
+        lwt () = Log#exn exn "sending an unregistred ocaml exception as a D-Bus error" in
         send_error packed method_call "ocaml.Exception" (Printexc.to_string exn)
 
 let ignore_send_exn packed method_call exn = ignore(send_exn packed method_call exn)
@@ -369,7 +369,7 @@ let dispatch_message connection message = match message with
                    try
                      receiver.sr_push (connection.packed, message)
                    with exn ->
-                     Log#exn exn "signal event failed with")
+                     LogI#exn exn "signal event failed with")
               connection.signal_receivers
 
         | Some _, Some sender ->
@@ -445,7 +445,7 @@ let dispatch_message connection message = match message with
                      try
                        receiver.sr_push (connection.packed, message)
                      with exn ->
-                       Log#exn exn "signal event failed with")
+                       LogI#exn exn "signal event failed with")
                 connection.signal_receivers
       end
 
@@ -490,7 +490,7 @@ let dispatch_message connection message = match message with
                     lwt obj = dynobj.do_create path in
                     return (Some obj)
                   with exn ->
-                    Log#exn exn "dynamic object handler failed with";
+                    lwt () = Log#exn exn "dynamic object handler failed with" in
                     return None
           else
             return obj
@@ -500,7 +500,7 @@ let dispatch_message connection message = match message with
               begin try
                 obj.oo_handle obj.oo_object connection.packed message
               with exn ->
-                Log#exn exn "method call handler failed with"
+                LogI#exn exn "method call handler failed with"
               end;
               return ()
           | None ->
@@ -579,8 +579,7 @@ let rec dispatch_forever connection =
              !(connection.on_disconnect) exn;
              return ()
            with exn ->
-             Log#exn exn "the error handler (OBus_connection.on_disconnect) failed with";
-             return ())
+             Log#exn exn "the error handler (OBus_connection.on_disconnect) failed with")
 
 (* +-----------------------------------------------------------------+
    | ``Packed'' connection                                           |
@@ -638,8 +637,7 @@ class packed_connection = object(self)
             try_lwt
               OBus_transport.shutdown connection.transport
             with exn ->
-              Log#exn exn "failed to abort/shutdown the transport";
-              return ()
+              Log#exn exn "failed to abort/shutdown the transport"
         in
         return exn
 end

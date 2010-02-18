@@ -49,7 +49,12 @@ let accept server listen =
     (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
     return (Event_connection(fd, addr))
   with Unix_error(err, _, _) ->
-    if server.server_up then Log#error "uncaught error: %s" (error_message err);
+    lwt () =
+      if server.server_up then
+        Log#error "uncaught error: %s" (error_message err)
+      else
+        return ()
+    in
     return Event_shutdown
 
 let string_of_addr = function
@@ -65,7 +70,7 @@ let rec listen_loop server listen =
           try
             Lwt_unix.close listen.listen_fd
           with Unix_error(err, _, _) ->
-            Log#error "cannot close listenning socket: %s" (error_message err);
+            LogI#error "cannot close listenning socket: %s" (error_message err);
         end;
         begin
           match listen.listen_address with
@@ -74,7 +79,7 @@ let rec listen_loop server listen =
                   try
                     Unix.unlink path
                   with Unix_error(err, _, _) ->
-                    Log#error "cannot unlink %S: %s" path (error_message err)
+                    LogI#error "cannot unlink %S: %s" path (error_message err)
                 end
             | _ ->
                 ()
@@ -93,7 +98,7 @@ let rec listen_loop server listen =
                     try
                       Some((Lwt_unix.get_credentials fd).Lwt_unix.cred_uid)
                     with Unix.Unix_error(error, _, _) ->
-                      Log#info "cannot read credential: %s" (Unix.error_message error);
+                      LogI#info "cannot read credential: %s" (Unix.error_message error);
                       None
                   in
                   lwt user_id, capabilities =
@@ -106,28 +111,26 @@ let rec listen_loop server listen =
                       ()
                   in
                   if user_id = None && not server.server_allow_anonymous then begin
-                    Log#info "client from %s rejected because anonymous connection are not allowed" (string_of_addr addr);
+                    LogI#info "client from %s rejected because anonymous connection are not allowed" (string_of_addr addr);
                     try
                       Lwt_unix.shutdown fd SHUTDOWN_ALL;
                       Lwt_unix.close fd
                     with exn ->
-                      Log#exn exn "shutdown socket failed with"
+                      LogI#exn exn "shutdown socket failed with"
                   end else begin
                     try
                       server.server_push (OBus_transport.socket ~capabilities fd)
                     with exn ->
-                      Log#exn exn "failed to push new transport with"
+                      LogI#exn exn "failed to push new transport with"
                   end;
                   return ()
               | _ ->
                   assert false
           with
             | OBus_auth.Auth_failure msg ->
-                Log#info "authentication failure for client from %s: %s" (string_of_addr addr) msg;
-                return ()
+                Log#info "authentication failure for client from %s: %s" (string_of_addr addr) msg
             | exn ->
-                Log#exn exn "authentication for client from %s failed with" (string_of_addr addr);
-                return ()
+                Log#exn exn "authentication for client from %s failed with" (string_of_addr addr)
         in
         listen_loop server listen
 
@@ -139,17 +142,19 @@ let make_socket domain typ addr =
     Lwt_unix.listen fd 10;
     return fd
   with Unix_error(err, _, _) as exn ->
-    Log#error "failed to create listenning socket with %s: %s"
-      (match addr with
-         | ADDR_UNIX path ->
-             let len = String.length path in
-             if len > 0 && path.[0] = '\x00' then
-               Printf.sprintf "unix abstract path %S" (String.sub path 1 (len - 1))
-             else
-               Printf.sprintf "unix path %S" path
-         | ADDR_INET(ia, port) ->
-             Printf.sprintf "address %s:%d" (string_of_inet_addr ia) port)
-      (Unix.error_message err);
+    lwt () =
+      Log#error "failed to create listenning socket with %s: %s"
+        (match addr with
+           | ADDR_UNIX path ->
+               let len = String.length path in
+               if len > 0 && path.[0] = '\x00' then
+                 Printf.sprintf "unix abstract path %S" (String.sub path 1 (len - 1))
+               else
+                 Printf.sprintf "unix path %S" path
+           | ADDR_INET(ia, port) ->
+               Printf.sprintf "address %s:%d" (string_of_inet_addr ia) port)
+        (Unix.error_message err)
+    in
     Lwt_unix.close fd;
     fail exn
 

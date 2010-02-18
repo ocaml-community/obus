@@ -48,7 +48,7 @@ let of_string str =
                          | None, Some abst, None -> Unix_abstract abst
                          | None, None, Some tmpd -> Unix_tmpdir tmpd
                          | _ ->
-                             Log#error "invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\"";
+                             LogI#error "invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\"";
                              Unknown(name, params)
                      end
                    | "tcp" ->
@@ -59,7 +59,7 @@ let of_string str =
                               | Some "ipv4" -> Some `Ipv4
                               | Some "ipv6" -> Some `Ipv4
                               | Some f ->
-                                  Log#error "unknown address family: %S" f;
+                                  LogI#error "unknown address family: %S" f;
                                   None
                               | None -> None }
                    | "autolaunch" ->
@@ -151,15 +151,17 @@ let session = lazy(
     | Some line ->
         try_lwt return (of_string line)
     | None ->
-        Log#warning "environment variable %s not found" session_bus_variable;
+        lwt () = Log#warning "environment variable %s not found" session_bus_variable in
         try_lwt
           (* Try with the root window property, this is bit ugly and
              it depends on the presence of xprop... *)
           lwt line = Lwt_process.pread_line ("xprop", [|"xprop"; "-root"; session_bus_property|]) in
           Scanf.sscanf line "_DBUS_SESSION_BUS_ADDRESS(STRING) = %S" (fun x -> try_lwt return (of_string x))
         with exn ->
-          Log#info "can not get session bus address from property %s \
-                    on root window (maybe x11 is not running), error is: %s"
-            session_bus_property (OBus_util.string_of_exn exn);
+          lwt () =
+            Log#info "can not get session bus address from property %s \
+                      on root window (maybe x11 is not running), error is: %s"
+              session_bus_property (OBus_util.string_of_exn exn)
+          in
           return [default_session_bus_addresses]
 )

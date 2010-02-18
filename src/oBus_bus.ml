@@ -28,16 +28,16 @@ OP_method Hello : string
 
 let error_handler = function
   | OBus_wire.Protocol_error msg ->
-      Log#error "the D-Bus connection with the message bus has been closed due to a protocol error: %s" msg;
+      LogI#error "the D-Bus connection with the message bus has been closed due to a protocol error: %s" msg;
       exit 1
   | OBus_connection.Connection_lost ->
-      Log#info "disconnected from D-Bus message bus";
+      LogI#info "disconnected from D-Bus message bus";
       exit 0
   | OBus_connection.Transport_error exn ->
-      Log#error "the D-Bus connection with the message bus has been closed due to a transport error: %s" (OBus_util.string_of_exn exn);
+      LogI#error "the D-Bus connection with the message bus has been closed due to a transport error: %s" (OBus_util.string_of_exn exn);
       exit 1
   | exn ->
-      Log#exn exn "the D-Bus connection with the message bus has been closed due to this uncaught exception";
+      LogI#exn exn "the D-Bus connection with the message bus has been closed due to this uncaught exception";
       exit 1
 
 let register_connection connection = match connection#get with

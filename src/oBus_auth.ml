@@ -95,7 +95,7 @@ end = struct
       try_lwt
         Lwt_stream.get_while (fun _ -> true) (Lwt_stream.map parse_line (Lwt_io.lines_of_file fname))
       with exn ->
-        Log#error "failed to load cookie file %s: %s" (keyring_file_name context) (OBus_util.string_of_exn exn);
+        lwt () = Log#error "failed to load cookie file %s: %s" (keyring_file_name context) (OBus_util.string_of_exn exn) in
         fail exn
     else
       return []
@@ -109,35 +109,38 @@ end = struct
     in
     let rec aux = function
       | 0 ->
-          (try
-             Unix.unlink fname;
-             Log#info "stale lock file %s removed" fname
-           with Unix.Unix_error(error, _, _) as exn ->
-             Log#error "failed to remove stale lock file %s: %s" fname (Unix.error_message error);
-             raise exn);
-          (try
+          lwt () =
+            try_lwt
+              Unix.unlink fname;
+              Log#info "stale lock file %s removed" fname
+            with Unix.Unix_error(error, _, _) as exn ->
+              lwt () = Log#error "failed to remove stale lock file %s: %s" fname (Unix.error_message error) in
+              fail exn
+          in
+          (try_lwt
              really_lock ();
              return ()
            with Unix.Unix_error(error, _, _) as exn ->
-             Log#error "failed to lock file %s after removing it: %s" fname (Unix.error_message error);
-             raise exn)
+             lwt () = Log#error "failed to lock file %s after removing it: %s" fname (Unix.error_message error) in
+             fail exn)
       | n ->
-          try
+          try_lwt
             really_lock ();
             return ()
           with exn ->
-            Log#info "waiting for lock file (%d) %s" n fname;
+            lwt () = Log#info "waiting for lock file (%d) %s" n fname in
             lwt () = Lwt_unix.sleep 0.250 in
             aux (n - 1)
     in
     aux 32
 
   let unlock_file fname =
-    try
-      Unix.unlink fname
+    try_lwt
+      Unix.unlink fname;
+      return ()
     with Unix.Unix_error(error, _, _) as exn ->
-      Log#error "failed to unlink file %s: %s" fname (Unix.error_message error);
-      raise exn
+      lwt () = Log#error "failed to unlink file %s: %s" fname (Unix.error_message error) in
+      fail exn
 
   let save context cookies =
     let fname = keyring_file_name context in
@@ -149,7 +152,7 @@ end = struct
       try
         Unix.mkdir dir 0o700
       with Unix.Unix_error(error, _, _) as exn ->
-        Log#error "failed to create directory %s with permissions 0600: %s" dir (Unix.error_message error);
+        LogI#error "failed to create directory %s with permissions 0600: %s" dir (Unix.error_message error);
         raise exn
     end;
     lwt () = lock_file lock_fname in
@@ -158,18 +161,17 @@ end = struct
         try_lwt
           Lwt_io.lines_to_file tmp_fname (Lwt_stream.map print_line (Lwt_stream.of_list cookies))
         with exn ->
-          Log#error "unable to write temporary keyring file %s: %s" tmp_fname (OBus_util.string_of_exn exn);
+          lwt () = Log#error "unable to write temporary keyring file %s: %s" tmp_fname (OBus_util.string_of_exn exn) in
           fail exn
       in
       try
         Unix.rename tmp_fname fname;
         return ()
       with Unix.Unix_error(error, _, _) as exn ->
-        Log#error "unable to rename file %s to %s: %s" tmp_fname fname (Unix.error_message error);
+        lwt () = Log#error "unable to rename file %s to %s: %s" tmp_fname fname (Unix.error_message error) in
         fail exn
       finally
-        unlock_file lock_fname;
-        return ()
+        unlock_file lock_fname
 end
 
 (* +-----------------------------------------------------------------+

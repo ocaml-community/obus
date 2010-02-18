@@ -168,12 +168,16 @@ let of_addresses ?(capabilities=[]) ?mechanisms addresses =
             assert false
     with
       | OBus_auth.Auth_failure msg ->
-          Log#error "authentication failed for address: domain=%s: %s"
-            (string_of_socket_params domain typ addr) msg;
+          lwt () =
+            Log#error "authentication failed for address: domain=%s: %s"
+              (string_of_socket_params domain typ addr) msg
+          in
           fallback x
       | exn ->
-          Log#exn exn "transport creation failed for address: %s"
-            (string_of_socket_params domain typ addr);
+          lwt () =
+            Log#exn exn "transport creation failed for address: %s"
+              (string_of_socket_params domain typ addr)
+          in
           fallback x
   in
   let rec aux = function
@@ -190,7 +194,7 @@ let of_addresses ?(capabilities=[]) ?mechanisms addresses =
                 aux rest
 
           | Unix_tmpdir _ ->
-              Log#error "unix tmpdir can only be used as a listening address";
+              lwt () = Log#error "unix tmpdir can only be used as a listening address" in
               aux rest
 
           | Tcp { tcp_host = host; tcp_port = port; tcp_family = family } ->
@@ -214,7 +218,7 @@ let of_addresses ?(capabilities=[]) ?mechanisms addresses =
                       Lwt_process.pread_line ("dbus-launch",
                                               [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
                     with exn ->
-                      Log#error "autolaunch failed: %s" (OBus_util.string_of_exn exn);
+                      lwt () = Log#error "autolaunch failed: %s" (OBus_util.string_of_exn exn) in
                       fail exn
                   in
                   let line = try String.sub line 0 (String.index line '\000') with _ -> line in

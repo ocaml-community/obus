@@ -79,7 +79,7 @@ let cast interface member typ (connection, message) =
   try
     Some(OBus_type.cast_sequence typ ~context:(OBus_connection.make_context (connection, message)) (OBus_message.body message))
   with exn ->
-    Log#exn exn "failed to cast signal from %S, interface %S, member %S with signature %S to %S"
+    LogI#exn exn "failed to cast signal from %S, interface %S, member %S with signature %S to %S"
       (match OBus_message.sender message with None -> "" | Some n -> n) interface member
       (OBus_value.string_of_signature (OBus_value.type_of_sequence (OBus_message.body message)))
       (OBus_value.string_of_signature (OBus_type.type_sequence typ));
