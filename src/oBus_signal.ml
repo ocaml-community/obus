@@ -42,7 +42,7 @@ let _connect proxy ~interface ~member ~push ~until =
         else begin
 
           let match_rule = OBus_match.rule
-            ~typ:`signal
+            ~typ:`Signal
             ?sender:(OBus_proxy.name proxy)
             ~path:(OBus_proxy.path proxy)
             ~interface

@@ -11,7 +11,7 @@
 
 (** Type of a rule used to match a message *)
 type rule = private {
-  typ : [ `signal | `error | `method_call | `method_return ] option;
+  typ : [ `Signal | `Error | `Method_call | `Method_return ] option;
   sender : OBus_name.bus option;
   interface : OBus_name.interface option;
   member : OBus_name.member option;
@@ -26,7 +26,7 @@ type rule = private {
 } with projection, obus(basic)
 
 val rule :
-  ?typ : [ `signal | `error | `method_call | `method_return ] ->
+  ?typ : [ `Signal | `Error | `Method_call | `Method_return ] ->
   ?sender : OBus_name.bus ->
   ?interface : OBus_name.interface ->
   ?member : OBus_name.member ->

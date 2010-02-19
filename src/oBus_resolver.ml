@@ -43,7 +43,7 @@ let make connection name =
 
               | None ->
                   let match_rule = OBus_match.rule
-                    ~typ:`signal
+                    ~typ:`Signal
                     ~sender:"org.freedesktop.DBus"
                     ~interface:"org.freedesktop.DBus"
                     ~member:"NameOwnerChanged"

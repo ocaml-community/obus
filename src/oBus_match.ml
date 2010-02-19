@@ -8,7 +8,7 @@
  *)
 
 type rule = {
-  typ : [ `signal | `error | `method_call | `method_return ] option;
+  typ : [ `Signal | `Error | `Method_call | `Method_return ] option;
   sender : OBus_name.bus option;
   interface : OBus_name.interface option;
   member : OBus_name.member option;
@@ -55,10 +55,10 @@ let string_of_rule mr =
     | Some t ->
         add "type"
           (match t with
-             | `method_call -> "method_call"
-             | `method_return -> "method_return"
-             | `error -> "error"
-             | `signal -> "signal")
+             | `Method_call -> "method_call"
+             | `Method_return -> "method_return"
+             | `Error -> "error"
+             | `Signal -> "signal")
   end;
   add_opt "sender" OBus_name.validate_bus mr.sender;
   add_opt "interface" OBus_name.validate_interface mr.interface;
@@ -113,10 +113,10 @@ let rule_of_string str =
     match key with
       | "type" ->
           { mr with typ = Some(match value with
-                                 | "method_call" -> `method_call
-                                 | "method_return" -> `method_return
-                                 | "signal" -> `signal
-                                 | "error" -> `error
+                                 | "method_call" -> `Method_call
+                                 | "method_return" -> `Method_return
+                                 | "signal" -> `Signal
+                                 | "error" -> `Error
                                  | _ -> Printf.ksprintf failwith "OBus_match.rule_of_string: invalid type (%s)" value) }
       | "sender" ->
           check OBus_name.validate_bus value;
@@ -167,17 +167,17 @@ and match_arguments_aux num num' value' matcher arguments = match arguments with
 
 let match_message mr msg =
   (match OBus_message.typ msg, mr.typ with
-     | OBus_message.Method_call(path, interface, member), (Some `method_call | None) ->
+     | OBus_message.Method_call(path, interface, member), (Some `Method_call | None) ->
          (match_key mr.path path) &&
            (mr.interface = None || mr.interface = interface) &&
            (match_key mr.member member)
-     | OBus_message.Method_return serial, (Some `method_return | None)->
+     | OBus_message.Method_return serial, (Some `Method_return | None)->
          true
-     | OBus_message.Signal(path, interface, member), (Some `signal | None) ->
+     | OBus_message.Signal(path, interface, member), (Some `Signal | None) ->
          (match_key mr.path path) &&
            (match_key mr.interface interface) &&
            (match_key mr.member member)
-     | OBus_message.Error(serial, name), (Some `error | None) ->
+     | OBus_message.Error(serial, name), (Some `Error | None) ->
          true
      | _ ->
          false) &&

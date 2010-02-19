@@ -73,14 +73,14 @@ exception Access_denied of string
       policies *)
 
 type request_name_result =
-    [ `primary_owner
+    [ `Primary_owner
         (** You are now the primary owner of the connection *)
-    | `in_queue
+    | `In_queue
         (** You will get the name when it will be available *)
-    | `exists
+    | `Exists
         (** Somebody else already have the name and nobody specify
             what to do in this case *)
-    | `already_owner
+    | `Already_owner
         (** You already have the name *) ]
  with obus(basic)
 
@@ -100,9 +100,9 @@ val request_name : t ->
   *)
 
 type release_name_result =
-    [ `released
-    | `non_existent
-    | `not_owner ]
+    [ `Released
+    | `Non_existent
+    | `Not_owner ]
  with obus(basic)
 
 val release_name : t -> OBus_name.bus -> release_name_result Lwt.t
@@ -114,8 +114,8 @@ exception Service_unknown of string
       and can not be started automatically *)
 
 type start_service_by_name_result =
-    [ `success
-    | `already_running ]
+    [ `Success
+    | `Already_running ]
  with obus(basic)
 
 val start_service_by_name : t -> OBus_name.bus -> start_service_by_name_result Lwt.t

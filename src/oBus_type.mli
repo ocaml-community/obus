@@ -20,20 +20,20 @@
 type ('a, 'cl) t = ('a, 'cl) OBus_private_type.t
   (** Type of type combinators. *)
 
-type 'a basic = ('a, [`basic]) t
-type 'a container = ('a, [`container]) t
-type 'a sequence = ('a, [`sequence]) t
+type 'a basic = ('a, [`Basic]) t
+type 'a container = ('a, [`Container]) t
+type 'a sequence = ('a, [`Sequence]) t
 
 type ('a, 'cl) cl_basic = ('a, 'cl) t
-constraint 'cl = [ `basic ]
+constraint 'cl = [ `Basic ]
     (** Type matching type of the basic class *)
 
 type ('a, 'cl) cl_single = ('a, 'cl) t
-constraint 'cl = [< `basic | `container ]
+constraint 'cl = [< `Basic | `Container ]
     (** Type matching type of the single class *)
 
 type ('a, 'cl) cl_sequence = ('a, 'cl) t
-constraint 'cl = [< `basic | `container | `sequence ]
+constraint 'cl = [< `Basic | `Container | `Sequence ]
     (** Type matching type of the sequence class *)
 
 type ('a, 'b, 'c) func

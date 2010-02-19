@@ -15,17 +15,17 @@ let _ = Lwt_main.run begin
 
   lwt notif = Notification.notify ~summary:"Actions test" ~body:"click on something!"
     ~category:"network"
-    ~actions:[("coucou", `coucou);
-              ("plop", `plop)] ()
+    ~actions:[("coucou", `Coucou);
+              ("plop", `Plop)] ()
   in
 
   lwt result = notif#result in
 
   begin match result with
-    | `coucou -> print_endline "You pressed coucou!"
-    | `plop -> print_endline "You pressed plop!"
-    | `default -> print_endline "default action invoked"
-    | `closed -> print_endline "notification closed"
+    | `Coucou -> print_endline "You pressed coucou!"
+    | `Plop -> print_endline "You pressed plop!"
+    | `Default -> print_endline "default action invoked"
+    | `Closed -> print_endline "notification closed"
   end;
   return ()
 end

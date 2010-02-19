@@ -35,9 +35,9 @@ type image = {
 
 let obus_image = obus_structure obus_image
 
-type urgency = [ `low | `normal | `critical ]
+type urgency = [ `Low | `Normal | `Critical ]
 
-let obus_urgency = OBus_type.mapping obus_uint8 [`low, 0; `normal, 1; `critical, 2]
+let obus_urgency = OBus_type.mapping obus_uint8 [`Low, 0; `Normal, 1; `Critical, 2]
 
 type server_id = uint32
  with obus
@@ -68,7 +68,7 @@ type notification = {
   (* Wakeup the waiting thread when an action is received *)
 
   notif_closed : unit -> unit;
-  (* Wakeup the waiting thread with [`closed] when a notification is
+  (* Wakeup the waiting thread with [`Closed] when a notification is
      closed *)
 }
 
@@ -241,7 +241,7 @@ let notify ?(app_name= !app_name) ?desktop_entry
          let key = Printf.sprintf "key%d" acc in
          (acc + 1, key :: text :: al, (key, user_key) :: am))
       actions (0, [], []) in
-  let actions_map = (default_action, `default) :: actions_map in
+  let actions_map = (default_action, `Default) :: actions_map in
 
   (* Setup callbacks *)
   lwt () = Lazy.force init_callbacks in
@@ -264,8 +264,8 @@ let notify ?(app_name= !app_name) ?desktop_entry
                                   wakeup wakener (try
                                                     List.assoc action actions_map
                                                   with Not_found ->
-                                                    `default));
-                notif_closed = (fun _ -> wakeup wakener `closed) } in
+                                                    `Default));
+                notif_closed = (fun _ -> wakeup wakener `Closed) } in
 
   let _ = notifications := notif :: !notifications in
 

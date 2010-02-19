@@ -28,7 +28,7 @@ val desktop_entry : string option ref
   (** If the application has a desktop entry, it can be specified
       here *)
 
-type urgency = [ `low | `normal | `critical ]
+type urgency = [ `Low | `Normal | `Critical ]
     (** Urgency level of popups *)
 
 (** An image description *)
@@ -50,10 +50,10 @@ class type ['a] t = object
   method result : 'a Lwt.t
     (** Wait for a notification to be closed then return:
 
-        - [`closed] if the user clicked on the cross, timeout was
+        - [`Closed] if the user clicked on the cross, timeout was
         reached or the notification daemon exited
 
-        - [`default] if the default action was invoked, i.e. the user
+        - [`Default] if the default action was invoked, i.e. the user
         clicked on the notification, but not on a buttons
 
         - the corresponding action if the user clicked on a button
@@ -74,7 +74,7 @@ val notify :
   ?image:image ->
   summary:string ->
   ?body:string ->
-  ?actions:(string * ([> `default | `closed ] as 'a)) list ->
+  ?actions:(string * ([> `Default | `Closed ] as 'a)) list ->
   ?urgency:urgency ->
   ?category:string ->
   ?sound_file:string ->

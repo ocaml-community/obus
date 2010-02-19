@@ -34,18 +34,18 @@ lwt () =
   lwt result = OBus_bus.start_service_by_name bus service in
   lwt () = printl
     (match result with
-       | `success -> "success"
-       | `already_running -> "already running")
+       | `Success -> "success"
+       | `Already_running -> "already running")
   in
 
   lwt () = printf "trying to acquire the name %S: " name in
   lwt result = OBus_bus.request_name bus ~replace_existing:true ~do_not_queue:true name in
   lwt () = printl
     (match result with
-       | `primary_owner -> "success"
-       | `in_queue -> "in queue"
-       | `exists -> "the name already exists"
-       | `already_owner -> "i already own the name")
+       | `Primary_owner -> "success"
+       | `In_queue -> "in queue"
+       | `Exists -> "the name already exists"
+       | `Already_owner -> "i already own the name")
   in
 
   printlf "my names are: %s" (String.concat ", " (OBus_bus.acquired_names bus))

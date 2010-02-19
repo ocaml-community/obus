@@ -95,13 +95,13 @@ let acquired_names bus = match bus#get with
   | Running connection -> connection.acquired_names
 
 type request_name_result =
-    [ `primary_owner
-    | `in_queue
-    | `exists
-    | `already_owner ]
+    [ `Primary_owner
+    | `In_queue
+    | `Exists
+    | `Already_owner ]
 
 let obus_request_name_result = OBus_type.mapping obus_uint
-  [`primary_owner, 1; `in_queue, 2; `exists, 3; `already_owner, 4]
+  [`Primary_owner, 1; `In_queue, 2; `Exists, 3; `Already_owner, 4]
 
 OP_method RequestName : string -> uint -> request_name_result
 let request_name bus ?(allow_replacement=false) ?(replace_existing=false) ?(do_not_queue=false) name =
@@ -109,17 +109,17 @@ let request_name bus ?(allow_replacement=false) ?(replace_existing=false) ?(do_n
                            (if replace_existing then 2 else 0) lor
                            (if do_not_queue then 4 else 0))
 
-type release_name_result = [ `released | `non_existent | `not_owner ]
+type release_name_result = [ `Released | `Non_existent | `Not_owner ]
 
 let obus_release_name_result = OBus_type.mapping obus_uint
-  [`released, 1; `non_existent, 2; `not_owner, 3]
+  [`Released, 1; `Non_existent, 2; `Not_owner, 3]
 
 OP_method ReleaseName : string -> release_name_result
 
-type start_service_by_name_result = [ `success | `already_running ]
+type start_service_by_name_result = [ `Success | `Already_running ]
 
 let obus_start_service_by_name_result = OBus_type.mapping obus_uint
-  [(`success, 1); (`already_running, 2)]
+  [(`Success, 1); (`Already_running, 2)]
 
 OP_method StartServiceByName : string -> uint -> start_service_by_name_result
 let start_service_by_name bus name = start_service_by_name bus name 0

@@ -12,16 +12,16 @@ open OBus_private_type
 
 type ('a, 'cl) t = ('a, 'cl) OBus_private_type.t
 
-type 'a basic = ('a, [`basic]) t
-type 'a container = ('a, [`container]) t
-type 'a sequence = ('a, [`sequence]) t
+type 'a basic = ('a, [`Basic]) t
+type 'a container = ('a, [`Container]) t
+type 'a sequence = ('a, [`Sequence]) t
 
 type ('a, 'cl) cl_basic = ('a, 'cl) t
-constraint 'cl = [ `basic ]
+constraint 'cl = [ `Basic ]
 type ('a, 'cl) cl_single = ('a, 'cl) t
-constraint 'cl = [< `basic | `container ]
+constraint 'cl = [< `Basic | `Container ]
 type ('a, 'cl) cl_sequence = ('a, 'cl) t
-constraint 'cl = [< `basic | `container | `sequence ]
+constraint 'cl = [< `Basic | `Container | `Sequence ]
 
 type ('a, 'b, 'c) func = {
   f_type : OBus_value.tsingle tree;
