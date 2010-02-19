@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+module Log = Lwt_log.Make(struct let section = "obus(transport)" end)
+
 open Unix
 open Printf
 open Lwt
@@ -169,13 +171,13 @@ let of_addresses ?(capabilities=[]) ?mechanisms addresses =
     with
       | OBus_auth.Auth_failure msg ->
           lwt () =
-            Log#error "authentication failed for address: domain=%s: %s"
+            Log.error_f "authentication failed for address: domain=%s: %s"
               (string_of_socket_params domain typ addr) msg
           in
           fallback x
       | exn ->
           lwt () =
-            Log#exn exn "transport creation failed for address: %s"
+            Log.exn_f exn "transport creation failed for address: %s"
               (string_of_socket_params domain typ addr)
           in
           fallback x
@@ -194,7 +196,7 @@ let of_addresses ?(capabilities=[]) ?mechanisms addresses =
                 aux rest
 
           | Unix_tmpdir _ ->
-              lwt () = Log#error "unix tmpdir can only be used as a listening address" in
+              lwt () = Log.error "unix tmpdir can only be used as a listening address" in
               aux rest
 
           | Tcp { tcp_host = host; tcp_port = port; tcp_family = family } ->
@@ -218,7 +220,7 @@ let of_addresses ?(capabilities=[]) ?mechanisms addresses =
                       Lwt_process.pread_line ("dbus-launch",
                                               [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
                     with exn ->
-                      lwt () = Log#error "autolaunch failed: %s" (OBus_util.string_of_exn exn) in
+                      lwt () = Log.error_f "autolaunch failed: %s" (OBus_util.string_of_exn exn) in
                       fail exn
                   in
                   let line = try String.sub line 0 (String.index line '\000') with _ -> line in

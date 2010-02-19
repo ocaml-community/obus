@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+module Log = Lwt_log.Make(struct let section = "obus(info)" end)
+
 open Lwt
 
 let version = OBus_version.version
@@ -21,7 +23,7 @@ let machine_uuid = lazy(
     return (OBus_uuid.of_string line)
   with exn ->
     lwt () =
-      Log#error "failed to read the local machine uuid from file %S: %s"
+      Log.error_f "failed to read the local machine uuid from file %S: %s"
         OBus_config.machine_uuid_file (OBus_util.string_of_exn exn)
     in
     fail exn

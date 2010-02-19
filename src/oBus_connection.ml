@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+module Log = Lwt_log.Make(struct let section = "obus(connection)" end)
+
 open Printf
 open OBus_private_type
 open OBus_message
@@ -63,7 +65,7 @@ let apply_filters typ message filters =
          | None -> None)
       filters (Some message)
   with exn ->
-    LogI#exn exn "an %s filter failed with" typ;
+    ignore (Log.exn_f exn "an %s filter failed with" typ);
     None
 
 (* Get the error message of an error *)
@@ -144,7 +146,7 @@ let send_message_backend packed reply_waiter_opt message =
           if send_it then begin
             match apply_filters "outgoing" { message with serial = connection.next_serial } connection.outgoing_filters with
               | None ->
-                  Log#debug "outgoing message dropped by filters";
+                  lwt () = Log.debug "outgoing message dropped by filters" in
                   fail (Failure "message dropped by filters")
 
               | Some message ->
@@ -287,7 +289,7 @@ let send_exn packed method_call exn =
     | Some(name, msg) ->
         send_error packed method_call name msg
     | None ->
-        lwt () = Log#exn exn "sending an unregistred ocaml exception as a D-Bus error" in
+        lwt () = Log.exn exn "sending an unregistred ocaml exception as a D-Bus error" in
         send_error packed method_call "ocaml.Exception" (Printexc.to_string exn)
 
 let ignore_send_exn packed method_call exn = ignore(send_exn packed method_call exn)
@@ -348,13 +350,15 @@ let dispatch_message connection message = match message with
             wakeup w message
 
         | None ->
-            Log#debug "reply to message with serial %ld dropped%s"
-              reply_serial (match message with
-                              | { typ = Error(_, error_name) } ->
-                                  sprintf ", the reply is the error: %S: %S"
-                                    error_name (get_error message)
-                              | _ ->
+            ignore (
+              Log.debug_f "reply to message with serial %ld dropped%s"
+                reply_serial (match message with
+                                | { typ = Error(_, error_name) } ->
+                                    sprintf ", the reply is the error: %S: %S"
+                                      error_name (get_error message)
+                                | _ ->
                                   "")
+            )
       end
 
   | { typ = Signal _ } ->
@@ -369,7 +373,7 @@ let dispatch_message connection message = match message with
                    try
                      receiver.sr_push (connection.packed, message)
                    with exn ->
-                     LogI#exn exn "signal event failed with")
+                     ignore (Log.exn exn "signal event failed with"))
               connection.signal_receivers
 
         | Some _, Some sender ->
@@ -392,9 +396,14 @@ let dispatch_message connection message = match message with
 
                   begin match NameMap.lookup name connection.name_resolvers with
                     | Some nr ->
-                        Log#debug "updating internal name resolver: %S -> %S" name (match owner with
-                                                                                      | Some n -> n
-                                                                                      | None -> "");
+                        ignore (
+                          Log.debug "updating internal name resolver: %S -> %S"
+                            name
+                            (match owner with
+                               | Some n -> n
+                               | None -> "")
+                        );
+
                         nr.nr_set owner;
 
                         if not nr.nr_init_done then begin
@@ -445,7 +454,7 @@ let dispatch_message connection message = match message with
                      try
                        receiver.sr_push (connection.packed, message)
                      with exn ->
-                       LogI#exn exn "signal event failed with")
+                       ignore (Log.exn exn "signal event failed with"))
                 connection.signal_receivers
       end
 
@@ -490,7 +499,7 @@ let dispatch_message connection message = match message with
                     lwt obj = dynobj.do_create path in
                     return (Some obj)
                   with exn ->
-                    lwt () = Log#exn exn "dynamic object handler failed with" in
+                    lwt () = Log.exn exn "dynamic object handler failed with" in
                     return None
           else
             return obj
@@ -500,7 +509,7 @@ let dispatch_message connection message = match message with
               begin try
                 obj.oo_handle obj.oo_object connection.packed message
               with exn ->
-                LogI#exn exn "method call handler failed with"
+                ignore (Log.exn exn "method call handler failed with")
               end;
               return ()
           | None ->
@@ -547,7 +556,7 @@ let read_dispatch connection =
   in
   match apply_filters "incoming" message connection.incoming_filters with
     | None ->
-        Log#debug "incoming message dropped by filters";
+        lwt () = Log.debug "incoming message dropped by filters" in
         return ()
     | Some message ->
         dispatch_message connection message;
@@ -579,7 +588,7 @@ let rec dispatch_forever connection =
              !(connection.on_disconnect) exn;
              return ()
            with exn ->
-             Log#exn exn "the error handler (OBus_connection.on_disconnect) failed with")
+             Log.exn exn "the error handler (OBus_connection.on_disconnect) failed with")
 
 (* +-----------------------------------------------------------------+
    | ``Packed'' connection                                           |
@@ -637,7 +646,7 @@ class packed_connection = object(self)
             try_lwt
               OBus_transport.shutdown connection.transport
             with exn ->
-              Log#exn exn "failed to abort/shutdown the transport"
+              Log.exn exn "failed to abort/shutdown the transport"
         in
         return exn
 end

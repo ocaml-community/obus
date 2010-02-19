@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+module Log = Lwt_log.Make(struct let section = "obus(server)" end)
+
 open Unix
 open Lwt
 open OBus_private
@@ -51,7 +53,7 @@ let accept server listen =
   with Unix_error(err, _, _) ->
     lwt () =
       if server.server_up then
-        Log#error "uncaught error: %s" (error_message err)
+        Log.error_f "uncaught error: %s" (error_message err)
       else
         return ()
     in
@@ -70,7 +72,7 @@ let rec listen_loop server listen =
           try
             Lwt_unix.close listen.listen_fd
           with Unix_error(err, _, _) ->
-            LogI#error "cannot close listenning socket: %s" (error_message err);
+            ignore (Log.error_f "cannot close listenning socket: %s" (error_message err))
         end;
         begin
           match listen.listen_address with
@@ -79,7 +81,7 @@ let rec listen_loop server listen =
                   try
                     Unix.unlink path
                   with Unix_error(err, _, _) ->
-                    LogI#error "cannot unlink %S: %s" path (error_message err)
+                    ignore (Log.error_f "cannot unlink %S: %s" path (error_message err))
                 end
             | _ ->
                 ()
@@ -98,7 +100,7 @@ let rec listen_loop server listen =
                     try
                       Some((Lwt_unix.get_credentials fd).Lwt_unix.cred_uid)
                     with Unix.Unix_error(error, _, _) ->
-                      LogI#info "cannot read credential: %s" (Unix.error_message error);
+                      ignore (Log.info_f "cannot read credential: %s" (Unix.error_message error));
                       None
                   in
                   lwt user_id, capabilities =
@@ -111,26 +113,26 @@ let rec listen_loop server listen =
                       ()
                   in
                   if user_id = None && not server.server_allow_anonymous then begin
-                    LogI#info "client from %s rejected because anonymous connection are not allowed" (string_of_addr addr);
+                    ignore (Log.info_f "client from %s rejected because anonymous connection are not allowed" (string_of_addr addr));
                     try
                       Lwt_unix.shutdown fd SHUTDOWN_ALL;
                       Lwt_unix.close fd
                     with exn ->
-                      LogI#exn exn "shutdown socket failed with"
+                      ignore (Log.exn exn "shutdown socket failed with")
                   end else begin
                     try
                       server.server_push (OBus_transport.socket ~capabilities fd)
                     with exn ->
-                      LogI#exn exn "failed to push new transport with"
+                      ignore (Log.exn exn "failed to push new transport with")
                   end;
                   return ()
               | _ ->
                   assert false
           with
             | OBus_auth.Auth_failure msg ->
-                Log#info "authentication failure for client from %s: %s" (string_of_addr addr) msg
+                Log.info_f "authentication failure for client from %s: %s" (string_of_addr addr) msg
             | exn ->
-                Log#exn exn "authentication for client from %s failed with" (string_of_addr addr)
+                Log.exn_f exn "authentication for client from %s failed with" (string_of_addr addr)
         in
         listen_loop server listen
 
@@ -143,7 +145,7 @@ let make_socket domain typ addr =
     return fd
   with Unix_error(err, _, _) as exn ->
     lwt () =
-      Log#error "failed to create listenning socket with %s: %s"
+      Log.error_f "failed to create listenning socket with %s: %s"
         (match addr with
            | ADDR_UNIX path ->
                let len = String.length path in
