@@ -220,7 +220,7 @@ let of_addresses ?(capabilities=[]) ?mechanisms addresses =
                       Lwt_process.pread_line ("dbus-launch",
                                               [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
                     with exn ->
-                      lwt () = Log.error_f "autolaunch failed: %s" (OBus_util.string_of_exn exn) in
+                      lwt () = Log.error_f "autolaunch failed: %s" (Printexc.to_string exn) in
                       fail exn
                   in
                   let line = try String.sub line 0 (String.index line '\000') with _ -> line in

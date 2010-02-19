@@ -97,7 +97,7 @@ end = struct
       try_lwt
         Lwt_stream.get_while (fun _ -> true) (Lwt_stream.map parse_line (Lwt_io.lines_of_file fname))
       with exn ->
-        lwt () = Log.error_f "failed to load cookie file %s: %s" (keyring_file_name context) (OBus_util.string_of_exn exn) in
+        lwt () = Log.error_f "failed to load cookie file %s: %s" (keyring_file_name context) (Printexc.to_string exn) in
         fail exn
     else
       return []
@@ -163,7 +163,7 @@ end = struct
         try_lwt
           Lwt_io.lines_to_file tmp_fname (Lwt_stream.map print_line (Lwt_stream.of_list cookies))
         with exn ->
-          lwt () = Log.error_f "unable to write temporary keyring file %s: %s" tmp_fname (OBus_util.string_of_exn exn) in
+          lwt () = Log.error_f "unable to write temporary keyring file %s: %s" tmp_fname (Printexc.to_string exn) in
           fail exn
       in
       try
@@ -195,7 +195,7 @@ let make_stream ~recv ~send = {
               | End_of_file ->
                   fail (Auth_failure("input: premature end of input"))
               | exn ->
-                  fail (Auth_failure("input: " ^ OBus_util.string_of_exn exn)));
+                  fail (Auth_failure("input: " ^ Printexc.to_string exn)));
   send = (fun line ->
             try_lwt
               send line
@@ -203,7 +203,7 @@ let make_stream ~recv ~send = {
               | Auth_failure _ as exn ->
                   fail exn
               | exn ->
-                  fail (Auth_failure("output: " ^ OBus_util.string_of_exn exn)));
+                  fail (Auth_failure("output: " ^ Printexc.to_string exn)));
 }
 
 let stream_of_channels (ic, oc) =
@@ -521,7 +521,7 @@ struct
                                          Waiting_for_data mech,
                                          mechs))
               with exn ->
-                return (Transition(Client_error(OBus_util.string_of_exn exn),
+                return (Transition(Client_error(Printexc.to_string exn),
                                    Waiting_for_data mech,
                                    mechs))
             end

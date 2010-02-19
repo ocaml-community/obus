@@ -51,13 +51,15 @@ type t = {
 val obus_list : t list OBus_type.basic
   (** Type combinator *)
 
-exception Parse_failure of string
+exception Parse_failure of string * int * string
+  (** [Parse_failure(string, position, reason)] exception raised when
+      parsing a string failed. *)
 
 val of_string : string -> t list
   (** [of_string str] parse [str] and return the list of addresses
       defined in it.
 
-      @raise [Parse_failure] if the string contains an invalid address
+      @raise Parse_failure if the string contains an invalid address
   *)
 
 val to_string : t list -> string
@@ -65,7 +67,13 @@ val to_string : t list -> string
       of addresses *)
 
 val system : t list Lwt.t Lazy.t
-  (** [system] list of addresses for system bus *)
+  (** The list of addresses for system bus *)
 
 val session : t list Lwt.t Lazy.t
-  (** [session] list of addresses for session bus *)
+  (** The list of addresses for session bus *)
+
+val default_system : t list
+  (** The defaults bus addresses for the system bus *)
+
+val default_session : t list
+  (** The defaults bus addresses for the session bus *)

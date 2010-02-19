@@ -30,17 +30,29 @@ type address =
 type t = { address : address; guid : guid option }
  with projection
 
-exception Parse_failure of string
+exception Parse_failure of string * int * string
+
+let () =
+  Printexc.register_printer
+    (function
+       | Parse_failure(str, pos, msg) ->
+           Some(Printf.sprintf "failed to parse addresses %S, at position %d: %s" str pos msg)
+       | _ ->
+           None)
 
 let assoc key default list = match OBus_util.assoc key list with
   | Some v -> v
   | None -> default
 
+exception Fail = OBus_address_lexer.Fail
+
 let of_string str =
   try
-    let buf = Buffer.create 42 in
-    let addresses = List.rev (OBus_address_lexer.addresses [] buf (Lexing.from_string str)) in
-    List.map begin fun (name, params) -> {
+    let addresses = match str with
+      | "" -> []
+      | _ -> List.rev (OBus_address_lexer.addresses (Lexing.from_string str))
+    in
+    List.map begin fun (pos, name, params) -> {
       address = (match name with
                    | "unix" -> begin
                        match (OBus_util.assoc "path" params,
@@ -49,9 +61,7 @@ let of_string str =
                          | Some path, None, None -> Unix_path path
                          | None, Some abst, None -> Unix_abstract abst
                          | None, None, Some tmpd -> Unix_tmpdir tmpd
-                         | _ ->
-                             ignore (Log.error "invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\"");
-                             Unknown(name, params)
+                         | _ -> raise (Fail(pos, "invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\""))
                      end
                    | "tcp" ->
                        Tcp{ tcp_host = assoc "host" "" params;
@@ -59,22 +69,25 @@ let of_string str =
                             tcp_bind = assoc "bind" "*" params;
                             tcp_family = match OBus_util.assoc "family" params with
                               | Some "ipv4" -> Some `Ipv4
-                              | Some "ipv6" -> Some `Ipv4
-                              | Some f ->
-                                  ignore (Log.error_f "unknown address family: %S" f);
-                                  None
+                              | Some "ipv6" -> Some `Ipv6
+                              | Some f -> raise (Fail(pos, "unknown address family"))
                               | None -> None }
                    | "autolaunch" ->
                        Autolaunch
                    | _ ->
                        Unknown(name, params));
       guid = (match OBus_util.assoc "guid" params with
-                | Some guid_hex_encoded -> Some(OBus_uuid.of_string guid_hex_encoded)
-                | None -> None);
+                | Some guid_hex_encoded -> begin
+                    try
+                      Some(OBus_uuid.of_string guid_hex_encoded)
+                    with Invalid_argument _ ->
+                      raise (Fail(pos, "invalid guid"))
+                  end
+                | None ->
+                    None);
     } end addresses
-  with Failure msg ->
-    ignore (Log.debug_f "failed to parse address %S: %s" str msg);
-    raise (Parse_failure msg)
+  with Fail(pos, msg) ->
+    raise (Parse_failure(str, pos, msg))
 
 let to_string l =
   let buf = Buffer.create 42 in
@@ -89,7 +102,7 @@ let to_string l =
     | [] -> ()
     | x :: l -> f x; List.iter (fun x -> Buffer.add_char buf ch; f x) l
   in
-  concat ':' begin fun { address = address; guid = guid } ->
+  concat ';' begin fun { address = address; guid = guid } ->
     let name, params = match address with
       | Unix_path path ->
           "unix", [("path", path)]
@@ -130,40 +143,28 @@ let obus_list = OBus_type.map OBus_private_type.obus_string of_string to_string
 
 let system_bus_variable = "DBUS_SYSTEM_BUS_ADDRESS"
 let session_bus_variable = "DBUS_SESSION_BUS_ADDRESS"
-let session_bus_property = "_DBUS_SESSION_BUS_ADDRESS"
 
-let default_session_bus_addresses = { address = Autolaunch; guid = None }
-let default_system_bus_addresses = { address = Unix_path "/var/run/dbus/system_bus_socket"; guid = None }
+let default_session = [{ address = Autolaunch; guid = None }]
+let default_system = [{ address = Unix_path "/var/run/dbus/system_bus_socket"; guid = None }]
 
 open Lwt
 
+let not_found_msg : (_, _, _, _) format4 = "environment variable %s not found, using internal default"
+
 let system = lazy(
-  match
-    try Some (Sys.getenv system_bus_variable) with
-        Not_found ->
-          ignore (Log.debug_f "environment variable %s not found, using internal default" system_bus_variable);
-          None
-  with
-    | Some str -> try_lwt return (of_string str)
-    | None -> return [default_system_bus_addresses]
+  match try Some (Sys.getenv system_bus_variable) with Not_found -> None with
+    | Some str ->
+        return (of_string str)
+    | None ->
+        lwt () = Log.info_f not_found_msg system_bus_variable in
+        return default_system
 )
 
 let session = lazy(
   match try Some(Sys.getenv session_bus_variable) with Not_found -> None with
     | Some line ->
-        try_lwt return (of_string line)
+        return (of_string line)
     | None ->
-        lwt () = Log.warning_f "environment variable %s not found" session_bus_variable in
-        try_lwt
-          (* Try with the root window property, this is bit ugly and
-             it depends on the presence of xprop... *)
-          lwt line = Lwt_process.pread_line ("xprop", [|"xprop"; "-root"; session_bus_property|]) in
-          Scanf.sscanf line "_DBUS_SESSION_BUS_ADDRESS(STRING) = %S" (fun x -> try_lwt return (of_string x))
-        with exn ->
-          lwt () =
-            Log.info_f "can not get session bus address from property %s \
-                        on root window (maybe x11 is not running), error is: %s"
-              session_bus_property (OBus_util.string_of_exn exn)
-          in
-          return [default_session_bus_addresses]
+        lwt () = Log.info_f not_found_msg session_bus_variable in
+        return default_session
 )

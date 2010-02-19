@@ -12,11 +12,13 @@ module Log = Lwt_log.Make(struct let section = "obus(util)" end)
 open Lwt
 open Printf
 
-let string_of_exn = function
-  | Unix.Unix_error(err, _, _) -> Unix.error_message err
-  | Sys_error msg -> msg
-  | Failure msg -> msg
-  | exn -> Printexc.to_string exn
+let () =
+  Printexc.register_printer
+    (function
+       | Unix.Unix_error(error, _, _) ->
+           Some(Unix.error_message error)
+       | _ ->
+           None)
 
 let rec assoc x = function
   | [] -> None
@@ -111,7 +113,7 @@ let fill_random buffer pos len =
     if n < len then fill_pseudo buffer (pos + n) (len - n);
     close_in ic
   with exn ->
-    ignore (Log.warning_f "failed to get random data from /dev/urandom: %s" (string_of_exn exn));
+    ignore (Log.warning_f "failed to get random data from /dev/urandom: %s" (Printexc.to_string exn));
     fill_pseudo buffer pos len
 
 let random_string n =

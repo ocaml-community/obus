@@ -40,6 +40,10 @@ val match_message : rule -> OBus_message.t -> bool
   (** [match_message rule message] returns wether [message] is matched
       by [rule] *)
 
+exception Parse_failure of string * int * string
+  (** [Parse_failure(string, position, reason)] is raised when parsing
+      a rule failed *)
+
 val string_of_rule : rule -> string
   (** Return a string representation of a matching rule. *)
 

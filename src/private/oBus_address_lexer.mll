@@ -7,43 +7,85 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-rule value addr_acc kv_acc name key buf = parse
-  | [ '0'-'9' 'A'-'Z' 'a'-'z' '_' '-' '/' '.' '\\']
-      { Buffer.add_char buf (Lexing.lexeme_char lexbuf 0);
-        value addr_acc kv_acc name key buf lexbuf;
+{
+  exception Fail of int * string
+
+  let pos lexbuf = lexbuf.Lexing.lex_start_p.Lexing.pos_cnum
+
+  let fail lexbuf fmt =
+    Printf.ksprintf
+      (fun msg -> raise (Fail(pos lexbuf, msg)))
+      fmt
+}
+
+rule addresses = parse
+    | [^ ':' ]+ as name {
+        check_colon lexbuf;
+        let parameters = parameters lexbuf in
+        if semi_colon lexbuf then
+          (pos lexbuf, name, parameters) :: addresses lexbuf
+        else begin
+          check_eof lexbuf;
+          [(pos lexbuf, name, parameters)]
+        end
       }
-  | "%" { unescape_char buf lexbuf;
-          value addr_acc kv_acc name key buf lexbuf }
-  | "," { let v = Buffer.contents buf in
-            Buffer.clear buf;
-            key_values addr_acc ((key, v) :: kv_acc) name buf lexbuf }
-  | ";" { let v = Buffer.contents buf in
-            Buffer.clear buf;
-            addresses ((name, (key, v) :: kv_acc) :: addr_acc) buf lexbuf }
-  | eof { let v = Buffer.contents buf in
-            Buffer.clear buf;
-            (name, (key, v) :: kv_acc) :: addr_acc }
+    | ":" {
+        fail lexbuf "empty transport name"
+      }
+    | eof {
+        fail lexbuf "addresses expected"
+      }
 
-and unescape_char buf = parse
-  | ([ '0'-'9' 'a'-'f' 'A'-'F' ] [ '0'-'9' 'a'-'f' 'A'-'F' ]) as str {
-      Buffer.add_char buf (Scanf.sscanf str "%x" char_of_int)
-    }
+and semi_colon = parse
+    | ";" { true }
+    | "" { false }
 
-and colon = parse
-  | ":" { () }
+and check_eof = parse
+    | eof { () }
+    | _ as ch { fail lexbuf "invalid character %C" ch }
 
-and equal = parse
-  | "=" { () }
+and check_colon = parse
+    | ":" { () }
+    | "" { fail lexbuf "colon expected after transport name" }
 
-and key_values addr_acc kv_acc name buf = parse
-  | [^ '=' ]* as key {
-      equal lexbuf;
-      value addr_acc kv_acc name key buf lexbuf
-    }
+and parameters = parse
+    | eof { [] }
+    | "" { parameters_aux lexbuf }
 
-and addresses addr_acc buf = parse
-  | eof { addr_acc }
-  | [^ ':' ]* as name {
-      colon lexbuf;
-      key_values addr_acc [] name buf lexbuf;
-    }
+and parameters_aux = parse
+    | [^ '=' ]+ as key {
+        check_equal lexbuf;
+        let value = value (Buffer.create 42) lexbuf in
+        if coma lexbuf then
+          (key, value) :: parameters_aux lexbuf
+        else
+          [(key, value)]
+      }
+    | "=" { fail lexbuf "empty key" }
+
+and coma = parse
+    | "," { true }
+    | "" { false }
+
+and check_equal = parse
+    | "=" { () }
+    | "" { fail lexbuf "equal expected after key" }
+
+and value buf = parse
+    | [ '0'-'9' 'A'-'Z' 'a'-'z' '_' '-' '/' '.' '\\' ] as ch {
+        Buffer.add_char buf ch;
+        value buf lexbuf
+      }
+    | "%" {
+        Buffer.add_string buf (unescape lexbuf);
+        value buf lexbuf
+      }
+    | "" {
+        Buffer.contents buf
+      }
+
+and unescape = parse
+    | [ '0'-'9' 'a'-'f' 'A'-'F' ] [ '0'-'9' 'a'-'f' 'A'-'F' ] as str
+        { OBus_util.hex_decode str }
+    | ""
+        { failwith "two hexdigits expected after '%'" }

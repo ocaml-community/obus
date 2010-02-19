@@ -49,9 +49,6 @@ val hex_decode : string -> string
 val homedir : string Lazy.t
   (** Return the home directory *)
 
-val string_of_exn : exn -> string
-  (** Try to return something better that [Printexc.to_string] *)
-
 (** {6 Random number generation} *)
 
 (** All the following functions try to generate random numbers using

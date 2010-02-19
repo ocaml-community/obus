@@ -7,23 +7,49 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+{
+  exception Fail of int * string
+
+  let pos lexbuf = lexbuf.Lexing.lex_start_p.Lexing.pos_cnum
+
+  let fail lexbuf fmt =
+    Printf.ksprintf
+      (fun msg -> raise (Fail(pos lexbuf, msg)))
+      fmt
+}
+
 rule match_rules = parse
     | (['a'-'z' '_' '0'-'9']+ as key) "='" ([^ '\'']* as value) '\''
         { if comma lexbuf then
-            (key, value) :: match_rules lexbuf
-          else if end_of_rules lexbuf then
-            [(key, value)]
-          else
-            raise Exit }
+            (pos lexbuf, key, value) :: match_rules lexbuf
+          else begin
+            check_eof lexbuf;
+            [(pos lexbuf, key, value)]
+          end }
+    | "=" {
+        fail lexbuf "empty key"
+      }
+    | eof {
+        fail lexbuf "match rule expected"
+      }
+    | _ as ch {
+        fail lexbuf "invalid character %C" ch
+      }
 
 and comma = parse
     | ',' { true }
     | ""  { false }
 
-and end_of_rules = parse
-    | eof { true }
-    | ""  { false }
+and check_eof = parse
+    | eof { () }
+    | _ as ch { fail lexbuf "invalid character %C" ch }
 
 and arg = parse
-    | "arg" (['0'-'9']+ as nb) { Some(int_of_string nb) }
-    | ""                       { None }
+    | "arg" (['0'-'9']+ as n) {
+        let n = int_of_string n in
+        if n >= 0 && n <= 63 then
+          Some n
+        else
+          None
+      }
+    | "" { None }

@@ -36,7 +36,7 @@ let error_handler = function
       ignore (Log.info "disconnected from D-Bus message bus");
       exit 0
   | OBus_connection.Transport_error exn ->
-      ignore (Log.error_f "the D-Bus connection with the message bus has been closed due to a transport error: %s" (OBus_util.string_of_exn exn));
+      ignore (Log.error_f "the D-Bus connection with the message bus has been closed due to a transport error: %s" (Printexc.to_string exn));
       exit 1
   | exn ->
       ignore (Log.exn exn "the D-Bus connection with the message bus has been closed due to this uncaught exception");

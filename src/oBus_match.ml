@@ -86,62 +86,76 @@ let string_of_rule mr =
   List.iter (fun (n, value) -> !coma (); Printf.bprintf buf "arg%d='%s'" n value) mr.arguments;
   Buffer.contents buf
 
+exception Parse_failure of string * int * string
+
+let () =
+  Printexc.register_printer
+    (function
+       | Parse_failure(str, pos, msg) ->
+           Some(Printf.sprintf "failed to parse match-rule %S, at position %d: %s" str pos msg)
+       | _ ->
+           None)
+
+exception Fail = OBus_match_rule_lexer.Fail
+
 let rule_of_string str =
-  let l =
-    try
-      OBus_match_rule_lexer.match_rules (Lexing.from_string str)
-    with exn ->
-      failwith "OBus_match.rule_of_string: invalid matching rule"
-  in
-  let check validate value =
-    match validate value with
-      | None ->
-          ()
-      | Some err ->
-          raise (OBus_string.Invalid_string err)
-  in
-  let mr = {
-    typ = None;
-    sender = None;
-    interface = None;
-    member = None;
-    path = None;
-    destination = None;
-    arguments = [];
-  } in
-  List.fold_left begin fun mr (key, value) ->
-    match key with
-      | "type" ->
-          { mr with typ = Some(match value with
-                                 | "method_call" -> `Method_call
-                                 | "method_return" -> `Method_return
-                                 | "signal" -> `Signal
-                                 | "error" -> `Error
-                                 | _ -> Printf.ksprintf failwith "OBus_match.rule_of_string: invalid type (%s)" value) }
-      | "sender" ->
-          check OBus_name.validate_bus value;
-          { mr with sender = Some value }
-      | "destination" ->
-          check OBus_name.validate_bus value;
-          { mr with destination = Some value }
-      | "interface" ->
-          check OBus_name.validate_interface value;
-          { mr with interface = Some value }
-      | "member" ->
-          check OBus_name.validate_member value;
-          { mr with member = Some value }
-      | "path" ->
-          { mr with path = Some(OBus_path.of_string value) }
-      | _ ->
-          match OBus_match_rule_lexer.arg (Lexing.from_string key) with
-            | Some n ->
-                if n < 64 then
+  try
+    let l = match str with
+      | "" -> []
+      | _ -> OBus_match_rule_lexer.match_rules (Lexing.from_string str)
+    in
+    let check pos validate value =
+      match validate value with
+        | None ->
+            ()
+        | Some err ->
+            raise (Fail(pos, OBus_string.error_message err))
+    in
+    let mr = {
+      typ = None;
+      sender = None;
+      interface = None;
+      member = None;
+      path = None;
+      destination = None;
+      arguments = [];
+    } in
+    List.fold_left begin fun mr (pos, key, value) ->
+      match key with
+        | "type" ->
+            { mr with typ = Some(match value with
+                                   | "method_call" -> `Method_call
+                                   | "method_return" -> `Method_return
+                                   | "signal" -> `Signal
+                                   | "error" -> `Error
+                                   | _ -> raise (Fail(pos, Printf.sprintf "invalid message type (%s)" value))) }
+        | "sender" ->
+            check pos OBus_name.validate_bus value;
+            { mr with sender = Some value }
+        | "destination" ->
+            check pos OBus_name.validate_bus value;
+            { mr with destination = Some value }
+        | "interface" ->
+            check pos OBus_name.validate_interface value;
+            { mr with interface = Some value }
+        | "member" ->
+            check pos OBus_name.validate_member value;
+            { mr with member = Some value }
+        | "path" -> begin
+            try
+              { mr with path = Some(OBus_path.of_string value) }
+            with OBus_string.Invalid_string err ->
+              raise (Fail(pos, OBus_string.error_message err))
+          end
+        | _ ->
+            match OBus_match_rule_lexer.arg (Lexing.from_string key) with
+              | Some n ->
                   { mr with arguments = insert_sorted n value mr.arguments }
-                else
-                  Printf.ksprintf failwith "OBus_match.rule_of_string: invalid argument number (%d)" n
-            | None ->
-                Printf.ksprintf failwith "OBus_match.rule_of_string: invalid key (%s)" key
-  end mr l
+              | None ->
+                  raise (Fail(pos, Printf.sprintf "invalid key (%s)" key))
+    end mr l
+  with Fail(pos, msg) ->
+    raise (Parse_failure(str, pos, msg))
 
 let obus_rule = OBus_type.map OBus_private_type.obus_string rule_of_string string_of_rule
 
