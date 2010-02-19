@@ -135,9 +135,12 @@ and connection = {
      client-side part of a peer-to-peer connection and the connection
      is shared. *)
 
-  mutable down : (unit Lwt.t * unit Lwt.u) option;
+  down : (unit Lwt.t * unit Lwt.u) option React.signal;
+  set_down : (unit Lwt.t * unit Lwt.u) option -> unit;
   (* Waiting thread used to make the connection to stop dispatching
      messages. *)
+
+  state : [ `Up | `Down ] React.signal;
 
   abort_recv_wakener : OBus_message.t Lwt.u;
   abort_send_wakener : unit Lwt.u;
@@ -193,6 +196,9 @@ and packed_connection = <
   set_crash : exn -> exn Lwt.t;
   (* Put the connection in a 'crashed' state if not already
      done. Returns the exception to which the connection is set to. *)
+
+  running : bool React.signal;
+  (* Signal holding the current connection state. *)
 >
 
 (* +-----------------------------------------------------------------+

@@ -37,9 +37,9 @@ val path : t -> OBus_path.t
 val owner : t -> OBus_peer.t option
   (** [owner obj] returns the owner of the object, if any *)
 
-val exports : t -> OBus_connection.t list
-  (** [exports obj] is the list of connection on which the object is
-      exported *)
+val exports : t -> Set.Make(OBus_connection).t React.signal
+  (** [exports obj] is the signal holding the list of connection on
+      which the object is exported *)
 
 (** {6 Suppression} *)
 

@@ -22,6 +22,8 @@ exception Transport_error of exn
 
 type t = OBus_private.packed_connection
 
+let compare = Pervasives.compare
+
 type filter = OBus_private.filter
 
 type context = t * OBus_message.t
@@ -566,7 +568,7 @@ let read_dispatch connection =
 let rec dispatch_forever connection =
   try_bind
     (fun () ->
-       match connection.down with
+       match React.S.value connection.down with
          | Some(waiter, wakener) ->
              lwt () = waiter in
              read_dispatch connection
@@ -594,7 +596,11 @@ let rec dispatch_forever connection =
    | ``Packed'' connection                                           |
    +-----------------------------------------------------------------+ *)
 
-class packed_connection = object(self)
+class packed_connection =
+  let running, set_running = React.S.create true in
+object(self)
+
+  method running = running
 
   val mutable state = Crashed Exit (* Fake initial state *)
 
@@ -611,6 +617,7 @@ class packed_connection = object(self)
         return exn
     | Running connection ->
         state <- Crashed exn;
+        set_running false;
 
         begin match connection.guid with
           | Some guid -> guid_connection_map := GuidMap.remove guid !guid_connection_map
@@ -620,7 +627,7 @@ class packed_connection = object(self)
         (* This make the dispatcher to exit if it is waiting on
            [get_message] *)
         wakeup_exn connection.abort_recv_wakener exn;
-        begin match connection.down with
+        begin match React.S.value connection.down with
           | Some(waiter, wakener) -> wakeup_exn wakener exn
           | None -> ()
         end;
@@ -659,14 +666,18 @@ let of_transport ?guid ?(up=true) transport =
   let make _ =
     let abort_recv, abort_recv_wakener = Lwt.wait ()
     and abort_send, abort_send_wakener = Lwt.wait ()
-    and packed_connection = new packed_connection in
+    and packed_connection = new packed_connection
+    and down, set_down = React.S.create (if up then None else Some(wait ())) in
+    let state = React.S.map (function None -> `Up | Some _ -> `Down) down in
     let connection = {
       name = None;
       acquired_names = [];
       transport = transport;
       on_disconnect = ref (fun _ -> ());
       guid = guid;
-      down = (if up then None else Some(Lwt.wait ()));
+      down = down;
+      set_down = set_down;
+      state = state;
       abort_recv = abort_recv;
       abort_send = abort_send;
       abort_recv_wakener = abort_recv_wakener;
@@ -731,9 +742,7 @@ let loopback () = of_transport (OBus_transport.loopback ())
    | Other                                                           |
    +-----------------------------------------------------------------+ *)
 
-let running connection = match connection#get with
-  | Running _ -> true
-  | Crashed _ -> false
+let running packed = packed#running
 
 let watch packed = (get packed).watch
 
@@ -750,21 +759,24 @@ let close packed = match packed#get with
       lwt _ = packed#set_crash Connection_closed in
       return ()
 
-let is_up packed = (get packed).down = None
+let state packed = (get packed).state
 
 let set_up packed =
   let connection = get packed in
-  match connection.down with
-    | None -> ()
+  match React.S.value connection.down with
+    | None ->
+        ()
     | Some(waiter, wakener) ->
-        connection.down <- None;
+        connection.set_down None;
         wakeup wakener ()
 
 let set_down packed =
   let connection = get packed in
-  match connection.down with
-    | Some _ -> ()
-    | None -> connection.down <- Some(wait ())
+  match React.S.value connection.down with
+    | Some _ ->
+        ()
+    | None ->
+        connection.set_down (Some(wait ()))
 
 let incoming_filters packed = (get packed).incoming_filters
 let outgoing_filters packed = (get packed).outgoing_filters

@@ -25,9 +25,12 @@ module PropertyMap = OBus_util.MakeMap(struct
                                          let compare = Pervasives.compare
                                        end)
 
+module ConnectionSet = Set.Make(OBus_connection)
+
 type t = {
   path : OBus_path.t;
-  mutable exports : OBus_connection.t list;
+  exports : ConnectionSet.t React.signal;
+  set_exports : ConnectionSet.t -> unit;
   owner : OBus_peer.t option;
 }
 
@@ -36,17 +39,23 @@ let owner obj = obj.owner
 let exports obj = obj.exports
 
 let destroy obj =
-  List.iter
+  ConnectionSet.iter
     (fun connection -> match connection#get with
        | Crashed exn ->
            ()
        | Running connection ->
            connection.exported_objects <- ObjectMap.remove obj.path connection.exported_objects)
-    obj.exports;
-  obj.exports <- []
+    (React.S.value obj.exports);
+  obj.set_exports ConnectionSet.empty
 
 let make ?owner path =
-  let obj = { path = path; exports = []; owner = owner } in
+  let exports, set_exports = React.S.create ConnectionSet.empty in
+  let obj = {
+    path = path;
+    exports = exports;
+    set_exports = set_exports;
+    owner = owner;
+  } in
   begin
     match owner with
       | None ->
@@ -116,28 +125,31 @@ struct
     | _ ->
         invalid_arg "OBus_object.Make.handle_call"
 
-  let export connection obj =
-    match connection#get with
+  let export packed obj =
+    match packed#get with
       | Crashed exn ->
           raise exn
       | Running connection ->
           let o = Object.get obj in
-          connection.exported_objects <- ObjectMap.add o.path {
-            oo_handle = handle_call;
-            oo_object = Pack obj;
-            oo_connection_closed = (fun connection ->
-                                      o.exports <- List.filter ((<>) connection) o.exports);
-          } connection.exported_objects;
-          o.exports <- connection.packed :: o.exports
+          if not (ConnectionSet.mem packed (React.S.value o.exports)) then begin
+            connection.exported_objects <- ObjectMap.add o.path {
+              oo_handle = handle_call;
+              oo_object = Pack obj;
+              oo_connection_closed = (fun packed -> o.set_exports (ConnectionSet.remove packed (React.S.value o.exports)));
+            } connection.exported_objects;
+            o.set_exports (ConnectionSet.add connection.packed (React.S.value o.exports))
+          end
 
-  let remove connection obj =
-    match connection#get with
+  let remove packed obj =
+    match packed#get with
       | Crashed exn ->
           raise exn
       | Running connection ->
           let o = Object.get obj in
-          connection.exported_objects <- ObjectMap.remove o.path connection.exported_objects;
-          o.exports <- List.filter ((<>) connection.packed) o.exports
+          if ConnectionSet.mem packed (React.S.value o.exports) then begin
+            connection.exported_objects <- ObjectMap.remove o.path connection.exported_objects;
+            o.set_exports (ConnectionSet.remove connection.packed (React.S.value o.exports))
+          end
 
   let destroy obj =
     destroy (Object.get obj)
@@ -166,10 +178,11 @@ struct
       | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
           dyn_emit_signal connection ?destination ~interface ~member ~path:obj.path body
       | None, None ->
-          Lwt_list.iter_p
-            (fun connection ->
-               dyn_emit_signal connection ~interface ~member ~path:obj.path body)
-            obj.exports
+          ConnectionSet.fold
+            (fun connection w ->
+               w <&> dyn_emit_signal connection ~interface ~member ~path:obj.path body)
+            (React.S.value obj.exports)
+            (return ())
 
   module MakeInterface(Name : OBus_interface.Name) =
   struct

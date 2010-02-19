@@ -17,6 +17,10 @@
 type t = OBus_private.packed_connection
  with obus(sequence)
 
+val compare : t -> t -> int
+  (** Same as [Pervasives.compare]. It allows this module to be used
+      as argument to the functors [Set.Make] and [Map.Make]. *)
+
 (** {6 Creation} *)
 
 (** The following functions will return a connection which is ready to
@@ -51,7 +55,7 @@ val close : t -> unit Lwt.t
       - if the connection is already closed, it does nothing
   *)
 
-val running : t -> bool
+val running : t -> bool React.signal
   (** Return weather a connection is running. *)
 
 val watch : t -> unit Lwt.t
@@ -265,6 +269,6 @@ val of_transport : ?guid : OBus_address.guid -> ?up : bool -> OBus_transport.t -
 
     When a connection is down, messages will not be dispatched *)
 
-val is_up : t -> bool
+val state : t -> [ `Up | `Down ] React.signal
 val set_up : t -> unit
 val set_down : t -> unit
