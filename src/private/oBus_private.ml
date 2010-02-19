@@ -24,6 +24,7 @@ module NameMap = OBus_util.MakeMap(struct
                                      type t = OBus_name.bus
                                      let compare = String.compare
                                    end)
+module NameSet = Set.Make(String)
 
 (* +-----------------------------------------------------------------+
    | Objects                                                         |
@@ -120,7 +121,8 @@ and connection = {
   (* Unique name of the connection. If set this means that the other
      side is a message bus. *)
 
-  mutable acquired_names : OBus_name.bus list;
+  acquired_names : NameSet.t React.signal;
+  set_acquired_names : NameSet.t -> unit;
   (* List of names we currently own *)
 
   transport : OBus_transport.t;

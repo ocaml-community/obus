@@ -432,7 +432,7 @@ let dispatch_message connection message = match message with
                   (* Only handle signals destined to us *)
                   when message.destination = connection.name ->
 
-                  connection.acquired_names <- name :: connection.acquired_names
+                  connection.set_acquired_names (NameSet.add name (React.S.value connection.acquired_names))
 
               (* Internal handling of "NameLost" signals *)
               | ("org.freedesktop.DBus",
@@ -442,7 +442,7 @@ let dispatch_message connection message = match message with
                   (* Only handle signals destined to us *)
                   when message.destination = connection.name ->
 
-                  connection.acquired_names <- List.filter ((<>) name) connection.acquired_names
+                  connection.set_acquired_names (NameSet.remove name (React.S.value connection.acquired_names))
 
               | _ ->
                   ()
@@ -667,11 +667,13 @@ let of_transport ?guid ?(up=true) transport =
     let abort_recv, abort_recv_wakener = Lwt.wait ()
     and abort_send, abort_send_wakener = Lwt.wait ()
     and packed_connection = new packed_connection
-    and down, set_down = React.S.create (if up then None else Some(wait ())) in
+    and down, set_down = React.S.create (if up then None else Some(wait ()))
+    and acquired_names, set_acquired_names = React.S.create ~eq:NameSet.equal NameSet.empty in
     let state = React.S.map (function None -> `Up | Some _ -> `Down) down in
     let connection = {
       name = None;
-      acquired_names = [];
+      acquired_names = acquired_names;
+      set_acquired_names = set_acquired_names;
       transport = transport;
       on_disconnect = ref (fun _ -> ());
       guid = guid;

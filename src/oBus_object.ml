@@ -49,7 +49,7 @@ let destroy obj =
   obj.set_exports ConnectionSet.empty
 
 let make ?owner path =
-  let exports, set_exports = React.S.create ConnectionSet.empty in
+  let exports, set_exports = React.S.create ~eq:ConnectionSet.equal ConnectionSet.empty in
   let obj = {
     path = path;
     exports = exports;

@@ -65,7 +65,7 @@ val get_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t Lwt.t
 
 (** {6 Bus names acquiring} *)
 
-val acquired_names : t -> OBus_name.bus list
+val acquired_names : t -> Set.Make(String).t React.signal
   (** Returns the list of names we currently own *)
 
 exception Access_denied of string

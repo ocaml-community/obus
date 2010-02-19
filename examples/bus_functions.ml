@@ -16,6 +16,8 @@ open Lwt_io
 let service = "org.freedesktop.Notifications"
 let name = "org.ocamlcore.forge.obus"
 
+module Name_set = Set.Make(String)
+
 lwt () =
   lwt bus = Lazy.force OBus_bus.session in
 
@@ -48,4 +50,4 @@ lwt () =
        | `Already_owner -> "i already own the name")
   in
 
-  printlf "my names are: %s" (String.concat ", " (OBus_bus.acquired_names bus))
+  printlf "my names are: %s" (String.concat ", " (Name_set.elements (React.S.value (OBus_bus.acquired_names bus))))
