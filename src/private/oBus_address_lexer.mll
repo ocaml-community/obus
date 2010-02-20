@@ -19,21 +19,36 @@
 }
 
 rule addresses = parse
+    | eof { [] }
+    | "" { address_plus lexbuf }
+
+(*
+        let address = address lexbuf in
+        if semi_colon lexbuf then
+          address :: addresses lexbuf
+        else begin
+          check_eof lexbuf;
+          [address]
+        end
+      }
+*)
+
+and address_plus = parse
     | [^ ':' ]+ as name {
         check_colon lexbuf;
         let parameters = parameters lexbuf in
         if semi_colon lexbuf then
-          (pos lexbuf, name, parameters) :: addresses lexbuf
+          (name, parameters) :: address_plus lexbuf
         else begin
           check_eof lexbuf;
-          [(pos lexbuf, name, parameters)]
+          [(name, parameters)]
         end
       }
     | ":" {
         fail lexbuf "empty transport name"
       }
     | eof {
-        fail lexbuf "addresses expected"
+        fail lexbuf "address expected"
       }
 
 and semi_colon = parse
@@ -50,14 +65,14 @@ and check_colon = parse
 
 and parameters = parse
     | eof { [] }
-    | "" { parameters_aux lexbuf }
+    | "" { parameters_plus lexbuf }
 
-and parameters_aux = parse
+and parameters_plus = parse
     | [^ '=' ]+ as key {
         check_equal lexbuf;
         let value = value (Buffer.create 42) lexbuf in
         if coma lexbuf then
-          (key, value) :: parameters_aux lexbuf
+          (key, value) :: parameters_plus lexbuf
         else
           [(key, value)]
       }

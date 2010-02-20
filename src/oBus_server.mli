@@ -39,22 +39,30 @@ end
 val make :
   ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Server.mechanism list ->
-  ?addresses : OBus_address.address list ->
+  ?addresses : OBus_address.t list ->
   ?allow_anonymous : bool -> unit -> t Lwt.t
   (** [make ?mechanisms ?addresses] Create a server which will listen
       on all of the given addresses.
 
       @param mechanisms is the list of authentication mechanisms supported
-      by the server.
-      @param addresses default to [OBus_address.Unix_tmpdir "/tmp"].
+             by the server.
+      @param addresses default to [{ name = "unix"; args = [("tmpdir", "/tmp")]].
       @param allow_anonymous tell whether clients using anonymous
-      authentication will be accepted. It defaults to [false].
+             authentication will be accepted. It defaults to [false].
+      @param capabilities is the list of supported capabilities,
+             it defaults to {!OBus_auth.capabilities}
 
-      @raise Invalid_argument if [addresses] is empty
+      About errors:
+      - if no address are provided, it raises [Invalid_argument],
+      - if an address is invalid, it raises [Invalid_argument]
+      - if listenning fails for all addresses, it fails with the
+        exception reported for the first address
+
+      It succeed if it can listen on at least one address.
   *)
 
 val make_lowlevel :
   ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Server.mechanism list ->
-  ?addresses : OBus_address.address list ->
+  ?addresses : OBus_address.t list ->
   ?allow_anonymous : bool -> unit -> lowlevel Lwt.t

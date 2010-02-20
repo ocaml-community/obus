@@ -9,47 +9,34 @@
 
 (** Manipulation of D-Bus addresses *)
 
+(** {6 Types} *)
+
 type guid = OBus_uuid.t
     (** A unique address identifier. Each server listenning address'
         has a unique one. *)
 
-(** Parameters for TCP addresses *)
-type tcp_params = {
-  tcp_host : string;
-  (** For connecting, this is is the host to contact *)
-
-  tcp_bind : string;
-  (** For listening, this is the address to bind to *)
-
-  tcp_port : string;
-  (** Port number or tcp service name *)
-
-  tcp_family : [ `Ipv4 | `Ipv6 ] option;
-  (** Restrict to ipv4 or ipv6 *)
-} with projection
-
-type address =
-  | Unix_path of string
-  | Unix_abstract of string
-  | Unix_tmpdir of string
-      (** A unix socket *)
-  | Tcp of tcp_params
-  | Autolaunch
-  | Unknown of string * (string * string) list
-      (** [Unknown(name, values)] an address which is not known by
-          obus. [values] is a list of [(key, value)]. *)
- with constructor
-
+(** Type of an address *)
 type t = {
-  address : address;
-  (** The address part of an address *)
+  name : string;
+  (** The transport name *)
 
-  guid : guid option;
-  (** An address may optionnally specifiy a guid *)
+  args : (string * string) list;
+  (** Arguments of the address *)
 } with projection
+
+val make : name : string -> args : (string * string) list -> t
+  (** Creates an address *)
 
 val obus_list : t list OBus_type.basic
   (** Type combinator *)
+
+val arg : string -> t -> string option
+  (** [arg key address] returns the value of argument [key], if any *)
+
+val guid : t -> guid option
+  (** Returns the address guid, if any *)
+
+(** {6 To/from string conversion} *)
 
 exception Parse_failure of string * int * string
   (** [Parse_failure(string, position, reason)] exception raised when
@@ -66,6 +53,8 @@ val to_string : t list -> string
   (** [to_string addresses] return a string representation of a list
       of addresses *)
 
+(** {6 Well-known addresses} *)
+
 val system : t list Lwt.t Lazy.t
   (** The list of addresses for system bus *)
 
@@ -73,7 +62,7 @@ val session : t list Lwt.t Lazy.t
   (** The list of addresses for session bus *)
 
 val default_system : t list
-  (** The defaults bus addresses for the system bus *)
+  (** The default addresses for the system bus *)
 
 val default_session : t list
-  (** The defaults bus addresses for the session bus *)
+  (** The default addresses for the session bus *)

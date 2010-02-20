@@ -20,6 +20,9 @@ type capability =
     [ `Unix_fd
         (** The transport support unix fd passing *) ]
 
+val capabilities : capability list
+  (** List of all capabilities *)
+
 (** {6 Communication} *)
 
 type stream

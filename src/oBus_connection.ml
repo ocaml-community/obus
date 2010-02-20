@@ -399,7 +399,7 @@ let dispatch_message connection message = match message with
                   begin match NameMap.lookup name connection.name_resolvers with
                     | Some nr ->
                         ignore (
-                          Log.debug "updating internal name resolver: %S -> %S"
+                          Log.debug_f "updating internal name resolver: %S -> %S"
                             name
                             (match owner with
                                | Some n -> n

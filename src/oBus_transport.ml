@@ -130,30 +130,132 @@ let make_socket domain typ addr =
   (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
   try_lwt
     lwt () = Lwt_unix.connect fd addr in
-    return fd
+    return (fd, domain)
   with exn ->
     Lwt_unix.close fd;
     fail exn
 
-let string_of_socket_params domain typ addr =
-  Printf.sprintf "domain=%s typ=%s addr=%s"
-    (match domain with
-       | PF_UNIX -> "unix"
-       | PF_INET -> "inet"
-       | PF_INET6 -> "inet6")
-    (match typ with
-       | SOCK_STREAM -> "stream"
-       | SOCK_DGRAM -> "dgram"
-       | SOCK_RAW -> "raw"
-       | SOCK_SEQPACKET -> "seqpacket")
-    (match addr with
-       | ADDR_UNIX path -> sprintf "unix(%s)" path
-       | ADDR_INET(addr, port) -> sprintf "inet(%s,%d)" (string_of_inet_addr addr) port)
+let rec connect address =
+  match OBus_address.name address with
+    | "unix" -> begin
+        match (OBus_address.arg "path" address,
+               OBus_address.arg "abstract" address,
+               OBus_address.arg "tmpdir" address) with
+          | Some path, None, None ->
+              make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX(path))
+          | None, Some abst, None ->
+              make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ abst))
+          | None, None, Some tmpd ->
+              fail (Invalid_argument "OBus_transport.connect: unix tmpdir can only be used as a listening address")
+          | _ ->
+              fail (Invalid_argument "OBus_transport.connect: invalid unix address, must supply exactly one of 'path', 'abstract', 'tmpdir'")
+      end
+    | "tcp" -> begin
+        let host = match OBus_address.arg "host" address with
+          | Some host -> host
+          | None -> ""
+        and port = match OBus_address.arg "port" address with
+          | Some port -> port
+          | None -> "0"
+        in
+        let opts = [AI_SOCKTYPE SOCK_STREAM] in
+        let opts = match OBus_address.arg "family" address with
+          | Some "ipv4" -> AI_FAMILY PF_INET :: opts
+          | Some "ipv6" -> AI_FAMILY PF_INET6 :: opts
+          | Some family -> Printf.ksprintf invalid_arg "OBus_transport.connect: unknown address family '%s'" family
+          | None -> opts
+        in
+        match getaddrinfo host port opts with
+          | [] ->
+              Printf.ksprintf
+                failwith
+                "OBus_transport.connect: no address info for host=%s port=%s%s"
+                host port
+                (match OBus_address.arg "family" address with
+                   | None -> ""
+                   | Some f -> " family=" ^ f)
+          | ai :: ais ->
+              try_lwt
+                make_socket ai.ai_family ai.ai_socktype ai.ai_addr
+              with exn ->
+                (* If the first connection failed, try with all the
+                   other ones: *)
+                let rec find = function
+                  | [] ->
+                      (* If all connection failed, raise the error for
+                         the first address: *)
+                      fail exn
+                  | ai :: ais ->
+                      try_lwt
+                        make_socket ai.ai_family ai.ai_socktype ai.ai_addr
+                      with exn ->
+                        find ais
+                in
+                find ais
+      end
+    | "autolaunch" -> begin
+        lwt addresses =
+          lwt uuid = Lazy.force OBus_info.machine_uuid in
+          lwt line =
+            try_lwt
+              Lwt_process.pread_line ("dbus-launch", [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
+            with exn ->
+              lwt () = Log.error_f "autolaunch failed: %s" (Printexc.to_string exn) in
+              fail exn
+          in
+          let line = try String.sub line 0 (String.index line '\000') with _ -> line in
+          try_lwt
+            return (OBus_address.of_string line)
+          with OBus_address.Parse_failure(addr, pos, reason) as exn ->
+            lwt () = Log.error_f "autolaunch returned an invalid address %S, at position %d: %s" addr pos reason in
+            fail exn
+        in
+        match addresses with
+          | [] ->
+              lwt () = Log.error_f "'autolaunch' returned no addresses" in
+              fail (Failure "'autolaunch' returned no addresses")
+          | address :: rest ->
+              try_lwt
+                connect address
+              with exn ->
+                let rec find = function
+                  | [] ->
+                      fail exn
+                  | address :: rest ->
+                      try_lwt
+                        connect address
+                      with exn ->
+                        find rest
+                in
+                find rest
+      end
 
-let of_addresses ?(capabilities=[]) ?mechanisms addresses =
-  let rec try_one domain typ addr fallback x =
-    try_lwt
-      lwt fd = make_socket domain typ addr in
+    | name ->
+        fail (Failure ("unknown transport type: " ^ name))
+
+let of_addresses ?(capabilities=OBus_auth.capabilities) ?mechanisms = function
+  | [] ->
+      fail (Invalid_argument "OBus_transport.of_addresses: no address given")
+  | addr :: rest ->
+      (* Search an address for which connection succeed: *)
+      lwt fd, domain =
+        try_lwt
+          connect addr
+        with exn ->
+          (* If the first try fails, try with the others: *)
+          let rec find = function
+            | [] ->
+                (* If they all fail, raise the first exception: *)
+                fail exn
+            | addr :: rest ->
+                try_lwt
+                  connect addr
+                with exn ->
+                  find rest
+          in
+          find rest
+      in
+      (* Do authentication only once: *)
       Lwt_unix.write fd "\x00" 0 1 >>= function
         | 0 ->
             fail (OBus_auth.Auth_failure "failed to send the initial null byte")
@@ -168,69 +270,3 @@ let of_addresses ?(capabilities=[]) ?mechanisms addresses =
             return (guid, socket ~capabilities fd)
         | n ->
             assert false
-    with
-      | OBus_auth.Auth_failure msg ->
-          lwt () =
-            Log.error_f "authentication failed for address: domain=%s: %s"
-              (string_of_socket_params domain typ addr) msg
-          in
-          fallback x
-      | exn ->
-          lwt () =
-            Log.exn_f exn "transport creation failed for address: %s"
-              (string_of_socket_params domain typ addr)
-          in
-          fallback x
-  in
-  let rec aux = function
-    | [] ->
-        fail (Failure "no working D-Bus address found")
-    | { OBus_address.address = address } :: rest ->
-        match address with
-          | Unix_path path ->
-              try_one PF_UNIX SOCK_STREAM (ADDR_UNIX(path))
-                aux rest
-
-          | Unix_abstract path ->
-              try_one PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ path))
-                aux rest
-
-          | Unix_tmpdir _ ->
-              lwt () = Log.error "unix tmpdir can only be used as a listening address" in
-              aux rest
-
-          | Tcp { tcp_host = host; tcp_port = port; tcp_family = family } ->
-              let opts = [AI_SOCKTYPE SOCK_STREAM] in
-              let opts = match family with
-                | Some `Ipv4 -> AI_FAMILY PF_INET :: opts
-                | Some `Ipv6 -> AI_FAMILY PF_INET6 :: opts
-                | None -> opts in
-              let rec try_all = function
-                | [] -> aux rest
-                | ai :: ais -> try_one ai.ai_family ai.ai_socktype ai.ai_addr try_all ais
-              in
-              try_all (getaddrinfo host port opts)
-
-          | Autolaunch ->
-              lwt addresses =
-                try_lwt
-                  lwt uuid = Lazy.force OBus_info.machine_uuid in
-                  lwt line =
-                    try_lwt
-                      Lwt_process.pread_line ("dbus-launch",
-                                              [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
-                    with exn ->
-                      lwt () = Log.error_f "autolaunch failed: %s" (Printexc.to_string exn) in
-                      fail exn
-                  in
-                  let line = try String.sub line 0 (String.index line '\000') with _ -> line in
-                  return (OBus_address.of_string line)
-                with exn ->
-                  return []
-              in
-              aux (addresses @ rest)
-
-          | _ ->
-              aux rest
-  in
-  aux addresses

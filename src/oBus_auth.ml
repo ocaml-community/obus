@@ -14,6 +14,8 @@ open Lwt
 
 type capability = [ `Unix_fd ]
 
+let capabilities = [`Unix_fd]
+
 (* Maximum line length, if line greated are received, authentication
    will fail *)
 let max_line_length = 42 * 1024

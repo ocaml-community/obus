@@ -9,26 +9,30 @@
 
 module Log = Lwt_log.Make(struct let section = "obus(address)" end)
 
+(* +-----------------------------------------------------------------+
+   | Types                                                           |
+   +-----------------------------------------------------------------+ *)
+
 type guid = OBus_uuid.t
 
-type tcp_params = {
-  tcp_host : string;
-  tcp_bind : string;
-  tcp_port : string;
-  tcp_family : [ `Ipv4 | `Ipv6 ] option;
+type t = {
+  name : string;
+  args : (string * string) list;
 } with projection
 
-type address =
-  | Unix_path of string
-  | Unix_abstract of string
-  | Unix_tmpdir of string
-  | Tcp of tcp_params
-  | Autolaunch
-  | Unknown of string * (string * string) list
- with constructor
+let make ~name ~args = { name = name; args = args }
 
-type t = { address : address; guid : guid option }
- with projection
+let arg arg address =
+  OBus_util.assoc arg address.args
+
+let guid address =
+  match OBus_util.assoc "guid" address.args with
+    | Some guid -> Some(OBus_uuid.of_string guid)
+    | None -> None
+
+(* +-----------------------------------------------------------------+
+   | Parsing/marshaling                                              |
+   +-----------------------------------------------------------------+ *)
 
 exception Parse_failure of string * int * string
 
@@ -40,53 +44,12 @@ let () =
        | _ ->
            None)
 
-let assoc key default list = match OBus_util.assoc key list with
-  | Some v -> v
-  | None -> default
-
-exception Fail = OBus_address_lexer.Fail
-
 let of_string str =
   try
-    let addresses = match str with
-      | "" -> []
-      | _ -> List.rev (OBus_address_lexer.addresses (Lexing.from_string str))
-    in
-    List.map begin fun (pos, name, params) -> {
-      address = (match name with
-                   | "unix" -> begin
-                       match (OBus_util.assoc "path" params,
-                              OBus_util.assoc "abstract" params,
-                              OBus_util.assoc "tmpdir" params) with
-                         | Some path, None, None -> Unix_path path
-                         | None, Some abst, None -> Unix_abstract abst
-                         | None, None, Some tmpd -> Unix_tmpdir tmpd
-                         | _ -> raise (Fail(pos, "invalid unix address: must specify exactly one of \"path\", \"abstract\" or \"tmpdir\""))
-                     end
-                   | "tcp" ->
-                       Tcp{ tcp_host = assoc "host" "" params;
-                            tcp_port = assoc "port" "0" params;
-                            tcp_bind = assoc "bind" "*" params;
-                            tcp_family = match OBus_util.assoc "family" params with
-                              | Some "ipv4" -> Some `Ipv4
-                              | Some "ipv6" -> Some `Ipv6
-                              | Some f -> raise (Fail(pos, "unknown address family"))
-                              | None -> None }
-                   | "autolaunch" ->
-                       Autolaunch
-                   | _ ->
-                       Unknown(name, params));
-      guid = (match OBus_util.assoc "guid" params with
-                | Some guid_hex_encoded -> begin
-                    try
-                      Some(OBus_uuid.of_string guid_hex_encoded)
-                    with Invalid_argument _ ->
-                      raise (Fail(pos, "invalid guid"))
-                  end
-                | None ->
-                    None);
-    } end addresses
-  with Fail(pos, msg) ->
+    List.map
+      (fun (name, args) -> { name = name; args = args })
+      (OBus_address_lexer.addresses (Lexing.from_string str))
+  with OBus_address_lexer.Fail(pos, msg) ->
     raise (Parse_failure(str, pos, msg))
 
 let to_string l =
@@ -102,50 +65,29 @@ let to_string l =
     | [] -> ()
     | x :: l -> f x; List.iter (fun x -> Buffer.add_char buf ch; f x) l
   in
-  concat ';' begin fun { address = address; guid = guid } ->
-    let name, params = match address with
-      | Unix_path path ->
-          "unix", [("path", path)]
-      | Unix_abstract path ->
-          "unix", [("abstract", path)]
-      | Unix_tmpdir path ->
-          "unix", [("tmpdir", path)]
-      | Tcp { tcp_host = host;
-              tcp_port = port;
-              tcp_bind = bind;
-              tcp_family = family } ->
-          "tcp", (OBus_util.filter_map (fun x -> x)
-                    [(if host <> "" then Some("host", host) else None);
-                     (if bind <> "" && bind <> "*" then Some("bind", bind) else None);
-                     (if port <> "0" then Some("port", port) else None);
-                     (OBus_util.map_option family
-                        (fun f -> ("family", match f with
-                                     | `Ipv4 -> "ipv4"
-                                     | `Ipv6 -> "ipv6")))])
-
-      | Autolaunch ->
-          "autolaunch", []
-      | Unknown(name, params) ->
-          name, params
-    in
+  concat ';' begin fun { name = name; args = args } ->
     Buffer.add_string buf name;
     Buffer.add_char buf ':';
-    concat ',' (fun (k, v) ->
-                  Buffer.add_string buf k;
-                  Buffer.add_char buf '=';
-                  escape v) (match guid with
-                               | Some g -> params @ [("guid", OBus_uuid.to_string g)]
-                               | None -> params)
+    concat ','
+      (fun (k, v) ->
+         Buffer.add_string buf k;
+         Buffer.add_char buf '=';
+         escape v)
+      args
   end l;
   Buffer.contents buf
 
 let obus_list = OBus_type.map OBus_private_type.obus_string of_string to_string
 
+(* +-----------------------------------------------------------------+
+   | Well known addresses                                            |
+   +-----------------------------------------------------------------+ *)
+
 let system_bus_variable = "DBUS_SYSTEM_BUS_ADDRESS"
 let session_bus_variable = "DBUS_SESSION_BUS_ADDRESS"
 
-let default_session = [{ address = Autolaunch; guid = None }]
-let default_system = [{ address = Unix_path "/var/run/dbus/system_bus_socket"; guid = None }]
+let default_system = [{ name = "unix"; args = [("path", "/var/run/dbus/system_bus_socket")] }]
+let default_session = [{ name = "autolaunch"; args = [] }]
 
 open Lwt
 

@@ -53,8 +53,24 @@ val of_addresses :
   ?mechanisms : OBus_auth.Client.mechanism list ->
   OBus_address.t list ->
   (OBus_address.guid * t) Lwt.t
-    (** Try to make a working transport from a list of
-        addresses. Return also the guid of the server address.
+    (** [of_addresses ?capabilities ?mechanisms addresses] tries to:
 
-        @param capabilities defaults to [[]]. If set, obus will try to
-        negotiate features it contains. *)
+        - connects to the server using one of the given given addresses,
+        - authenticates ourself to the server using [mechanisms], which
+          defaults to {!OBus_auth.Client.default_mechanisms},
+        - negociates [capabilities], which defaults to
+          {!OBus_auth.capabilities}
+
+        If all succeed, it returns the server address guid and the
+        newly created transport, which is ready to send and receive
+        messages.
+
+        Note about errors:
+        - if one of the addresses is not valid, or [addresses = []],
+          it raises [Invalid_argument],
+        - if all connections failed, it raises the exception raised
+           by the try on first address, which is either a [Failure] or
+           a [Unix.Unix_error]
+        - if the authentication failed, a {!OBus_auth.Auth_error} is
+          raised
+    *)
