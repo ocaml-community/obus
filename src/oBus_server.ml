@@ -343,7 +343,7 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
 
           (* Launch waiting loops. Yield so the user have the time to
              bind the event before the first connection: *)
-          List.iter (fun listen -> listener_threads := (Lwt_unix.yield () >> listen_loop server listen) :: !listener_threads) listeners;
+          List.iter (fun listen -> listener_threads := (Lwt_main.fast_yield () >> listen_loop server listen) :: !listener_threads) listeners;
 
           return (event, (List.map snd successes), shutdown)
         end
