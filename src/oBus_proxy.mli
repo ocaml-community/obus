@@ -29,7 +29,16 @@ class type ['a] signal = object
   method event : 'a React.event
     (** The signal itself *)
 
-  method disconnect : unit
+  method set_filters : (int * OBus_match.argument_filter) list -> unit Lwt.t
+    (** Sets the list of argument filters for the given signal. This
+        means that the message bus will filter signals that must be
+        delivered to the current running program.
+
+        The goal of argument filters is to reduce the number of
+        messages received, and so to minimise the number of wakeup of
+        the program. *)
+
+  method disconnect : unit Lwt.t
     (** Stop receiving the signal *)
 end
 

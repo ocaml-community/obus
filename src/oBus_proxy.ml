@@ -23,7 +23,8 @@ let make ~peer ~path = { peer = peer; path = path }
 
 class type ['a] signal = object
   method event : 'a React.event
-  method disconnect : unit
+  method set_filters : (int * OBus_match.argument_filter) list -> unit Lwt.t
+  method disconnect : unit Lwt.t
 end
 
 (* +-----------------------------------------------------------------+
@@ -204,7 +205,11 @@ struct
      | Signals                                                       |
      +---------------------------------------------------------------+ *)
 
-  let _connect proxy ~interface ~member ~push ~until =
+  type signal_action =
+    | Set_filters of unit Lwt.u * (int * OBus_match.argument_filter) list
+    | Done of unit Lwt.u
+
+  let _connect proxy ~interface ~member ~push ~commands =
     let proxy = Proxy.get proxy in
     match proxy.peer.connection#get with
       | Crashed exn ->
@@ -223,47 +228,124 @@ struct
             (* If the connection is a peer-to-peer connection the only
                thing to do is to locally add the receiver *)
             let node = Lwt_sequence.add_r (make_signal_receiver None) connection.signal_receivers in
-            lwt () = until in
-            Lwt_sequence.remove node;
-            return ()
+            Lwt_stream.find_map
+              (function
+                 | Done wakener ->
+                     Some wakener
+                 | Set_filters(wakener, _) ->
+                     wakeup wakener ();
+                     None)
+              commands >>= function
+                | Some wakener ->
+                    Lwt_sequence.remove node;
+                    wakeup wakener ();
+                    return ()
+                | None ->
+                    Lwt_sequence.remove node;
+                    return ()
 
           else begin
 
-            let match_rule = OBus_match.rule
+            let make_match_rule arguments = OBus_match.rule
               ~typ:`Signal
               ?sender:proxy.peer.name
               ~path:proxy.path
               ~interface
               ~member
+              ~arguments
               ()
             in
 
+            let rec loop commands match_rule =
+              Lwt_stream.last_new commands >>= function
+                | Done wakener ->
+                    return (wakener, Some match_rule)
+                | Set_filters(wakener, filters) ->
+                    let new_match_rule = make_match_rule filters in
+                    if new_match_rule <> match_rule then begin
+                      let t1 = OBus_private_bus.add_match connection.packed new_match_rule in
+                      let t2 = OBus_private_bus.remove_match connection.packed match_rule in
+                      lwt () = t1 and () = t2 in
+                      wakeup wakener ();
+                      loop commands new_match_rule
+                    end else begin
+                      wakeup wakener ();
+                      loop commands new_match_rule
+                    end
+
+            and init commands =
+              Lwt_stream.last_new commands >>= function
+                | Done wakener ->
+                    return (wakener, None)
+                | Set_filters(wakener, filters) ->
+                    let match_rule = make_match_rule filters in
+                    lwt () = OBus_private_bus.add_match connection.packed match_rule in
+                    wakeup wakener ();
+                    loop commands match_rule
+            in
+
+            (* Yield the first time to let the user add argument
+               filters: *)
+            lwt () = Lwt_main.fast_yield () in
             match proxy.peer.name with
               | None ->
                   let node = Lwt_sequence.add_r (make_signal_receiver None) connection.signal_receivers in
-                  lwt () = OBus_private_bus.add_match connection.packed match_rule in
-                  lwt () = until in
+                  lwt wakener, match_rule = init commands in
                   Lwt_sequence.remove node;
-                  OBus_private_bus.remove_match connection.packed match_rule
+                  lwt () =
+                    match match_rule with
+                      | Some match_rule -> OBus_private_bus.remove_match connection.packed match_rule
+                      | None -> return ()
+                  in
+                  wakeup wakener ();
+                  return ()
 
               | Some name ->
                   lwt resolver = OBus_resolver.make connection.packed name in
                   let node = Lwt_sequence.add_r (make_signal_receiver (Some resolver#name)) connection.signal_receivers in
-                  lwt () = OBus_private_bus.add_match connection.packed match_rule in
-                  lwt () = until in
+                  lwt wakener, match_rule = init commands in
                   Lwt_sequence.remove node;
-                  OBus_private_bus.remove_match connection.packed match_rule <&> resolver#disable
+                  lwt () =
+                    match match_rule with
+                      | Some match_rule -> OBus_private_bus.remove_match connection.packed match_rule
+                      | None -> return ()
+                  and () = resolver#disable in
+                  wakeup wakener ();
+                  return ()
           end
 
-  let dyn_connect proxy ~interface ~member =
-    let event, push = React.E.create () and until_waiter, until_wakener = wait () in
-    ignore_result (_connect proxy ~interface ~member ~push ~until:until_waiter);
-    let event = React.E.map (fun (connection, message) -> OBus_message.body message) event
-    and disconnect = lazy(wakeup until_wakener ()) in
+  let make_signal event push_command =
+    let _, wakener = Lwt.wait () in
+    push_command (`Data(Set_filters(wakener, [])));
     (object
-       method event = event
-       method disconnect = Lazy.force disconnect
+       val mutable connected = true
+       method event =
+         if connected then
+           event
+         else
+           failwith "OBus_proxy.event: signal disconnected"
+       method set_filters filters =
+         if connected then begin
+           let waiter, wakener = Lwt.task () in
+           push_command (`Data(Set_filters(wakener, filters)));
+           waiter
+         end else
+           fail (Failure "OBus_proxy.set_filters: signal disconnected")
+       method disconnect =
+         if connected then begin
+           let waiter, wakener = Lwt.task () in
+           connected <- false;
+           push_command (`Data(Done wakener));
+           waiter
+         end else begin
+           return ()
+         end
      end)
+
+  let dyn_connect proxy ~interface ~member =
+    let event, push = React.E.create () and push_command, commands = Lwt_stream.push_stream () in
+    ignore (_connect proxy ~interface ~member ~push ~commands);
+    make_signal (React.E.map (fun (connection, message) -> OBus_message.body message) event) push_command
 
   let cast interface member typ (connection, message) =
     try
@@ -278,14 +360,9 @@ struct
       None
 
   let connect proxy ~interface ~member typ =
-    let event, push = React.E.create () and until_waiter, until_wakener = wait () in
-    ignore_result (_connect proxy ~interface ~member ~push ~until:until_waiter);
-    let event = React.E.fmap (cast interface member typ) event
-    and disconnect = lazy(wakeup until_wakener ()) in
-    (object
-       method event = event
-       method disconnect = Lazy.force disconnect
-     end)
+    let event, push = React.E.create () and push_command, commands = Lwt_stream.push_stream () in
+    ignore (_connect proxy ~interface ~member ~push ~commands);
+    make_signal (React.E.fmap (cast interface member typ) event) push_command
 
   (* +---------------------------------------------------------------+
      | Interface                                                     |
