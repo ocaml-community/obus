@@ -91,6 +91,14 @@ exception Parse_failure of string * int * string
 let () =
   Printexc.register_printer
     (function
+       | Parse_failure(str, pos, reason) ->
+           Some(Printf.sprintf "failed to parse D-Bus matching rule %S, at position %d: %s" str pos reason)
+       | _ ->
+           None)
+
+let () =
+  Printexc.register_printer
+    (function
        | Parse_failure(str, pos, msg) ->
            Some(Printf.sprintf "failed to parse match-rule %S, at position %d: %s" str pos msg)
        | _ ->

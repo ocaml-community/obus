@@ -49,6 +49,14 @@ let osignature { f_reply = r } = type_sequence r
 
 exception Cast_failure = OBus_private_type.Cast_failure
 
+let () =
+  Printexc.register_printer
+    (function
+       | Cast_failure(func, msg) ->
+           Some(Printf.sprintf "'%s' failed to cast D-Bus value: %s" func msg)
+       | _ ->
+           None)
+
 let make_basic = OBus_private_type.make_basic
 let make_single = OBus_private_type.make_single
 let make_sequence = OBus_private_type.make_sequence

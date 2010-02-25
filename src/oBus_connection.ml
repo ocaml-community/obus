@@ -20,6 +20,18 @@ exception Connection_closed
 exception Connection_lost
 exception Transport_error of exn
 
+let () =
+  Printexc.register_printer
+    (function
+       | Connection_closed ->
+           Some "D-Bus connection closed"
+       | Connection_lost ->
+           Some "D-Bus connection lost"
+       | Transport_error exn ->
+           Some(Printf.sprintf "D-Bus transport failure: %s" (Printexc.to_string exn))
+       | _ ->
+           None)
+
 type t = OBus_private.packed_connection
 
 let compare = Pervasives.compare

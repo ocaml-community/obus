@@ -40,7 +40,7 @@ let () =
   Printexc.register_printer
     (function
        | Parse_failure(str, pos, msg) ->
-           Some(Printf.sprintf "failed to parse addresses %S, at position %d: %s" str pos msg)
+           Some(Printf.sprintf "failed to parse D-Bus addresses %S, at position %d: %s" str pos msg)
        | _ ->
            None)
 

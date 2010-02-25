@@ -27,6 +27,14 @@ type document = interface list * node list
 
 exception Parse_failure = OBus_xml_parser.Parse_failure
 
+let () =
+  Printexc.register_printer
+    (function
+       | Parse_failure((line, column), msg) ->
+           Some(Printf.sprintf "failed to parse D-Bus introspection document, at line %d, column %d: %s" line column msg)
+       | _ ->
+           None)
+
 let annotations =
   any (elt "annotation"
          (perform

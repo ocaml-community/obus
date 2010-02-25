@@ -14,9 +14,6 @@ open OBus_string
 type element = string
 type t = element list
 
-exception Invalid_path of string * string
-exception Invalid_element of string * string
-
 let is_valid_char ch =
   (ch >= 'A' && ch <= 'Z') ||
     (ch >= 'a' && ch <= 'z') ||

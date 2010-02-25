@@ -27,6 +27,14 @@ let max_reject = 42
 exception Auth_failure of string
 let auth_failure fmt = ksprintf (fun msg -> fail (Auth_failure msg)) fmt
 
+let () =
+  Printexc.register_printer
+    (function
+       | Auth_failure msg ->
+           Some(Printf.sprintf "D-Bus authentication failed: %s" msg)
+       | _ ->
+           None)
+
 let hex_encode = OBus_util.hex_encode
 let hex_decode str =
   try

@@ -16,6 +16,16 @@ open OBus_message
 exception Data_error of string
 exception Protocol_error of string
 
+let () =
+  Printexc.register_printer
+    (function
+       | Data_error msg ->
+           Some(sprintf "failed to marshal D-Bus message: %s" msg)
+       | Protocol_error msg ->
+           Some(sprintf "D-Bus protocol error: %s" msg)
+       | _ ->
+           None)
+
 type byte_order = Little_endian | Big_endian
 let native_byte_order = match OBus_config.native_byte_order with
   | `little_endian -> Little_endian

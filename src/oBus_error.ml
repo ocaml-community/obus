@@ -46,6 +46,18 @@ let make name msg =
 let unmake = function
   | DBus(name, msg) -> Some(name, msg)
   | exn -> OBus_util.find_map (fun (name, (maker, unmaker)) ->
-                            OBus_util.map_option (unmaker exn) (fun msg -> (name, msg))) !errors
+                                 OBus_util.map_option (unmaker exn) (fun msg -> (name, msg))) !errors
 
 let register name maker unmaker = errors := (name, (maker, unmaker)) :: !errors
+
+let () =
+  Printexc.register_printer
+    (function
+       | Failure _ ->
+           None
+       | exn ->
+           match unmake exn with
+             | Some(name, msg) ->
+                 Some(Printf.sprintf "D-Bus error: %s: %s" name msg)
+             | None ->
+                 None)

@@ -92,6 +92,14 @@ and print_tsequence pp = print_list print_tsingle pp
 
 exception Invalid_signature of string * string
 
+let () =
+  Printexc.register_printer
+    (function
+       | Invalid_signature(str, msg) ->
+           Some(Printf.sprintf "invalid signature %S: %s" str msg)
+       | _ ->
+           None)
+
 let invalid_signature str msg = raise (Invalid_signature(str, msg))
 
 let length_validate_signature l =

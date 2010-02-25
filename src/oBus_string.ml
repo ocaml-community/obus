@@ -34,6 +34,14 @@ let () =
        | _ ->
            None)
 
+let () =
+  Printexc.register_printer
+    (function
+       | Invalid_string error ->
+           Some(error_message error)
+       | _ ->
+           None)
+
 let validate s =
   let fail i msg = Some{ typ = "string"; str = s; ofs = i; msg = msg } in
 
