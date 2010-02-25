@@ -16,6 +16,10 @@ open OBus_private
 open OBus_connection
 open OBus_pervasives
 
+(* +-----------------------------------------------------------------+
+   | Types and common functions                                      |
+   +-----------------------------------------------------------------+ *)
+
 module MethodMap = OBus_util.MakeMap(struct
                                        type t = OBus_name.interface option * OBus_name.member * tsequence
                                        let compare = Pervasives.compare
@@ -83,18 +87,58 @@ let remove_by_path connection path =
           | None ->
               ()
 
-module type Object = sig
+(* +-----------------------------------------------------------------+
+   | Interfaces                                                      |
+   +-----------------------------------------------------------------+ *)
+
+module type Interface_name = sig
+  val name : OBus_name.interface
+end
+
+module type S = sig
+  type obj with obus(basic)
+  val export : OBus_connection.t -> obj -> unit
+  val remove : OBus_connection.t -> obj -> unit
+  val destroy : obj -> unit
+  val dynamic : connection : OBus_connection.t -> prefix : OBus_path.t -> handler : (OBus_path.t -> obj Lwt.t) -> unit
+  val emit : obj ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member ->
+    ('a, _) OBus_type.cl_sequence ->
+    ?peer : OBus_peer.t -> 'a -> unit Lwt.t
+  module Make_interface(Name : Interface_name) : sig
+    val ol_interface : OBus_name.interface
+    val ol_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> (obj -> 'a) -> unit
+    val ol_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> (obj -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t)
+    val ol_property_r : OBus_name.member ->
+      ('a, _) OBus_type.cl_single ->
+      (obj -> 'a Lwt.t) -> unit
+    val ol_property_w : OBus_name.member ->
+      ('a, _) OBus_type.cl_single ->
+      (obj -> 'a -> unit Lwt.t) -> unit
+    val ol_property_rw : OBus_name.member ->
+      ('a, _) OBus_type.cl_single ->
+      (obj -> 'a Lwt.t) ->
+      (obj -> 'a -> unit Lwt.t) -> unit
+  end
+end
+
+module type Custom = sig
   type obj
   val get : obj -> t
 end
 
-module Make(Object : Object) =
+(* +-----------------------------------------------------------------+
+   | Custom object implementation                                    |
+   +-----------------------------------------------------------------+ *)
+
+module Make(Object : Custom) =
 struct
   exception Pack of Object.obj
 
-  type t = Object.obj
+  type obj = Object.obj
 
-  let obus_t = OBus_type.map_with_context obus_path
+  let obus_obj = OBus_type.map_with_context obus_path
     (fun context path ->
        let connection, message = OBus_connection.cast_context context in
        match connection#get with
@@ -184,7 +228,7 @@ struct
             (React.S.value obj.exports)
             (return ())
 
-  module Make_interface(Name : OBus_proxy.Interface_name) =
+  module Make_interface(Name : Interface_name) =
   struct
     let ol_interface = Name.name
 
@@ -282,3 +326,10 @@ struct
   OL_method Set : string -> string -> variant -> unit
   OL_method GetAll : string -> (string, variant) dict
 end
+
+include Make(struct
+               type obj = t
+               let get obj = obj
+             end)
+
+let obus_t = obus_obj

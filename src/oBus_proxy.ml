@@ -21,6 +21,11 @@ type t = {
 
 let make ~peer ~path = { peer = peer; path = path }
 
+class type ['a] signal = object
+  method event : 'a React.event
+  method disconnect : unit
+end
+
 (* +-----------------------------------------------------------------+
    | Signatures                                                      |
    +-----------------------------------------------------------------+ *)
@@ -64,10 +69,6 @@ module type S = sig
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     OBus_message.body -> unit Lwt.t
-  class type ['a] signal = object
-    method event : 'a React.event
-    method disconnect : unit
-  end
   val connect : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
@@ -202,11 +203,6 @@ struct
   (* +---------------------------------------------------------------+
      | Signals                                                       |
      +---------------------------------------------------------------+ *)
-
-  class type ['a] signal = object
-    method event : 'a React.event
-    method disconnect : unit
-  end
 
   let _connect proxy ~interface ~member ~push ~until =
     let proxy = Proxy.get proxy in

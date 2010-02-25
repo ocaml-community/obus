@@ -24,6 +24,15 @@ type t = {
 val make : peer : OBus_peer.t -> path : OBus_path.t -> t
   (** Creates a proxy from the given peer and path *)
 
+(** A signal definition. ['a] is the type of signals contents. *)
+class type ['a] signal = object
+  method event : 'a React.event
+    (** The signal itself *)
+
+  method disconnect : unit
+    (** Stop receiving the signal *)
+end
+
 (** Type of an D-Bus interface anme *)
 module type Interface_name = sig
   val name : OBus_name.interface
@@ -102,15 +111,6 @@ module type S = sig
     OBus_message.body -> unit Lwt.t
 
   (** {6 Signals} *)
-
-  (** A signal definition. ['a] is the type of signals contents. *)
-  class type ['a] signal = object
-    method event : 'a React.event
-      (** The signal itself *)
-
-    method disconnect : unit
-      (** Stop receiving the signal *)
-  end
 
   val connect : proxy ->
     interface : OBus_name.interface ->
@@ -250,5 +250,5 @@ module type Custom = sig
         only used in the type combinator. *)
 end
 
-(** Create a custom proxy module: *)
 module Make(Proxy : Custom) : S with type proxy = Proxy.proxy
+  (** [Make(Proxy)] creates a custom proxy module *)

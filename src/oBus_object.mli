@@ -7,15 +7,15 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** D-Bus objects *)
+(** Local D-Bus objects *)
 
 (** This module allow you to create D-Bus objects and export them on a
     connection, allowing other programs to acccess them. *)
 
-type t
-  (** Type of an obus object. It contains informations needed by obus
-      to export it on a connection and dispatch incomming method
-      calls. *)
+type t with obus(basic)
+  (** Default type for local D-Bus objects. It contains informations
+      needed by obus to export it on a connection and dispatch
+      incomming method calls. *)
 
 (** {6 Creation} *)
 
@@ -48,50 +48,27 @@ val remove_by_path : OBus_connection.t -> OBus_path.t -> unit
       [path] on [connection]. Works for normal objects and dynamic
       nodes. *)
 
-(** Signature of custom objects *)
-module type Object = sig
-  type obj
-    (** Type of custom object *)
-
-  val get : obj -> t
-    (** [get obj] should returns the obus object attached to the
-        custom object. *)
-
-(** Typical example:
-
-    {[
-      type t = {
-        obus : OBus_object.t;
-        x : int;
-        y : int;
-        ...
-      }
-
-      module M = OBus_object.Make(struct
-                                    type obj = t
-                                    let get obj = obj.obus
-                                  end)
-
-*)
+module type Interface_name = sig
+  val name : OBus_name.interface
 end
 
-module Make(Object : Object) : sig
+(** Local object signature *)
+module type S = sig
 
-  type t = Object.obj
-    with obus(basic)
-    (** The type of objects, with its type combinator *)
+  type obj with obus(basic)
+    (** The type of objects *)
 
-  val export : OBus_connection.t -> t -> unit
+  val export : OBus_connection.t -> obj -> unit
     (** [export connection obj] exports [obj] on [connection] *)
 
-  val remove : OBus_connection.t -> t -> unit
+  val remove : OBus_connection.t -> obj -> unit
     (** [remove connection obj] removes [obj] from [connection] *)
 
-  val destroy : t -> unit
+  val destroy : obj -> unit
     (** [destroy obj] removes [obj] from all connection it is exported
         on *)
 
-  val dynamic : connection : OBus_connection.t -> prefix : OBus_path.t -> handler : (OBus_path.t -> t Lwt.t) -> unit
+  val dynamic : connection : OBus_connection.t -> prefix : OBus_path.t -> handler : (OBus_path.t -> obj Lwt.t) -> unit
     (** [dynamic ~connection ~prefix ~handler] defines a dynamic node
         it the tree of object. This means that objects with a path
         prefixed by [prefix], will be created on the fly by [handler]
@@ -149,7 +126,7 @@ module Make(Object : Object) : sig
         ]}
     *)
 
-  val emit : t ->
+  val emit : obj ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
     ('a, _) OBus_type.cl_sequence ->
@@ -158,7 +135,7 @@ module Make(Object : Object) : sig
         [peer] is specified then the signal is sent only to it, otherwise
         it is broadcasted. *)
 
-  module Make_interface(Name : OBus_proxy.Interface_name) : sig
+  module Make_interface(Name : Interface_name) : sig
 
     (** This module is aimed to be use with the [obus.syntax] syntax
         extension.
@@ -208,10 +185,10 @@ module Make(Object : Object) : sig
     val ol_interface : OBus_name.interface
       (** Name of the interface *)
 
-    val ol_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> (t -> 'a) -> unit
+    val ol_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> (obj -> 'a) -> unit
       (** Registers a method call *)
 
-    val ol_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> (t -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t)
+    val ol_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> (obj -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t)
       (** Registers a signal and define the signal emiting
           function.
 
@@ -238,18 +215,51 @@ module Make(Object : Object) : sig
 
     val ol_property_r : OBus_name.member ->
       ('a, _) OBus_type.cl_single ->
-      (t -> 'a Lwt.t) -> unit
+      (obj -> 'a Lwt.t) -> unit
       (** Registers a read-only property *)
 
     val ol_property_w : OBus_name.member ->
       ('a, _) OBus_type.cl_single ->
-      (t -> 'a -> unit Lwt.t) -> unit
+      (obj -> 'a -> unit Lwt.t) -> unit
       (** Registers a write-only property *)
 
     val ol_property_rw : OBus_name.member ->
       ('a, _) OBus_type.cl_single ->
-      (t -> 'a Lwt.t) ->
-      (t -> 'a -> unit Lwt.t) -> unit
+      (obj -> 'a Lwt.t) ->
+      (obj -> 'a -> unit Lwt.t) -> unit
       (** Registers a read and write property *)
   end
 end
+
+(** The default object implementation *)
+include S with type obj = t
+
+(** Signature of custom objects *)
+module type Custom = sig
+  type obj
+    (** Type of custom object *)
+
+  val get : obj -> t
+    (** [get obj] should returns the obus object attached to the given
+        custom object. *)
+
+(** Typical example:
+
+    {[
+      type t = {
+        obus : OBus_object.t;
+        x : int;
+        y : int;
+        ...
+      }
+
+      module M = OBus_object.Make(struct
+                                    type obj = t
+                                    let get obj = obj.obus
+                                  end)
+
+*)
+end
+
+module Make(Object : Custom) : S with type obj = Object.obj
+  (** [Make(Object)] creates a custom object module *)
