@@ -37,7 +37,7 @@ lwt () =
        in
        printlf "from D-Bus: the owner of the name %S changed: %S -> %S"
          name (opt old_owner) (opt new_owner))
-    signal#event;
+    (OBus_bus.name_owner_changed session)#event;
 
   Lwt_event.always_notify_p
     (printlf "from D-Bus: i lost the name %S!")
