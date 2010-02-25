@@ -13,7 +13,7 @@ open Lwt
 open Lwt_io
 open OBus_pervasives
 
-include OBus_interface.Make(struct let name = "org.plop.foo" end)
+include OBus_proxy.Make_interface(struct let name = "org.plop.foo" end)
 
 OP_method Ping : string -> string
 

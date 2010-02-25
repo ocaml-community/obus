@@ -19,7 +19,7 @@ let manager =
                  (OBus_peer.make bus "org.freedesktop.Hal")
                  [ "org"; "freedesktop"; "Hal"; "Manager" ]))
 
-include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Manager" end)
+include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Manager" end)
 
 (* Hal seems to returns string instead of object path... *)
 let obus_broken_device = OBus_type.map_with_context obus_string

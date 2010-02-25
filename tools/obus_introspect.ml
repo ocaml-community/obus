@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open OBus_interface
-
 let recursive = ref false
 let mli = ref false
 let anons = ref []
@@ -33,7 +31,7 @@ open Lwt
 module Interf_map = Map.Make(struct type t = string let compare = compare end)
 
 let rec get proxy =
-  lwt interfaces, subs = OBus_proxy.introspect proxy in
+  lwt interfaces, children = OBus_proxy.introspect proxy in
   let map = List.fold_left (fun map (name, content, annots) ->
                               Interf_map.add name (content, annots) map)
     Interf_map.empty interfaces in
@@ -44,7 +42,11 @@ let rec get proxy =
           (fun t1 t2 ->
              lwt nodes1, map1 = t1 and nodes2, map2 = t2 in
              return (nodes1 @ nodes2, Interf_map.fold Interf_map.add map1 map2))
-          (return (nodes, map)) (List.map get subs)
+          (return (nodes, map))
+          (List.map
+             (fun child ->
+                get { proxy with OBus_proxy.path = OBus_proxy.path proxy @ [child] })
+             children)
     | false ->
         return (nodes, map)
 

@@ -72,10 +72,10 @@ val reprobe : t -> bool Lwt.t
 val claim_interface : t -> string -> string -> bool Lwt.t
 val addon_is_ready : t -> bool Lwt.t
 
-val property_modified : t -> (int * (string * bool * bool) list) OBus_signal.t
-val condition : t -> (string * string) OBus_signal.t
-val interface_lock_acquired : t -> (string * string * int) OBus_signal.t
-val interface_lock_released : t -> (string * string * int) OBus_signal.t
+val property_modified : t -> (int * (string * bool * bool) list) OBus_proxy.signal
+val condition : t -> (string * string) OBus_proxy.signal
+val interface_lock_acquired : t -> (string * string * int) OBus_proxy.signal
+val interface_lock_released : t -> (string * string * int) OBus_proxy.signal
 
 (** {6 Specifics interfaces} *)
 

@@ -184,7 +184,7 @@ struct
             (React.S.value obj.exports)
             (return ())
 
-  module MakeInterface(Name : OBus_interface.Name) =
+  module Make_interface(Name : OBus_proxy.Interface_name) =
   struct
     let ol_interface = Name.name
 
@@ -236,7 +236,7 @@ struct
     let ol_property_rw member typ reader writer = ol_property member typ (Some reader) (Some writer) Read_write
   end
 
-  include MakeInterface(struct let name = "org.freedesktop.DBus.Introspectable" end)
+  include Make_interface(struct let name = "org.freedesktop.DBus.Introspectable" end)
 
   let introspect obj connection =
     return (List.map (fun (name, members) -> (name, !members, [])) !interfaces,
@@ -248,7 +248,7 @@ struct
 
   OL_method Introspect : OBus_connection.t -> OBus_introspect.document
 
-  include MakeInterface(struct let name = "org.freedesktop.DBus.Properties" end)
+  include Make_interface(struct let name = "org.freedesktop.DBus.Properties" end)
 
   let get obj iface name =
     match PropertyMap.lookup (iface, name) !properties with

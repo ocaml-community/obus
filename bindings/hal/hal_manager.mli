@@ -25,8 +25,8 @@ val acquire_global_interface_lock : t -> string -> bool -> unit Lwt.t
 val release_global_interface_lock : t -> string -> unit Lwt.t
 val singleton_addon_is_ready : t -> string -> unit Lwt.t
 
-val device_added : t -> Hal_device.t OBus_signal.t
-val device_removed : t -> Hal_device.t OBus_signal.t
-val new_capability : t -> (Hal_device.t * string) OBus_signal.t
-val global_interface_lock_acquired : t -> (string * string * int) OBus_signal.t
-val global_interface_lock_released : t -> (string * string * int) OBus_signal.t
+val device_added : t -> Hal_device.t OBus_proxy.signal
+val device_removed : t -> Hal_device.t OBus_proxy.signal
+val new_capability : t -> (Hal_device.t * string) OBus_proxy.signal
+val global_interface_lock_acquired : t -> (string * string * int) OBus_proxy.signal
+val global_interface_lock_released : t -> (string * string * int) OBus_proxy.signal

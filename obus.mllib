@@ -14,7 +14,6 @@ src/OBus_bus
 src/OBus_connection
 src/OBus_error
 src/OBus_info
-src/OBus_interface
 src/OBus_introspect
 src/OBus_wire
 src/OBus_transport
@@ -22,10 +21,8 @@ src/OBus_message
 src/OBus_name
 src/OBus_path
 src/OBus_peer
-src/OBus_property
 src/OBus_proxy
 src/OBus_resolver
-src/OBus_signal
 src/OBus_string
 src/OBus_type
 src/OBus_uuid

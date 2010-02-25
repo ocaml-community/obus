@@ -15,16 +15,16 @@ open OBus_pervasives
 
 type t = OBus_connection.t
 
-include OBus_interface.MakeCustom
-    (struct
-       type proxy = t
-       let get bus = { OBus_proxy.peer = { OBus_peer.connection = bus;
-                                           OBus_peer.name = Some "org.freedesktop.DBus" };
-                       OBus_proxy.path = ["org"; "freedesktop"; "DBus"] }
-     end)
-     (struct
-        let name = "org.freedesktop.DBus"
-      end)
+module Proxy = OBus_proxy.Make
+  (struct
+     type proxy = OBus_connection.t
+     let get bus = { OBus_proxy.peer = { OBus_peer.connection = bus;
+                                         OBus_peer.name = Some "org.freedesktop.DBus" };
+                     OBus_proxy.path = ["org"; "freedesktop"; "DBus"] }
+     let make = OBus_proxy.connection
+   end)
+
+include Proxy.Make_interface(struct let name = "org.freedesktop.DBus" end)
 
 OP_method Hello : string
 

@@ -18,7 +18,7 @@ module M = OBus_object.Make(struct
                               let get x = x
                             end)
 
-include M.MakeInterface(struct let name = "org.plop.foo" end)
+include M.Make_interface(struct let name = "org.plop.foo" end)
 
 let ping obj msg =
   lwt () = printlf "received: %s" msg in

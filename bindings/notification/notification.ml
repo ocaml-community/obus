@@ -14,7 +14,7 @@ open OBus_pervasives
 let server_name = "org.freedesktop.Notifications"
 let server_path = ["org"; "freedesktop"; "Notifications"]
 
-include OBus_interface.Make(struct let name = "org.freedesktop.Notifications" end)
+include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Notifications" end)
 
 type server_info = {
   server_name : string;

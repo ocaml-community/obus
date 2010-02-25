@@ -179,7 +179,7 @@ val get_id : t -> OBus_uuid.t Lwt.t
 
 (** {6 Signals} *)
 
-val name_owner_changed : t -> (OBus_name.bus * OBus_name.bus option * OBus_name.bus option) OBus_signal.t
+val name_owner_changed : t -> (OBus_name.bus * OBus_name.bus option * OBus_name.bus option) OBus_proxy.signal
   (** This signal is emited each the owner of a name (unique
       connection name or service name) change.
 
@@ -187,5 +187,5 @@ val name_owner_changed : t -> (OBus_name.bus * OBus_name.bus option * OBus_name.
       disconnection message looks like: [(name, Some name, None)]
       where is a connection unique name. *)
 
-val name_lost : t -> OBus_name.bus OBus_signal.t
-val name_acquired : t -> OBus_name.bus OBus_signal.t
+val name_lost : t -> OBus_name.bus OBus_proxy.signal
+val name_acquired : t -> OBus_name.bus OBus_proxy.signal

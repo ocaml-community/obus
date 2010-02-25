@@ -51,7 +51,7 @@ let obus_property = OBus_type.map obus_variant
      | Pbool x -> basic (Boolean x)
      | Pdouble x -> basic (Double x))
 
-include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device" end)
+include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device" end)
 
 OP_method GetAllProperties : (string, property) dict
 OP_method SetMultipleProperties : (string, property) dict -> unit
@@ -94,28 +94,28 @@ OP_signal InterfaceLockAcquired : string * string * int
 OP_signal InterfaceLockReleased : string * string * int
 
 module Volume = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.Volume" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.Volume" end)
   OP_method Mount : string -> string -> string list -> int
   OP_method Unmount : string list -> int
   OP_method Eject : string list -> int
 end
 module Storage = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.Storage" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.Storage" end)
   OP_method Eject : string list -> int
   OP_method CloseTray : string list -> int
 end
 module Storage_removable = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.Storage.Removable" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.Storage.Removable" end)
   OP_method CheckForMedia : bool
 end
 module Wake_on_lan = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.WakeOnLan" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.WakeOnLan" end)
   OP_method GetSupported : int
   OP_method GetEnabled : int
   OP_method SetEnabled : bool -> int
 end
 module System_power_management = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.SystemPowerManagement" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.SystemPowerManagement" end)
   OP_method Suspend : int -> int
   OP_method SuspendHybrid : int -> int
   OP_method Hibernate : int
@@ -124,7 +124,7 @@ module System_power_management = struct
   OP_method SetPowerSave : bool -> int
 end
 module Cpufreq = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.CPUFreq" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.CPUFreq" end)
   OP_method SetCPUFreqGovernor : string -> unit
   OP_method SetCPUFreqPerformance : int -> unit
   OP_method SetCPUFreqConsiderNice : bool -> unit
@@ -134,16 +134,16 @@ module Cpufreq = struct
   OP_method GetCPUFreqAvailableGovernors : string list
 end
 module Laptop_panel = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.LaptopPanel" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.LaptopPanel" end)
   OP_method SetBrightness : int -> int
   OP_method GetBrightness : int
 end
 module Dock_station = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.DockStation" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.DockStation" end)
   OP_method Undock : int
 end
 module Kill_switch = struct
-  include OBus_interface.Make(struct let name = "org.freedesktop.Hal.Device.KillSwitch" end)
+  include OBus_proxy.Make_interface(struct let name = "org.freedesktop.Hal.Device.KillSwitch" end)
   OP_method SetPower : bool -> int
   OP_method GetPower : int
 end

@@ -158,7 +158,7 @@ module Make(Object : Object) : sig
         [peer] is specified then the signal is sent only to it, otherwise
         it is broadcasted. *)
 
-  module MakeInterface(Name : OBus_interface.Name) : sig
+  module Make_interface(Name : OBus_proxy.Interface_name) : sig
 
     (** This module is aimed to be use with the [obus.syntax] syntax
         extension.
