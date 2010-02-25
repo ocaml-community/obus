@@ -9,6 +9,20 @@
 
 (** Matching rules *)
 
+(** Type of an argument filter. Argument filters are used in match
+    rules to match message arguments. *)
+type argument_filter =
+  | AF_string of string
+      (** [AF_string str] matches any string argument which is equal
+          to [str] *)
+  | AF_string_path of string
+      (** [AF_string_path path] matches any string argument [arg] such
+          that one of the following conditions hold:
+
+          - [arg] is equal to [path]
+          - [path] ends with ['/'] and is a prefix of [arg]
+          - [arg] ends with ['/'] and is a prefix of [path] *)
+
 (** Type of a rule used to match a message *)
 type rule = private {
   typ : [ `Signal | `Error | `Method_call | `Method_return ] option;
@@ -17,12 +31,8 @@ type rule = private {
   member : OBus_name.member option;
   path : OBus_path.t option;
   destination : OBus_name.bus option;
-  arguments : (int * string) list;
-  (** Matching the argument [n] with string value [v] will match a
-      message if its [n]th argument is a string and is equal to
-      [v]. [n] must in the range 0..63.
-
-      Note that [arguments] is always a sorted list. *)
+  arguments : (int * argument_filter) list;
+  (** [arguments] is always a sorted list. *)
 } with projection, obus(basic)
 
 val rule :
@@ -32,7 +42,7 @@ val rule :
   ?member : OBus_name.member ->
   ?path : OBus_path.t ->
   ?destination : OBus_name.bus ->
-  ?arguments : (int * string) list ->
+  ?arguments : (int * argument_filter) list ->
   unit -> rule
   (** Create a matching rule *)
 

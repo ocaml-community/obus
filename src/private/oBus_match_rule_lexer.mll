@@ -45,10 +45,10 @@ and check_eof = parse
     | _ as ch { fail lexbuf "invalid character %C" ch }
 
 and arg = parse
-    | "arg" (['0'-'9']+ as n) {
+    | "arg" (['0'-'9']+ as n) ("path"? as path) {
         let n = int_of_string n in
         if n >= 0 && n <= 63 then
-          Some n
+          Some(n, path = "path")
         else
           None
       }

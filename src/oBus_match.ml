@@ -7,6 +7,10 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+type argument_filter =
+  | AF_string of string
+  | AF_string_path of string
+
 type rule = {
   typ : [ `Signal | `Error | `Method_call | `Method_return ] option;
   sender : OBus_name.bus option;
@@ -14,17 +18,17 @@ type rule = {
   member : OBus_name.member option;
   path : OBus_path.t option;
   destination : OBus_name.bus option;
-  arguments : (int * string) list;
+  arguments : (int * argument_filter) list;
 } with projection
 
-let rec insert_sorted num value = function
-  | [] -> [(num, value)]
+let rec insert_sorted num filter = function
+  | [] -> [(num, filter)]
   | (num', _) as pair :: rest when num' < num ->
-      pair :: insert_sorted num value rest
+      pair :: insert_sorted num filter rest
   | (num', _) :: rest when num' = num ->
-      (num, value) :: rest
+      (num, filter) :: rest
   | ((num', _) :: rest) as l ->
-      (num, value) :: l
+      (num, filter) :: l
 
 let rule ?typ ?sender ?interface ?member ?path ?destination ?(arguments=[]) () = {
   typ = typ;
@@ -33,7 +37,7 @@ let rule ?typ ?sender ?interface ?member ?path ?destination ?(arguments=[]) () =
   member = member;
   path = path;
   destination = destination;
-  arguments = List.fold_left (fun l (num, value) -> insert_sorted num value l) [] arguments;
+  arguments = List.fold_left (fun l (num, filter) -> insert_sorted num filter l) [] arguments;
 }
 
 let string_of_rule mr =
@@ -83,7 +87,13 @@ let string_of_rule mr =
         Buffer.add_char buf '\''
   end;
   add_opt "destination" OBus_name.validate_bus mr.destination;
-  List.iter (fun (n, value) -> !coma (); Printf.bprintf buf "arg%d='%s'" n value) mr.arguments;
+  List.iter (fun (n, filter) ->
+               !coma ();
+               match filter with
+                 | AF_string str ->
+                     Printf.bprintf buf "arg%d='%s'" n str
+                 | AF_string_path str ->
+                     Printf.bprintf buf "arg%dpath='%s'" n str) mr.arguments;
   Buffer.contents buf
 
 exception Parse_failure of string * int * string
@@ -93,14 +103,6 @@ let () =
     (function
        | Parse_failure(str, pos, reason) ->
            Some(Printf.sprintf "failed to parse D-Bus matching rule %S, at position %d: %s" str pos reason)
-       | _ ->
-           None)
-
-let () =
-  Printexc.register_printer
-    (function
-       | Parse_failure(str, pos, msg) ->
-           Some(Printf.sprintf "failed to parse match-rule %S, at position %d: %s" str pos msg)
        | _ ->
            None)
 
@@ -157,8 +159,8 @@ let rule_of_string str =
           end
         | _ ->
             match OBus_match_rule_lexer.arg (Lexing.from_string key) with
-              | Some n ->
-                  { mr with arguments = insert_sorted n value mr.arguments }
+              | Some(n, is_path) ->
+                  { mr with arguments = insert_sorted n (if is_path then AF_string_path value else AF_string value)  mr.arguments }
               | None ->
                   raise (Fail(pos, Printf.sprintf "invalid key (%s)" key))
     end mr l
@@ -171,19 +173,35 @@ let match_key matcher value = match matcher with
   | None -> true
   | Some value' -> value = value'
 
+let starts_with str prefix =
+  let str_len = String.length str and prefix_len = String.length prefix in
+  let rec loop i =
+    (i = prefix_len) || (i < str_len && str.[i] = prefix.[i] && loop (i + 1))
+  in
+  loop 0
+
+let ends_with_slash str = str <> "" && str.[String.length str - 1] = '/'
+
 let rec match_arguments num matcher arguments = match matcher with
   | [] ->
       true
-  | (num', value') :: rest ->
-      match_arguments_aux num num' value' rest arguments
+  | (num', filter) :: rest ->
+      match_arguments_aux num num' filter rest arguments
 
-and match_arguments_aux num num' value' matcher arguments = match arguments with
+and match_arguments_aux num num' filter matcher arguments = match arguments with
   | [] ->
       false
   | value :: rest when num < num' ->
-      match_arguments_aux (num + 1) num' value' matcher rest
+      match_arguments_aux (num + 1) num' filter matcher rest
   | OBus_value.Basic(OBus_value.String value) :: rest ->
-      value = value' && match_arguments (num + 1) matcher rest
+      (match filter with
+         | AF_string str ->
+             str = value
+         | AF_string_path str ->
+             (str = value)
+             || (ends_with_slash str && starts_with value str)
+             || (ends_with_slash value && starts_with str value))
+      &&  match_arguments (num + 1) matcher rest
   | _ ->
       false
 
