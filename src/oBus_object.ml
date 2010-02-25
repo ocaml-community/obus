@@ -28,7 +28,10 @@ module PropertyMap = OBus_util.MakeMap(struct
                                          type t = OBus_name.interface * OBus_name.member
                                          let compare = Pervasives.compare
                                        end)
-
+module InterfaceMap = OBus_util.MakeMap(struct
+                                          type t = OBus_name.interface
+                                          let compare = Pervasives.compare
+                                        end)
 module ConnectionSet = Set.Make(OBus_connection)
 
 type t = {
@@ -37,10 +40,6 @@ type t = {
   set_exports : ConnectionSet.t -> unit;
   owner : OBus_peer.t option;
 }
-
-let path obj = obj.path
-let owner obj = obj.owner
-let exports obj = obj.exports
 
 let destroy obj =
   ConnectionSet.iter
@@ -97,6 +96,9 @@ end
 
 module type S = sig
   type obj with obus(basic)
+  val path : obj -> OBus_path.t
+  val owner : obj -> OBus_peer.t option
+  val exports : obj -> Set.Make(OBus_connection).t React.signal
   val export : OBus_connection.t -> obj -> unit
   val remove : OBus_connection.t -> obj -> unit
   val destroy : obj -> unit
@@ -155,9 +157,13 @@ struct
                                                    (OBus_path.to_string path))))
     (fun obj -> (Object.get obj).path)
 
+  let path obj = (Object.get obj).path
+  let owner obj = (Object.get obj).owner
+  let exports obj = (Object.get obj).exports
+
   let methods = ref MethodMap.empty
   let properties = ref PropertyMap.empty
-  let interfaces = ref []
+  let interfaces = ref InterfaceMap.empty
 
   let handle_call pack connection message = match message, pack with
     | { typ = Method_call(path, interface, member) }, Pack obj ->
@@ -233,7 +239,7 @@ struct
     let ol_interface = Name.name
 
     let members = ref []
-    let () = interfaces := (Name.name, members) :: !interfaces
+    let () = interfaces := InterfaceMap.add Name.name members !interfaces
 
     let with_names typs = List.map (fun typ -> (None, typ)) typs
 
@@ -283,7 +289,7 @@ struct
   include Make_interface(struct let name = "org.freedesktop.DBus.Introspectable" end)
 
   let introspect obj connection =
-    return (List.map (fun (name, members) -> (name, !members, [])) !interfaces,
+    return (InterfaceMap.fold (fun name members acc -> (name, !members, []) :: acc) !interfaces [],
             match connection#get with
               | Crashed _ ->
                   []

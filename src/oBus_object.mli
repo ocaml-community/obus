@@ -17,8 +17,6 @@ type t with obus(basic)
       needed by obus to export it on a connection and dispatch
       incomming method calls. *)
 
-(** {6 Creation} *)
-
 val make : ?owner : OBus_peer.t -> OBus_path.t -> t
   (** [make ?owner path] creates a new object with path [path].
 
@@ -28,20 +26,6 @@ val make : ?owner : OBus_peer.t -> OBus_path.t -> t
 
 val make' : ?owner : OBus_peer.t -> unit -> t
   (** Same as [make] but generate a unique path *)
-
-(** {6 Properties} *)
-
-val path : t -> OBus_path.t
-  (** [path obj] returns the path of the object *)
-
-val owner : t -> OBus_peer.t option
-  (** [owner obj] returns the owner of the object, if any *)
-
-val exports : t -> Set.Make(OBus_connection).t React.signal
-  (** [exports obj] is the signal holding the list of connection on
-      which the object is exported *)
-
-(** {6 Suppression} *)
 
 val remove_by_path : OBus_connection.t -> OBus_path.t -> unit
   (** [remove_by_path connection path] removes the object with path
@@ -57,6 +41,20 @@ module type S = sig
 
   type obj with obus(basic)
     (** The type of objects *)
+
+  (** {6 Properties} *)
+
+  val path : obj -> OBus_path.t
+    (** [path obj] returns the path of the object *)
+
+  val owner : obj -> OBus_peer.t option
+    (** [owner obj] returns the owner of the object, if any *)
+
+  val exports : obj -> Set.Make(OBus_connection).t React.signal
+    (** [exports obj] is the signal holding the list of connection on
+        which the object is exported *)
+
+  (** {6 Exports} *)
 
   val export : OBus_connection.t -> obj -> unit
     (** [export connection obj] exports [obj] on [connection] *)
