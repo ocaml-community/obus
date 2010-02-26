@@ -44,7 +44,9 @@ val rule :
   ?destination : OBus_name.bus ->
   ?arguments : (int * argument_filter) list ->
   unit -> rule
-  (** Create a matching rule *)
+    (** Create a matching rule. It raises [Invalid_argument] if one of
+        the argument filters use a number outside of the range
+        [1..63] *)
 
 val match_message : rule -> OBus_message.t -> bool
   (** [match_message rule message] returns wether [message] is matched

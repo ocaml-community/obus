@@ -50,6 +50,6 @@ and arg = parse
         if n >= 0 && n <= 63 then
           Some(n, path = "path")
         else
-          None
+          fail lexbuf "invalid argument number '%d': it must be between 0 and 63" n
       }
     | "" { None }

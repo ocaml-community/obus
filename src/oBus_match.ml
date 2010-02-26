@@ -37,7 +37,11 @@ let rule ?typ ?sender ?interface ?member ?path ?destination ?(arguments=[]) () =
   member = member;
   path = path;
   destination = destination;
-  arguments = List.fold_left (fun l (num, filter) -> insert_sorted num filter l) [] arguments;
+  arguments = List.fold_left (fun l (num, filter) ->
+                                if num < 0 || num > 63 then
+                                  Printf.ksprintf invalid_arg "OBus_match.rule: invalid argument number '%d': it must be in the rane [1..63]" num
+                                else
+                                  insert_sorted num filter l) [] arguments;
 }
 
 let string_of_rule mr =

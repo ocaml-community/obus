@@ -149,6 +149,11 @@ exception Service_unknown of string
 
 (** {6 Messages routing} *)
 
+exception Match_rule_invalid of string
+  (** Exception raised when the program trey to send an invalid match
+      rule. This should never happen since values of type
+      {!OBus_match.rule} are always valid. *)
+
 val add_match : t -> OBus_match.rule -> unit Lwt.t
   (** Add a matching rule on a message bus. This means that every
       message routed on the message bus matching this rule will be

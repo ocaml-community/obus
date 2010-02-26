@@ -78,6 +78,9 @@ exception Service_unknown of string
 exception OBus_match_not_found of string
  with obus(prefix ^ "MatchRuleNotFound")
 
+exception Match_rule_invalid of string
+ with obus(prefix ^ "MatchRuleInvalid")
+
 exception Service_unknown of string
  with obus(prefix ^ "ServiceUnknown")
 
