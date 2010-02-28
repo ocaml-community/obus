@@ -258,20 +258,6 @@ let _ =
    | The syntax extension                                            |
    +-----------------------------------------------------------------+ *)
 
-(* Name of the identifer used for the current interface *)
-let current_proxy_interface = ref ""
-let current_local_interface = ref ""
-
-let get_proxy_interface _loc =
-  match !current_proxy_interface with
-    | "" -> Loc.raise _loc (Failure "OP_interface missing before definitions")
-    | name -> <:expr< $lid:name$ >>
-
-let get_local_interface _loc =
-  match !current_local_interface with
-    | "" -> Loc.raise _loc (Failure "OL_interface missing before definitions")
-    | name -> <:expr< $lid:name$ >>
-
 EXTEND Gram
   GLOBAL:str_item class_expr;
 
@@ -307,17 +293,17 @@ EXTEND Gram
 
       | "OP_interface"; proxy = opt_module; name = a_STRING; id = opt_interface_id -> begin
           check_interface_name _loc name;
-          let id =
-            match id with
-              | Some id -> id
-              | None -> "op_interface"
-          and proxy =
+          let proxy =
             match proxy with
               | Some id -> id
               | None -> <:ident< OBus_proxy >>
           in
-          current_proxy_interface := id;
-          <:str_item< let $lid:id$ = $id:proxy$.make_interface $str:name$ >>
+          match id with
+            | Some id ->
+                <:str_item< let __obus_proxy_interface = $id:proxy$.make_interface $str:name$
+                            let $lid:id$ = __obus_proxy_interface >>
+            | None ->
+                <:str_item< let __obus_proxy_interface = $id:proxy$.make_interface $str:name$ >>
         end
 
       | "OP_method"; (dname, cname) = obus_member; ":"; (typ, names) = obus_func ->
@@ -334,22 +320,22 @@ EXTEND Gram
             <:str_item< let $lid:cname$ =
                           let __obus_type = $typ$ in
                           $Gen.abstract _loc (<:patt< __obus_proxy >> :: pnames)
-                            (Gen.apply _loc <:expr< OBus_proxy.Interface.method_call $get_proxy_interface _loc$ $str:dname$ __obus_type __obus_proxy >> enames)$ >>
+                            (Gen.apply _loc <:expr< OBus_proxy.Interface.method_call __obus_proxy_interface $str:dname$ __obus_type __obus_proxy >> enames)$ >>
           else
-            <:str_item< let $lid:cname$ = OBus_proxy.Interface.method_call $get_proxy_interface _loc$ $str:dname$ $typ$ >>
+            <:str_item< let $lid:cname$ = OBus_proxy.Interface.method_call __obus_proxy_interface $str:dname$ $typ$ >>
 
       | "OP_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBus_proxy.Interface.signal $get_proxy_interface _loc$ $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.signal __obus_proxy_interface $str:dname$ $typ$ >>
 
       | "OP_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property_reader $get_proxy_interface _loc$ $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property_reader __obus_proxy_interface $str:dname$ $typ$ >>
 
       | "OP_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:prepend_lid "set" cname$ = OBus_proxy.Interface.property_writer $get_proxy_interface _loc$ $str:dname$ $typ$ >>
+          <:str_item< let $lid:prepend_lid "set" cname$ = OBus_proxy.Interface.property_writer __obus_proxy_interface $str:dname$ $typ$ >>
 
       | "OP_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property_reader $get_proxy_interface _loc$ $str:dname$ $typ$;;
-                      let $lid:prepend_lid "set" cname$ = OBus_proxy.Interface.property_writer $get_proxy_interface _loc$ $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property_reader __obus_proxy_interface $str:dname$ $typ$;;
+                      let $lid:prepend_lid "set" cname$ = OBus_proxy.Interface.property_writer __obus_proxy_interface $str:dname$ $typ$ >>
 
   (* +---------------------------------------------------------------+
      | Extension for local code                                      |
@@ -357,17 +343,17 @@ EXTEND Gram
 
       | "OL_interface"; local = opt_module; name = a_STRING; id = opt_interface_id -> begin
           check_interface_name _loc name;
-          let id =
-            match id with
-              | Some id -> id
-              | None -> "ol_interface"
-          and local =
+          let local =
             match local with
               | Some id -> id
               | None -> <:ident< OBus_object >>
           in
-          current_local_interface := id;
-          <:str_item< let $lid:id$ = $id:local$.make_interface $str:name$ >>
+          match id with
+            | Some id ->
+                <:str_item< let __obus_local_interface = $id:local$.make_interface $str:name$
+                            let $lid:id$ = __obus_local_interface >>
+            | None ->
+                <:str_item< let __obus_local_interface = $id:local$.make_interface $str:name$ >>
         end
 
       | "OL_method"; (dname, cname) = obus_member; ":"; (typ, names) = obus_func; e = equal_expr ->
@@ -376,37 +362,37 @@ EXTEND Gram
                  let vars = gen_vars fst names in
                  <:str_item< let $lid:cname$ =
                                let __obus_func = $e$ in
-                               OBus_object.Interface.method_call $get_local_interface _loc$ $str:dname$ $typ$
+                               OBus_object.Interface.method_call __obus_local_interface $str:dname$ $typ$
                                  $Gen.abstract _loc (pvars vars) (Gen.apply _loc <:expr< __obus_func >> (evars vars))$;
                                __obus_func >>
              | None ->
                  let vars = gen_vars (fun _ -> _loc) names in
-                 <:str_item< let () = OBus_object.Interface.method_call $get_local_interface _loc$ $str:dname$ $typ$ $Gen.abstract _loc (pvars vars) (Gen.apply _loc (Gen.ide _loc cname) (evars vars))$ >>)
+                 <:str_item< let () = OBus_object.Interface.method_call __obus_local_interface $str:dname$ $typ$ $Gen.abstract _loc (pvars vars) (Gen.apply _loc (Gen.ide _loc cname) (evars vars))$ >>)
 
       | "OL_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let () = OBus_object.Interface.signal $get_local_interface _loc$ $str:dname$ $typ$
-                      let $lid:cname$ = OBus_object.Interface.emit $get_local_interface _loc$ $str:dname$ $typ$ >>
+          <:str_item< let () = OBus_object.Interface.signal __obus_local_interface $str:dname$ $typ$
+                      let $lid:cname$ = OBus_object.Interface.emit __obus_local_interface $str:dname$ $typ$ >>
 
       | "OL_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type; e = equal_expr ->
           (match e with
              | Some e ->
-                 <:str_item< let () = OBus_object.Interface.property_r $get_local_interface _loc$ $str:dname$ $typ$ $e$ >>
+                 <:str_item< let () = OBus_object.Interface.property_r __obus_local_interface $str:dname$ $typ$ $e$ >>
              | None ->
-                 <:str_item< let () = OBus_object.Interface.property_r $get_local_interface _loc$ $str:dname$ $typ$ (fun __obj -> $lid:cname$ __obj) >>)
+                 <:str_item< let () = OBus_object.Interface.property_r __obus_local_interface $str:dname$ $typ$ (fun __obj -> $lid:cname$ __obj) >>)
 
       | "OL_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type; e = equal_expr ->
           (match e with
              | Some e ->
-                 <:str_item< let () = OBus_object.Interface.property_w $get_local_interface _loc$ $str:dname$ $typ$ $e$ >>
+                 <:str_item< let () = OBus_object.Interface.property_w __obus_local_interface $str:dname$ $typ$ $e$ >>
              | None ->
-                 <:str_item< let () = OBus_object.Interface.property_w $get_local_interface _loc$ $str:dname$ $typ$ (fun __obj __x -> $lid:prepend_lid "set" cname$ __obj __x) >>)
+                 <:str_item< let () = OBus_object.Interface.property_w __obus_local_interface $str:dname$ $typ$ (fun __obj __x -> $lid:prepend_lid "set" cname$ __obj __x) >>)
 
       | "OL_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type; es = equal_expr2 ->
           (match es with
              | Some(reader, writer) ->
-                 <:str_item< let () = OBus_object.Interface.property_rw $get_local_interface _loc$ $str:dname$ $typ$ $reader$ $writer$ >>
+                 <:str_item< let () = OBus_object.Interface.property_rw __obus_local_interface $str:dname$ $typ$ $reader$ $writer$ >>
              | None ->
-                 <:str_item< let () = OBus_object.Interface.property_rw $get_local_interface _loc$ $str:dname$ $typ$ (fun __ obj -> $lid:cname$ __obj) (fun __obj __x -> $lid:prepend_lid "set" cname$ __obj __x) >>)
+                 <:str_item< let () = OBus_object.Interface.property_rw __obus_local_interface $str:dname$ $typ$ (fun __ obj -> $lid:cname$ __obj) (fun __obj __x -> $lid:prepend_lid "set" cname$ __obj __x) >>)
 
       ] ];
 

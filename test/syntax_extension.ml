@@ -89,3 +89,18 @@ OL_method Test : int -> int
 OL_method TestWithDefinition : int -> int = fun x -> x + 1
 OL_signal Foo : string * string
 OL_property_rw Prop : int = (fun obj -> return obj.x) (fun obj x -> obj.x <- x; return ())
+
+(* +-----------------------------------------------------------------+
+   | Tricky things with modules                                      |
+   +-----------------------------------------------------------------+ *)
+
+OL_interface "org.foo" as foo
+OL_method A : int
+
+module Bar =
+struct
+  OL_interface "org.bar" as bar
+  OL_method B : int
+end
+
+OL_method C : int
