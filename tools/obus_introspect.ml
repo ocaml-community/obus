@@ -12,6 +12,7 @@ let mli = ref false
 let anons = ref []
 let session = ref false
 let system = ref false
+let address = ref None
 let obj_mode = ref false
 
 let args = [
@@ -19,6 +20,7 @@ let args = [
   "-caml", Arg.Set mli, "print in caml style instead of xml";
   "-session", Arg.Set session, "the service is on the session bus (the default)";
   "-system", Arg.Set system, "the service is on the system bus";
+  "-address", Arg.String (fun addr -> address := Some addr), "the service is on the given message bus";
   "-objects", Arg.Set obj_mode, "list objects with interfaces they implements instead of interfaces";
 ]
 
@@ -51,15 +53,18 @@ let rec get proxy =
         return (nodes, map)
 
 let main service path =
-  lwt bus = Lazy.force begin match !session, !system with
-    | true, true ->
+  lwt bus = match !session, !system, !address with
+    | true, true, _
+    | true, _, Some _
+    | _, true, Some _ ->
         prerr_endline "must specify at most one of -session, -system\n\n";
         Arg.usage args usage_msg;
         exit 1
-    | false, false
-    | true, false -> OBus_bus.session
-    | false, true -> OBus_bus.system
-  end in
+    | false, false, None
+    | true, false, None -> Lazy.force OBus_bus.session
+    | false, true, None -> Lazy.force OBus_bus.system
+    | false, false, Some addr -> OBus_bus.of_addresses (OBus_address.of_string addr)
+  in
   lwt nodes, map = get (OBus_proxy.make (OBus_peer.make bus service) path) in
   begin
     match !obj_mode with
