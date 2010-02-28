@@ -73,8 +73,8 @@ let im_term_of_args = List.map (fun (name, typ) -> implem_term_of_single typ)
 let print_proxy_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
-  p "  let obus_proxy_interface = OBus_proxy.make_interface %S\n" name;
   p "  type t = OBus_proxy.t with obus\n";
+  p "  OP_interface %S\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  OP_method %s : %a\n" name (print_func (tuple (im_term_of_args  outs))) (im_term_of_args ins)
@@ -95,21 +95,22 @@ let print_proxy_implem pp (name, content, annots) =
 
 let print_service_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
-  p "let obus_local_interface = M.make_interface %S\n" name;
+  p "module %a = struct\n" puid name;
+  p "  OL_interface(M) %S as %a\n" name plid name;
   List.iter begin function
     | Signal(name, args, annots) ->
         let args = match args with
           | [] -> unit
           | _ -> tuple (if_term_of_args args)
         in
-        p "OL_signal %s : %a\n" name
+        p "  OL_signal %s : %a\n" name
           (print_term true) args
     | _ ->
         ()
   end content;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        p "let %a obj" plid name;
+        p "  let %a obj" plid name;
         ignore (List.fold_left (fun i (name, typ) ->
                                   match name with
                                     | Some name ->
@@ -120,18 +121,20 @@ let print_service_implem pp (name, content, annots) =
                                         i + 1) 0 ins);
         p " = Lwt.fail (Failure \"not imlemented\")\n";
     | Property(name, typ, access, annots) ->
-        p "let %a obj = Lwt.fail (Failure \"not imlemented\")\n" plid name;
-        p "let %a obj x = Lwt.fail (Failure \"not imlemented\")\n" plid ("set" ^ name)
+        if access = Read || access = Read_write then
+          p "  let %a obj = Lwt.fail (Failure \"not imlemented\")\n" plid name;
+        if access = Write || access = Read_write then
+          p "  let %a obj x = Lwt.fail (Failure \"not imlemented\")\n" plid ("set" ^ name)
     | _ ->
         ()
   end content;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        p "OL_method %s : %a\n" name
-          (print_func (tuple (if_term_of_args  outs)))
-          (if_term_of_args ins)
+        p "  OL_method %s : %a\n" name
+          (print_func (tuple (im_term_of_args  outs)))
+          (im_term_of_args ins)
     | Property(name, typ, access, annots) ->
-        p "OL_property_%s %s : %a\n" (match access with
+        p "  OL_property_%s %s : %a\n" (match access with
                                                | Read -> "r"
                                                | Write -> "w"
                                                | Read_write -> "rw")

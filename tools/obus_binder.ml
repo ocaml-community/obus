@@ -96,19 +96,17 @@ let () =
 
   with_pp (output_file_prefix ^ ".ml")
     (fun pp ->
-       pp_print_string pp "open OBus_type.Perv\n";
+       pp_print_string pp "open OBus_pervasives\n";
        if !service_mode then
-         pp_print_string pp "
+         pp_print_string pp "\
 type t = {
   obus : OBus_object.t;
 }
-
 module M = OBus_object.Make(struct
                               type obj = t
-                              let get x = x.obus
-                              let make obj = { obus = obj }
+                              let cast x = x.obus
+                              let make x = { obus = x }
                             end)
-
 ";
        Interf_set.iter (if !service_mode then
                           Print.print_service_implem pp
