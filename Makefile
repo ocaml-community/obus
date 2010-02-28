@@ -58,7 +58,7 @@ list-deps:
 
 .PHONY: tests
 tests:
-	$(OC) tests
+	$(OC) test_programs
 
 .PHONY: test-syntax
 test-syntax:
@@ -66,7 +66,7 @@ test-syntax:
 	camlp4o \
 	  `ocamlfind query -i-format type-conv.syntax` \
 	  `ocamlfind query -predicates syntax,preprocessor -a-format type-conv.syntax` \
-	  _build/pa_obus.cma test/syntax_extension.ml -o _build/result.ml
+	  _build/pa_obus.cma tests/syntax_extension.ml -o _build/result.ml
 
 # +------------------------------------------------------------------+
 # | Documentation                                                    |

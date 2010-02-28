@@ -6,14 +6,14 @@
 # Use camlp4 for all files
 <**/*.ml{,i}>: syntax_camlp4o, pkg_camlp4
 <syntax/pa_{obus,projection,constructor}.*>: pkg_type-conv
-<{src,tools,test,examples,bindings}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
+<{src,tools,tests,examples,bindings}/**/*.ml{,i}>: pkg_type-conv.syntax, pa_projection, pa_constructor
 <oBus_config.ml>: pkg_type-conv.syntax
 <src/oBus_introspect.ml>: pa_monad
 <**/*.d.*>: debug
 
 # Use pa_obus for all files except pa_obus itself
 <**/*.ml{,i}>: pkg_lwt.syntax, pa_obus
-<{src,test}/**/*.ml>: pkg_lwt.syntax.log
+<{src,tests}/**/*.ml>: pkg_lwt.syntax.log
 <syntax/*.ml{,i}>: -pkg_lwt.syntax, -pa_obus
 
 # Modules needed by pa_obus:
@@ -27,7 +27,7 @@
 <syntax/pa_monad.ml>: pkg_camlp4.quotations.r
 
 # Common dependencies
-<{src,src/private,tools,test,examples}/*>: pkg_lwt.unix, pkg_xmlm, pkg_react
+<{src,src/private,tools,tests,examples}/*>: pkg_lwt.unix, pkg_xmlm, pkg_react
 
 # Examples
 <examples/*>: use_obus
@@ -39,7 +39,7 @@
 <tools/*>: use_obus, pkg_xmlm, pkg_str
 
 # Tests
-<test/**/*>: pkg_str, pkg_xmlm
+<tests/**/*>: pkg_str, pkg_xmlm
 
 # Bindings distributed with obus
 <bindings/**/*>: use_obus, pkg_lwt

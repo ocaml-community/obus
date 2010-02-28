@@ -144,7 +144,7 @@ let _ =
 
     | After_rules ->
         (* Tests must see everything *)
-        Pathname.define_context "test" [ "src"; "src/private" ];
+        Pathname.define_context "tests" [ "src"; "src/private" ];
 
         (* The library and internal modules can see each other *)
         Pathname.define_context "src" [ "src/private" ];
@@ -191,7 +191,7 @@ let _ =
         virtual_rule "byte" & byte @ common;
         virtual_rule "native" & native @ common;
         virtual_rule "debug" & debug @ common;
-        virtual_rule "tests" & (List.map (sprintf "test/%s.d.byte") tests);
+        virtual_rule "test_programs" & (List.map (sprintf "tests/%s.d.byte") tests);
 
         (* +---------------------------------------------------------+
            | Libraries                                               |
