@@ -73,7 +73,7 @@ let im_term_of_args = List.map (fun (name, typ) -> implem_term_of_single typ)
 let print_proxy_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
-  p "  include OBus_interface.Make(struct let name = %S end)\n" name;
+  p "  let obus_proxy_interface = OBus_proxy.make_interface %S\n" name;
   p "  type t = OBus_proxy.t with obus\n";
   List.iter begin function
     | Method(name, ins, outs, annots) ->
@@ -95,7 +95,7 @@ let print_proxy_implem pp (name, content, annots) =
 
 let print_service_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
-  p "include M.MakeInterface(struct let name = %S end)\n" name;
+  p "let obus_local_interface = M.make_interface %S\n" name;
   List.iter begin function
     | Signal(name, args, annots) ->
         let args = match args with

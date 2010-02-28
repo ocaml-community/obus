@@ -13,12 +13,7 @@ open Lwt
 open Lwt_io
 open OBus_pervasives
 
-module M = OBus_object.Make(struct
-                              type obj = OBus_object.t
-                              let get x = x
-                            end)
-
-include M.Make_interface(struct let name = "org.plop.foo" end)
+let obus_local_interface = OBus_object.make_interface "org.plop.foo"
 
 let ping obj msg =
   lwt () = printlf "received: %s" msg in
@@ -33,10 +28,10 @@ let _ = Lwt_main.run begin
   lwt _ = OBus_bus.request_name bus "org.plop" in
 
   (* Create the object *)
-  let obj = OBus_object.make ["plip"] in
+  let obj = OBus_object.make ~interfaces:[obus_local_interface] ["plip"] in
 
   (* Export the object on the connection *)
-  M.export bus obj;
+  OBus_object.export bus obj;
 
   (* Wait forever *)
   fst (wait ())

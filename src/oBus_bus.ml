@@ -18,13 +18,13 @@ type t = OBus_connection.t
 module Proxy = OBus_proxy.Make
   (struct
      type proxy = OBus_connection.t
-     let get bus = { OBus_proxy.peer = { OBus_peer.connection = bus;
-                                         OBus_peer.name = Some "org.freedesktop.DBus" };
-                     OBus_proxy.path = ["org"; "freedesktop"; "DBus"] }
+     let cast bus = { OBus_proxy.peer = { OBus_peer.connection = bus;
+                                          OBus_peer.name = Some "org.freedesktop.DBus" };
+                      OBus_proxy.path = ["org"; "freedesktop"; "DBus"] }
      let make = OBus_proxy.connection
    end)
 
-include Proxy.Make_interface(struct let name = "org.freedesktop.DBus" end)
+let obus_proxy_interface = Proxy.make_interface "org.freedesktop.DBus"
 
 OP_method Hello : string
 
@@ -67,7 +67,7 @@ let of_laddresses laddr = Lazy.force laddr >>= of_addresses
 let session = lazy(of_laddresses OBus_address.session)
 let system = lazy(of_laddresses OBus_address.system)
 
-let prefix = op_interface ^ ".Error."
+let prefix = OBus_proxy.Interface.name obus_proxy_interface ^ ".Error."
 
 exception Access_denied of string
  with obus(prefix ^ "AccessDenied")

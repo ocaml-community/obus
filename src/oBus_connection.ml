@@ -87,13 +87,6 @@ let get_error msg = match msg.body with
   | Basic String x :: _ -> x
   | _ -> ""
 
-let get packed =
-  match packed#get with
-    | Crashed exn ->
-        raise exn
-    | Running connection ->
-        connection
-
 (* +-----------------------------------------------------------------+
    | FDs closing                                                     |
    +-----------------------------------------------------------------+ *)
@@ -520,11 +513,10 @@ let dispatch_message connection message = match message with
         in
         match obj with
           | Some obj ->
-              begin try
-                obj.oo_handle obj.oo_object connection.packed message
-              with exn ->
-                ignore (Log.exn exn "method call handler failed with")
-              end;
+              ignore (try_lwt
+                        obj.oo_handle obj.oo_object connection.packed message
+                      with exn ->
+                        Log.exn exn "method call handler failed with");
               return ()
           | None ->
               (* Handle introspection for missing intermediate object:
@@ -675,7 +667,7 @@ end
    +-----------------------------------------------------------------+ *)
 
 let of_transport ?guid ?(up=true) transport =
-  let make _ =
+  let make () =
     let abort_recv, abort_recv_wakener = Lwt.wait ()
     and abort_send, abort_send_wakener = Lwt.wait ()
     and packed_connection = new packed_connection
@@ -758,14 +750,14 @@ let loopback () = of_transport (OBus_transport.loopback ())
 
 let running packed = packed#running
 
-let watch packed = (get packed).watch
+let watch packed = (unpack_connection packed).watch
 
-let guid packed = (get packed).guid
-let transport packed = (get packed).transport
-let name packed = (get packed).name
+let guid packed = (unpack_connection packed).guid
+let transport packed = (unpack_connection packed).transport
+let name packed = (unpack_connection packed).name
 let support_unix_fd_passing packed =
-  List.mem `Unix_fd (OBus_transport.capabilities (get packed).transport)
-let on_disconnect packed = (get packed).on_disconnect
+  List.mem `Unix_fd (OBus_transport.capabilities (unpack_connection packed).transport)
+let on_disconnect packed = (unpack_connection packed).on_disconnect
 let close packed = match packed#get with
   | Crashed _ ->
       return ()
@@ -773,10 +765,10 @@ let close packed = match packed#get with
       lwt _ = packed#set_crash Connection_closed in
       return ()
 
-let state packed = (get packed).state
+let state packed = (unpack_connection packed).state
 
 let set_up packed =
-  let connection = get packed in
+  let connection = unpack_connection packed in
   match React.S.value connection.down with
     | None ->
         ()
@@ -785,13 +777,13 @@ let set_up packed =
         wakeup wakener ()
 
 let set_down packed =
-  let connection = get packed in
+  let connection = unpack_connection packed in
   match React.S.value connection.down with
     | Some _ ->
         ()
     | None ->
         connection.set_down (Some(wait ()))
 
-let incoming_filters packed = (get packed).incoming_filters
-let outgoing_filters packed = (get packed).outgoing_filters
+let incoming_filters packed = (unpack_connection packed).incoming_filters
+let outgoing_filters packed = (unpack_connection packed).outgoing_filters
 

@@ -298,22 +298,22 @@ EXTEND Gram
             <:str_item< let $lid:cname$ =
                           let __obus_type = $typ$ in
                           $Gen.abstract _loc (<:patt< __obus_proxy >> :: pnames)
-                            (Gen.apply _loc <:expr< op_method_call $str:dname$ __obus_type __obus_proxy >> enames)$ >>
+                            (Gen.apply _loc <:expr< OBus_proxy.Interface.method_call obus_proxy_interface $str:dname$ __obus_type __obus_proxy >> enames)$ >>
           else
-            <:str_item< let $lid:cname$ = op_method_call $str:dname$ $typ$ >>
+            <:str_item< let $lid:cname$ = OBus_proxy.Interface.method_call obus_proxy_interface $str:dname$ $typ$ >>
 
       | "OP_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = op_signal $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.signal obus_proxy_interface $str:dname$ $typ$ >>
 
       | "OP_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = op_property_reader $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property_reader obus_proxy_interface $str:dname$ $typ$ >>
 
       | "OP_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:prepend_lid "set" cname$ = op_property_writer $str:dname$ $typ$ >>
+          <:str_item< let $lid:prepend_lid "set" cname$ = OBus_proxy.Interface.property_writer obus_proxy_interface $str:dname$ $typ$ >>
 
       | "OP_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = op_property_reader $str:dname$ $typ$;;
-                      let $lid:prepend_lid "set" cname$ = op_property_writer $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property_reader obus_proxy_interface $str:dname$ $typ$;;
+                      let $lid:prepend_lid "set" cname$ = OBus_proxy.Interface.property_writer obus_proxy_interface $str:dname$ $typ$ >>
 
   (* +---------------------------------------------------------------+
      | Extension for local code                                      |
@@ -322,41 +322,52 @@ EXTEND Gram
       | "OL_method"; (dname, cname) = obus_member; ":"; (typ, names) = obus_func; e = equal_expr ->
           (match e with
              | Some e ->
-                 <:str_item< let () = ol_method_call $str:dname$ $typ$ $e$ >>
+                 let vars = gen_vars fst names in
+                 <:str_item< let $lid:cname$ =
+                               let __obus_func = $e$ in
+                               OBus_object.Interface.method_call obus_local_interface $str:dname$ $typ$
+                                 $Gen.abstract _loc (pvars vars) (Gen.apply _loc <:expr< __obus_func >> (evars vars))$;
+                               __obus_func >>
              | None ->
-                 <:str_item< let () = ol_method_call $str:dname$ $typ$ $lid:cname$ >>)
+                 let vars = gen_vars (fun _ -> _loc) names in
+                 <:str_item< let () = OBus_object.Interface.method_call obus_local_interface $str:dname$ $typ$ $Gen.abstract _loc (pvars vars) (Gen.apply _loc (Gen.ide _loc cname) (evars vars))$ >>)
 
       | "OL_signal"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = ol_signal $str:dname$ $typ$ >>
+          <:str_item< let () = OBus_object.Interface.signal obus_local_interface $str:dname$ $typ$
+                      let $lid:cname$ = OBus_object.Interface.emit obus_local_interface $str:dname$ $typ$ >>
 
       | "OL_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type; e = equal_expr ->
           (match e with
              | Some e ->
-                 <:str_item< let () = ol_property_r $str:dname$ $typ$ $e$ >>
+                 <:str_item< let () = OBus_object.Interface.property_r obus_local_interface $str:dname$ $typ$ $e$ >>
              | None ->
-                 <:str_item< let () = ol_property_r $str:dname$ $typ$ $lid:cname$>>)
+                 <:str_item< let () = OBus_object.Interface.property_r obus_local_interface $str:dname$ $typ$ (fun __obj -> $lid:cname$ __obj) >>)
 
       | "OL_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type; e = equal_expr ->
           (match e with
              | Some e ->
-                 <:str_item< let () = ol_property_w $str:dname$ $typ$ $e$ >>
+                 <:str_item< let () = OBus_object.Interface.property_w obus_local_interface $str:dname$ $typ$ $e$ >>
              | None ->
-                 <:str_item< let () = ol_property_w $str:dname$ $typ$ $lid:prepend_lid "set" cname$ >>)
+                 <:str_item< let () = OBus_object.Interface.property_w obus_local_interface $str:dname$ $typ$ (fun __obj __x -> $lid:prepend_lid "set" cname$ __obj __x) >>)
 
-      | "OL_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type; e = equal_expr ->
-          (match e with
-             | Some e ->
-                 <:str_item< let () =
-                               let __obus_reader, __obus_writer = $e$ in
-                               ol_property_rw $str:dname$ $typ$ __obus_reader __obus_writer >>
+      | "OL_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type; es = equal_expr2 ->
+          (match es with
+             | Some(reader, writer) ->
+                 <:str_item< let () = OBus_object.Interface.property_rw obus_local_interface $str:dname$ $typ$ $reader$ $writer$ >>
              | None ->
-                 <:str_item< let () = ol_property_rw $str:dname$ $typ$ $lid:cname$ $lid:prepend_lid "set" cname$ >>)
+                 <:str_item< let () = OBus_object.Interface.property_rw obus_local_interface $str:dname$ $typ$ (fun __ obj -> $lid:cname$ __obj) (fun __obj __x -> $lid:prepend_lid "set" cname$ __obj __x) >>)
 
       ] ];
 
   equal_expr:
     [ [ "="; e = expr ->
           Some e
+      | ->
+          None ] ];
+
+  equal_expr2:
+    [ [ "="; e1 = expr LEVEL "simple"; e2 = expr LEVEL "simple" ->
+          Some(e1, e2)
       | ->
           None ] ];
 END

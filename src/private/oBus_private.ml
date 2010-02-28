@@ -12,19 +12,23 @@
 
 open Lwt
 
-module SerialMap = OBus_util.MakeMap(struct
-                                       type t = OBus_message.serial
-                                       let compare : int32 -> int32 -> int = compare
-                                     end)
-module ObjectMap = OBus_util.MakeMap(struct
-                                       type t = OBus_path.t
-                                       let compare = Pervasives.compare
-                                     end)
-module NameMap = OBus_util.MakeMap(struct
-                                     type t = OBus_name.bus
-                                     let compare = String.compare
-                                   end)
-module NameSet = Set.Make(String)
+module SerialMap = OBus_util.MakeMap
+  (struct
+     type t = OBus_message.serial
+     let compare : int32 -> int32 -> int = compare
+   end)
+
+module ObjectMap = OBus_util.MakeMap
+  (struct
+     type t = OBus_path.t
+     let compare = Pervasives.compare
+   end)
+
+module StringMap = OBus_util.MakeMap(String)
+module StringSet = Set.Make(String)
+
+module NameMap = StringMap
+module NameSet = StringSet
 
 (* +-----------------------------------------------------------------+
    | Objects                                                         |
@@ -33,7 +37,7 @@ module NameSet = Set.Make(String)
 type packed_object = exn
 
 type obus_object = {
-  oo_handle : packed_object -> packed_connection -> OBus_message.t -> unit;
+  oo_handle : packed_object -> packed_connection -> OBus_message.t -> unit Lwt.t;
   (* Method call handler *)
 
   oo_connection_closed : packed_connection -> unit;
@@ -204,7 +208,7 @@ and packed_connection = <
 >
 
 (* +-----------------------------------------------------------------+
-   | OBus_utils                                                           |
+   | Misc                                                            |
    +-----------------------------------------------------------------+ *)
 
 let unknown_method_exn message = match message with
@@ -231,3 +235,10 @@ let children connection path =
        | Some(elt :: _) -> if List.mem elt acc then acc else elt :: acc
        | _ -> acc)
     connection.exported_objects []
+
+let unpack_connection packed =
+  match packed#get with
+    | Crashed exn ->
+        raise exn
+    | Running connection ->
+        connection

@@ -24,15 +24,21 @@ let obus_t = OBus_type.map_with_context <:obus_type< unit >>
 let make ~connection ~name = { connection = connection; name = Some name }
 let anonymous c = { connection = c; name = None }
 
-let op_method_call member typ peer = OBus_connection.method_call peer.connection
-  ?destination:peer.name
-  ~path:[]
-  ~interface:"org.freedesktop.DBus.Peer"
-  ~member
-  typ
+let ping peer =
+  OBus_connection.method_call peer.connection
+    ?destination:peer.name
+    ~path:[]
+    ~interface:"org.freedesktop.DBus.Peer"
+    ~member:"Ping"
+    <:obus_func< t >>
 
-OP_method Ping : t
-OP_method GetMachineId : OBus_uuid.t
+let get_machine_id peer =
+  OBus_connection.method_call peer.connection
+    ?destination:peer.name
+    ~path:[]
+    ~interface:"org.freedesktop.DBus.Peer"
+    ~member:"GetMachineId"
+    <:obus_func< OBus_uuid.t >>
 
 let wait_for_exit peer =
   match peer.name with

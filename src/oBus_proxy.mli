@@ -12,7 +12,7 @@
 (** A proxy is an object on which live on a different processus, but
     behave as a native ocaml value. *)
 
-(** Type default proxy type *)
+(** The default type for proxies *)
 type t = {
   peer : OBus_peer.t;
   (** Peer owning the object *)
@@ -27,7 +27,7 @@ val make : peer : OBus_peer.t -> path : OBus_path.t -> t
 (** A signal definition. ['a] is the type of signals contents. *)
 class type ['a] signal = object
   method event : 'a React.event
-    (** The signal itself *)
+    (** The event which occurs each time the signal is received. *)
 
   method set_filters : (int * OBus_match.argument_filter) list -> unit Lwt.t
     (** Sets the list of argument filters for the given signal. This
@@ -35,16 +35,107 @@ class type ['a] signal = object
         delivered to the current running program.
 
         The goal of argument filters is to reduce the number of
-        messages received, and so to minimise the number of wakeup of
+        messages received, and so to reduce the number of wakeup of
         the program. *)
 
   method disconnect : unit Lwt.t
     (** Stop receiving the signal *)
 end
 
-(** Type of an D-Bus interface anme *)
-module type Interface_name = sig
-  val name : OBus_name.interface
+(** Interface definition *)
+module Interface : sig
+
+  (** This module allow you to easily define members of a D-Bus
+      interface. It is aimed to be used in conjunction with the
+      [obus.syntax] syntax extension.
+
+      To use it, you must create a variable named
+      [obus_proxy_interface] of type {!OBus_proxy.Interface.t}, then
+      you can use the syntax extension to define members of the class.
+
+      Here is a typical example:
+
+      {[
+        let obus_proxy_interface = OBus_proxy.make_interface "org.foo.bar"
+
+        OP_method Foo : int -> int
+        OP_method Bar : strign -> unit
+        ...
+      ]}
+
+      where [OP_method] stands for "OBus Proxy method".
+
+      Note that interface contained in XML introspection files can be
+      automatically converted with [obus-binder] *)
+
+  type 'proxy t
+    (** Type of an interface. ['proxy] is the type of proxies used. *)
+
+  val name : 'proxy t -> OBus_name.interface
+    (** Name of the interface *)
+
+  val method_call : 'proxy t -> OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'proxy -> 'a
+    (** [method_call iface member typ] defines a method call.
+
+        A method call definition looks like:
+
+        {[
+          let caml_name = OBus_proxy.Interface.method_call obus_proxy_interface "DBusName" method_call_type
+        ]}
+
+        Or even simpler, with the syntax extension:
+
+        {[
+          OP_method DBusName : method_call_type
+        ]}
+      *)
+
+  val signal : 'proxy t -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> 'proxy -> 'a signal
+    (** [signal iface member typ] defines a signal.
+
+        A signal defintion looks like:
+
+        {[
+          let caml_name = OBus_proxy.Interface.signal obus_proxy_interface "DBusName" signal_type
+        ]}
+
+        Or, with the syntax extension:
+
+        {[
+          OBUS_signal DBusName : signal_type
+        ]}
+    *)
+
+  val property_reader : 'proxy t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> 'proxy -> 'a Lwt.t
+    (** [property_reader iface member typ] defines a property reader.
+
+        A property reader definition looks like:
+
+        {[
+          let caml_name = OBus_proxy.Interface.property_reader obus_proxy_interface "DBusName" property_type
+        ]}
+    *)
+
+  val  property_writer : 'proxy t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> 'proxy -> 'a -> unit Lwt.t
+    (** [property_writer member typ] defines a property writer.
+
+        A property writer definition looks like:
+
+        {[
+          let set_caml_name = OBus_proxy.Interface.property_writer obus_proxy_interface "DBusName" property_type
+        ]}
+    *)
+
+  (** With the syntax extension, read-only properties
+      (resp. write-only properties, resp. read and write properties)
+      can be defined like this:
+
+      {[
+        OBUS_property_r DBusName : property_type
+        OBUS_property_w DBusName : property_type
+        OBUS_property_rw DBusName : property_type
+      ]}
+  *)
 end
 
 (** Proxy signature *)
@@ -52,6 +143,11 @@ module type S = sig
 
   type proxy with obus(basic)
     (** Type of proxy objects *)
+
+  val make_interface : OBus_name.interface -> proxy Interface.t
+    (** Create an interface using proxies of type {!proxy} *)
+
+  (** {6 Informations} *)
 
   val peer : proxy -> OBus_peer.t
     (** Returns the peer pointed by a proxy *)
@@ -165,82 +261,6 @@ module type S = sig
   val dyn_get_all : proxy -> interface : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
     (** [dyn_get_all t ~interface] returns the list of all properties of
         the given proxy with their values *)
-
-  (** {6 interface definition} *)
-
-  (** This is the ocaml version of a D-Bus interface for proxy code.
-
-      Note that interface contained in XML introspection files can be
-      automatically converted with [obus-binder] *)
-  module Make_interface(Name : Interface_name) : sig
-    val op_interface : OBus_name.interface
-      (** Name of the interface *)
-
-    val op_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> proxy -> 'a
-      (** [op_method_call member typ] defines a method call.
-
-          A method call definition looks like:
-
-          {[
-            let caml_name = op_method_call "DBusName" method_call_type
-          ]}
-
-          Or even simpler, with the syntax extension:
-
-          {[
-            OP_method DBusName : method_call_type
-          ]}
-
-          where [OP_method] stands for "OBus Proxy method".
-      *)
-
-    val op_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> proxy -> 'a signal
-      (** [op_signal member typ] defines a signal.
-
-          A signal defintion looks like:
-
-          {[
-            let caml_name = signal "DBusName" signal_type
-          ]}
-
-          Or, with the syntax extension:
-
-          {[
-            OBUS_signal DBusName : signal_type
-          ]}
-      *)
-
-    val op_property_reader : OBus_name.member -> ('a, _) OBus_type.cl_single -> proxy -> 'a Lwt.t
-      (** [op_property_reader member typ] defines a property reader.
-
-          A property reader definition looks like:
-
-          {[
-            let caml_name = property_reader "DBusName" property_type
-          ]}
-      *)
-
-    val op_property_writer : OBus_name.member -> ('a, _) OBus_type.cl_single -> proxy -> 'a -> unit Lwt.t
-      (** [property_writer member typ] defines a property writer.
-
-          A property writer definition looks like:
-
-          {[
-            let set_caml_name = property_writer "DBusName" property_type
-          ]}
-      *)
-
-    (** With the syntax extension, read-only properties
-        (resp. write-only properties, resp. read and write properties)
-        can be defined like this:
-
-        {[
-          OBUS_property_r DBusName : property_type
-          OBUS_property_w DBusName : property_type
-          OBUS_property_rw DBusName : property_type
-        ]}
-    *)
-  end
 end
 
 (** The default proxy implementation *)
@@ -249,9 +269,9 @@ include S with type proxy = t
 (** Custom proxy type: *)
 module type Custom = sig
   type proxy
-    (** Type of proxy objects *)
+    (** Type of custom proxy objects *)
 
-  val get : proxy -> t
+  val cast : proxy -> t
     (** Returns the underlying obus proxy *)
 
   val make : t -> proxy

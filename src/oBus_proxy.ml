@@ -14,6 +14,10 @@ open OBus_private
 open OBus_peer
 open OBus_pervasives
 
+(* +-----------------------------------------------------------------+
+   | Types                                                           |
+   +-----------------------------------------------------------------+ *)
+
 type t = {
   peer : OBus_peer.t;
   path : OBus_path.t;
@@ -27,22 +31,36 @@ class type ['a] signal = object
   method disconnect : unit Lwt.t
 end
 
+module Interface =
+struct
+  type 'proxy t = {
+    name : OBus_name.interface;
+    method_call : 'a 'b. OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'proxy -> 'a;
+    signal : 'a 'cl. OBus_name.member -> ('a, 'cl) OBus_type.cl_sequence -> 'proxy -> 'a signal;
+    property_reader : 'a 'cl. OBus_name.member -> ('a, 'cl) OBus_type.cl_single -> 'proxy -> 'a Lwt.t;
+    property_writer : 'a 'cl. OBus_name.member -> ('a, 'cl) OBus_type.cl_single -> 'proxy -> 'a -> unit Lwt.t;
+  }
+
+  let name iface = iface.name
+  let method_call iface = iface.method_call
+  let signal iface = iface.signal
+  let property_reader iface = iface.property_reader
+  let property_writer iface = iface.property_writer
+end
+
 (* +-----------------------------------------------------------------+
    | Signatures                                                      |
    +-----------------------------------------------------------------+ *)
 
-module type Interface_name = sig
-  val name : OBus_name.interface
-end
-
 module type Custom = sig
   type proxy
-  val get : proxy -> t
+  val cast : proxy -> t
   val make : t -> proxy
 end
 
 module type S = sig
   type proxy with obus(basic)
+  val make_interface : OBus_name.interface -> proxy Interface.t
   val peer : proxy -> OBus_peer.t
   val path : proxy -> OBus_path.t
   val connection : proxy -> OBus_connection.t
@@ -93,20 +111,13 @@ module type S = sig
     member : OBus_name.member ->
     OBus_value.single -> unit Lwt.t
   val dyn_get_all : proxy -> interface : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
-  module Make_interface(Name : Interface_name) : sig
-    val op_interface : OBus_name.interface
-    val op_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> proxy -> 'a
-    val op_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> proxy -> 'a signal
-    val op_property_reader : OBus_name.member -> ('a, _) OBus_type.cl_single -> proxy -> 'a Lwt.t
-    val op_property_writer : OBus_name.member -> ('a, _) OBus_type.cl_single -> proxy -> 'a -> unit Lwt.t
-  end
 end
 
 (* +-----------------------------------------------------------------+
    | Custom proxy implementation                                     |
    +-----------------------------------------------------------------+ *)
 
-module Make(Proxy : Custom) =
+module Make(Proxy : Custom) : S with type proxy = Proxy.proxy =
 struct
   type proxy = Proxy.proxy
 
@@ -114,19 +125,19 @@ struct
     (fun context path ->
        let connection, message = OBus_connection.cast_context context in
        Proxy.make { peer = { connection = connection; name = OBus_message.sender message }; path = path })
-    (fun proxy -> (Proxy.get proxy).path)
+    (fun proxy -> (Proxy.cast proxy).path)
 
-  let peer proxy = (Proxy.get proxy).peer
-  let path proxy = (Proxy.get proxy).path
-  let connection proxy = (Proxy.get proxy).peer.connection
-  let name proxy = (Proxy.get proxy).peer.name
+  let peer proxy = (Proxy.cast proxy).peer
+  let path proxy = (Proxy.cast proxy).path
+  let connection proxy = (Proxy.cast proxy).peer.connection
+  let name proxy = (Proxy.cast proxy).peer.name
 
   (* +---------------------------------------------------------------+
      | Method calls                                                  |
      +---------------------------------------------------------------+ *)
 
   let method_call proxy ?interface ~member typ =
-    let proxy = Proxy.get proxy in
+    let proxy = Proxy.cast proxy in
     OBus_connection.method_call proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
@@ -135,7 +146,7 @@ struct
       typ
 
   let method_call_no_reply proxy ?interface ~member typ =
-    let proxy = Proxy.get proxy in
+    let proxy = Proxy.cast proxy in
     OBus_connection.method_call_no_reply proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
@@ -144,7 +155,7 @@ struct
       typ
 
   let method_call' proxy ?interface ~member body typ =
-    let proxy = Proxy.get proxy in
+    let proxy = Proxy.cast proxy in
     OBus_connection.method_call' proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
@@ -154,7 +165,7 @@ struct
       typ
 
   let dyn_method_call proxy ?interface ~member body =
-    let proxy = Proxy.get proxy in
+    let proxy = Proxy.cast proxy in
     OBus_connection.dyn_method_call proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
@@ -163,7 +174,7 @@ struct
       body
 
   let dyn_method_call_no_reply proxy ?interface ~member body =
-    let proxy = Proxy.get proxy in
+    let proxy = Proxy.cast proxy in
     OBus_connection.dyn_method_call_no_reply proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
@@ -182,17 +193,16 @@ struct
      | Properties                                                    |
      +---------------------------------------------------------------+ *)
 
-  let op_method_call member typ proxy = method_call proxy ~interface:"org.freedesktop.DBus.Properties" ~member typ
+  let interface = "org.freedesktop.DBus.Properties"
 
-  OP_method Get as _dyn_get : string -> string -> variant
-  OP_method Set as _dyn_set : string -> string -> variant -> unit
-  OP_method GetAll as _dyn_get_all : string -> (string, variant) dict
+  let dyn_get proxy = method_call proxy ~interface ~member:"Get" <:obus_func< string -> string -> variant >>
+  let dyn_set proxy = method_call proxy ~interface ~member:"Set" <:obus_func< string -> string -> variant -> unit >>
+  let dyn_get_all proxy = method_call proxy ~interface ~member:"GetAll" <:obus_func< string -> (string, variant) dict >>
+  let dyn_get_with_context proxy = method_call proxy ~interface ~member:"Get" <:obus_func< string -> string -> variant * OBus_connection.context >>
 
-  OP_method Get as dyn_get_with_context : string -> string -> variant * OBus_connection.context
-
-  let dyn_get proxy ~interface ~member = _dyn_get proxy interface member
-  let dyn_set proxy ~interface ~member value = _dyn_set proxy interface member value
-  let dyn_get_all proxy ~interface = _dyn_get_all proxy interface
+  let dyn_get proxy ~interface ~member = dyn_get proxy interface member
+  let dyn_set proxy ~interface ~member value = dyn_set proxy interface member value
+  let dyn_get_all proxy ~interface = dyn_get_all proxy interface
 
   let get proxy ~interface ~member typ =
     lwt value, (connection, message) = dyn_get_with_context proxy interface member in
@@ -210,7 +220,7 @@ struct
     | Done of unit Lwt.u
 
   let _connect proxy ~interface ~member ~push ~commands =
-    let proxy = Proxy.get proxy in
+    let proxy = Proxy.cast proxy in
     match proxy.peer.connection#get with
       | Crashed exn ->
           fail exn
@@ -365,22 +375,25 @@ struct
     make_signal (React.E.fmap (cast interface member typ) event) push_command
 
   (* +---------------------------------------------------------------+
-     | Interface                                                     |
+     | Interface creation                                            |
      +---------------------------------------------------------------+ *)
 
-  module Make_interface(Name : Interface_name) =
-  struct
-    let op_interface = Name.name
-    let op_method_call member typ proxy = method_call proxy ~interface:op_interface ~member typ
-    let op_signal member typ proxy = connect proxy ~interface:op_interface ~member typ
-    let op_property_reader member typ proxy = get proxy ~interface:op_interface ~member typ
-    let op_property_writer member typ proxy value = set proxy ~interface:op_interface ~member typ value
-  end
+  let make_interface interface = {
+    Interface.name = interface;
+    Interface.method_call = (fun member typ proxy -> method_call proxy ~interface ~member typ);
+    Interface.signal = (fun member typ proxy -> connect proxy ~interface ~member typ);
+    Interface.property_reader = (fun member typ proxy -> get proxy ~interface ~member typ);
+    Interface.property_writer = (fun member typ proxy value -> set proxy ~interface ~member typ value);
+  }
 end
+
+(* +-----------------------------------------------------------------+
+   | Implementation using native proxies                             |
+   +-----------------------------------------------------------------+ *)
 
 include Make(struct
                type proxy = t
-               let get proxy = proxy
+               let cast proxy = proxy
                let make proxy = proxy
              end)
 

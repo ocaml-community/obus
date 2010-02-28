@@ -35,3 +35,6 @@ OBUS_name_translator "haskell"
 OP_method SetCPUFreqGovernor : string
 
 OP_method MethodWithLabels : x : int -> y : int -> string -> unit
+
+OP_method Foo : x : int -> y : int -> int
+OL_property_rw Prop : int = (fun obj -> return obj.x) (fun obj x -> obj.x <- x; return ())

@@ -106,6 +106,7 @@ type t = {
 module M = OBus_object.Make(struct
                               type obj = t
                               let get x = x.obus
+                              let make obj = { obus = obj }
                             end)
 
 ";

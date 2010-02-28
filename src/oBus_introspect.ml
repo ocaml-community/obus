@@ -16,12 +16,12 @@ type argument = name option * OBus_value.tsingle
 
 type access = Read | Write | Read_write
 
-type declaration =
+type member =
   | Method of name * argument list * argument list * annotation list
   | Signal of name * argument list * annotation list
   | Property of name * OBus_value.tsingle * access * annotation list
 
-type interface = name * declaration list * annotation list
+type interface = name * member list * annotation list
 type node = OBus_path.element
 type document = interface list * node list
 

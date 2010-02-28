@@ -16,34 +16,75 @@ open OBus_private
 open OBus_connection
 open OBus_pervasives
 
+(* Numebrs used to generate new unique object paths: *)
+let object_unique_id = ref(0, 0)
+
 (* +-----------------------------------------------------------------+
-   | Types and common functions                                      |
+   | Types                                                           |
    +-----------------------------------------------------------------+ *)
 
-module MethodMap = OBus_util.MakeMap(struct
-                                       type t = OBus_name.interface option * OBus_name.member * tsequence
-                                       let compare = Pervasives.compare
-                                     end)
-module PropertyMap = OBus_util.MakeMap(struct
-                                         type t = OBus_name.interface * OBus_name.member
-                                         let compare = Pervasives.compare
-                                       end)
-module InterfaceMap = OBus_util.MakeMap(struct
-                                          type t = OBus_name.interface
-                                          let compare = Pervasives.compare
-                                        end)
+module MethodMap = OBus_util.MakeMap
+  (struct
+     type t = OBus_name.interface option * OBus_name.member * signature
+     let compare = Pervasives.compare
+   end)
+
+module PropertyMap = OBus_util.MakeMap
+  (struct
+     type t = OBus_name.interface * OBus_name.member
+     let compare = Pervasives.compare
+   end)
+
 module ConnectionSet = Set.Make(OBus_connection)
+
+(* Type of a method call handler *)
+type untyped_method = packed_object -> OBus_connection.t -> OBus_message.t -> unit Lwt.t
+
+(* Property primitives *)
+type untyped_property = {
+  up_reader : (packed_object -> OBus_value.single Lwt.t) option;
+  up_writer : (packed_object -> OBus_value.single -> unit Lwt.t) option;
+}
+
+(* An interface description *)
+type untyped_interface = {
+  ui_introspect : OBus_introspect.interface;
+  (* For introspection *)
+
+  ui_methods : untyped_method MethodMap.t;
+  (* For dispatching *)
+
+  ui_properties : untyped_property PropertyMap.t;
+  (* List for properties, for reading/writing properties *)
+}
 
 type t = {
   path : OBus_path.t;
   exports : ConnectionSet.t React.signal;
   set_exports : ConnectionSet.t -> unit;
   owner : OBus_peer.t option;
+  mutable methods : untyped_method MethodMap.t;
+  mutable properties : untyped_property PropertyMap.t;
+  mutable interfaces : untyped_interface list;
 }
 
-let destroy obj =
+(* Generate the [methods] and [properties] fields from the
+   [interfaces] field: *)
+let generate obj =
+  match obj.interfaces with
+    | [] ->
+        obj.methods <- MethodMap.empty;
+        obj.properties <- PropertyMap.empty
+    | [ui] ->
+        obj.methods <- ui.ui_methods;
+        obj.properties <- ui.ui_properties
+    | uis ->
+        obj.methods <- List.fold_right (fun ui map -> MethodMap.fold MethodMap.add ui.ui_methods map) uis MethodMap.empty;
+        obj.properties <- List.fold_right (fun ui map -> PropertyMap.fold PropertyMap.add ui.ui_properties map) uis PropertyMap.empty
+
+let default_destroy obj =
   ConnectionSet.iter
-    (fun connection -> match connection#get with
+    (fun packed -> match packed#get with
        | Crashed exn ->
            ()
        | Running connection ->
@@ -51,54 +92,144 @@ let destroy obj =
     (React.S.value obj.exports);
   obj.set_exports ConnectionSet.empty
 
-let make ?owner path =
-  let exports, set_exports = React.S.create ~eq:ConnectionSet.equal ConnectionSet.empty in
-  let obj = {
-    path = path;
-    exports = exports;
-    set_exports = set_exports;
-    owner = owner;
-  } in
-  begin
-    match owner with
-      | None ->
-          ()
-      | Some peer ->
-          ignore_result (lwt () = OBus_peer.wait_for_exit peer in
-                         destroy obj;
-                         return ())
-  end;
-  obj
-
-let id = ref(-1)
-let make' ?owner () = incr id; make ?owner ["ocaml"; string_of_int !id]
-
-let remove_by_path connection path =
-  match connection#get with
-    | Crashed exn ->
-        raise exn
-    | Running connection ->
-        connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> path) connection.dynamic_objects;
-        match ObjectMap.lookup path connection.exported_objects with
-          | Some obj ->
-              connection.exported_objects <- ObjectMap.remove path connection.exported_objects;
-              obj.oo_connection_closed connection.packed
-          | None ->
-              ()
-
 (* +-----------------------------------------------------------------+
-   | Interfaces                                                      |
+   | Interface                                                       |
    +-----------------------------------------------------------------+ *)
 
-module type Interface_name = sig
-  val name : OBus_name.interface
+module Interface =
+struct
+  type 'obj creation = {
+    name : OBus_name.interface;
+    unpack : packed_object -> 'obj;
+    get : 'obj -> t;
+    mutable members : OBus_introspect.member list;
+    mutable methods : untyped_method MethodMap.t;
+    mutable properties : untyped_property PropertyMap.t;
+  }
+
+  type 'obj state =
+    | Creation of 'obj creation
+        (* Members are being added to the interface *)
+    | Finished of ('obj -> t) * untyped_interface
+        (* Registration is done. *)
+
+  type 'obj t = 'obj state ref
+
+  let make name unpack get =
+    ref (Creation{
+           name = name;
+           unpack = unpack;
+           get = get;
+           members = [];
+           methods = MethodMap.empty;
+           properties = PropertyMap.empty;
+         })
+
+  let untyped_interface iface = match !iface with
+    | Creation cr ->
+        let ui = {
+          ui_introspect = (cr.name, List.rev cr.members, []);
+          ui_methods = cr.methods;
+          ui_properties = cr.properties;
+        } in
+        iface := Finished(cr.get, ui);
+        ui
+    | Finished(_, ui) ->
+        ui
+
+  let close iface = ignore (untyped_interface iface)
+
+  let name iface = match !iface with
+    | Creation{ name = name }
+    | Finished(_, { ui_introspect = (name, _, _) }) -> name
+
+  let introspect iface = (untyped_interface iface).ui_introspect
+
+  let get_creation caller iface = match !iface with
+    | Creation cr ->
+        cr
+    | Finished(_, { ui_introspect = (name, _, _) }) ->
+        Printf.ksprintf failwith "OBus_object.Interface.%s: The interface %S cannot register any new member" caller name
+
+  let with_names typs = List.map (fun t -> (None, t)) typs
+
+  let method_call iface member typ f =
+    let cr = get_creation "method_call" iface
+    and isig = OBus_type.isignature typ
+    and osig = OBus_type.osignature typ in
+    cr.members <- Method(member, with_names isig, with_names osig, []) :: cr.members;
+    let handler pack connection message =
+      try_bind
+        (fun () -> OBus_type.cast_func typ ~context:(OBus_connection.make_context (connection, message)) message.body (f (cr.unpack pack)))
+        (send_reply connection message (OBus_type.func_reply typ))
+        (send_exn connection message)
+    in
+    cr.methods <- MethodMap.add (Some cr.name, member, isig) handler (MethodMap.add (None, member, isig) handler cr.methods)
+
+  let signal iface member typ =
+    let cr = get_creation "signal" iface in
+    cr.members <- Signal(member, with_names (OBus_type.type_sequence typ), []) :: cr.members
+
+  let emit iface member typ obj ?peer value =
+    let interface, obj = match !iface with
+      | Creation{ name = name; get = get }
+      | Finished(get, { ui_introspect = (name, _, _) }) -> (name, get obj)
+    and body = OBus_type.make_sequence typ value in
+    match peer, obj.owner with
+      | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
+      | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
+          dyn_emit_signal connection ?destination ~interface ~member ~path:obj.path body
+      | None, None ->
+          join (ConnectionSet.fold
+                  (fun connection l -> dyn_emit_signal connection ~interface ~member ~path:obj.path body :: l)
+                  (React.S.value obj.exports)
+                  [])
+
+  let property iface member typ reader writer mode =
+    let cr = get_creation "property" iface
+    and ty = OBus_type.type_single typ in
+    cr.members <- Property(member, ty, mode, []) :: cr.members;
+    cr.properties <- PropertyMap.add (cr.name, member) {
+      up_reader = (match reader with
+                     | None ->
+                         None
+                     | Some f ->
+                         Some(fun pack -> f (cr.unpack pack) >|= OBus_type.make_single typ));
+      up_writer = (match writer with
+                     | None ->
+                         None
+                     | Some f ->
+                         Some(fun pack x -> match OBus_type.opt_cast_single typ x with
+                                | Some x -> f (cr.unpack pack) x
+                                | None -> fail (Failure (sprintf "invalid type for property %S: '%s', should be '%s'"
+                                                           member
+                                                           (string_of_signature [type_of_single x])
+                                                           (string_of_signature [ty])))));
+    } cr.properties
+
+  let property_r iface member typ reader = property iface member typ (Some reader) None Read
+  let property_w iface member typ writer = property iface member typ None (Some writer) Write
+  let property_rw iface member typ reader writer = property iface member typ (Some reader) (Some writer) Read_write
 end
+
+(* +-----------------------------------------------------------------+
+   | Objects signature                                               |
+   +-----------------------------------------------------------------+ *)
 
 module type S = sig
   type obj with obus(basic)
+  val make_interface : OBus_name.interface -> obj Interface.t
+  val add_interface : obj -> obj Interface.t -> unit
+  val remove_interface : obj -> obj Interface.t -> unit
+  val remove_interface_by_name : obj -> OBus_name.interface -> unit
+  val introspectable : obj Interface.t
+  val properties : obj Interface.t
+  val make : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> OBus_path.t -> t
+  val make' : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> unit -> t
   val path : obj -> OBus_path.t
   val owner : obj -> OBus_peer.t option
   val exports : obj -> Set.Make(OBus_connection).t React.signal
+  val introspect : obj -> OBus_introspect.interface list
   val export : OBus_connection.t -> obj -> unit
   val remove : OBus_connection.t -> obj -> unit
   val destroy : obj -> unit
@@ -108,35 +239,31 @@ module type S = sig
     member : OBus_name.member ->
     ('a, _) OBus_type.cl_sequence ->
     ?peer : OBus_peer.t -> 'a -> unit Lwt.t
-  module Make_interface(Name : Interface_name) : sig
-    val ol_interface : OBus_name.interface
-    val ol_method_call : OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> (obj -> 'a) -> unit
-    val ol_signal : OBus_name.member -> ('a, _) OBus_type.cl_sequence -> (obj -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t)
-    val ol_property_r : OBus_name.member ->
-      ('a, _) OBus_type.cl_single ->
-      (obj -> 'a Lwt.t) -> unit
-    val ol_property_w : OBus_name.member ->
-      ('a, _) OBus_type.cl_single ->
-      (obj -> 'a -> unit Lwt.t) -> unit
-    val ol_property_rw : OBus_name.member ->
-      ('a, _) OBus_type.cl_single ->
-      (obj -> 'a Lwt.t) ->
-      (obj -> 'a -> unit Lwt.t) -> unit
-  end
 end
 
 module type Custom = sig
   type obj
-  val get : obj -> t
+  val cast : obj -> t
 end
 
 (* +-----------------------------------------------------------------+
-   | Custom object implementation                                    |
+   | Objects implementation                                          |
    +-----------------------------------------------------------------+ *)
 
-module Make(Object : Custom) =
+module Make(Object : Custom) : S with type obj = Object.obj =
 struct
   exception Pack of Object.obj
+
+  let unpack_object = function
+    | Pack obj ->
+        obj
+    | _ ->
+        (* This should never happen *)
+        failwith "OBus_object.Make.unpack"
+
+  (* +---------------------------------------------------------------+
+     | Type and type combinator                                      |
+     +---------------------------------------------------------------+ *)
 
   type obj = Object.obj
 
@@ -145,197 +272,255 @@ struct
        let connection, message = OBus_connection.cast_context context in
        match connection#get with
          | Crashed _ ->
-             raise (OBus_type.Cast_failure("OBus_object.Make.obus_t", "connection crashed"))
+             raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj", "connection crashed"))
          | Running connection ->
              match ObjectMap.lookup path connection.exported_objects with
                | Some{ oo_object = Pack obj } ->
                    obj
-               | _ ->
-                   raise (OBus_type.Cast_failure("OBus_object.Make.obus_t",
+               | Some{ oo_object = pack } ->
+                   raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj",
+                                                 Printf.sprintf
+                                                   "unexpected type for object with path %S"
+                                                   (OBus_path.to_string path)))
+               | None ->
+                   raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj",
                                                  Printf.sprintf
                                                    "cannot find object with path %S"
                                                    (OBus_path.to_string path))))
-    (fun obj -> (Object.get obj).path)
+    (fun obj -> (Object.cast obj).path)
 
-  let path obj = (Object.get obj).path
-  let owner obj = (Object.get obj).owner
-  let exports obj = (Object.get obj).exports
+  (* +---------------------------------------------------------------+
+     | Properties                                                    |
+     +---------------------------------------------------------------+ *)
 
-  let methods = ref MethodMap.empty
-  let properties = ref PropertyMap.empty
-  let interfaces = ref InterfaceMap.empty
+  let path obj = (Object.cast obj).path
+  let owner obj = (Object.cast obj).owner
+  let exports obj = (Object.cast obj).exports
+  let introspect obj = List.map (fun ui -> ui.ui_introspect) (Object.cast obj).interfaces
 
-  let handle_call pack connection message = match message, pack with
-    | { typ = Method_call(path, interface, member) }, Pack obj ->
-        begin match MethodMap.lookup (interface, member, type_of_sequence message.body) !methods with
-          | Some f -> f obj connection message
-          | None -> ignore_result (send_exn connection message (unknown_method_exn message))
+  (* +---------------------------------------------------------------+
+     | Export/remove                                                 |
+     +---------------------------------------------------------------+ *)
+
+  let handle_call packed_object packed_connection message =
+    let info = Object.cast (unpack_object packed_object) in
+    match message with
+      | { typ = Method_call(path, interface, member) } -> begin
+          match MethodMap.lookup (interface, member, type_of_sequence message.body) info.methods with
+            | Some f -> f packed_object packed_connection message
+            | None -> send_exn packed_connection message (unknown_method_exn message)
         end
 
-    | _ ->
-        invalid_arg "OBus_object.Make.handle_call"
+      | _ ->
+          invalid_arg "OBus_object.Make.handle_call"
 
   let export packed obj =
-    match packed#get with
-      | Crashed exn ->
-          raise exn
-      | Running connection ->
-          let o = Object.get obj in
-          if not (ConnectionSet.mem packed (React.S.value o.exports)) then begin
-            connection.exported_objects <- ObjectMap.add o.path {
-              oo_handle = handle_call;
-              oo_object = Pack obj;
-              oo_connection_closed = (fun packed -> o.set_exports (ConnectionSet.remove packed (React.S.value o.exports)));
-            } connection.exported_objects;
-            o.set_exports (ConnectionSet.add connection.packed (React.S.value o.exports))
-          end
+    let connection = unpack_connection packed in
+    let info = Object.cast obj in
+    if not (ConnectionSet.mem packed (React.S.value info.exports)) then begin
+      connection.exported_objects <- ObjectMap.add info.path {
+        oo_handle = handle_call;
+        oo_object = Pack obj;
+        oo_connection_closed = (fun packed -> info.set_exports (ConnectionSet.remove packed (React.S.value info.exports)));
+      } connection.exported_objects;
+      info.set_exports (ConnectionSet.add connection.packed (React.S.value info.exports))
+    end
 
   let remove packed obj =
-    match packed#get with
-      | Crashed exn ->
-          raise exn
-      | Running connection ->
-          let o = Object.get obj in
-          if ConnectionSet.mem packed (React.S.value o.exports) then begin
-            connection.exported_objects <- ObjectMap.remove o.path connection.exported_objects;
-            o.set_exports (ConnectionSet.remove connection.packed (React.S.value o.exports))
-          end
+    let info = Object.cast obj in
+    if ConnectionSet.mem packed (React.S.value info.exports) then begin
+      info.set_exports (ConnectionSet.remove packed (React.S.value info.exports));
+      match packed#get with
+        | Crashed _ ->
+           ()
+        | Running connection ->
+            connection.exported_objects <- ObjectMap.remove info.path connection.exported_objects
+    end
 
   let destroy obj =
-    destroy (Object.get obj)
+    let info = Object.cast obj in
+    ConnectionSet.iter
+      (fun packed -> match packed#get with
+         | Crashed exn ->
+             ()
+         | Running connection ->
+             connection.exported_objects <- ObjectMap.remove info.path connection.exported_objects)
+      (React.S.value info.exports);
+    info.set_exports ConnectionSet.empty
 
-  let dynamic ~connection ~prefix ~handler =
-    match connection#get with
-      | Crashed exn ->
-          raise exn
-      | Running connection ->
-          (* Remove any dynamic node declared with the same prefix: *)
-          connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> prefix) connection.dynamic_objects;
-          let create path =
-            lwt obj = handler path in
-            return {
-              oo_handle = handle_call;
-              oo_object = Pack obj;
-              oo_connection_closed = ignore;
-            }
-          in
-          connection.dynamic_objects <- { do_prefix = prefix; do_create = create } :: connection.dynamic_objects
+  let dynamic ~connection:packed ~prefix ~handler =
+    let connection = unpack_connection packed in
+    (* Remove any dynamic node declared with the same prefix: *)
+    connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> prefix) connection.dynamic_objects;
+    let create path =
+      lwt obj = handler path in
+      return {
+        oo_handle = handle_call;
+        oo_object = Pack obj;
+        oo_connection_closed = ignore;
+      }
+    in
+    connection.dynamic_objects <- { do_prefix = prefix; do_create = create } :: connection.dynamic_objects
+
+  (* +---------------------------------------------------------------+
+     | Signals                                                       |
+     +---------------------------------------------------------------+ *)
 
   let emit obj ~interface ~member typ ?peer x =
-    let body = OBus_type.make_sequence typ x and obj = Object.get obj in
+    let body = OBus_type.make_sequence typ x and obj = Object.cast obj in
     match peer, obj.owner with
       | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
       | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
           dyn_emit_signal connection ?destination ~interface ~member ~path:obj.path body
       | None, None ->
-          ConnectionSet.fold
-            (fun connection w ->
-               w <&> dyn_emit_signal connection ~interface ~member ~path:obj.path body)
-            (React.S.value obj.exports)
-            (return ())
+          join (ConnectionSet.fold
+                  (fun connection l -> dyn_emit_signal connection ~interface ~member ~path:obj.path body :: l)
+                  (React.S.value obj.exports)
+                  [])
 
-  module Make_interface(Name : Interface_name) =
-  struct
-    let ol_interface = Name.name
+  (* +---------------------------------------------------------------+
+     | Interfaces                                                    |
+     +---------------------------------------------------------------+ *)
 
-    let members = ref []
-    let () = interfaces := InterfaceMap.add Name.name members !interfaces
+  let make_interface name = Interface.make name unpack_object Object.cast
 
-    let with_names typs = List.map (fun typ -> (None, typ)) typs
+  let iface_equal { ui_introspect = (name1, _, _) } { ui_introspect = (name2, _, _) } =
+    name1 = name2
 
-    let ol_method_call member typ f =
-      let handler obj connection message =
-        ignore_result
-          (try_bind
-             (fun _ -> OBus_type.cast_func typ ~context:(OBus_connection.make_context (connection, message)) message.body (f obj))
-             (send_reply connection message (OBus_type.func_reply typ))
-             (send_exn connection message))
-      in
-      let isig = OBus_type.isignature typ and osig = OBus_type.osignature typ in
-      methods := MethodMap.add (Some Name.name, member, isig) handler
-        (MethodMap.add (None, member, isig) handler !methods);
-      members := Method(member, with_names isig, with_names osig, []) :: !members
+  let add_interface obj iface =
+    let obj = Object.cast obj and ui = Interface.untyped_interface iface in
+    if List.exists (iface_equal ui) obj.interfaces then begin
+      obj.interfaces <- ui :: List.filter (iface_equal ui) obj.interfaces;
+      generate obj
+    end else begin
+      obj.interfaces <- ui :: obj.interfaces;
+      obj.methods <- MethodMap.fold MethodMap.add ui.ui_methods obj.methods;
+      obj.properties <- PropertyMap.fold PropertyMap.add ui.ui_properties obj.properties
+    end
 
-    let ol_signal member typ =
-      members := Signal(member, with_names (OBus_type.type_sequence typ), []) :: !members;
-      (fun obj -> emit obj ~interface:Name.name ~member typ)
+  let remove_interface_by_name obj name =
+    let obj = Object.cast obj in
+    if List.exists (fun { ui_introspect = (name', _, _) } -> name = name') obj.interfaces then begin
+      obj.interfaces <- List.filter (fun { ui_introspect = (name', _, _) } -> name <> name') obj.interfaces;
+      generate obj
+    end
 
-    let ol_property member typ reader writer mode =
-      let ty = OBus_type.type_single typ in
-      properties := PropertyMap.add (Name.name, member)
-        ((match reader with
-            | None ->
-                None
-            | Some f ->
-                Some(fun obj -> f obj >|= OBus_type.make_single typ)),
-         (match writer with
-            | None ->
-                None
-            | Some f ->
-                Some(fun obj x -> match OBus_type.opt_cast_single typ x with
-                       | Some x -> f obj x
-                       | None -> fail (Failure (sprintf "invalid type for property %S: %s, should be %s"
-                                                  member
-                                                  (string_of_signature [type_of_single x])
-                                                  (string_of_signature [ty]))))))
-        !properties;
-      members := Property(member, ty, mode, []) :: !members
+  let remove_interface obj iface =
+    remove_interface_by_name obj (Interface.name iface)
 
-    let ol_property_r member typ reader = ol_property member typ (Some reader) None Read
-    let ol_property_w member typ writer = ol_property member typ None (Some writer) Write
-    let ol_property_rw member typ reader writer = ol_property member typ (Some reader) (Some writer) Read_write
-  end
+  (* +---------------------------------------------------------------+
+     | Common interfaces                                             |
+     +---------------------------------------------------------------+ *)
 
-  include Make_interface(struct let name = "org.freedesktop.DBus.Introspectable" end)
+  let introspectable = make_interface "org.freedesktop.DBus.Introspectable"
 
-  let introspect obj connection =
-    return (InterfaceMap.fold (fun name members acc -> (name, !members, []) :: acc) !interfaces [],
-            match connection#get with
-              | Crashed _ ->
-                  []
-              | Running connection ->
-                  children connection (Object.get obj).path)
+  let () =
+    Interface.method_call introspectable "Introspect" <:obus_func< OBus_connection.t -> OBus_introspect.document >>
+      (fun obj connection ->
+         let obj = Object.cast obj in
+         return (List.map (fun ui -> ui.ui_introspect) obj.interfaces,
+                 match connection#get with
+                   | Crashed _ ->
+                       []
+                   | Running connection ->
+                       children connection obj.path));
+    Interface.close introspectable
 
-  OL_method Introspect : OBus_connection.t -> OBus_introspect.document
+  let properties = make_interface "org.freedesktop.DBus.Properties"
 
-  include Make_interface(struct let name = "org.freedesktop.DBus.Properties" end)
+  let () =
+    Interface.method_call properties "Get" <:obus_func< string -> string -> variant >>
+      (fun obj interface member ->
+         match PropertyMap.lookup (interface, member) (Object.cast obj).properties with
+           | Some{ up_reader = Some f } ->
+               f (Pack obj)
+           | Some{ up_reader = None } ->
+               fail (Failure (sprintf "property %S on interface %S is not readable" member interface))
+           | None ->
+               fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
+    Interface.method_call properties "Set" <:obus_func< string -> string -> variant -> unit >>
+      (fun obj interface member x ->
+         match PropertyMap.lookup (interface, member) (Object.cast obj).properties with
+           | Some{ up_writer = Some f } ->
+               f (Pack obj) x
+           | Some{ up_writer = None } ->
+               fail (Failure (sprintf "property %S on interface %S is not writable" member interface))
+           | None ->
+               fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
+    Interface.method_call properties "GetAll" <:obus_func< string -> (string, variant) dict >>
+      (fun obj interface ->
+         PropertyMap.fold
+           (fun (interface', member) up acc ->
+              if interface = interface' then
+                match up.up_reader with
+                  | Some f ->
+                      lwt x = f (Pack obj) and l = acc in
+                      return ((member, x) :: l)
+                  | None -> acc
+              else acc)
+           (Object.cast obj).properties
+           (return []));
+    Interface.close properties
 
-  let get obj iface name =
-    match PropertyMap.lookup (iface, name) !properties with
-      | Some(Some reader, _) ->
-          reader obj
-      | Some(None, _) ->
-          fail (Failure (sprintf "property %S on interface %S is not readable" name iface))
-      | None ->
-          fail (Failure (sprintf "no such property: %S on interface %S" name iface))
+  (* +---------------------------------------------------------------+
+     | Constructors                                                  |
+     +---------------------------------------------------------------+ *)
 
-  let set obj iface name x =
-    match PropertyMap.lookup (iface, name) !properties with
-      | Some(_, Some writer) ->
-          writer obj x
-      | Some(_, None) ->
-          fail (Failure (sprintf "property %S on interface %S is not writable" name iface))
-      | None ->
-          fail (Failure (sprintf "no such property: %S on interface %S" name iface))
+  let make ?owner ?(common=true) ?(interfaces=[]) path =
+    let interfaces = if common then introspectable :: properties :: interfaces else interfaces in
+    let exports, set_exports = React.S.create ~eq:ConnectionSet.equal ConnectionSet.empty in
+    let obj = {
+      path = path;
+      exports = exports;
+      set_exports = set_exports;
+      owner = owner;
+      methods = MethodMap.empty;
+      properties = PropertyMap.empty;
+      interfaces = List.map Interface.untyped_interface interfaces;
+    } in
+    generate obj;
+    let () =
+      match owner with
+        | None ->
+            ()
+        | Some peer ->
+            ignore (lwt () = OBus_peer.wait_for_exit peer in
+                    default_destroy obj;
+                    return ())
+    in
+    obj
 
-  let get_all obj iface =
-    PropertyMap.fold (fun (iface', member) (reader, writer) acc ->
-                        if iface = iface' then
-                          match reader with
-                            | Some f ->
-                                lwt x = f obj and l = acc in
-                                return ((member, x) :: l)
-                            | None -> acc
-                        else acc) !properties (return [])
-
-  OL_method Get : string -> string -> variant
-  OL_method Set : string -> string -> variant -> unit
-  OL_method GetAll : string -> (string, variant) dict
+  let make' ?owner ?common ?interfaces () =
+    let id1 , id2 = !object_unique_id in
+    let id2 = id2 + 1 in
+    if id2 < 0 then
+      object_unique_id := (id1 + 1, 0)
+    else
+      object_unique_id := (id1, id2);
+    make ?owner ?common ?interfaces ["ocaml"; Printf.sprintf "%d_%d" id1 id2]
 end
+
+(* +-----------------------------------------------------------------+
+   | Implementation for native objects                               |
+   +-----------------------------------------------------------------+ *)
 
 include Make(struct
                type obj = t
-               let get obj = obj
+               let cast obj = obj
              end)
 
 let obus_t = obus_obj
+
+(* +-----------------------------------------------------------------+
+   | Misc                                                            |
+   +-----------------------------------------------------------------+ *)
+
+let remove_by_path packed path =
+  let connection = unpack_connection packed in
+  connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> path) connection.dynamic_objects;
+  match ObjectMap.lookup path connection.exported_objects with
+    | Some obj ->
+        connection.exported_objects <- ObjectMap.remove path connection.exported_objects;
+        obj.oo_connection_closed connection.packed
+    | None ->
+        ()
