@@ -51,7 +51,7 @@ let obus_property = OBus_type.map obus_variant
      | Pbool x -> basic (Boolean x)
      | Pdouble x -> basic (Double x))
 
-let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device"
+OP_interface "org.freedesktop.Hal.Device"
 
 OP_method GetAllProperties : (string, property) dict
 OP_method SetMultipleProperties : (string, property) dict -> unit
@@ -94,28 +94,28 @@ OP_signal InterfaceLockAcquired : string * string * int
 OP_signal InterfaceLockReleased : string * string * int
 
 module Volume = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.Volume"
+  OP_interface "org.freedesktop.Hal.Device.Volume"
   OP_method Mount : string -> string -> string list -> int
   OP_method Unmount : string list -> int
   OP_method Eject : string list -> int
 end
 module Storage = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.Storage"
+  OP_interface "org.freedesktop.Hal.Device.Storage"
   OP_method Eject : string list -> int
   OP_method CloseTray : string list -> int
 end
 module Storage_removable = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.Storage.Removable"
+  OP_interface "org.freedesktop.Hal.Device.Storage.Removable"
   OP_method CheckForMedia : bool
 end
 module Wake_on_lan = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.WakeOnLan"
+  OP_interface "org.freedesktop.Hal.Device.WakeOnLan"
   OP_method GetSupported : int
   OP_method GetEnabled : int
   OP_method SetEnabled : bool -> int
 end
 module System_power_management = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.SystemPowerManagement"
+  OP_interface "org.freedesktop.Hal.Device.SystemPowerManagement"
   OP_method Suspend : int -> int
   OP_method SuspendHybrid : int -> int
   OP_method Hibernate : int
@@ -124,7 +124,7 @@ module System_power_management = struct
   OP_method SetPowerSave : bool -> int
 end
 module Cpufreq = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.CPUFreq"
+  OP_interface "org.freedesktop.Hal.Device.CPUFreq"
   OP_method SetCPUFreqGovernor : string -> unit
   OP_method SetCPUFreqPerformance : int -> unit
   OP_method SetCPUFreqConsiderNice : bool -> unit
@@ -134,16 +134,16 @@ module Cpufreq = struct
   OP_method GetCPUFreqAvailableGovernors : string list
 end
 module Laptop_panel = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.LaptopPanel"
+  OP_interface "org.freedesktop.Hal.Device.LaptopPanel"
   OP_method SetBrightness : int -> int
   OP_method GetBrightness : int
 end
 module Dock_station = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.DockStation"
+  OP_interface "org.freedesktop.Hal.Device.DockStation"
   OP_method Undock : int
 end
 module Kill_switch = struct
-  let obus_proxy_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Device.KillSwitch"
+  OP_interface "org.freedesktop.Hal.Device.KillSwitch"
   OP_method SetPower : bool -> int
   OP_method GetPower : int
 end

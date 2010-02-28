@@ -55,10 +55,13 @@ module Interface : sig
       {[
         module M = OBus_object.Make(...)
 
-        let obus_local_interface = new M.interface "org.mydomain"
+        OL_interface(M) "org.mydomain"
 
         let foo a b c = return (a + b + c)
+        let bar a b = return (a ^ b)
+
         OL_method Foo : int -> int -> int -> int
+        OL_method Bar : string -> string -> stirng
       ]}
 
       or:
@@ -66,7 +69,7 @@ module Interface : sig
       {[
         module M = OBus_object.Make(...)
 
-        let obus_local_interface = M.make_interface "org.mydomain"
+        OL_interface(M) "org.mydomain"
 
         OL_method Foo : int -> int -> int -> int =
           fun a b c -> return (a + b + c)
@@ -74,7 +77,7 @@ module Interface : sig
           fun a b c -> return (a + b + c)
       ]}
 
-      where [OL_method] stands for "OBus Local method".
+      where [OL_xxx] stands for "OBus Local xxx".
   *)
 
   type 'obj t

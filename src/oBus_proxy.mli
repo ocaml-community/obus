@@ -49,21 +49,17 @@ module Interface : sig
       interface. It is aimed to be used in conjunction with the
       [obus.syntax] syntax extension.
 
-      To use it, you must create a variable named
-      [obus_proxy_interface] of type {!OBus_proxy.Interface.t}, then
-      you can use the syntax extension to define members of the class.
-
       Here is a typical example:
 
       {[
-        let obus_proxy_interface = OBus_proxy.make_interface "org.foo.bar"
+        OP_interface "org.foo.bar"
 
         OP_method Foo : int -> int
         OP_method Bar : strign -> unit
         ...
       ]}
 
-      where [OP_method] stands for "OBus Proxy method".
+      where [OP_xxx] stands for "OBus Proxy xxx".
 
       Note that interface contained in XML introspection files can be
       automatically converted with [obus-binder] *)
