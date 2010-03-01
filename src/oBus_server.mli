@@ -55,8 +55,8 @@ val make :
       About errors:
       - if no address are provided, it raises [Invalid_argument],
       - if an address is invalid, it raises [Invalid_argument]
-      - if listenning fails for all addresses, it fails with the
-        exception reported for the first address
+      - if listenning fails for one of the addresses, it fails with the
+        exception reported for this address
 
       It succeed if it can listen on at least one address.
   *)

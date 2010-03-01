@@ -44,6 +44,23 @@ type server = {
   server_allow_anonymous : bool;
 }
 
+let cleanup address =
+  match OBus_address.name address with
+    | "unix" -> begin
+        match OBus_address.arg "path" address with
+          | Some path -> begin
+              try
+                Unix.unlink path;
+                return ()
+              with Unix_error(err, _, _) ->
+                Log.error_f "cannot unlink %S: %s" path (Unix.error_message err)
+            end
+          | _ ->
+              return ()
+      end
+    | _ ->
+        return ()
+
 let accept server listen =
   try_lwt
     lwt fd, address = Lwt_unix.accept listen.listen_fd in
@@ -74,24 +91,7 @@ let rec listen_loop server listen =
           with Unix_error(err, _, _) ->
             Log.error_f "cannot close listenning socket: %s" (Unix.error_message err)
         in
-        lwt () =
-          match OBus_address.name listen.listen_address with
-            | "unix" -> begin
-                match OBus_address.arg "path" listen.listen_address with
-                  | Some path when String.length path >= 1 && path.[0] <> '\x00' -> begin
-                      try
-                        Unix.unlink path;
-                        return ()
-                      with Unix_error(err, _, _) ->
-                        Log.error_f "cannot unlink %S: %s" path (Unix.error_message err)
-                    end
-                  | _ ->
-                      return ()
-              end
-            | _ ->
-                return ()
-        in
-        return ()
+        cleanup listen.listen_address
 
     | Event_connection(fd, address) ->
         lwt () =
@@ -262,91 +262,105 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
     | addresses ->
         (* Construct the list of all listening fds for each
            address: *)
-        lwt result_by_address = Lwt_list.fold_left_s
-          (fun acc address ->
-             try_lwt
-               lwt x = fds_of_address address in
-               return (`Success x :: acc)
-             with e ->
-               return (`Failure e :: acc))
-          [] addresses
+        lwt result_by_address =
+          Lwt_list.map_p
+            (fun address ->
+               try_lwt
+                 lwt x = fds_of_address address in
+                 return (`Success x)
+               with e ->
+                 return (`Failure e))
+            addresses
         in
 
-        (* Keeps only success: *)
-        let successes =
-          OBus_util.filter_map
-            (function
-               | `Failure _ | `Success([], _) -> None
-               | `Success(fds, address) -> Some(fds, address))
-            result_by_address
-        in
+        match OBus_util.find_map (function `Success _ -> None | `Failure e -> Some e) result_by_address with
+          | Some exn ->
+              (* We fail to listen on one of the given addresses,
+                 close everything and fail: *)
+              lwt () =
+                Lwt_list.iter_p
+                  (function
+                     | `Success(fds, address) ->
+                         lwt () =
+                           Lwt_list.iter_p
+                             (fun fd ->
+                                try_lwt
+                                  Lwt_unix.close fd;
+                                  return ()
+                                with Unix_error(err, _, _) ->
+                                  Log.error_f "failed to close listenning file descriptor: %s" (Unix.error_message err))
+                             fds
+                         in
+                         cleanup address
+                     | `Failure e ->
+                         return ())
+                  result_by_address
+              in
+              fail exn
 
-        (* Fails if no listening file descriptor have been created: *)
-        if successes = [] then
-          match OBus_util.find_map (function `Failure exn -> Some exn | _ -> None) result_by_address with
-            | Some exn ->
-                (* Fails with the first error, if any *)
-                fail exn
-            | None ->
-                (* Otherwise just returns a Failure *)
-                fail (Failure "OBus_server.make_server: unable to listening on any address")
+          | None ->
+              let successes =
+                List.map
+                  (function
+                     | `Failure _ -> assert false
+                     | `Success x -> x)
+                  result_by_address
+              in
 
-        else begin
-          let guids = List.map (fun _ -> OBus_uuid.generate ()) successes
-          and event, push = React.E.create ()
-          and abort_waiter, abort_wakener = Lwt.wait () in
+              let guids = List.map (fun _ -> OBus_uuid.generate ()) successes
+              and event, push = React.E.create ()
+              and abort_waiter, abort_wakener = Lwt.wait () in
 
-          let successes =
-            List.map2
-              (fun (fds, address) guid ->
-                 (fds, {
-                    OBus_address.name = OBus_address.name address;
-                    OBus_address.args = ("guid", OBus_uuid.to_string guid) :: OBus_address.args address;
-                  }))
-              successes guids
-          in
+              let successes =
+                List.map2
+                  (fun (fds, address) guid ->
+                     (fds, {
+                        OBus_address.name = OBus_address.name address;
+                        OBus_address.args = ("guid", OBus_uuid.to_string guid) :: OBus_address.args address;
+                      }))
+                  successes guids
+              in
 
-          let listeners = List.flatten
-            (List.map2
-               (fun (fds, address) guid ->
-                  List.map
-                    (fun fd -> { listen_fd = fd;
-                                 listen_address = address;
-                                 listen_capabilities = (List.filter
-                                                          (fun `Unix_fd ->
-                                                             match (OBus_address.arg "path" address,
-                                                                    OBus_address.arg "abstract" address) with
-                                                               | None, None -> false
-                                                               | _ -> true)
-                                                          capabilities);
-                                 listen_guid = guid })
-                    fds)
-               successes guids)
-          and listener_threads = ref [] in
+              let listeners = List.flatten
+                (List.map2
+                   (fun (fds, address) guid ->
+                      List.map
+                        (fun fd -> { listen_fd = fd;
+                                     listen_address = address;
+                                     listen_capabilities = (List.filter
+                                                              (fun `Unix_fd ->
+                                                                 match (OBus_address.arg "path" address,
+                                                                        OBus_address.arg "abstract" address) with
+                                                                   | None, None -> false
+                                                                   | _ -> true)
+                                                              capabilities);
+                                     listen_guid = guid })
+                        fds)
+                   successes guids)
+              and listener_threads = ref [] in
 
-          let server = {
-            server_up = true;
-            server_abort = abort_waiter;
-            server_mechanisms = mechanisms;
-            server_push = push;
-            server_allow_anonymous = allow_anonymous;
-          } in
+              let server = {
+                server_up = true;
+                server_abort = abort_waiter;
+                server_mechanisms = mechanisms;
+                server_push = push;
+                server_allow_anonymous = allow_anonymous;
+              } in
 
-          let rec shutdown = lazy(
-            if server.server_up then begin
-              server.server_up <- false;
-              wakeup abort_wakener Event_shutdown
-            end;
-            (* Wait for all listenners to exit: *)
-            Lwt.join !listener_threads
-          ) in
+              let rec shutdown = lazy(
+                if server.server_up then begin
+                  server.server_up <- false;
+                  wakeup abort_wakener Event_shutdown
+                end;
+                (* Wait for all listenners to exit: *)
+                Lwt.join !listener_threads
+              ) in
 
-          (* Launch waiting loops. Yield so the user have the time to
-             bind the event before the first connection: *)
-          List.iter (fun listen -> listener_threads := (Lwt_main.fast_yield () >> listen_loop server listen) :: !listener_threads) listeners;
+              (* Launch waiting loops. Yield so the user have the time
+                 to bind the event before the first connection: *)
+              List.iter (fun listen -> listener_threads := (Lwt_main.fast_yield () >> listen_loop server listen) :: !listener_threads) listeners;
 
-          return (event, (List.map snd successes), shutdown)
-        end
+              return (event, (List.map snd successes), shutdown)
 
 let make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
   lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
