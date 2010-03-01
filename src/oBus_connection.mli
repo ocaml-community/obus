@@ -208,7 +208,7 @@ val send_error : t -> OBus_message.t -> OBus_error.name -> OBus_error.message ->
 
 val send_exn : t -> OBus_message.t -> exn -> unit Lwt.t
   (** [send_exn connection method_call exn] is a short-hand for
-      passing [exn] through [OBus_error.unmake] then calling
+      passing [exn] through [OBus_error.cast] then calling
       [send_error].
 
       It send the dbus error ["ocaml.Exception"] with the exception as

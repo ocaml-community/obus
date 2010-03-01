@@ -40,24 +40,12 @@ let errors = ref
 
 let make name msg =
   match OBus_util.assoc name !errors with
-    | Some (maker, unmaker) -> maker msg
+    | Some (make, cast) -> make msg
     | None -> DBus(name, msg)
 
-let unmake = function
+let cast = function
   | DBus(name, msg) -> Some(name, msg)
-  | exn -> OBus_util.find_map (fun (name, (maker, unmaker)) ->
-                                 OBus_util.map_option (unmaker exn) (fun msg -> (name, msg))) !errors
+  | exn -> OBus_util.find_map (fun (name, (make, cast)) ->
+                                 OBus_util.map_option (cast exn) (fun msg -> (name, msg))) !errors
 
-let register name maker unmaker = errors := (name, (maker, unmaker)) :: !errors
-
-let () =
-  Printexc.register_printer
-    (function
-       | Failure _ ->
-           None
-       | exn ->
-           match unmake exn with
-             | Some(name, msg) ->
-                 Some(Printf.sprintf "D-Bus error: %s: %s" name msg)
-             | None ->
-                 None)
+let register name make cast = errors := (name, (make, cast)) :: !errors

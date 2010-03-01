@@ -75,5 +75,5 @@ val make : name -> message -> exn
   (** Make an exception from a D-Bus error name and message. It return
       [DBus(name, message)] if [name] has not been registred *)
 
-val unmake : exn -> (name * message) option
-  (** Return the D-Bus error name and message of a caml exception. *)
+val cast : exn -> (name * message) option
+  (** Return the D-Bus error name and message of an ocaml exception. *)

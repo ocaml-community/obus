@@ -292,7 +292,7 @@ let send_error packed { sender = sender; serial = serial } name msg =
                         body = [basic(String msg)] }
 
 let send_exn packed method_call exn =
-  match OBus_error.unmake exn with
+  match OBus_error.cast exn with
     | Some(name, msg) ->
         send_error packed method_call name msg
     | None ->
