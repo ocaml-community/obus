@@ -135,6 +135,38 @@ let make_socket domain typ addr =
     Lwt_unix.close fd;
     fail exn
 
+let rec write_nonce fd nonce pos len =
+  Lwt_unix.write fd nonce 0 16 >>= function
+    | 0 ->
+        fail (Failure "OBus_transport.connect: failed to send the nonce to the server")
+    | n ->
+        if n = len then
+          return ()
+        else
+          write_nonce fd nonce (pos + n) (len - n)
+
+let make_socket_nonce nonce_file domain typ addr =
+  match nonce_file with
+    | None ->
+        fail (Invalid_argument "OBus_transport.connect: missing 'noncefile' parameter")
+    | Some file_name ->
+        lwt nonce =
+          try_lwt
+            Lwt_io.with_file ~mode:Lwt_io.input file_name (Lwt_io.read ~count:16)
+          with
+            | Unix.Unix_error(err, _, _) ->
+                fail (Failure(Printf.sprintf "failed to read the nonce file '%s': %s" file_name (Unix.error_message err)))
+            | End_of_file ->
+                fail (Failure(Printf.sprintf "OBus_transport.connect: '%s' is an invalid nonce-file" file_name))
+        in
+        if String.length nonce <> 16 then
+          fail (Failure(Printf.sprintf "OBus_transport.connect: '%s' is an invalid nonce-file" file_name))
+        else begin
+          lwt fd, domain = make_socket domain typ addr in
+          lwt () = write_nonce fd nonce 0 16 in
+          return (fd, domain)
+        end
+
 let rec connect address =
   match OBus_address.name address with
     | "unix" -> begin
@@ -150,7 +182,7 @@ let rec connect address =
           | _ ->
               fail (Invalid_argument "OBus_transport.connect: invalid unix address, must supply exactly one of 'path', 'abstract', 'tmpdir'")
       end
-    | "tcp" -> begin
+    | ("tcp" | "nonce-tcp") as name -> begin
         let host = match OBus_address.arg "host" address with
           | Some host -> host
           | None -> ""
@@ -175,6 +207,12 @@ let rec connect address =
                    | None -> ""
                    | Some f -> " family=" ^ f)
           | ai :: ais ->
+              let make_socket =
+                if name = "nonce-tcp" then
+                  make_socket_nonce (OBus_address.arg "noncefile" address)
+                else
+                  make_socket
+              in
               try_lwt
                 make_socket ai.ai_family ai.ai_socktype ai.ai_addr
               with exn ->
