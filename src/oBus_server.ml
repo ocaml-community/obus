@@ -13,6 +13,10 @@ open Unix
 open Lwt
 open OBus_private
 
+(* +-----------------------------------------------------------------+
+   | Types                                                           |
+   +-----------------------------------------------------------------+ *)
+
 class type t = object
   method event : OBus_connection.t React.event
   method addresses : OBus_address.t list
@@ -44,6 +48,10 @@ type server = {
   server_allow_anonymous : bool;
   server_nonce : string;
 }
+
+(* +-----------------------------------------------------------------+
+   | Accepting new connecctions                                      |
+   +-----------------------------------------------------------------+ *)
 
 let cleanup address =
   match OBus_address.name address with
@@ -122,6 +130,10 @@ let rec accept server listen =
     | `Shutdown ->
         return Event_shutdown
 
+(* +-----------------------------------------------------------------+
+   | Listeners                                                       |
+   +-----------------------------------------------------------------+ *)
+
 let string_of_address = function
   | ADDR_UNIX path ->
       path
@@ -188,6 +200,10 @@ let rec listen_loop server listen =
                 Log.exn_f exn "authentication for client from %s failed with" (string_of_address address)
         in
         listen_loop server listen
+
+(* +-----------------------------------------------------------------+
+   | Address -> transport                                            |
+   +-----------------------------------------------------------------+ *)
 
 let make_socket domain typ address =
   let fd = Lwt_unix.socket domain typ 0 in
@@ -316,6 +332,10 @@ let fd_addr_list_of_address address = match OBus_address.name address with
 
   | name ->
       fail (Failure ("OBus_server.make_server: unknown transport type: " ^ name))
+
+(* +-----------------------------------------------------------------+
+   | Servers creation                                                |
+   +-----------------------------------------------------------------+ *)
 
 let default_address = OBus_address.make ~name:"unix" ~args:[("tmpdir", Filename.temp_dir_name)]
 
@@ -458,6 +478,10 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
               List.iter (fun listen -> listener_threads := (Lwt_main.fast_yield () >> listen_loop server listen) :: !listener_threads) listeners;
 
               return (event, (List.map snd (List.flatten successes)), shutdown)
+
+(* +-----------------------------------------------------------------+
+   | Public maker                                                    |
+   +-----------------------------------------------------------------+ *)
 
 let make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
   lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
