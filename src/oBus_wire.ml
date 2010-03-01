@@ -207,7 +207,7 @@ struct
     | Object_path p ->
         c.ofs <- pad4 c.ofs + path_length p + 5
     | Unix_fd fd ->
-        c.ofs <- pad4 c.ofs+ 4;
+        c.ofs <- pad4 c.ofs + 4;
         c.fds <- FDSet.add fd c.fds
 
   let rec single c = function
@@ -272,9 +272,12 @@ struct
       | Some sender ->
           c.ofs <- pad8 c.ofs + 9 + String.length sender
     end;
+    (* The signature *)
     c.ofs <- pad8 c.ofs + 6;
     tsequence_of_sequence c msg.body;
+    (* The number of fds: *)
     c.ofs <- pad8 c.ofs + 8;
+    (* The message body: *)
     sequence c msg.body;
     c
 end
@@ -524,7 +527,7 @@ type wpointer = {
 }
 
 let write_padding2 ptr =
-  if pad2 ptr.ofs = 1 then begin
+  if ptr.ofs land 1 = 1 then begin
     put_uint8 ptr.buf ptr.ofs 0;
     ptr.ofs <- ptr.ofs + 1
   end
@@ -838,7 +841,7 @@ let write_message oc ?byte_order msg =
     | str, [||] ->
         Lwt_io.write oc str
     | _ ->
-        fail (Data_error "Cannot send a message with file descriptros on a channel")
+        fail (Data_error "Cannot send a message with file descriptors on a channel")
 
 type writer = {
   channel : Lwt_io.output_channel;
