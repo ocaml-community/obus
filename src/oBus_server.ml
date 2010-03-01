@@ -42,6 +42,7 @@ type server = {
   server_mechanisms : OBus_auth.Server.mechanism list option;
   server_push : OBus_transport.t -> unit;
   server_allow_anonymous : bool;
+  server_nonce : string;
 }
 
 let cleanup address =
@@ -53,27 +54,73 @@ let cleanup address =
                 Unix.unlink path;
                 return ()
               with Unix_error(err, _, _) ->
-                Log.error_f "cannot unlink %S: %s" path (Unix.error_message err)
+                Log.error_f "cannot unlink '%s': %s" path (Unix.error_message err)
             end
-          | _ ->
+          | None ->
               return ()
       end
     | _ ->
         return ()
 
-let accept server listen =
-  try_lwt
-    lwt fd, address = Lwt_unix.accept listen.listen_fd in
-    (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
-    return (Event_connection(fd, address))
-  with Unix_error(err, _, _) ->
-    lwt () =
-      if server.server_up then
-        Log.error_f "uncaught error: %s" (error_message err)
-      else
-        return ()
-    in
-    return Event_shutdown
+let rec read_nonce fd buf ofs len =
+  Lwt_unix.read fd buf ofs len >>= function
+    | 0 ->
+        fail End_of_file
+    | n ->
+        if n = len then
+          return ()
+        else
+          read_nonce fd buf (ofs + n) (len - n)
+
+let rec accept server listen =
+  begin
+    try_lwt
+      lwt result = Lwt_unix.accept listen.listen_fd in
+      return (`Accept result)
+    with Unix_error(err, _, _) ->
+      lwt () =
+        if server.server_up then
+          Log.error_f "uncaught error: %s" (error_message err)
+        else
+          return ()
+      in
+      return `Shutdown
+  end >>= function
+    | `Accept(fd, address) ->
+        if OBus_address.name listen.listen_address = "nonce-tcp" then
+          begin
+            let nonce = String.create 16 in
+            try_lwt
+              lwt () = read_nonce fd nonce 0 16 in
+              if nonce <> server.server_nonce then begin
+                lwt () = Log.info_f "client rejected because of invalid nonce" in
+                return `Drop
+              end else
+                return `OK
+            with
+              | End_of_file ->
+                  lwt () = Log.warning "cannot read nonce from socket" in
+                  return `Drop
+              | Unix.Unix_error(err, _, _) ->
+                  lwt () = Log.warning_f "cannot read nonce from socket: %s" (Unix.error_message err) in
+                  return `Drop
+          end >>= function
+            | `OK ->
+                return (Event_connection(fd, address))
+            | `Drop ->
+                lwt () =
+                  try
+                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                    Lwt_unix.close fd;
+                    return ()
+                  with Unix.Unix_error(err, _, _) ->
+                    Log.error_f "cannot shutdown socket: %s" (Unix.error_message err)
+                in
+                accept server listen
+        else
+          return (Event_connection(fd, address))
+    | `Shutdown ->
+        return Event_shutdown
 
 let string_of_address = function
   | ADDR_UNIX path ->
@@ -118,19 +165,20 @@ let rec listen_loop server listen =
                       ()
                   in
                   if user_id = None && not server.server_allow_anonymous then begin
-                    ignore (Log.info_f "client from %s rejected because anonymous connection are not allowed" (string_of_address address));
-                    try
+                    lwt () = Log.info_f "client from %s rejected because anonymous connection are not allowed" (string_of_address address) in
+                    try_lwt
                       Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                      Lwt_unix.close fd
-                    with exn ->
-                      ignore (Log.exn exn "shutdown socket failed with")
+                      Lwt_unix.close fd;
+                      return ()
+                    with Unix.Unix_error(err, _, _) ->
+                      Log.error_f "cannot shutdown socket: %s" (Unix.error_message err)
                   end else begin
                     try
-                      server.server_push (OBus_transport.socket ~capabilities fd)
+                      server.server_push (OBus_transport.socket ~capabilities fd);
+                      return ()
                     with exn ->
-                      ignore (Log.exn exn "failed to push new transport with")
-                  end;
-                  return ()
+                      Log.exn exn "failed to push new transport with"
+                  end
               | _ ->
                   assert false
           with
@@ -197,7 +245,7 @@ let fd_addr_list_of_address address = match OBus_address.name address with
             fail (Invalid_argument "OBus_transport.connect: invalid unix address, must supply exactly one of 'path', 'abstract', 'tmpdir'")
     end
 
-  | "tcp" -> begin
+  | ("tcp" | "nonce-tcp") as name -> begin
       let port = match OBus_address.arg "port" address with
         | Some port -> port
         | None -> "0"
@@ -236,13 +284,13 @@ let fd_addr_list_of_address address = match OBus_address.name address with
                      | ADDR_UNIX path ->
                          assert false
                      | ADDR_INET(host, port) ->
-                         return (`Success(fd, OBus_address.make ~name:"tcp" ~args:[("host", string_of_inet_addr host);
-                                                                                   ("port", string_of_int port);
-                                                                                   ("family",
-                                                                                    match ai.ai_family with
-                                                                                      | PF_UNIX -> assert false
-                                                                                      | PF_INET -> "ipv4"
-                                                                                      | PF_INET6 -> "ipv6")]))
+                         return (`Success(fd, OBus_address.make ~name ~args:[("host", string_of_inet_addr host);
+                                                                             ("port", string_of_int port);
+                                                                             ("family",
+                                                                              match ai.ai_family with
+                                                                                | PF_UNIX -> assert false
+                                                                                | PF_INET -> "ipv4"
+                                                                                | PF_INET6 -> "ipv6")]))
                  with exn ->
                    return (`Failure exn))
               ais
@@ -289,29 +337,45 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
             addresses
         in
 
+        (* Close all listening file descriptors and fail: *)
+        let abort exn =
+          lwt () =
+            Lwt_list.iter_p
+              (function
+                 | `Success fd_addr_list ->
+                     Lwt_list.iter_p
+                       (fun (fd, address) ->
+                          try_lwt
+                            Lwt_unix.close fd;
+                            cleanup address
+                          with Unix_error(err, _, _) ->
+                            Log.error_f "failed to close listenning file descriptor: %s" (Unix.error_message err))
+                       fd_addr_list
+                 | `Failure e ->
+                     return ())
+              result_by_address
+          in
+          fail exn
+        in
+
         match OBus_util.find_map (function `Success _ -> None | `Failure e -> Some e) result_by_address with
           | Some exn ->
-              (* We fail to listen on one of the given addresses,
-                 close everything and fail: *)
-              lwt () =
-                Lwt_list.iter_p
-                  (function
-                     | `Success fd_addr_list ->
-                         Lwt_list.iter_p
-                           (fun (fd, address) ->
-                              try_lwt
-                                Lwt_unix.close fd;
-                                cleanup address
-                              with Unix_error(err, _, _) ->
-                                Log.error_f "failed to close listenning file descriptor: %s" (Unix.error_message err))
-                           fd_addr_list
-                     | `Failure e ->
-                         return ())
-                  result_by_address
-              in
-              fail exn
+              abort exn
 
           | None ->
+              lwt nonce, nonce_file =
+                if List.exists (fun addr -> OBus_address.name addr = "nonce-tcp") addresses then begin
+                  let nonce = OBus_util.random_string 16 in
+                  let file_name = Filename.concat Filename.temp_dir_name ("obus-" ^ OBus_util.hex_encode (OBus_util.random_string 10)) in
+                  try_lwt
+                    lwt () = Lwt_io.with_file ~mode:Lwt_io.output file_name (fun oc -> Lwt_io.write oc nonce) in
+                    return (nonce, file_name)
+                  with Unix.Unix_error(err, _, _) ->
+                    abort (Failure(Printf.sprintf "cannot create nonce file '%s': %s" file_name (Unix.error_message err)))
+                end else
+                  return ("", "")
+              in
+
               let successes =
                 List.map
                   (function
@@ -329,10 +393,14 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
                   (fun fd_addr_list guid ->
                      List.map
                        (fun (fd, addr) ->
-                          (fd, {
-                             OBus_address.name = OBus_address.name addr;
-                             OBus_address.args = ("guid", OBus_uuid.to_string guid) :: OBus_address.args addr;
-                           }))
+                          let args = ("guid", OBus_uuid.to_string guid) :: OBus_address.args addr in
+                          let args =
+                            if OBus_address.name addr = "nonce-tcp" then
+                              ("noncefile", nonce_file) :: args
+                            else
+                              args
+                          in
+                          (fd, { addr with OBus_address.args = args }))
                        fd_addr_list)
                   successes guids
               in
@@ -363,6 +431,7 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
                 server_mechanisms = mechanisms;
                 server_push = push;
                 server_allow_anonymous = allow_anonymous;
+                server_nonce = nonce;
               } in
 
               let rec shutdown = lazy(
@@ -370,6 +439,16 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
                   server.server_up <- false;
                   wakeup abort_wakener Event_shutdown
                 end;
+                lwt () =
+                  if nonce_file <> "" then begin
+                    try
+                      Unix.unlink nonce_file;
+                      return ()
+                    with Unix_error(err, _, _) ->
+                      Log.error_f "cannot unlink '%s': %s" nonce_file (Unix.error_message err)
+                  end else
+                    return ()
+                in
                 (* Wait for all listenners to exit: *)
                 Lwt.join !listener_threads
               ) in
