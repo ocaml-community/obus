@@ -26,10 +26,14 @@ val of_addresses : OBus_address.t list -> t Lwt.t
   (** Establish a connection with a message bus. The bus must be
       accessible with at least one of the given addresses *)
 
-val register_connection : OBus_connection.t -> unit Lwt.t
+val register_connection : ?set_on_disconnect : bool -> OBus_connection.t -> unit Lwt.t
   (** Register the given connection to a message bus. It has the side
       effect of requesting a name to the message bus if not already
       done.
+
+      If [set_on_disconnect] is [true] (the default) then the
+      {!OBus_connection.on_disconnect} function of the connection is
+      replaced (see notes bellow).
 
       If the connection is a connection to a message bus, created with
       one of the function of {!OBus_connection} then
