@@ -44,44 +44,65 @@ let () =
 
 let validate s =
   let fail i msg = Some{ typ = "string"; str = s; ofs = i; msg = msg } in
-
-  let rec trail minimum acc count i =
-    if i = String.length s then
-      fail i "premature end of UTF8 sequence"
-    else
-      let n = Char.code (String.unsafe_get s i) in
-      if n land 0xc0 = 0x80 then
-        let acc = (acc lsl 6) lor (n land 0x3f) in
-        match count with
-          | 1 ->
-              if acc < minimum then
-                fail i "overlong UTF8 sequence"
-              else
-                main (i + 1)
-          | _ ->
-              trail minimum acc (count - 1) (i + 1)
-      else
-        fail i "malformed UTF8 sequence"
-
-  and main i =
-    if i = String.length s then
+  let len = String.length s in
+  let rec main i =
+    if i = len then
       None
     else
-      let n = Char.code (String.unsafe_get s i) in
-      if n = 0 then
-        fail i "null byte"
-      else if n land 0x80 = 0 then
-        main (i + 1)
-      else if n land 0xe0 = 0xc0 then
-        trail 0x80 (n land 0x1f) 1 (i + 1)
-      else if n land 0xf0 = 0xe0 then
-        trail 0x800 (n land 0x0f) 2 (i + 1)
-      else if n land 0xf8 = 0xf0 then
-        trail 0x10000 (n land 0x07) 3 (i + 1)
-      else
-        fail i "invalid start of UTF8 sequence"
+      let ch = String.unsafe_get s i in
+      match ch with
+        | '\x00' ->
+            fail i "null byte"
+        | '\x01' .. '\x7f' ->
+            main (i + 1)
+        | '\xc0' .. '\xdf' ->
+            if i + 1 >= len then
+              fail len "premature end of UTF8 sequence"
+            else begin
+              let byte1 = Char.code (String.unsafe_get s (i + 1)) in
+              if byte1 land 0xc0 != 0x80 then
+                fail (i + 1)  "malformed UTF8 sequence"
+              else if ((Char.code ch land 0x1f) lsl 6) lor (byte1 land 0x3f) < 0x80 then
+                fail i "overlong UTF8 sequence"
+              else
+                main (i + 2)
+            end
+        | '\xe0' .. '\xef' ->
+            if i + 2 >= len then
+              fail len "premature end of UTF8 sequence"
+            else begin
+              let byte1 = Char.code (String.unsafe_get s (i + 1))
+              and byte2 = Char.code (String.unsafe_get s (i + 2)) in
+              if byte1 land 0xc0 != 0x80 then
+                fail (i + 1)  "malformed UTF8 sequence"
+              else if byte2 land 0xc0 != 0x80 then
+                fail (i + 2)  "malformed UTF8 sequence"
+              else if ((Char.code ch land 0x0f) lsl 12) lor ((byte1 land 0x3f) lsl 6) lor (byte2 land 0x3f) < 0x800 then
+                fail i "overlong UTF8 sequence"
+              else
+                main (i + 3)
+            end
+        | '\xf0' .. '\xf7' ->
+            if i + 3 >= len then
+              fail len "premature end of UTF8 sequence"
+            else begin
+              let byte1 = Char.code (String.unsafe_get s (i + 1))
+              and byte2 = Char.code (String.unsafe_get s (i + 2))
+              and byte3 = Char.code (String.unsafe_get s (i + 3)) in
+              if byte1 land 0xc0 != 0x80 then
+                fail (i + 1)  "malformed UTF8 sequence"
+              else if byte2 land 0xc0 != 0x80 then
+                fail (i + 2)  "malformed UTF8 sequence"
+              else if byte3 land 0xc0 != 0x80 then
+                fail (i + 3)  "malformed UTF8 sequence"
+              else if ((Char.code ch land 0x0f) lsl 18) lor ((byte1 land 0x3f) lsl 12) lor ((byte2 land 0x3f) lsl 6) lor (byte3 land 0x3f) < 0x10000 then
+                fail i "overlong UTF8 sequence"
+              else
+                main (i + 4)
+            end
+        | _ ->
+            fail i "invalid start of UTF8 sequence"
   in
-
   main 0
 
 let assert_validate validator str = match validator str with
