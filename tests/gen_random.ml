@@ -62,6 +62,7 @@ let uint64 () = Int64.logor (Int64.shift_left (Random.int64 Int64.max_int) 1) (R
 let int16 () = uint16 () - (1 lsl 15)
 let int32 () = uint32 ()
 let int64 () = uint64 ()
+let double () = Int64.to_float (int64 ())
 
 (* In the following functions, [count] is the number of terminals
    (basic types/values) and [deep] is the current number of containers
@@ -116,7 +117,7 @@ let basic count deep = function
   | Tuint16 -> count + 1, Uint16(uint16 ())
   | Tuint32 -> count + 1, Uint32(uint32 ())
   | Tuint64 -> count + 1, Uint64(uint64 ())
-  | Tdouble -> count + 1, Double(Int64.float_of_bits (int64 ()))
+  | Tdouble -> count + 1, Double(double ())
   | Tstring -> count + 1, String(string 100)
   | Tsignature -> count + 1, Signature(snd (tsequence 0 0))
   | Tobject_path -> count + 1, Object_path(path ())
