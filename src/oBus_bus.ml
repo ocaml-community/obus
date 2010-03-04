@@ -62,10 +62,25 @@ let of_addresses addresses =
   lwt () = register_connection bus in
   return bus
 
-let of_laddresses laddr = Lazy.force laddr >>= of_addresses
+let of_laddresses name laddr =
+  try_lwt
+    Lazy.force laddr >>= of_addresses
+  with exn ->
+    lwt () =
+      Log.warning_f "Failed to open a connection to the %s bus: %s"
+        name
+        (match exn with
+           | Unix.Unix_error(error, func, "") ->
+               Printf.sprintf "%s: %s" func (Unix.error_message error)
+           | Unix.Unix_error(error, func, arg) ->
+               Printf.sprintf "%s(%s): %s" func arg (Unix.error_message error)
+           | exn ->
+               Printexc.to_string exn)
+    in
+    fail exn
 
-let session = lazy(of_laddresses OBus_address.session)
-let system = lazy(of_laddresses OBus_address.system)
+let session = lazy(of_laddresses "session" OBus_address.session)
+let system = lazy(of_laddresses "system" OBus_address.system)
 
 let prefix = OBus_proxy.Interface.name dbus ^ ".Error."
 

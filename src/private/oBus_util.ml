@@ -12,14 +12,6 @@ module Log = Lwt_log.Make(struct let section = "obus(util)" end)
 open Lwt
 open Printf
 
-let () =
-  Printexc.register_printer
-    (function
-       | Unix.Unix_error(error, _, _) ->
-           Some(Unix.error_message error)
-       | _ ->
-           None)
-
 let rec assoc x = function
   | [] -> None
   | (k, v) :: _ when k = x -> Some(v)
