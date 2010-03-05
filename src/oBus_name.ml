@@ -15,84 +15,177 @@ type interface = string
 type member = string
 type error = string
 
-let alpha ch = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
-let underscore ch = ch = '_'
-let hyphen ch = ch = '-'
-let digit ch = ch >= '0' && ch <= '9'
+(* +-----------------------------------------------------------------+
+   | Bus names                                                       |
+   +-----------------------------------------------------------------+ *)
 
-(*** Common names, which are of the form element1.element2.element3... ***)
+let is_unique name = length name > 0 && unsafe_get name 0 = ':'
 
-(* [validate_from str i] test that the name in [str] starting at [i]
-   is valid *)
-let validate_from typ valid_char str i =
-  let fail i msg = Some{ typ = typ; str = str; ofs = i; msg = msg }
+let validate_unique_connection str =
+  let fail i msg = Some{ typ = "unique connection name"; str = str; ofs = i; msg = msg }
   and len = length str in
 
-  let rec aux_element_start i =
+  let rec element_start i =
     if i = len then
       fail i "empty element"
-    else if valid_char (unsafe_get str i) then
-      aux_element (i + 1)
-    else if unsafe_get str i = '.' then
-      fail i "empty element"
-    else
-      fail i "invalid character"
+    else match unsafe_get str i with
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' | '0' .. '9'->
+          element (i + 1)
+      | '.' ->
+          fail i "empty element"
+      | _ ->
+          fail i "invalid character"
 
-  and aux_element i =
+  and element i =
     if i = len then
       None
-    else
-      let ch = unsafe_get str i in
-      if ch = '.' then
-        aux_element_start (i + 1)
-      else if valid_char ch || digit ch then
-        aux_element (i + 1)
-      else
-        fail i "invalid character"
+    else match unsafe_get str i with
+      | '.' ->
+          element_start (i + 1)
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' | '0' .. '9'->
+          element (i + 1)
+      | _ ->
+          fail i "invalid character"
 
-  and aux_first_element_start i =
-    if i = len then
-      fail i "empty element"
-    else if valid_char (unsafe_get str i) then
-      aux_first_element (i + 1)
-    else if unsafe_get str i = '.' then
-      fail i "empty element"
-    else
-      fail i "invalid character"
-
-  and aux_first_element i =
+  and first_element i =
     if i = len then
       fail (-1) "must contains at least two elements"
-    else
-      let ch = unsafe_get str i in
-      if ch = '.' then
-        aux_element_start (i + 1)
-      else if valid_char ch || digit ch then
-        aux_first_element (i + 1)
-      else
-        fail i "invalid character"
-
+    else match unsafe_get str i with
+      | '.' ->
+          element_start (i + 1)
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' | '0' .. '9'->
+          first_element (i + 1)
+      | _ ->
+          fail i "invalid character"
   in
 
   if len > OBus_constant.max_name_length then
     fail (-1) "name too long"
-  else
-    aux_first_element_start i
+  else if len = 1 then
+    fail 1 "premature end of name"
+  else match unsafe_get str 1 with
+    | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' | '0' .. '9'->
+        first_element 2
+    | '.' ->
+        fail 1 "empty element"
+    | _ ->
+        fail 1 "invalid character"
 
-let validate typ valid_char = function
-  | "" -> Some{ typ = typ; str = ""; ofs = -1; msg = "empty name" }
-  | n -> validate_from typ valid_char n 0
+let validate_bus_other str =
+  let fail i msg = Some{ typ = "unique connection name"; str = str; ofs = i; msg = msg }
+  and len = length str in
 
-let validate_interface str = validate "interface name" (fun ch -> alpha ch || underscore ch) str
-let validate_error str = validate "error name" (fun ch -> alpha ch || underscore ch) str
+  let rec element_start i =
+    if i = len then
+      fail i "empty element"
+    else match unsafe_get str i with
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' ->
+          element (i + 1)
+      | '.' ->
+          fail i "empty element"
+      | _ ->
+          fail i "invalid character"
+
+  and element i =
+    if i = len then
+      None
+    else match unsafe_get str i with
+      | '.' ->
+          element_start (i + 1)
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' | '0' .. '9'->
+          element (i + 1)
+      | _ ->
+          fail i "invalid character"
+
+  and first_element i =
+    if i = len then
+      fail (-1) "must contains at least two elements"
+    else match unsafe_get str i with
+      | '.' ->
+          element_start (i + 1)
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' | '0' .. '9'->
+          first_element (i + 1)
+      | _ ->
+          fail i "invalid character"
+  in
+
+  if len > OBus_constant.max_name_length then
+    fail (-1) "name too long"
+  else match unsafe_get str 1 with
+    | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' ->
+        first_element 1
+    | '.' ->
+        fail 1 "empty element"
+    | _ ->
+        fail 1 "invalid character"
 
 let validate_bus = function
   | "" ->
       Some{ typ = "bus name"; str = ""; ofs = -1; msg = "empty name" }
-  | str when unsafe_get str 0 = ':' ->
-      validate_from "unique connection name" (fun ch -> alpha ch || underscore ch || hyphen ch || digit ch) str 1
   | str ->
-      validate_from "bus name" (fun ch -> alpha ch || underscore ch || hyphen ch) str 0
+      match unsafe_get str 0 with
+        | ':' -> validate_unique_connection str
+        | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' -> validate_bus_other str
+        | '.' -> Some{ typ = "bus name"; str = str; ofs = 0; msg = "empty element" }
+        | _ -> Some{ typ = "bus name"; str = str; ofs = 0; msg = "invalid character" }
+
+(* +-----------------------------------------------------------------+
+   | Interface names                                                 |
+   +-----------------------------------------------------------------+ *)
+
+let validate_interface str =
+  let fail i msg = Some{ typ = "interface name"; str = str; ofs = i; msg = msg }
+  and len = length str in
+
+  let rec element_start i =
+    if i = len then
+      fail i "empty element"
+    else match unsafe_get str i with
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' ->
+          element (i + 1)
+      | '.' ->
+          fail i "empty element"
+      | _ ->
+          fail i "invalid character"
+
+  and element i =
+    if i = len then
+      None
+    else match unsafe_get str i with
+      | '.' ->
+          element_start (i + 1)
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '0' .. '9' ->
+          element (i + 1)
+      | _ ->
+          fail i "invalid character"
+
+  and first_element i =
+    if i = len then
+      fail (-1) "must contains at least two elements"
+    else match unsafe_get str i with
+      | '.' ->
+          element_start (i + 1)
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '0' .. '9' ->
+          first_element (i + 1)
+      | _ ->
+          fail i "invalid character"
+  in
+
+  if len > OBus_constant.max_name_length then
+    fail (-1) "name too long"
+  else if len = 0 then
+    fail (-1) "empty name"
+  else match unsafe_get str 0 with
+    | 'A' .. 'Z' | 'a' .. 'z' | '_' ->
+        first_element 1
+    | '.' ->
+        fail 0 "empty element"
+    | _ ->
+        fail 0 "invalid character"
+
+(* +-----------------------------------------------------------------+
+   | Member names                                                    |
+   +-----------------------------------------------------------------+ *)
 
 let validate_member str =
   let fail i msg = Some{ typ = "member name"; str = str; ofs = i; msg = msg }
@@ -101,26 +194,38 @@ let validate_member str =
   let rec aux i =
     if i = len then
       None
-    else
-      let ch = unsafe_get str i in
-      if alpha ch || underscore ch || digit ch then
-        aux (i + 1)
-      else
-        fail i "invalid character"
+    else match unsafe_get str i with
+      | 'A' .. 'Z' | 'a' .. 'z' | '_' | '0' .. '9' ->
+          aux (i + 1)
+      | _ ->
+          fail i "invalid character"
   in
 
-  if len = 0 then
-    Some{ typ = "member name"; str = str; ofs = -1; msg = "empty name" }
-  else if len > OBus_constant.max_name_length then
-    Some{ typ = "member name"; str = str; ofs = -1; msg = "name too long" }
-  else
-    let ch = unsafe_get str 0 in
-    if alpha ch || underscore ch then
-      aux 1
-    else
-      fail 0 "invalid character"
+  if len > OBus_constant.max_name_length then
+    fail (-1) "name too long"
+  else if len = 0 then
+    fail (-1) "empty name"
+  else match unsafe_get str 0 with
+    | 'A' .. 'Z' | 'a' .. 'z' | '_' ->
+        aux 1
+    | _ ->
+        fail 0 "invalid character"
 
-let is_unique name = length name > 0 && unsafe_get name 0 = ':'
+(* +-----------------------------------------------------------------+
+   | Error names                                                     |
+   +-----------------------------------------------------------------+ *)
+
+let validate_error str =
+  (* Error names have the same restriction as interface names *)
+  match validate_interface str with
+    | None ->
+        None
+    | Some error ->
+        Some{ error with typ = "error name" }
+
+(* +-----------------------------------------------------------------+
+   | Name translation                                                |
+   +-----------------------------------------------------------------+ *)
 
 (* Split a name into blocks. Blocks are the longest sub-strings
    matched by the regulare expression: "[A-Z]*[^A-Z.]*" *)

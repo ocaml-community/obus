@@ -61,7 +61,7 @@ let validate s =
             else begin
               let byte1 = Char.code (String.unsafe_get s (i + 1)) in
               if byte1 land 0xc0 != 0x80 then
-                fail (i + 1)  "malformed UTF8 sequence"
+                fail (i + 1) "malformed UTF8 sequence"
               else if ((Char.code ch land 0x1f) lsl 6) lor (byte1 land 0x3f) < 0x80 then
                 fail i "overlong UTF8 sequence"
               else
@@ -74,9 +74,9 @@ let validate s =
               let byte1 = Char.code (String.unsafe_get s (i + 1))
               and byte2 = Char.code (String.unsafe_get s (i + 2)) in
               if byte1 land 0xc0 != 0x80 then
-                fail (i + 1)  "malformed UTF8 sequence"
+                fail (i + 1) "malformed UTF8 sequence"
               else if byte2 land 0xc0 != 0x80 then
-                fail (i + 2)  "malformed UTF8 sequence"
+                fail (i + 2) "malformed UTF8 sequence"
               else if ((Char.code ch land 0x0f) lsl 12) lor ((byte1 land 0x3f) lsl 6) lor (byte2 land 0x3f) < 0x800 then
                 fail i "overlong UTF8 sequence"
               else
@@ -90,11 +90,11 @@ let validate s =
               and byte2 = Char.code (String.unsafe_get s (i + 2))
               and byte3 = Char.code (String.unsafe_get s (i + 3)) in
               if byte1 land 0xc0 != 0x80 then
-                fail (i + 1)  "malformed UTF8 sequence"
+                fail (i + 1) "malformed UTF8 sequence"
               else if byte2 land 0xc0 != 0x80 then
-                fail (i + 2)  "malformed UTF8 sequence"
+                fail (i + 2) "malformed UTF8 sequence"
               else if byte3 land 0xc0 != 0x80 then
-                fail (i + 3)  "malformed UTF8 sequence"
+                fail (i + 3) "malformed UTF8 sequence"
               else if ((Char.code ch land 0x0f) lsl 18) lor ((byte1 land 0x3f) lsl 12) lor ((byte2 land 0x3f) lsl 6) lor (byte3 land 0x3f) < 0x10000 then
                 fail i "overlong UTF8 sequence"
               else
