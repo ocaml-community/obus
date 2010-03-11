@@ -37,7 +37,19 @@ let tree_get_boundary t =
    | Type combinators                                                |
    +-----------------------------------------------------------------+ *)
 
+module FDMap = Map.Make(struct type t = Unix.file_descr let compare = Pervasives.compare end)
+
 type context = exn
+
+type full_context = {
+  ctx_data : exn;
+  (* The data of the context *)
+
+  mutable ctx_fds : Unix.file_descr FDMap.t;
+  (* Mapping from file descriptors of the message to duplicated
+     ones. *)
+}
+
 exception No_context
 
 exception Cast_failure of string * string
@@ -47,21 +59,21 @@ let signature_mismatch = "signature mismatch"
 type 'a btype = {
   b_type : tbasic;
   b_make : 'a -> basic;
-  b_cast : context -> basic -> 'a;
+  b_cast : full_context -> basic -> 'a;
 }
 
 (* Container type combinator *)
 type 'a ctype = {
   c_type : tsingle;
   c_make : 'a -> single;
-  c_cast : context -> single -> 'a;
+  c_cast : full_context -> single -> 'a;
 }
 
 (* Sequence type combinator *)
 type 'a stype = {
   s_type : tsingle tree;
   s_make : 'a -> single tree;
-  s_cast : context -> sequence -> 'a * sequence;
+  s_cast : full_context -> sequence -> 'a * sequence;
 }
 
 type ('a, 'cl) t =

@@ -132,8 +132,16 @@ let obus_unix_file_descr = Btype {
   b_type = Tunix_fd;
   b_make = unix_fd;
   b_cast = (fun context -> function
-              | Unix_fd fd -> Unix.dup fd
-              | _ -> raise (Cast_failure("OBus_pervasives.obus_unix_file_descr", signature_mismatch)));
+              | Unix_fd fd -> begin
+                  try
+                    FDMap.find fd context.ctx_fds
+                  with Not_found ->
+                    let fd' = Unix.dup fd in
+                    context.ctx_fds <- FDMap.add fd fd' context.ctx_fds;
+                    fd'
+                end
+              | _ ->
+                  raise (Cast_failure("OBus_pervasives.obus_unix_file_descr", signature_mismatch)));
 }
 
 let obus_file_descr = map obus_unix_file_descr Lwt_unix.of_unix_file_descr Lwt_unix.unix_file_descr

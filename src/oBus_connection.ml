@@ -50,7 +50,7 @@ let cast_context = function
 let obus_t = Stype {
   s_type = Tnil;
   s_make = (fun _ -> Tnil);
-  s_cast = (fun context l -> match context with
+  s_cast = (fun context l -> match context.ctx_data with
               | Context(connection, message) -> (connection, l)
               | _ -> raise (OBus_type.Cast_failure("OBus_connection.obus_t", "context missing")));
 }
@@ -58,7 +58,7 @@ let obus_t = Stype {
 let obus_context = Stype {
   s_type = Tnil;
   s_make = (fun _ -> Tnil);
-  s_cast = (fun context l -> match context with
+  s_cast = (fun context l -> match context.ctx_data with
               | Context context -> (context, l)
               | _ -> raise (OBus_type.Cast_failure("OBus_connection.obus_context", "context missing")));
 }
@@ -103,7 +103,7 @@ let rec tsingle_contains_fds = function
   | Tarray t -> tsingle_contains_fds t
   | Tdict(tk, tv) -> tbasic_contains_fds tk && tsingle_contains_fds tv
   | Tstructure t -> tsequence_contains_fds t
-  | Tvariant -> false
+  | Tvariant -> true
 
 and tsequence_contains_fds t = List.exists tsingle_contains_fds t
 
@@ -124,7 +124,9 @@ let rec single_close_fds = function
         List.iter (fun (k, v) -> basic_close_fds k; single_close_fds v) l
   | Structure l ->
       sequence_close_fds l
-  | Byte_array _ | Variant _ ->
+  | Variant v ->
+      single_close_fds v
+  | Byte_array _ ->
       ()
 
 and sequence_close_fds l =

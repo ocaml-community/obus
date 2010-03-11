@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+module Log = Lwt_log.Make(struct let section = "obus(type)" end)
+
 open OBus_value
 open OBus_private_type
 
@@ -26,7 +28,7 @@ constraint 'cl = [< `Basic | `Container | `Sequence ]
 type ('a, 'b, 'c) func = {
   f_type : OBus_value.tsingle tree;
   f_make : OBus_value.single tree -> (OBus_value.sequence -> 'b) -> 'a;
-  f_cast : context -> OBus_value.sequence -> 'a -> 'b;
+  f_cast : full_context -> OBus_value.sequence -> 'a -> 'b;
   f_reply : 'c sequence;
 }
 
@@ -61,22 +63,65 @@ let make_basic = OBus_private_type.make_basic
 let make_single = OBus_private_type.make_single
 let make_sequence = OBus_private_type.make_sequence
 
-let cast_basic t ?(context=No_context) x = _cast_basic t context x
-let cast_single t ?(context=No_context) x = _cast_single t context x
-let cast_sequence t ?(context=No_context) x = _cast_sequence t context x
+let close_fds map =
+  FDMap.iter (fun fd_src fd_dup ->
+                try
+                  Unix.close fd_dup
+                with exn ->
+                  ignore (Log.exn exn "failed to close file descriptor")) map
 
-let opt_cast f ?(context=No_context) x = try Some(f context x) with Cast_failure _ -> None
+let cast f ?(context=No_context) x =
+  let context = { ctx_data = context; ctx_fds = FDMap.empty } in
+  try
+    f context x
+  with exn ->
+    (* Close all duplicated file descriptors, that are now
+       inaccessible: *)
+    close_fds context.ctx_fds;
+    raise exn
+
+let cast_basic t = cast (_cast_basic t)
+let cast_single t = cast (_cast_single t)
+let cast_sequence t = cast (_cast_sequence t)
+
+let opt_cast f ?(context=No_context) x =
+  let context = { ctx_data = context; ctx_fds = FDMap.empty } in
+  try
+    Some(f context x)
+  with
+    | Cast_failure _ ->
+        close_fds context.ctx_fds;
+        None
+    | exn ->
+        close_fds context.ctx_fds;
+        raise exn
+
 let opt_cast_basic t = opt_cast (_cast_basic t)
 let opt_cast_single t = opt_cast (_cast_single t)
 let opt_cast_sequence t = opt_cast (_cast_sequence t)
 
 let make_func { f_make = f } cont = f Tnil cont
-let cast_func { f_cast = f } ?(context=No_context) x g = f context x g
+
+let cast_func { f_cast = f } ?(context=No_context) x g =
+  let context = { ctx_data = context; ctx_fds = FDMap.empty } in
+  match try `OK(f context x) with exn -> `Fail exn with
+    | `OK apply ->
+        apply g
+    | `Fail exn ->
+        close_fds context.ctx_fds;
+        raise exn
+
 let opt_cast_func { f_cast = f } ?(context=No_context) x g =
-  try
-    Some(f context x g)
-  with
-      Cast_failure _ -> None
+  let context = { ctx_data = context; ctx_fds = FDMap.empty } in
+  match try `OK(f context x) with exn -> `Fail exn with
+    | `OK apply ->
+        Some(apply g)
+    | `Fail(Cast_failure _) ->
+        close_fds context.ctx_fds;
+        None
+    | `Fail exn ->
+        close_fds context.ctx_fds;
+        raise exn
 
 let func_reply { f_reply = r } = r
 
@@ -101,17 +146,19 @@ let map_with_context t f g = match t with
   | Btype t -> Btype{
       b_type = t.b_type;
       b_make = (fun x -> t.b_make (g x));
-      b_cast = (fun context x -> f context (t.b_cast context x));
+      b_cast = (fun context x -> f context.ctx_data (t.b_cast context x));
     }
   | Ctype t -> Ctype{
       c_type = t.c_type;
       c_make = (fun x -> t.c_make (g x));
-      c_cast = (fun context x -> f context (t.c_cast context x));
+      c_cast = (fun context x -> f context.ctx_data (t.c_cast context x));
     }
   | Stype t -> Stype{
       s_type = t.s_type;
       s_make = (fun x -> t.s_make (g x));
-      s_cast = (fun context l -> let v, rest = t.s_cast context l in (f context v, rest))
+      s_cast = (fun context l ->
+                  let v, rest = t.s_cast context l in
+                  (f context.ctx_data v, rest))
     }
 
 (* +-----------------------------------------------------------------+
