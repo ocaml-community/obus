@@ -27,7 +27,7 @@
 <syntax/pa_monad.ml>: pkg_camlp4.quotations.r
 
 # Common dependencies
-<{src,src/private,tools,tests,examples}/*>: pkg_lwt.unix, pkg_xmlm, pkg_react
+<{src,src/private,tools,tests,examples}/*>: pkg_lwt.unix, pkg_lwt.react, pkg_xmlm, pkg_react
 
 # Examples
 <examples/*>: use_obus

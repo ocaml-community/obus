@@ -89,6 +89,7 @@ let packages = [
   "lwt.unix";
   "lwt.syntax";
   "lwt.syntax.log";
+  "lwt.react";
   "str";
   "xmlm";
   "react";
