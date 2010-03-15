@@ -22,6 +22,11 @@ let errors = ref
      (function
         | Failure msg -> Some msg
         | _ -> None));
+    "org.freedesktop.DBus.Error.InvalidArgs",
+    ((fun msg -> Invalid_argument msg),
+     (function
+        | Invalid_argument msg -> Some msg
+        | _ -> None));
     "org.freedesktop.DBus.Error.UnknownMethod",
     ((fun msg -> Unknown_method msg),
      (function
