@@ -326,7 +326,7 @@ struct
 
   let make_signal event push_command =
     let _, wakener = Lwt.wait () in
-    push_command (`Data(Set_filters(wakener, [])));
+    push_command (Some(Set_filters(wakener, [])));
     (object
        val mutable connected = true
        method event =
@@ -337,7 +337,7 @@ struct
        method set_filters filters =
          if connected then begin
            let waiter, wakener = Lwt.task () in
-           push_command (`Data(Set_filters(wakener, filters)));
+           push_command (Some(Set_filters(wakener, filters)));
            waiter
          end else
            fail (Failure "OBus_proxy.set_filters: signal disconnected")
@@ -345,7 +345,7 @@ struct
          if connected then begin
            let waiter, wakener = Lwt.task () in
            connected <- false;
-           push_command (`Data(Done wakener));
+           push_command (Some(Done wakener));
            waiter
          end else begin
            return ()
@@ -353,7 +353,7 @@ struct
      end)
 
   let dyn_connect proxy ~interface ~member =
-    let event, push = React.E.create () and push_command, commands = Lwt_stream.push_stream () in
+    let event, push = React.E.create () and commands, push_command = Lwt_stream.create () in
     ignore (_connect proxy ~interface ~member ~push ~commands);
     make_signal (React.E.map (fun (connection, message) -> OBus_message.body message) event) push_command
 
@@ -370,7 +370,7 @@ struct
       None
 
   let connect proxy ~interface ~member typ =
-    let event, push = React.E.create () and push_command, commands = Lwt_stream.push_stream () in
+    let event, push = React.E.create () and commands, push_command = Lwt_stream.create () in
     ignore (_connect proxy ~interface ~member ~push ~commands);
     make_signal (React.E.fmap (cast interface member typ) event) push_command
 
