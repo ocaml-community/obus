@@ -52,7 +52,7 @@ module Interface : sig
       Here is a typical example:
 
       {[
-        OP_interface "org.foo.bar"
+        let op_interface = OBus_proxy.make_interface "org.foo.bar"
 
         OP_method Foo : int -> int
         OP_method Bar : strign -> unit

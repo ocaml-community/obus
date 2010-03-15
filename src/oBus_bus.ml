@@ -24,7 +24,7 @@ module Proxy = OBus_proxy.Make
      let make = OBus_proxy.connection
    end)
 
-OP_interface(Proxy) "org.freedesktop.DBus" as dbus
+let op_interface = Proxy.make_interface "org.freedesktop.DBus"
 
 OP_method Hello : string
 
@@ -82,7 +82,7 @@ let of_laddresses name laddr =
 let session = lazy(of_laddresses "session" OBus_address.session)
 let system = lazy(of_laddresses "system" OBus_address.system)
 
-let prefix = OBus_proxy.Interface.name dbus ^ ".Error."
+let prefix = OBus_proxy.Interface.name op_interface ^ ".Error."
 
 exception Access_denied of string
  with obus(prefix ^ "AccessDenied")

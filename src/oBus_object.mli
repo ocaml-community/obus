@@ -55,7 +55,7 @@ module Interface : sig
       {[
         module M = OBus_object.Make(...)
 
-        OL_interface(M) "org.mydomain"
+        let ol_interface = M.make_interface "org.mydomain"
 
         let foo a b c = return (a + b + c)
         let bar a b = return (a ^ b)
@@ -69,7 +69,7 @@ module Interface : sig
       {[
         module M = OBus_object.Make(...)
 
-        OL_interface(M) "org.mydomain"
+        let ol_interface = M.make_interface "org.mydomain"
 
         OL_method Foo : int -> int -> int -> int =
           fun a b c -> return (a + b + c)

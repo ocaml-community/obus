@@ -13,7 +13,7 @@ open Lwt
 open Lwt_io
 open OBus_pervasives
 
-OP_interface "org.plop.foo"
+let op_interface = OBus_proxy.make_interface "org.plop.foo"
 OP_method Ping : string -> string
 
 let _ = Lwt_main.run begin
