@@ -324,7 +324,16 @@ struct
                   return ()
           end
 
+  let stop_signal stop () =
+    ignore_result (Lazy.force stop)
+
   let make_signal event push_command =
+    let disable = lazy(
+      let waiter, wakener = Lwt.task () in
+      push_command (Some(Done wakener));
+      waiter
+    ) in
+    let event = Lwt_event.with_finaliser (stop_signal disable) event in
     let _, wakener = Lwt.wait () in
     push_command (Some(Set_filters(wakener, [])));
     (object
@@ -343,10 +352,8 @@ struct
            fail (Failure "OBus_proxy.set_filters: signal disconnected")
        method disconnect =
          if connected then begin
-           let waiter, wakener = Lwt.task () in
            connected <- false;
-           push_command (Some(Done wakener));
-           waiter
+           Lazy.force disable
          end else begin
            return ()
          end

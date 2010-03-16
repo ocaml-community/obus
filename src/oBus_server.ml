@@ -483,8 +483,12 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
    | Public maker                                                    |
    +-----------------------------------------------------------------+ *)
 
+let stop stop () =
+  ignore_result (Lazy.force stop)
+
 let make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
   lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
+  let event = Lwt_event.with_finaliser (stop shutdown) event in
   return (object
             method event = event
             method addresses = addresses
@@ -494,6 +498,7 @@ let make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
 let make ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
   lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
   let event = React.E.map (OBus_connection.of_transport ~up:false) event in
+  let event = Lwt_event.with_finaliser (stop shutdown) event in
   return (object
             method event = event
             method addresses = addresses

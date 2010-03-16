@@ -15,6 +15,9 @@ class type t = object
   method disable : unit Lwt.t
 end
 
+let finalise stop () =
+  ignore_result (Lazy.force stop)
+
 let make connection name =
   match connection#get with
     | Crashed exn ->
@@ -108,7 +111,9 @@ let make connection name =
               return ()
           ) in
 
+          let name = Lwt_signal.with_finaliser (finalise disable) name_resolver.nr_owner in
+
           return (object
-                    method name = name_resolver.nr_owner
+                    method name = name
                     method disable = Lazy.force disable
                   end)

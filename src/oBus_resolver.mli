@@ -29,9 +29,7 @@
 
 class type t = object
   method name : OBus_name.bus option React.signal
-    (** Signal holding the name owner. Note: you must not stop this
-        signal by using [React.S.stop], use the [stop] method
-        instead. *)
+    (** Signal holding the name owner *)
 
   method disable : unit Lwt.t
     (** Stop monitoring this name *)
