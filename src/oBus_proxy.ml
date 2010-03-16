@@ -296,7 +296,7 @@ struct
 
             (* Yield the first time to let the user add argument
                filters: *)
-            lwt () = Lwt_main.fast_yield () in
+            lwt () = pause () in
             match proxy.peer.name with
               | None ->
                   let node = Lwt_sequence.add_r (make_signal_receiver None) connection.signal_receivers in
