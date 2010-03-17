@@ -24,6 +24,18 @@ module ObjectMap = OBus_util.MakeMap
      let compare = Pervasives.compare
    end)
 
+module SignalMap = OBus_util.MakeMap
+  (struct
+     type t = OBus_path.t * OBus_name.interface * OBus_name.member
+     let compare = Pervasives.compare
+   end)
+
+module RuleSet = Set.Make
+  (struct
+     type t = OBus_match.rule
+     let compare = Pervasives.compare
+   end)
+
 module StringMap = OBus_util.MakeMap(String)
 module StringSet = Set.Make(String)
 
@@ -87,31 +99,43 @@ and name_resolver = {
      resolver can be removed. *)
 
   nr_match_rule : OBus_match.rule;
-  (* The matching rule, in case the end-point of the connection is a
-     message bus *)
+  (* The matching rule, for the message bus *)
 
-  mutable nr_init_done : bool;
-  (* Wether initialization is done *)
-
-  nr_init_waiter : unit Lwt.t;
-  (* Sleeping thread which is wakeup after the initial resolution,
-     even if it fails. *)
-
-  nr_init_wakener : unit Lwt.u;
-  (* Wakener for [nr_init_waiter] *)
+  mutable nr_state : name_resolver_state;
+  (* State of the resolver *)
 }
+
+and name_resolver_state =
+  | Nrs_init of name_resolver Lwt.t * name_resolver Lwt.u
+      (* The resolver is being initialised *)
+  | Nrs_running
+      (* The resolver has already been initalised and is now
+         running *)
 
 (* +-----------------------------------------------------------------+
    | Signals                                                         |
    +-----------------------------------------------------------------+ *)
 
 and signal_receiver = {
-  (* Matching rules *)
   sr_sender : OBus_name.bus option React.signal option;
-  sr_path : OBus_path.t;
-  sr_interface : OBus_name.interface;
-  sr_member : OBus_name.member;
+  (* The sender that must be matched *)
+
+  mutable sr_rule : OBus_match.rule;
+  (* The rule used for this receiver *)
+
   sr_push : packed_connection * OBus_message.t -> unit;
+  (* Function used to send new events *)
+}
+
+and signal_receiver_set = {
+  mutable srs_rules : RuleSet.t;
+  (* The set of rules used by receivers, that are actually set on the
+     message bus *)
+
+  mutable srs_mutex : Lwt_mutex.t;
+  (* Mutex used to prevent concurrent updates of rules *)
+
+  srs_receivers : signal_receiver Lwt_sequence.t;
 }
 
 (* +-----------------------------------------------------------------+
@@ -184,7 +208,8 @@ and connection = {
   mutable reply_waiters : OBus_message.t Lwt.u SerialMap.t;
   (* Mapping serial -> thread waiting for a reply *)
 
-  signal_receivers : signal_receiver Lwt_sequence.t;
+  mutable signal_receivers : signal_receiver_set SignalMap.t;
+  (* Mapping (inteface, member, path) -> set of signal receivers *)
 
   packed : packed_connection;
   (* The pack containing the connection *)

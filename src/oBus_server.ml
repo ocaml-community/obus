@@ -19,12 +19,14 @@ open OBus_private
 
 class type t = object
   method event : OBus_connection.t React.event
+  method start : unit
   method addresses : OBus_address.t list
   method shutdown : unit Lwt.t
 end
 
 class type lowlevel = object
   method event : OBus_transport.t React.event
+  method start : unit
   method addresses : OBus_address.t list
   method shutdown : unit Lwt.t
 end
@@ -475,9 +477,11 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
 
               (* Launch waiting loops. Yield so the user have the time
                  to bind the event before the first connection: *)
-              List.iter (fun listen -> listener_threads := (pause () >> listen_loop server listen) :: !listener_threads) listeners;
+              let start_waiter, start_wakener = Lwt.wait () in
+              let thread = select [pause (); start_waiter] in
+              List.iter (fun listen -> listener_threads := (thread >> listen_loop server listen) :: !listener_threads) listeners;
 
-              return (event, (List.map snd (List.flatten successes)), shutdown)
+              return (event, start_wakener, (List.map snd (List.flatten successes)), shutdown)
 
 (* +-----------------------------------------------------------------+
    | Public maker                                                    |
@@ -487,20 +491,22 @@ let stop stop () =
   ignore_result (Lazy.force stop)
 
 let make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
-  lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
+  lwt event, start_wakener, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
   let event = Lwt_event.with_finaliser (stop shutdown) event in
   return (object
             method event = event
+            method start = wakeup start_wakener ()
             method addresses = addresses
             method shutdown = Lazy.force shutdown
           end)
 
 let make ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
-  lwt event, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
+  lwt event, start_wakener, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
   let event = React.E.map (OBus_connection.of_transport ~up:false) event in
   let event = Lwt_event.with_finaliser (stop shutdown) event in
   return (object
             method event = event
+            method start = wakeup start_wakener ()
             method addresses = addresses
             method shutdown = Lazy.force shutdown
           end)

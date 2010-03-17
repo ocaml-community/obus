@@ -27,6 +27,7 @@ let make ~peer ~path = { peer = peer; path = path }
 
 class type ['a] signal = object
   method event : 'a React.event
+  method start : unit
   method set_filters : (int * OBus_match.argument_filter) list -> unit Lwt.t
   method disconnect : unit Lwt.t
 end
@@ -215,154 +216,178 @@ struct
      | Signals                                                       |
      +---------------------------------------------------------------+ *)
 
-  type signal_action =
-    | Set_filters of unit Lwt.u * (int * OBus_match.argument_filter) list
-    | Done of unit Lwt.u
+  (* Update rules on the message bus *)
+  let update_rules connection set =
+    let rules = Lwt_sequence.fold_l (fun sr rules -> RuleSet.add sr.sr_rule rules) set.srs_receivers RuleSet.empty in
+    (* If rules have changed, compute the minimal set of changes to
+       make with the message bus and do them: *)
+    if RuleSet.compare rules set.srs_rules <> 0 then
+      Lwt_mutex.with_lock set.srs_mutex
+        (fun () ->
+           let new_rules = RuleSet.diff rules set.srs_rules
+           and old_rules = RuleSet.diff set.srs_rules rules in
+           set.srs_rules <- new_rules;
+           lwt () = RuleSet.fold (fun rule thread -> thread <&> OBus_private_bus.add_match connection rule) new_rules (return ())
+           and () = RuleSet.fold (fun rule thread -> thread <&> OBus_private_bus.remove_match connection rule) old_rules (return ()) in
+           return ())
+    else
+      return ()
 
-  let _connect proxy ~interface ~member ~push ~commands =
-    let proxy = Proxy.cast proxy in
+  type signal_info = {
+    sig_receiver : signal_receiver;
+    (* The signal reciever itself *)
+
+    sig_node : signal_receiver Lwt_sequence.node;
+    (* The node to remove it *)
+
+    sig_set : signal_receiver_set;
+    (* The set the signal receiver is part of *)
+
+    sig_resolver : OBus_resolver.t option;
+    (* Resolver for the sender *)
+  }
+
+  (* Connect a signal to the given push function: *)
+  let connect_signal ~proxy ~interface ~member ~start_waiter ~push =
     match proxy.peer.connection#get with
       | Crashed exn ->
           fail exn
 
       | Running connection ->
-          let make_signal_receiver sender_resolver_opt = {
-            sr_sender = sender_resolver_opt;
-            sr_path = proxy.path;
-            sr_interface = interface;
-            sr_member = member;
-            sr_push = push;
-          } in
-
-          if connection.OBus_private.name = None then
-            (* If the connection is a peer-to-peer connection the only
-               thing to do is to locally add the receiver *)
-            let node = Lwt_sequence.add_r (make_signal_receiver None) connection.signal_receivers in
-            Lwt_stream.find_map
-              (function
-                 | Done wakener ->
-                     Some wakener
-                 | Set_filters(wakener, _) ->
-                     wakeup wakener ();
-                     None)
-              commands >>= function
-                | Some wakener ->
-                    Lwt_sequence.remove node;
-                    wakeup wakener ();
-                    return ()
-                | None ->
-                    Lwt_sequence.remove node;
-                    return ()
-
-          else begin
-
-            let make_match_rule arguments = OBus_match.rule
-              ~typ:`Signal
-              ?sender:proxy.peer.name
-              ~path:proxy.path
-              ~interface
-              ~member
-              ~arguments
-              ()
-            in
-
-            let rec loop commands match_rule =
-              Lwt_stream.last_new commands >>= function
-                | Done wakener ->
-                    return (wakener, Some match_rule)
-                | Set_filters(wakener, filters) ->
-                    let new_match_rule = make_match_rule filters in
-                    if new_match_rule <> match_rule then begin
-                      let t1 = OBus_private_bus.add_match connection.packed new_match_rule in
-                      let t2 = OBus_private_bus.remove_match connection.packed match_rule in
-                      lwt () = t1 and () = t2 in
-                      wakeup wakener ();
-                      loop commands new_match_rule
-                    end else begin
-                      wakeup wakener ();
-                      loop commands new_match_rule
-                    end
-
-            and init commands =
-              Lwt_stream.last_new commands >>= function
-                | Done wakener ->
-                    return (wakener, None)
-                | Set_filters(wakener, filters) ->
-                    let match_rule = make_match_rule filters in
-                    lwt () = OBus_private_bus.add_match connection.packed match_rule in
-                    wakeup wakener ();
-                    loop commands match_rule
-            in
-
-            (* Yield the first time to let the user add argument
-               filters: *)
-            lwt () = pause () in
-            match proxy.peer.name with
+          let key = (proxy.path, interface, member) in
+          let set =
+            match SignalMap.lookup key connection.signal_receivers with
+              | Some set ->
+                  set
               | None ->
-                  let node = Lwt_sequence.add_r (make_signal_receiver None) connection.signal_receivers in
-                  lwt wakener, match_rule = init commands in
-                  Lwt_sequence.remove node;
-                  lwt () =
-                    match match_rule with
-                      | Some match_rule -> OBus_private_bus.remove_match connection.packed match_rule
-                      | None -> return ()
-                  in
-                  wakeup wakener ();
-                  return ()
+                  let set = {
+                    srs_rules = RuleSet.empty;
+                    srs_mutex = Lwt_mutex.create ();
+                    srs_receivers = Lwt_sequence.create ();
+                  } in
+                  connection.signal_receivers <- SignalMap.add key set connection.signal_receivers;
+                  set
+          in
 
-              | Some name ->
-                  lwt resolver = OBus_resolver.make connection.packed name in
-                  let node = Lwt_sequence.add_r (make_signal_receiver (Some resolver#name)) connection.signal_receivers in
-                  lwt wakener, match_rule = init commands in
-                  Lwt_sequence.remove node;
-                  lwt () =
-                    match match_rule with
-                      | Some match_rule -> OBus_private_bus.remove_match connection.packed match_rule
-                      | None -> return ()
-                  and () = resolver#disable in
-                  wakeup wakener ();
-                  return ()
-          end
+          try_lwt
+            if connection.OBus_private.name = None then begin
+              (* If the connection is a peer-to-peer connection the
+                 only thing to do is to locally add the receiver *)
+              let receiver = { sr_sender = None; sr_rule = OBus_match.rule (); sr_push = push } in
+              let node = Lwt_sequence.add_r receiver set.srs_receivers in
+              return {
+                sig_receiver = receiver;
+                sig_node = node;
+                sig_set = set;
+                sig_resolver = None;
+              }
+
+            end else begin
+              (* Yield to let the user add argument filters: *)
+              lwt () = select [pause (); start_waiter] in
+
+              let rule = OBus_match.rule
+                ~typ:`Signal
+                ?sender:proxy.peer.name
+                ~path:proxy.path
+                ~interface
+                ~member
+                ()
+              in
+
+              match proxy.peer.connection#get with
+                | Crashed exn ->
+                    fail exn
+
+                | Running connection ->
+                    match proxy.peer.name with
+                      | None ->
+                          let receiver = { sr_sender = None; sr_rule = rule; sr_push = push } in
+                          let node = Lwt_sequence.add_r receiver set.srs_receivers in
+                          lwt () =
+                            try_lwt
+                              update_rules connection.packed set
+                            with exn ->
+                              Lwt_sequence.remove node;
+                              fail exn
+                          in
+                          return {
+                            sig_receiver = receiver;
+                            sig_node = node;
+                            sig_set = set;
+                            sig_resolver = None;
+                          }
+
+                      | Some name ->
+                          lwt resolver = OBus_resolver.make connection.packed name in
+                          let receiver = { sr_sender = Some resolver#name; sr_rule = rule; sr_push = push } in
+                          let node = Lwt_sequence.add_r receiver set.srs_receivers in
+                          lwt () =
+                            try_lwt
+                              update_rules connection.packed set
+                            with exn ->
+                              Lwt_sequence.remove node;
+                              fail exn
+                          in
+                          return {
+                            sig_receiver = receiver;
+                            sig_node = node;
+                            sig_set = set;
+                            sig_resolver = Some resolver;
+                          }
+            end
+          with exn ->
+            if Lwt_sequence.is_empty set.srs_receivers then
+              connection.signal_receivers <- SignalMap.remove key connection.signal_receivers;
+            fail exn
 
   let stop_signal stop () =
     ignore_result (Lazy.force stop)
 
-  let make_signal event push_command =
-    let disable = lazy(
-      let waiter, wakener = Lwt.task () in
-      push_command (Some(Done wakener));
-      waiter
+  let make_signal proxy interface member event start_waiter start_wakener =
+    let init_wakeup = lazy(wakeup start_wakener ()) in
+    let disconnect = lazy(
+      Lazy.force init_wakeup;
+      lwt sig_info = start_waiter in
+      React.E.stop event;
+      Lwt_sequence.remove sig_info.sig_node;
+      try_lwt
+        update_rules proxy.peer.connection sig_info.sig_set
+      finally
+        if Lwt_sequence.is_empty sig_info.sig_set.srs_receivers then begin
+          match proxy.peer.connection#get with
+            | Crashed _ ->
+                ()
+            | Running connection ->
+                connection.signal_receivers <- SignalMap.remove (proxy.path, interface, member) connection.signal_receivers
+        end;
+        return ()
     ) in
-    let event = Lwt_event.with_finaliser (stop_signal disable) event in
-    let _, wakener = Lwt.wait () in
-    push_command (Some(Set_filters(wakener, [])));
+    let event = Lwt_event.with_finaliser (stop_signal disconnect) event in
     (object
-       val mutable connected = true
-       method event =
-         if connected then
-           event
-         else
-           failwith "OBus_proxy.event: signal disconnected"
+       method event = event
+       method start = Lazy.force init_wakeup
        method set_filters filters =
-         if connected then begin
-           let waiter, wakener = Lwt.task () in
-           push_command (Some(Set_filters(wakener, filters)));
-           waiter
-         end else
-           fail (Failure "OBus_proxy.set_filters: signal disconnected")
-       method disconnect =
-         if connected then begin
-           connected <- false;
-           Lazy.force disable
-         end else begin
-           return ()
-         end
+         Lazy.force init_wakeup;
+         lwt sig_info = start_waiter in
+         sig_info.sig_receiver.sr_rule <- OBus_match.rule
+           ~typ:`Signal
+           ?sender:proxy.peer.name
+           ~path:proxy.path
+           ~interface
+           ~member
+           ~arguments:filters
+           ();
+         update_rules proxy.peer.connection sig_info.sig_set
+       method disconnect = Lazy.force disconnect
      end)
 
   let dyn_connect proxy ~interface ~member =
-    let event, push = React.E.create () and commands, push_command = Lwt_stream.create () in
-    ignore (_connect proxy ~interface ~member ~push ~commands);
-    make_signal (React.E.map (fun (connection, message) -> OBus_message.body message) event) push_command
+    let proxy = Proxy.cast proxy in
+    let event, push = React.E.create ()
+    and start_waiter, start_wakener = Lwt.wait () in
+    let start_waiter = connect_signal ~proxy ~interface ~member ~start_waiter ~push in
+    make_signal proxy interface member (React.E.map (fun (connection, message) -> OBus_message.body message) event) start_waiter start_wakener
 
   let cast interface member typ (connection, message) =
     try
@@ -377,9 +402,11 @@ struct
       None
 
   let connect proxy ~interface ~member typ =
-    let event, push = React.E.create () and commands, push_command = Lwt_stream.create () in
-    ignore (_connect proxy ~interface ~member ~push ~commands);
-    make_signal (React.E.fmap (cast interface member typ) event) push_command
+    let proxy = Proxy.cast proxy in
+    let event, push = React.E.create ()
+    and start_waiter, start_wakener = Lwt.wait () in
+    let start_waiter = connect_signal ~proxy ~interface ~member ~start_waiter ~push in
+    make_signal proxy interface member (React.E.fmap (cast interface member typ) event) start_waiter start_wakener
 
   (* +---------------------------------------------------------------+
      | Interface creation                                            |

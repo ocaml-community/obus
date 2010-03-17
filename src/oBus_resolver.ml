@@ -37,12 +37,18 @@ let make connection name =
                     method disable = return ()
                   end)
         else
-          let name_resolver =
+          lwt name_resolver =
             match NameMap.lookup name connection.name_resolvers with
               | Some name_resolver ->
                   (* add a reference to the resolver *)
                   name_resolver.nr_ref_count <- name_resolver.nr_ref_count + 1;
-                  name_resolver
+                  begin
+                    match name_resolver.nr_state with
+                      | Nrs_init(waiter, wakener) ->
+                          waiter
+                      | Nrs_running ->
+                          return name_resolver
+                  end;
 
               | None ->
                   let match_rule = OBus_match.rule
@@ -53,16 +59,13 @@ let make connection name =
                     ~path:["org"; "freedesktop"; "DBus"]
                     ~arguments:[(0, OBus_match.AF_string name)] () in
 
-                  let w, wakener = Lwt.wait ()
-                  and owner, set = React.S.create None in
+                  let init_waiter, init_wakener = Lwt.wait () and owner, set = React.S.create None in
                   let name_resolver = {
                     nr_owner = owner;
                     nr_set = set;
                     nr_ref_count = 1;
                     nr_match_rule = match_rule;
-                    nr_init_done = false;
-                    nr_init_waiter = w;
-                    nr_init_wakener = wakener;
+                    nr_state = Nrs_init(init_waiter, init_wakener);
                   } in
 
                   (* Immediatly add the resolver to be sure no other
@@ -70,32 +73,34 @@ let make connection name =
                   connection.name_resolvers <- NameMap.add name name_resolver connection.name_resolvers;
 
                   (* Initialization *)
-                  ignore_result
-                    (try_lwt
-                       (* Add the rule for monitoring the name + ask
-                          for the current name owner. The calling
-                          order is important to avoid race
-                          conditions. *)
-                       lwt () = OBus_private_bus.add_match connection.packed match_rule in
-                       lwt owner = OBus_private_bus.get_name_owner connection.packed name in
-                       name_resolver.nr_set owner;
-                       if not name_resolver.nr_init_done then begin
-                         name_resolver.nr_init_done <- true;
-                         Lwt.wakeup name_resolver.nr_init_wakener ()
-                       end;
-                       return ()
-                     with exn ->
-                       if not name_resolver.nr_init_done then begin
-                         name_resolver.nr_init_done <- true;
-                         Lwt.wakeup_exn name_resolver.nr_init_wakener exn
-                       end;
-                       return ());
+                  try_lwt
+                    (* Add the rule for monitoring the name + ask for
+                       the current name owner. The calling order is
+                       important to avoid race conditions. *)
+                    lwt () = OBus_private_bus.add_match connection.packed match_rule in
+                    lwt owner = OBus_private_bus.get_name_owner connection.packed name in
+                    name_resolver.nr_set owner;
+                    match name_resolver.nr_state with
+                      | Nrs_init(waiter, wakener) ->
+                          name_resolver.nr_state <- Nrs_running;
+                          wakeup wakener name_resolver;
+                          return name_resolver
+                      | Nrs_running ->
+                          return name_resolver
+                  with exn ->
+                    match name_resolver.nr_state with
+                      | Nrs_init(waiter, wakener) ->
+                          connection.name_resolvers <- NameMap.remove name connection.name_resolvers;
+                          wakeup_exn wakener exn;
+                          fail exn
+                      | Nrs_running ->
+                          (* If we go here, this means that a
+                             NameOwnerChanged signals have been
+                             received by the connection.
 
-                  name_resolver
+                             We consider that the resolver is OK. *)
+                          return name_resolver
           in
-
-          (* Wait for initialization *)
-          lwt () = name_resolver.nr_init_waiter in
 
           let disable = lazy(
             name_resolver.nr_ref_count <- name_resolver.nr_ref_count - 1;

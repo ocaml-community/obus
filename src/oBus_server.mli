@@ -17,6 +17,10 @@ class type t = object
         Note that new connections are initially down to avoid race
         condition. *)
 
+  method start : unit
+    (** Start receiving events immediatly. Calling [start] is not
+        mandatory. *)
+
   method addresses : OBus_address.t list
     (** Listenning addresses *)
 
@@ -28,6 +32,10 @@ end
 class type lowlevel = object
   method event : OBus_transport.t React.event
     (** Event which receive new transports *)
+
+  method start : unit
+    (** Start receiving events immediatly. Calling [start] is not
+        mandatory. *)
 
   method addresses : OBus_address.t list
     (** Listenning addresses *)

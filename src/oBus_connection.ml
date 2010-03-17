@@ -310,37 +310,25 @@ let unknown_method packed message =
    | Signal matching                                                 |
    +-----------------------------------------------------------------+ *)
 
-let signal_match r = function
-  | { sender = sender; typ = Signal(path, interface, member); body = body } ->
-      (match r.sr_sender, sender with
-         | None, _ -> true
+let match_sender signal_receiver message =
+  match signal_receiver.sr_sender, message.sender with
+    | None, _ ->
+        true
 
-         (* this normally never happen because with a message bus, all
-            messages have a sender field *)
-         | _, None -> false
+    | Some _, None ->
+        (* this normally never happen because with a message bus, all
+           messages have a sender field *)
+        false
 
-         | Some name, Some sender -> match React.S.value name with
-             | None ->
-                 (* This case is when the name the rule filter on do
-                    not currently have an owner *)
-                 false
+    | Some name, Some sender ->
+        match React.S.value name with
+          | None ->
+              (* This case is when the name the rule filter on do not
+                 currently have an owner *)
+              false
 
-             | Some owner -> owner = sender) &&
-        (r.sr_path = path) &&
-        (r.sr_interface = interface) &&
-        (r.sr_member = member)
-
-  | _ ->
-      false
-
-let signal_match_ignore_sender r = function
-  | { typ = Signal(path, interface, member); body = body } ->
-      (r.sr_path = path) &&
-        (r.sr_interface = interface) &&
-        (r.sr_member = member)
-
-  | _ ->
-      false
+          | Some owner ->
+              owner = sender
 
 (* +-----------------------------------------------------------------+
    | Reading/dispatching                                             |
@@ -366,24 +354,30 @@ let dispatch_message connection message = match message with
                                     sprintf ", the reply is the error: %S: %S"
                                       error_name (get_error message)
                                 | _ ->
-                                  "")
+                                    "")
             )
       end
 
-  | { typ = Signal _ } ->
+  | { typ = Signal(path, interface, member) } ->
       begin match connection.name, message.sender with
-        | None, _
-        | _, None ->
-            (* If this is a peer-to-peer connection, we do match on
-               the sender *)
-            Lwt_sequence.iter_l
-              (fun receiver ->
-                 if signal_match_ignore_sender receiver message then
-                   try
-                     receiver.sr_push (connection.packed, message)
-                   with exn ->
-                     ignore (Log.exn exn "signal event failed with"))
-              connection.signal_receivers
+        | None, _ ->
+            (* If this is a peer-to-peer connection, we do not match
+               on the sender *)
+            begin match SignalMap.lookup (path, interface, member) connection.signal_receivers with
+              | Some set ->
+                  Lwt_sequence.iter_l
+                    (fun receiver ->
+                       try
+                         receiver.sr_push (connection.packed, message)
+                       with exn ->
+                         ignore (Log.exn exn "signal event failed with"))
+                    set.srs_receivers
+              | None ->
+                 ()
+            end
+
+        | Some _, None ->
+            ignore (Log.error_f "signal without sender received from message bus")
 
         | Some _, Some sender ->
             begin match sender, message with
@@ -415,16 +409,20 @@ let dispatch_message connection message = match message with
 
                         nr.nr_set owner;
 
-                        if not nr.nr_init_done then begin
-                          (* The resolver has not yet been
-                             initialized; this means that the reply to
-                             GetNameOwner (done by
-                             [OBus_resolver.make]) has not yet been
-                             received. We consider that this first
-                             signal has precedence and terminate
-                             initialization. *)
-                          nr.nr_init_done <- true;
-                          Lwt.wakeup nr.nr_init_wakener ()
+                        begin
+                          match nr.nr_state with
+                            | Nrs_init(waiter, wakener) ->
+                                (* The resolver has not yet been
+                                   initialized; this means that the
+                                   reply to GetNameOwner (done by
+                                   [OBus_resolver.make]) has not yet
+                                   been received. We consider that
+                                   this first signal has precedence
+                                   and terminate initialization. *)
+                                nr.nr_state <- Nrs_running;
+                                Lwt.wakeup wakener nr
+                            | Nrs_running ->
+                                ()
                         end
 
                     | None ->
@@ -457,14 +455,18 @@ let dispatch_message connection message = match message with
 
             (* Only handle signals broadcasted or destined to us *)
             if message.destination = None || message.destination = connection.name then
-              Lwt_sequence.iter_l
-                (fun receiver ->
-                   if signal_match receiver message then
-                     try
-                       receiver.sr_push (connection.packed, message)
-                     with exn ->
-                       ignore (Log.exn exn "signal event failed with"))
-                connection.signal_receivers
+              match SignalMap.lookup (path, interface, member) connection.signal_receivers with
+                | Some set ->
+                    Lwt_sequence.iter_l
+                      (fun receiver ->
+                         if match_sender receiver message then
+                           try
+                             receiver.sr_push (connection.packed, message)
+                           with exn ->
+                             ignore (Log.exn exn "signal event failed with"))
+                      set.srs_receivers
+                | None ->
+                    ()
       end
 
   (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
@@ -705,7 +707,7 @@ let of_transport ?guid ?(up=true) transport =
       incoming_filters = Lwt_sequence.create ();
       outgoing_filters = Lwt_sequence.create ();
       reply_waiters = SerialMap.empty;
-      signal_receivers = Lwt_sequence.create ();
+      signal_receivers = SignalMap.empty;
       packed = (packed_connection :> t);
     } in
     packed_connection#set_connection connection;
