@@ -320,7 +320,7 @@ struct
 
                       | Some name ->
                           lwt resolver = OBus_resolver.make connection.packed name in
-                          let receiver = { sr_sender = Some resolver#name; sr_rule = rule; sr_push = push } in
+                          let receiver = { sr_sender = Some(OBus_resolver.owner resolver); sr_rule = rule; sr_push = push } in
                           let node = Lwt_sequence.add_r receiver set.srs_receivers in
                           lwt () =
                             try_lwt

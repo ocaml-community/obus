@@ -10,10 +10,15 @@
 open Lwt
 open OBus_private
 
-class type t = object
-  method name : OBus_name.bus option React.signal
-  method disable : unit Lwt.t
-end
+type t = {
+  name : OBus_name.bus;
+  owner : OBus_name.bus option React.signal;
+  disable : unit Lwt.t Lazy.t;
+}
+
+let name resolver = resolver.name
+let owner resolver = resolver.owner
+let disable resolver = Lazy.force resolver.disable
 
 let finalise stop () =
   ignore_result (Lazy.force stop)
@@ -25,17 +30,16 @@ let make connection name =
 
     | Running connection ->
         (* If the connection is a peer-to-peer connection, act as if
-           they is no owner *)
-        if (connection.name = None ||
-
+           there is no owner *)
+        if (connection.OBus_private.name = None ||
             (* If it is a unique name and the peer has already exited,
                then there is nothing to do *)
             (OBus_name.is_unique name && OBus_cache.mem connection.exited_peers name)) then
-          let name = React.S.const None in
-          return (object
-                    method name = name
-                    method disable = return ()
-                  end)
+          return {
+            name = name;
+            owner = React.S.const None;
+            disable = lazy(return ());
+          }
         else
           lwt name_resolver =
             match NameMap.lookup name connection.name_resolvers with
@@ -116,9 +120,8 @@ let make connection name =
               return ()
           ) in
 
-          let name = Lwt_signal.with_finaliser (finalise disable) name_resolver.nr_owner in
-
-          return (object
-                    method name = name
-                    method disable = Lazy.force disable
-                  end)
+          return {
+            name = name;
+            owner = Lwt_signal.with_finaliser (finalise disable) name_resolver.nr_owner;
+            disable = disable;
+          }

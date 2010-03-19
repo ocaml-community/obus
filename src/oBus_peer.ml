@@ -49,11 +49,11 @@ let wait_for_exit peer =
                                 | None ->
                                     if Lwt.state waiter = Sleep then Lwt.wakeup wakener ()
                                 | Some _ ->
-                                    ()) resolver#name in
+                                    ()) (OBus_resolver.owner resolver) in
         lwt () = waiter in
         (* Just to make the compiler happy: *)
         ignore ev;
-        resolver#disable
+        OBus_resolver.disable resolver
 
     | None ->
         fail (Invalid_argument "OBus_peer.wait_for_exit: peer has no name")
