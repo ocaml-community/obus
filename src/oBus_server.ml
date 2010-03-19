@@ -17,93 +17,98 @@ open OBus_private
    | Types                                                           |
    +-----------------------------------------------------------------+ *)
 
-class type t = object
-  method event : OBus_connection.t React.event
-  method start : unit
-  method addresses : OBus_address.t list
-  method shutdown : unit Lwt.t
-end
-
-class type lowlevel = object
-  method event : OBus_transport.t React.event
-  method start : unit
-  method addresses : OBus_address.t list
-  method shutdown : unit Lwt.t
-end
-
-type event =
-  | Event_shutdown
-  | Event_connection of Lwt_unix.file_descr * Unix.sockaddr
-
+(* Type of a listener. A server have one or more listeners. Each
+   listener listen for new clients on a givne address *)
 type listener = {
-  listen_fd : Lwt_unix.file_descr;
-  listen_address : OBus_address.t;
-  listen_guid : OBus_address.guid;
-  listen_capabilities : OBus_auth.capability list;
+  lst_fd : Lwt_unix.file_descr;
+  lst_address : OBus_address.t;
+  lst_guid : OBus_address.guid;
+  lst_capabilities : OBus_auth.capability list;
 }
 
-type server = {
-  mutable server_up : bool;
-  server_abort : event Lwt.t;
-  server_mechanisms : OBus_auth.Server.mechanism list option;
-  server_push : OBus_transport.t -> unit;
-  server_allow_anonymous : bool;
-  server_nonce : string;
+(* Type of events received by a listener *)
+type event =
+  | Event_shutdown
+      (* Event fired when the user shutdown the server, or when a
+         listener fails. *)
+  | Event_connection of Lwt_unix.file_descr * Unix.sockaddr
+      (* A new client connects to the server *)
+
+(* Type of a server *)
+type t = {
+  mutable srv_up : bool;
+  (* The server state *)
+
+  srv_addresses : OBus_address.t list;
+  (* List of connecting addresses of the server *)
+
+  srv_callback : (t -> OBus_transport.t -> unit);
+  (* The callback function *)
+
+  srv_abort_waiter : event Lwt.t;
+  srv_abort_wakener : event Lwt.u;
+  (* Sleeping thread which is wakeup with the value [Event_shutdown]
+     when the server is shutdown *)
+
+  srv_mechanisms : OBus_auth.Server.mechanism list option;
+  (* List of mechanisms supported by this server *)
+
+  srv_allow_anonymous : bool;
+  (* Does the server allow anonymous clients ? *)
+
+  srv_nonce : string;
+  (* The server nonce, for the "tcp-nonce" transport *)
+
+  srv_nonce_file : string;
+  (* The file in which the nonce is stored *)
+
+  mutable srv_loops : unit Lwt.t;
+  (* [srv_loops] is the join of all listener's loops *)
 }
 
 (* +-----------------------------------------------------------------+
    | Accepting new connecctions                                      |
    +-----------------------------------------------------------------+ *)
 
-let cleanup address =
-  match OBus_address.name address with
-    | "unix" -> begin
-        match OBus_address.arg "path" address with
-          | Some path -> begin
-              try
-                Unix.unlink path;
-                return ()
-              with Unix_error(err, _, _) ->
-                Log.error_f "cannot unlink '%s': %s" path (Unix.error_message err)
-            end
-          | None ->
-              return ()
-      end
-    | _ ->
-        return ()
+(* Reads the nonce sent by the client before authentication. The nonce
+   is composed of the first 16 bytes sent by the client. *)
+let read_nonce fd =
+  let nonce = String.create 16 in
+  let rec loop ofs len =
+    Lwt_unix.read fd nonce ofs len >>= function
+      | 0 ->
+          fail End_of_file
+      | n ->
+          if n = len then
+            return nonce
+          else
+            loop (ofs + n) (len - n)
+  in
+  loop 0 16
 
-let rec read_nonce fd buf ofs len =
-  Lwt_unix.read fd buf ofs len >>= function
-    | 0 ->
-        fail End_of_file
-    | n ->
-        if n = len then
-          return ()
-        else
-          read_nonce fd buf (ofs + n) (len - n)
-
-let rec accept server listen =
+(* Wait for a client to connects *)
+let rec accept server listener =
   begin
     try_lwt
-      lwt result = Lwt_unix.accept listen.listen_fd in
+      lwt result = Lwt_unix.accept listener.lst_fd in
       return (`Accept result)
     with Unix_error(err, _, _) ->
       lwt () =
-        if server.server_up then
+        if server.srv_up then
           Log.error_f "uncaught error: %s" (error_message err)
         else
+          (* Ignore errors that happens after a shutdown *)
           return ()
       in
       return `Shutdown
   end >>= function
     | `Accept(fd, address) ->
-        if OBus_address.name listen.listen_address = "nonce-tcp" then
+        if OBus_address.name listener.lst_address = "nonce-tcp" then begin
           begin
-            let nonce = String.create 16 in
             try_lwt
-              lwt () = read_nonce fd nonce 0 16 in
-              if nonce <> server.server_nonce then begin
-                lwt () = Log.info_f "client rejected because of invalid nonce" in
+              lwt nonce = read_nonce fd in
+              if nonce <> server.srv_nonce then begin
+                lwt () = Log.notice_f "client rejected because of invalid nonce" in
                 return `Drop
               end else
                 return `OK
@@ -126,8 +131,8 @@ let rec accept server listen =
                   with Unix.Unix_error(err, _, _) ->
                     Log.error_f "cannot shutdown socket: %s" (Unix.error_message err)
                 in
-                accept server listen
-        else
+                accept server listener
+        end else
           return (Event_connection(fd, address))
     | `Shutdown ->
         return Event_shutdown
@@ -136,77 +141,105 @@ let rec accept server listen =
    | Listeners                                                       |
    +-----------------------------------------------------------------+ *)
 
+(* Cleans up resources allocated for the given listenning address *)
+let cleanup address =
+  match OBus_address.name address with
+    | "unix" -> begin
+        match OBus_address.arg "path" address with
+          | Some path -> begin
+              (* Sockets in the file system must be removed manually *)
+              try
+                Unix.unlink path;
+                return ()
+              with Unix_error(err, _, _) ->
+                Log.error_f "cannot unlink '%s': %s" path (Unix.error_message err)
+            end
+          | None ->
+              return ()
+      end
+    | _ ->
+        return ()
+
 let string_of_address = function
   | ADDR_UNIX path ->
-      path
+      let len = String.length path in
+      if len > 0 && path.[0] = '\x00' then
+        Printf.sprintf "unix abstract path %S" (String.sub path 1 (len - 1))
+      else
+        Printf.sprintf "unix path %S" path
   | ADDR_INET(ia, port) ->
-      Printf.sprintf "%s:%d" (string_of_inet_addr ia) port
+      Printf.sprintf "internet address %s:%d" (string_of_inet_addr ia) port
 
-let rec listen_loop server listen =
-  choose [server.server_abort; accept server listen] >>= function
+(* Handle new clients. This function never fails. *)
+let handle_client server listener fd address =
+  try_lwt
+    let buf = String.create 1 in
+    Lwt_unix.read fd buf 0 1 >>= function
+      | 0 ->
+          fail (OBus_auth.Auth_failure "did not receive the initial null byte")
+      | 1 ->
+          let user_id =
+            try
+              Some((Lwt_unix.get_credentials fd).Lwt_unix.cred_uid)
+            with Unix.Unix_error(error, _, _) ->
+              ignore (Log.info_f "cannot read credential: %s" (Unix.error_message error));
+              None
+          in
+          lwt user_id, capabilities =
+            OBus_auth.Server.authenticate
+              ~capabilities:listener.lst_capabilities
+              ?mechanisms:server.srv_mechanisms
+              ?user_id
+              ~guid:listener.lst_guid
+              ~stream:(OBus_auth.stream_of_fd fd)
+              ()
+          in
+          if user_id = None && not server.srv_allow_anonymous then begin
+            lwt () = Log.notice_f "client from %s rejected because anonymous connections are not allowed" (string_of_address address) in
+            try_lwt
+              Lwt_unix.shutdown fd SHUTDOWN_ALL;
+              Lwt_unix.close fd;
+              return ()
+            with Unix.Unix_error(err, _, _) ->
+              Log.error_f "cannot shutdown socket: %s" (Unix.error_message err)
+          end else begin
+            try
+              server.srv_callback server (OBus_transport.socket ~capabilities fd);
+              return ()
+            with exn ->
+              Log.exn exn "server callback failed failed with"
+          end
+      | _ ->
+          assert false
+  with
+    | OBus_auth.Auth_failure msg ->
+        Log.notice_f "authentication failure for client from %s: %s" (string_of_address address) msg
+    | exn ->
+        Log.exn_f exn "authentication for client from %s failed with" (string_of_address address)
+
+(* Accept clients until the server is shutdown, or an accept fails: *)
+let rec lst_loop server listener =
+  choose [server.srv_abort_waiter; accept server listener] >>= function
     | Event_shutdown ->
         lwt () =
           try
-            Lwt_unix.close listen.listen_fd;
+            Lwt_unix.close listener.lst_fd;
             return ()
           with Unix_error(err, _, _) ->
             Log.error_f "cannot close listenning socket: %s" (Unix.error_message err)
         in
-        cleanup listen.listen_address
+        cleanup listener.lst_address
 
     | Event_connection(fd, address) ->
-        lwt () =
-          try_lwt
-            let buf = String.create 1 in
-            Lwt_unix.read fd buf 0 1 >>= function
-              | 0 ->
-                  fail (OBus_auth.Auth_failure "did not receive the initial null byte")
-              | 1 ->
-                  let user_id =
-                    try
-                      Some((Lwt_unix.get_credentials fd).Lwt_unix.cred_uid)
-                    with Unix.Unix_error(error, _, _) ->
-                      ignore (Log.info_f "cannot read credential: %s" (Unix.error_message error));
-                      None
-                  in
-                  lwt user_id, capabilities =
-                    OBus_auth.Server.authenticate
-                      ~capabilities:listen.listen_capabilities
-                      ?mechanisms:server.server_mechanisms
-                      ?user_id
-                      ~guid:listen.listen_guid
-                      ~stream:(OBus_auth.stream_of_fd fd)
-                      ()
-                  in
-                  if user_id = None && not server.server_allow_anonymous then begin
-                    lwt () = Log.info_f "client from %s rejected because anonymous connection are not allowed" (string_of_address address) in
-                    try_lwt
-                      Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                      Lwt_unix.close fd;
-                      return ()
-                    with Unix.Unix_error(err, _, _) ->
-                      Log.error_f "cannot shutdown socket: %s" (Unix.error_message err)
-                  end else begin
-                    try
-                      server.server_push (OBus_transport.socket ~capabilities fd);
-                      return ()
-                    with exn ->
-                      Log.exn exn "failed to push new transport with"
-                  end
-              | _ ->
-                  assert false
-          with
-            | OBus_auth.Auth_failure msg ->
-                Log.info_f "authentication failure for client from %s: %s" (string_of_address address) msg
-            | exn ->
-                Log.exn_f exn "authentication for client from %s failed with" (string_of_address address)
-        in
-        listen_loop server listen
+        (* Launch authentication and dispatching in parallel: *)
+        ignore (handle_client server listener fd address);
+        lst_loop server listener
 
 (* +-----------------------------------------------------------------+
    | Address -> transport                                            |
    +-----------------------------------------------------------------+ *)
 
+(* Tries to create a socket using the given parameters *)
 let make_socket domain typ address =
   let fd = Lwt_unix.socket domain typ 0 in
   (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
@@ -215,19 +248,7 @@ let make_socket domain typ address =
     Lwt_unix.listen fd 10;
     return fd
   with Unix_error(err, _, _) as exn ->
-    lwt () =
-      Log.error_f "failed to create listenning socket with %s: %s"
-        (match address with
-           | ADDR_UNIX path ->
-               let len = String.length path in
-               if len > 0 && path.[0] = '\x00' then
-                 Printf.sprintf "unix abstract path %S" (String.sub path 1 (len - 1))
-               else
-                 Printf.sprintf "unix path %S" path
-           | ADDR_INET(ia, port) ->
-               Printf.sprintf "address %s:%d" (string_of_inet_addr ia) port)
-        (Unix.error_message err)
-    in
+    lwt () = Log.error_f "failed to create listenning socket with %s: %s" (string_of_address address) (Unix.error_message err) in
     Lwt_unix.close fd;
     fail exn
 
@@ -237,6 +258,8 @@ let make_path path =
 let make_abstract path =
   make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ path))
 
+(* Takes a D-Bus listenning address and returns the list of [(fd,
+   client-address)] it denotes *)
 let fd_addr_list_of_address address = match OBus_address.name address with
   | "unix" -> begin
       match (OBus_address.arg "path" address,
@@ -336,15 +359,37 @@ let fd_addr_list_of_address address = match OBus_address.name address with
       fail (Failure ("OBus_server.make_server: unknown transport type: " ^ name))
 
 (* +-----------------------------------------------------------------+
-   | Servers creation                                                |
+   | Servers                                                         |
    +-----------------------------------------------------------------+ *)
+
+let addresses server = server.srv_addresses
+
+let shutdown server =
+  if server.srv_up then begin
+    server.srv_up <- false;
+    wakeup server.srv_abort_wakener Event_shutdown;
+    lwt () =
+      if server.srv_nonce_file <> "" then begin
+        try
+          Unix.unlink server.srv_nonce_file;
+          return ()
+        with Unix_error(err, _, _) ->
+          Log.error_f "cannot unlink '%s': %s" server.srv_nonce_file (Unix.error_message err)
+      end else
+        return ()
+    in
+    (* Wait for all listenners to exit: *)
+    server.srv_loops
+  end else
+    server.srv_loops
 
 let default_address = OBus_address.make ~name:"unix" ~args:[("tmpdir", Filename.temp_dir_name)]
 
-let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[default_address]) ?(allow_anonymous=false) () =
+let make_lowlevel ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[default_address]) ?(allow_anonymous=false) callback =
   match addresses with
     | [] ->
         fail (Invalid_argument "OBus_server.make: no addresses given")
+
     | addresses ->
         (* Construct the list of all listening fds for each
            address: *)
@@ -406,9 +451,7 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
                   result_by_address
               in
 
-              let guids = List.map (fun _ -> OBus_uuid.generate ()) successes
-              and event, push = React.E.create ()
-              and abort_waiter, abort_wakener = Lwt.wait () in
+              let guids = List.map (fun _ -> OBus_uuid.generate ()) successes in
 
               let successes =
                 List.map2
@@ -432,81 +475,37 @@ let make_server ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[
                    (fun fd_addr_list guid ->
                       List.map
                         (fun (fd, address) -> {
-                           listen_fd = fd;
-                           listen_address = address;
-                           listen_capabilities = (List.filter
-                                                    (fun `Unix_fd ->
-                                                       match (OBus_address.arg "path" address,
-                                                              OBus_address.arg "abstract" address) with
-                                                         | None, None -> false
-                                                         | _ -> true)
-                                                    capabilities);
-                           listen_guid = guid;
+                           lst_fd = fd;
+                           lst_address = address;
+                           lst_capabilities = (List.filter
+                                                 (fun `Unix_fd ->
+                                                    match (OBus_address.arg "path" address,
+                                                           OBus_address.arg "abstract" address) with
+                                                      | None, None -> false
+                                                      | _ -> true)
+                                                 capabilities);
+                           lst_guid = guid;
                          })
                         fd_addr_list)
                    successes guids)
-              and listener_threads = ref [] in
+              in
 
+              let abort_waiter, abort_wakener = Lwt.wait () in
               let server = {
-                server_up = true;
-                server_abort = abort_waiter;
-                server_mechanisms = mechanisms;
-                server_push = push;
-                server_allow_anonymous = allow_anonymous;
-                server_nonce = nonce;
+                srv_up = true;
+                srv_addresses = List.map snd (List.flatten successes);
+                srv_callback = callback;
+                srv_abort_waiter = abort_waiter;
+                srv_abort_wakener = abort_wakener;
+                srv_mechanisms = mechanisms;
+                srv_allow_anonymous = allow_anonymous;
+                srv_nonce = nonce;
+                srv_nonce_file = nonce_file;
+                srv_loops = return ();
               } in
+              server.srv_loops <- join (List.map (fun listener -> lst_loop server listener) listeners);
+              return server
 
-              let rec shutdown = lazy(
-                if server.server_up then begin
-                  server.server_up <- false;
-                  wakeup abort_wakener Event_shutdown
-                end;
-                lwt () =
-                  if nonce_file <> "" then begin
-                    try
-                      Unix.unlink nonce_file;
-                      return ()
-                    with Unix_error(err, _, _) ->
-                      Log.error_f "cannot unlink '%s': %s" nonce_file (Unix.error_message err)
-                  end else
-                    return ()
-                in
-                (* Wait for all listenners to exit: *)
-                Lwt.join !listener_threads
-              ) in
-
-              (* Launch waiting loops. Yield so the user have the time
-                 to bind the event before the first connection: *)
-              let start_waiter, start_wakener = Lwt.wait () in
-              let thread = select [pause (); start_waiter] in
-              List.iter (fun listen -> listener_threads := (thread >> listen_loop server listen) :: !listener_threads) listeners;
-
-              return (event, start_wakener, (List.map snd (List.flatten successes)), shutdown)
-
-(* +-----------------------------------------------------------------+
-   | Public maker                                                    |
-   +-----------------------------------------------------------------+ *)
-
-let stop stop () =
-  ignore_result (Lazy.force stop)
-
-let make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
-  lwt event, start_wakener, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
-  let event = Lwt_event.with_finaliser (stop shutdown) event in
-  return (object
-            method event = event
-            method start = wakeup start_wakener ()
-            method addresses = addresses
-            method shutdown = Lazy.force shutdown
-          end)
-
-let make ?capabilities ?mechanisms ?addresses ?allow_anonymous () =
-  lwt event, start_wakener, addresses, shutdown = make_server ?capabilities ?mechanisms ?addresses ?allow_anonymous () in
-  let event = React.E.map (OBus_connection.of_transport ~up:false) event in
-  let event = Lwt_event.with_finaliser (stop shutdown) event in
-  return (object
-            method event = event
-            method start = wakeup start_wakener ()
-            method addresses = addresses
-            method shutdown = Lazy.force shutdown
-          end)
+let make ?capabilities ?mechanisms ?addresses ?allow_anonymous callback =
+  make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous
+    (fun server transport -> callback server (OBus_connection.of_transport ~up:false transport))

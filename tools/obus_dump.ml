@@ -29,15 +29,16 @@ let rec loop pp action what_bus a b =
 
 let launch pp what_bus laddresses =
   lwt addresses = Lazy.force laddresses in
-  lwt server = OBus_server.make_lowlevel ~capabilities:[`Unix_fd] () in
-  Unix.putenv (Printf.sprintf "DBUS_%s_BUS_ADDRESS" (String.uppercase what_bus))
-    (OBus_address.to_string server#addresses);
-  Lwt_event.always_notify_p
-    (fun transport ->
-       lwt (_, bus) = OBus_transport.of_addresses ~capabilities:[`Unix_fd] addresses in
-       choose [loop pp "message received" what_bus bus transport;
-               loop pp "sending message" what_bus transport bus])
-    server#event;
+  lwt server =
+    OBus_server.make_lowlevel ~capabilities:[`Unix_fd]
+      (fun server transport ->
+         ignore begin
+           lwt (_, bus) = OBus_transport.of_addresses ~capabilities:[`Unix_fd] addresses in
+           choose [loop pp "message received" what_bus bus transport;
+                   loop pp "sending message" what_bus transport bus]
+         end)
+  in
+  Unix.putenv (Printf.sprintf "DBUS_%s_BUS_ADDRESS" (String.uppercase what_bus)) (OBus_address.to_string (OBus_server.addresses server));
   return ()
 
 let cmd_args = ref []

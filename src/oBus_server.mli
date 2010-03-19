@@ -9,68 +9,62 @@
 
 (** Server for one-to-one communication *)
 
-(** Type of servers *)
-class type t = object
-  method event : OBus_connection.t React.event
-    (** Event which receive new connections.
+type t
+  (** Type of a server *)
 
-        Note that new connections are initially down to avoid race
-        condition. *)
+val addresses : t -> OBus_address.t list
+  (** [addresses server] returns all the addresses the server is
+      listenning on. These addresses must be passed to clients so they
+      can connect to [server]. *)
 
-  method start : unit
-    (** Start receiving events immediatly. Calling [start] is not
-        mandatory. *)
-
-  method addresses : OBus_address.t list
-    (** Listenning addresses *)
-
-  method shutdown : unit Lwt.t
-    (** Shutdown the server *)
-end
-
-(** Type of lowlevel servers *)
-class type lowlevel = object
-  method event : OBus_transport.t React.event
-    (** Event which receive new transports *)
-
-  method start : unit
-    (** Start receiving events immediatly. Calling [start] is not
-        mandatory. *)
-
-  method addresses : OBus_address.t list
-    (** Listenning addresses *)
-
-  method shutdown : unit Lwt.t
-    (** Shutdown the server *)
-end
+val shutdown : t -> unit Lwt.t
+  (** [shutdown server] shutdowns the given server. It terminates when
+      all listeners (a server may listen on several addresses) have
+      exited. If the server has already been shutdown, it does
+      nothing. *)
 
 val make :
   ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Server.mechanism list ->
   ?addresses : OBus_address.t list ->
-  ?allow_anonymous : bool -> unit -> t Lwt.t
-  (** [make ?mechanisms ?addresses] Create a server which will listen
-      on all of the given addresses.
+  ?allow_anonymous : bool ->
+  (t -> OBus_connection.t -> unit) -> t Lwt.t
+  (** [make ?capabilities ?mechanisms ?addresses ?allow_anonymous f]
+      Creates a server which will listen on all of the given addresses.
 
-      @param mechanisms is the list of authentication mechanisms supported
-             by the server.
-      @param addresses default to [{ name = "unix"; args = [("tmpdir", "/tmp")]].
+      @param capabilites is the set of the server's capabilities,
+      @param mechanisms is the list of authentication mechanisms
+             supported by the server,
+      @param addresses default to
+             [{ name = "unix"; args = [("tmpdir", "/tmp")]],
       @param allow_anonymous tell whether clients using anonymous
-             authentication will be accepted. It defaults to [false].
-      @param capabilities is the list of supported capabilities,
-             it defaults to {!OBus_auth.capabilities}
+             authentication will be accepted. It defaults to [false],
+      @param capabilities is the list of supported capabilities, it
+             defaults to {!OBus_auth.capabilities}
+      @param f is the callback which receive new clients. It takes
+             as arguments the server and the connection for the client.
 
       About errors:
       - if no address are provided, it raises [Invalid_argument],
       - if an address is invalid, it raises [Invalid_argument]
       - if listenning fails for one of the addresses, it fails with the
-        exception reported for this address
+      exception reported for this address
 
       It succeed if it can listen on at least one address.
-  *)
+
+      When a new client connects, the server handle authentication of
+      this client, then it creates a transport and the connection on
+      top of this transport.
+
+      Note that connections passed to [f] are initially down. It is up
+      to the user to set them up with {!OBus_connection.set_up}. *)
 
 val make_lowlevel :
   ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Server.mechanism list ->
   ?addresses : OBus_address.t list ->
-  ?allow_anonymous : bool -> unit -> lowlevel Lwt.t
+  ?allow_anonymous : bool ->
+  (t -> OBus_transport.t -> unit) -> t Lwt.t
+  (** [make_lowlevel] is the same as {!make} except that [f] receives
+      only the transport, and no connection is created for this
+      transport. *)

@@ -11,20 +11,22 @@ open Lwt
 open OBus_pervasives
 
 let () = Lwt_main.run (
-  lwt server = OBus_server.make () in
-  Lwt_event.always_notify_p
-    (fun connection ->
-       lwt () = Lwt_io.printl "new connection" in
-       ignore (Lwt_sequence.add_r
-                 (fun message ->
-                    Format.printf "@[<hv 2>message received:@\n%a@]@." OBus_message.print message;
-                    Some message)
-                 (OBus_connection.incoming_filters connection));
-       OBus_connection.set_up connection;
-       return ())
-    server#event;
-  lwt () = Lwt_io.eprintlf "server addresses: %S" (OBus_address.to_string server#addresses) in
-  lwt connection = OBus_connection.of_addresses server#addresses in
+  lwt server =
+    OBus_server.make
+      (fun server connection ->
+         ignore begin
+           lwt () = Lwt_io.printl "new connection" in
+           ignore (Lwt_sequence.add_r
+                     (fun message ->
+                        Format.printf "@[<hv 2>message received:@\n%a@]@." OBus_message.print message;
+                        Some message)
+                     (OBus_connection.incoming_filters connection));
+           OBus_connection.set_up connection;
+           return ()
+         end)
+  in
+  lwt () = Lwt_io.eprintlf "server addresses: %S" (OBus_address.to_string (OBus_server.addresses server)) in
+  lwt connection = OBus_connection.of_addresses (OBus_server.addresses server) in
   lwt () = OBus_connection.emit_signal connection
     ~path:["plop"]
     ~interface:"truc.bidule"
