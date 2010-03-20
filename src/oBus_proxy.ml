@@ -284,7 +284,7 @@ struct
 
             end else begin
               (* Yield to let the user add argument filters: *)
-              lwt () = select [pause (); start_waiter] in
+              lwt () = pick [pause (); start_waiter] in
 
               let rule = OBus_match.rule
                 ~typ:`Signal

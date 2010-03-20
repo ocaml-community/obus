@@ -219,7 +219,7 @@ let handle_client server listener fd address =
 
 (* Accept clients until the server is shutdown, or an accept fails: *)
 let rec lst_loop server listener =
-  choose [server.srv_abort_waiter; accept server listener] >>= function
+  pick [server.srv_abort_waiter; accept server listener] >>= function
     | Event_shutdown ->
         lwt () =
           try
