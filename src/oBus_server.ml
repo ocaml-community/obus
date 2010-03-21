@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-module Log = Lwt_log.Make(struct let section = "obus(server)" end)
+let section = Lwt_log.Section.make "obus(server)"
 
 open Unix
 open Lwt
@@ -95,7 +95,7 @@ let rec accept server listener =
     with Unix_error(err, _, _) ->
       lwt () =
         if server.srv_up then
-          Log.error_f "uncaught error: %s" (error_message err)
+          Lwt_log.error_f ~section "uncaught error: %s" (error_message err)
         else
           (* Ignore errors that happens after a shutdown *)
           return ()
@@ -108,16 +108,16 @@ let rec accept server listener =
             try_lwt
               lwt nonce = read_nonce fd in
               if nonce <> server.srv_nonce then begin
-                lwt () = Log.notice_f "client rejected because of invalid nonce" in
+                lwt () = Lwt_log.notice_f ~section "client rejected because of invalid nonce" in
                 return `Drop
               end else
                 return `OK
             with
               | End_of_file ->
-                  lwt () = Log.warning "cannot read nonce from socket" in
+                  lwt () = Lwt_log.warning ~section "cannot read nonce from socket" in
                   return `Drop
               | Unix.Unix_error(err, _, _) ->
-                  lwt () = Log.warning_f "cannot read nonce from socket: %s" (Unix.error_message err) in
+                  lwt () = Lwt_log.warning_f ~section "cannot read nonce from socket: %s" (Unix.error_message err) in
                   return `Drop
           end >>= function
             | `OK ->
@@ -129,7 +129,7 @@ let rec accept server listener =
                     Lwt_unix.close fd;
                     return ()
                   with Unix.Unix_error(err, _, _) ->
-                    Log.error_f "cannot shutdown socket: %s" (Unix.error_message err)
+                    Lwt_log.error_f ~section "cannot shutdown socket: %s" (Unix.error_message err)
                 in
                 accept server listener
         end else
@@ -152,7 +152,7 @@ let cleanup address =
                 Unix.unlink path;
                 return ()
               with Unix_error(err, _, _) ->
-                Log.error_f "cannot unlink '%s': %s" path (Unix.error_message err)
+                Lwt_log.error_f ~section "cannot unlink '%s': %s" path (Unix.error_message err)
             end
           | None ->
               return ()
@@ -182,7 +182,7 @@ let handle_client server listener fd address =
             try
               Some((Lwt_unix.get_credentials fd).Lwt_unix.cred_uid)
             with Unix.Unix_error(error, _, _) ->
-              ignore (Log.info_f "cannot read credential: %s" (Unix.error_message error));
+              ignore (Lwt_log.info_f ~section "cannot read credential: %s" (Unix.error_message error));
               None
           in
           lwt user_id, capabilities =
@@ -195,27 +195,27 @@ let handle_client server listener fd address =
               ()
           in
           if user_id = None && not server.srv_allow_anonymous then begin
-            lwt () = Log.notice_f "client from %s rejected because anonymous connections are not allowed" (string_of_address address) in
+            lwt () = Lwt_log.notice_f ~section "client from %s rejected because anonymous connections are not allowed" (string_of_address address) in
             try_lwt
               Lwt_unix.shutdown fd SHUTDOWN_ALL;
               Lwt_unix.close fd;
               return ()
             with Unix.Unix_error(err, _, _) ->
-              Log.error_f "cannot shutdown socket: %s" (Unix.error_message err)
+              Lwt_log.error_f ~section "cannot shutdown socket: %s" (Unix.error_message err)
           end else begin
             try
               server.srv_callback server (OBus_transport.socket ~capabilities fd);
               return ()
             with exn ->
-              Log.exn exn "server callback failed failed with"
+              Lwt_log.exn ~section ~exn "server callback failed failed with"
           end
       | _ ->
           assert false
   with
     | OBus_auth.Auth_failure msg ->
-        Log.notice_f "authentication failure for client from %s: %s" (string_of_address address) msg
+        Lwt_log.notice_f ~section "authentication failure for client from %s: %s" (string_of_address address) msg
     | exn ->
-        Log.exn_f exn "authentication for client from %s failed with" (string_of_address address)
+        Lwt_log.exn_f ~section ~exn "authentication for client from %s failed with" (string_of_address address)
 
 (* Accept clients until the server is shutdown, or an accept fails: *)
 let rec lst_loop server listener =
@@ -226,7 +226,7 @@ let rec lst_loop server listener =
             Lwt_unix.close listener.lst_fd;
             return ()
           with Unix_error(err, _, _) ->
-            Log.error_f "cannot close listenning socket: %s" (Unix.error_message err)
+            Lwt_log.error_f ~section "cannot close listenning socket: %s" (Unix.error_message err)
         in
         cleanup listener.lst_address
 
@@ -248,7 +248,7 @@ let make_socket domain typ address =
     Lwt_unix.listen fd 10;
     return fd
   with Unix_error(err, _, _) as exn ->
-    lwt () = Log.error_f "failed to create listenning socket with %s: %s" (string_of_address address) (Unix.error_message err) in
+    lwt () = Lwt_log.error_f ~section "failed to create listenning socket with %s: %s" (string_of_address address) (Unix.error_message err) in
     Lwt_unix.close fd;
     fail exn
 
@@ -374,7 +374,7 @@ let shutdown server =
           Unix.unlink server.srv_nonce_file;
           return ()
         with Unix_error(err, _, _) ->
-          Log.error_f "cannot unlink '%s': %s" server.srv_nonce_file (Unix.error_message err)
+          Lwt_log.error_f ~section "cannot unlink '%s': %s" server.srv_nonce_file (Unix.error_message err)
       end else
         return ()
     in
@@ -416,7 +416,7 @@ let make_lowlevel ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses
                             Lwt_unix.close fd;
                             cleanup address
                           with Unix_error(err, _, _) ->
-                            Log.error_f "failed to close listenning file descriptor: %s" (Unix.error_message err))
+                            Lwt_log.error_f ~section "failed to close listenning file descriptor: %s" (Unix.error_message err))
                        fd_addr_list
                  | `Failure e ->
                      return ())

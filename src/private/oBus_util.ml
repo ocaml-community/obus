@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-module Log = Lwt_log.Make(struct let section = "obus(util)" end)
+let section = Lwt_log.Section.make "obus(util)"
 
 open Lwt
 open Printf
@@ -92,7 +92,7 @@ let homedir = lazy((Unix.getpwuid (Unix.getuid ())).Unix.pw_dir)
 let init_pseudo = Lazy.lazy_from_fun Random.self_init
 
 let fill_pseudo buffer pos len =
-  ignore (Log.warning "using pseudo-random generator");
+  ignore (Lwt_log.warning ~section "using pseudo-random generator");
   Lazy.force init_pseudo;
   for i = pos to pos + len - 1 do
     String.unsafe_set buffer i (char_of_int (Random.int 256))
@@ -105,7 +105,7 @@ let fill_random buffer pos len =
     if n < len then fill_pseudo buffer (pos + n) (len - n);
     close_in ic
   with exn ->
-    ignore (Log.warning_f "failed to get random data from /dev/urandom: %s" (Printexc.to_string exn));
+    ignore (Lwt_log.warning_f ~section "failed to get random data from /dev/urandom: %s" (Printexc.to_string exn));
     fill_pseudo buffer pos len
 
 let random_string n =

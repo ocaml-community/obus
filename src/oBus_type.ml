@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-module Log = Lwt_log.Make(struct let section = "obus(type)" end)
+let section = Lwt_log.Section.make "obus(type)"
 
 open OBus_value
 open OBus_private_type
@@ -68,7 +68,7 @@ let close_fds map =
                 try
                   Unix.close fd_dup
                 with exn ->
-                  ignore (Log.exn exn "failed to close file descriptor")) map
+                  ignore (Lwt_log.exn ~section ~exn "failed to close file descriptor")) map
 
 let cast f ?(context=No_context) x =
   let context = { ctx_data = context; ctx_fds = FDMap.empty } in

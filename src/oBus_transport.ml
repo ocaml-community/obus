@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-module Log = Lwt_log.Make(struct let section = "obus(transport)" end)
+let section = Lwt_log.Section.make "obus(transport)"
 
 open Unix
 open Printf
@@ -238,19 +238,19 @@ let rec connect address =
             try_lwt
               Lwt_process.pread_line ("dbus-launch", [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
             with exn ->
-              lwt () = Log.error_f "autolaunch failed: %s" (Printexc.to_string exn) in
+              lwt () = Lwt_log.error_f ~section "autolaunch failed: %s" (Printexc.to_string exn) in
               fail exn
           in
           let line = try String.sub line 0 (String.index line '\000') with _ -> line in
           try_lwt
             return (OBus_address.of_string line)
           with OBus_address.Parse_failure(addr, pos, reason) as exn ->
-            lwt () = Log.error_f "autolaunch returned an invalid address %S, at position %d: %s" addr pos reason in
+            lwt () = Lwt_log.error_f ~section "autolaunch returned an invalid address %S, at position %d: %s" addr pos reason in
             fail exn
         in
         match addresses with
           | [] ->
-              lwt () = Log.error_f "'autolaunch' returned no addresses" in
+              lwt () = Lwt_log.error_f ~section "'autolaunch' returned no addresses" in
               fail (Failure "'autolaunch' returned no addresses")
           | address :: rest ->
               try_lwt

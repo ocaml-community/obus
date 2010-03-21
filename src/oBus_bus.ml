@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-module Log = Lwt_log.Make(struct let section = "obus(bus)" end)
+let section = Lwt_log.Section.make "obus(bus)"
 
 open Lwt
 open OBus_private
@@ -30,16 +30,16 @@ OP_method Hello : string
 
 let error_handler = function
   | OBus_wire.Protocol_error msg ->
-      ignore (Log.error_f "the D-Bus connection with the message bus has been closed due to a protocol error: %s" msg);
+      ignore (Lwt_log.error_f ~section "the D-Bus connection with the message bus has been closed due to a protocol error: %s" msg);
       exit 1
   | OBus_connection.Connection_lost ->
-      ignore (Log.info "disconnected from D-Bus message bus");
+      ignore (Lwt_log.info ~section "disconnected from D-Bus message bus");
       exit 0
   | OBus_connection.Transport_error exn ->
-      ignore (Log.error_f "the D-Bus connection with the message bus has been closed due to a transport error: %s" (Printexc.to_string exn));
+      ignore (Lwt_log.error_f ~section "the D-Bus connection with the message bus has been closed due to a transport error: %s" (Printexc.to_string exn));
       exit 1
   | exn ->
-      ignore (Log.exn exn "the D-Bus connection with the message bus has been closed due to this uncaught exception");
+      ignore (Lwt_log.exn ~section ~exn "the D-Bus connection with the message bus has been closed due to this uncaught exception");
       exit 1
 
 let register_connection ?(set_on_disconnect=true) connection = match connection#get with
@@ -67,7 +67,7 @@ let of_laddresses name laddr =
     Lazy.force laddr >>= of_addresses
   with exn ->
     lwt () =
-      Log.warning_f "Failed to open a connection to the %s bus: %s"
+      Lwt_log.warning_f ~section "Failed to open a connection to the %s bus: %s"
         name
         (match exn with
            | Unix.Unix_error(error, func, "") ->

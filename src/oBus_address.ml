@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-module Log = Lwt_log.Make(struct let section = "obus(address)" end)
+let section = Lwt_log.Section.make "obus(address)"
 
 (* +-----------------------------------------------------------------+
    | Types                                                           |
@@ -98,7 +98,7 @@ let system = lazy(
     | Some str ->
         return (of_string str)
     | None ->
-        lwt () = Log.info_f not_found_msg system_bus_variable in
+        lwt () = Lwt_log.info_f ~section not_found_msg system_bus_variable in
         return default_system
 )
 
@@ -107,6 +107,6 @@ let session = lazy(
     | Some line ->
         return (of_string line)
     | None ->
-        lwt () = Log.info_f not_found_msg session_bus_variable in
+        lwt () = Lwt_log.info_f ~section not_found_msg session_bus_variable in
         return default_session
 )
