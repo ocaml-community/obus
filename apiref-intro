@@ -1,0 +1,76 @@
+{1 OBus - API Reference}
+
+{2 High-level}
+
+{3 Connection and message bus}
+
+{!modules:
+OBus_connection
+OBus_bus
+OBus_server
+}
+
+{3 D-Bus names, strings and paths}
+
+{!modules:
+OBus_string
+OBus_name
+OBus_path
+OBus_resolver
+}
+
+{3 D-Bus values}
+
+{!modules:
+OBus_value
+}
+
+{3 OBus type combinator system}
+
+{!modules:
+OBus_type
+OBus_pervasives
+}
+
+{3 Proxies}
+
+{!modules:
+OBus_peer
+OBus_proxy
+}
+
+{3 Local objects}
+
+{!modules:
+OBus_object
+}
+
+{3 Introspection}
+
+{!modules:
+OBus_introspect
+}
+
+{3 Low-level}
+
+{!modules:
+OBus_wire
+OBus_transport
+OBus_address
+OBus_auth
+OBus_message
+OBus_match
+
+}
+
+{3 Miscellaneous}
+
+{!modules:
+OBus_error
+OBus_info
+OBus_uuid
+}
+
+{3 Index}
+
+{!indexlist}

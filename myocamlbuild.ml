@@ -255,6 +255,11 @@ let _ =
         rule "obus_doc" ~prod:"obus.odocl" ~dep:"obus.mllib"
           (fun _ _ -> Echo(List.map (fun s -> s ^ "\n") (get_public_modules ()), "obus.odocl"));
 
+        (* Use an introduction page with categories *)
+        tag_file "obus.docdir/index.html" ["apiref"];
+        dep ["apiref"] ["apiref-intro"];
+        flag ["apiref"] & S[A"-intro"; P"apiref-intro"];
+
         (* Generation of "META" *)
         rule "META" ~deps:["META.in"; "obus.mllib"; "VERSION"] ~prod:"META"
           (fun _ _ ->
