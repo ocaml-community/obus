@@ -25,7 +25,6 @@ type tbasic =
   | Tsignature
   | Tobject_path
   | Tunix_fd
- with constructor
 
 type tsingle =
   | Tbasic of tbasic
@@ -33,9 +32,57 @@ type tsingle =
   | Tarray of tsingle
   | Tdict of tbasic * tsingle
   | Tvariant
- with constructor
 
 type tsequence = tsingle list
+
+(** {8 Constructors} *)
+
+val tbyte : tbasic
+val tboolean : tbasic
+val tint16 : tbasic
+val tint32 : tbasic
+val tint64 : tbasic
+val tuint16 : tbasic
+val tuint32 : tbasic
+val tuint64 : tbasic
+val tdouble : tbasic
+val tstring : tbasic
+val tsignature : tbasic
+val tobject_path : tbasic
+val tunix_fd : tbasic
+
+val tbasic : tbasic -> tsingle
+val tstructure : tsingle list -> tsingle
+val tarray : tsingle -> tsingle
+val tdict : tbasic -> tsingle -> tsingle
+val tvariant : tsingle
+
+val tsbyte : tsingle
+  (** [tsbyte = tbasic tbyte] *)
+val tsboolean : tsingle
+  (** [tsboolean = tbasic tboolean] *)
+val tsint16 : tsingle
+  (** [tsint16 = tbasic tint16] *)
+val tsint32 : tsingle
+  (** [tsint32 = tbasic tint32] *)
+val tsint64 : tsingle
+  (** [tsint64 = tbasic tint64] *)
+val tsuint16 : tsingle
+  (** [tsuint16 = tbasic tuint16] *)
+val tsuint32 : tsingle
+  (** [tsuint32 = tbasic tuint32] *)
+val tsuint64 : tsingle
+  (** [tsuint64 = tbasic tuint64] *)
+val tsdouble : tsingle
+  (** [tsdouble = tbasic tdouble] *)
+val tsstring : tsingle
+  (** [tsstring = tbasic tstring] *)
+val tssignature : tsingle
+  (** [tssignature = tbasic tsignature] *)
+val tsobject_path : tsingle
+  (** [tsobject_path = tbasic tobject_path] *)
+val tsunix_fd : tsingle
+  (** [tsunix_fd = tbasic tunix_fd] *)
 
 (** {6 Singatures} *)
 
@@ -77,7 +124,6 @@ type basic =
   | Signature of signature
   | Object_path of OBus_path.t
   | Unix_fd of Unix.file_descr
- with constructor
 
 type single =
     private
@@ -91,46 +137,56 @@ type single =
           value does not have the expected type *)
   | Structure of single list
   | Variant of single
- with constructor
 
 type sequence = single list
 
+(** {8 Constructors} *)
+
+val byte : char -> basic
+val boolean : bool -> basic
+val int16 : int -> basic
+val int32 : int32 -> basic
+val int64 : int64 -> basic
+val uint16 : int -> basic
+val uint32 : int32 -> basic
+val uint64 : int64 -> basic
+val double : float -> basic
+val string : string -> basic
+val signature : signature -> basic
+val object_path : OBus_path.t -> basic
+val unix_fd : Unix.file_descr -> basic
+
+val basic : basic -> single
+val array : tsingle -> single list -> single
+val byte_array : string -> single
+val dict : tbasic -> tsingle -> (basic * single) list -> single
+val structure : single list -> single
+val variant : single -> single
+
 val sbyte : char -> single
   (** [sbyte x = basic (byte x)] *)
-
 val sboolean : bool -> single
   (** [sboolean x = basic (boolean x)] *)
-
 val sint16 : int -> single
   (** [sint16 x = basic (int16 x)] *)
-
 val sint32 : int32 -> single
   (** [sint32 x = basic (int32 x)] *)
-
 val sint64 : int64 -> single
   (** [sint64 x = basic (int64 x)] *)
-
 val suint16 : int -> single
   (** [suint16 x = basic (uint16 x)] *)
-
 val suint32 : int32 -> single
   (** [suint32 x = basic (uint32 x)] *)
-
 val suint64 : int64 -> single
   (** [suint64 x = basic (uint64 x)] *)
-
 val sdouble : float -> single
   (** [sdouble x = basic (double x)] *)
-
 val sstring : string -> single
   (** [sstring x = basic (string x)] *)
-
 val ssignature : signature -> single
   (** [ssignature x = basic (signature x)] *)
-
 val sobject_path : OBus_path.t -> single
   (** [sobject_path x = basic (object_path x)] *)
-
 val sunix_fd : Unix.file_descr -> single
   (** [sunix_fd x = basic (unix_fd x)] *)
 

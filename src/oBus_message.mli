@@ -27,7 +27,11 @@ type typ =
 type flags = {
   no_reply_expected : bool;
   no_auto_start : bool;
-} with projection
+}
+
+val no_reply_expected : flags -> bool
+val no_auto_start : flags -> bool
+  (** Projections *)
 
 val make_flags : ?no_reply_expected:bool -> ?no_auto_start:bool -> unit -> flags
   (** Optionnal arguments default to true *)
@@ -42,7 +46,15 @@ type t = {
   destination : OBus_name.bus option;
   sender : OBus_name.bus option;
   body : body;
-} with projection
+}
+
+val flags : t -> flags
+val serial : t -> serial
+val typ : t -> typ
+val destination : t -> OBus_name.bus option
+val sender : t -> OBus_name.bus option
+val body : t -> body
+  (** Projections *)
 
 (** {6 Creation of header} *)
 

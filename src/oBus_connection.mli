@@ -15,7 +15,10 @@
     messages. *)
 
 type t = OBus_private.packed_connection
- with obus(sequence)
+
+val obus_t : t OBus_type.sequence
+  (** The type combinator. It returns the connection from which a
+      message come. *)
 
 val compare : t -> t -> int
   (** Same as [Pervasives.compare]. It allows this module to be used
@@ -99,9 +102,11 @@ val support_unix_fd_passing : t -> bool
 (** {6 Contextes} *)
 
 type context = t * OBus_message.t
- with obus(sequence)
-     (** The context contains the necessary informations to cast a
-         message body *)
+    (** The context contains the necessary informations to cast a
+        message body *)
+
+val obus_context : context OBus_type.sequence
+  (** The type combinator for obtaining the context *)
 
 val make_context : context -> OBus_type.context
   (** [context context] creates an obus-type context *)

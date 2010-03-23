@@ -21,7 +21,22 @@ type t = {
   name : OBus_name.bus option;
   (** Name of the peer. This only make sense if the connection is a
       connection to a message bus. *)
-} with projection
+}
+
+val connection : t -> OBus_connection.t
+val name : t -> OBus_name.bus option
+  (** Projections *)
+
+val obus_t : t OBus_type.sequence
+  (** This return the peer sending a message.
+
+      This may be used in method type to get the sender of a call, for
+      example:
+
+      {[
+        OL_method Foo : OBus_peer.t -> int -> string
+      ]}
+  *)
 
 (** Note that it is possible to use either a unique connection name or
     a bus name as peer name.
@@ -56,17 +71,6 @@ type t = {
     return a proxy using a peer using a unique name, so you do not
     have to care about this if you use it.
 *)
-
-val obus_t : t OBus_type.sequence
-  (** This return the peer sending a message.
-
-      This may be used in method type to get the sender of a call, for
-      example:
-
-      {[
-        OBUS_method Foo : OBus_peer.t -> int -> string
-      ]}
-  *)
 
 val make : connection : OBus_connection.t -> name : OBus_name.bus -> t
   (** [make connection name] make a named peer *)

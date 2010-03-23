@@ -7,8 +7,10 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-type t = OBus_proxy.t with obus(basic)
+type t = OBus_proxy.t
     (** Type of the Hal manager *)
+
+val obus_t : t OBus_type.basic
 
 val manager : t Lwt.t Lazy.t
   (** The Hal manager *)

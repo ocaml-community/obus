@@ -18,7 +18,9 @@ type server_info = {
   server_vendor : string;
   server_version : string;
   server_spec_version : string;
-} with obus(sequence)
+}
+
+val obus_server_info : server_info OBus_type.sequence
 
 val app_name : string ref
   (** Application name used for notification. The default value is
@@ -40,7 +42,9 @@ type image = {
   img_bits_per_sample : int;
   img_channels : int;
   img_data : string;
-} with obus(container)
+}
+
+val obus_image : image OBus_type.container
 
 (** Type of notification id *)
 type id

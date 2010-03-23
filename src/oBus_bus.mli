@@ -86,7 +86,8 @@ type request_name_result =
             what to do in this case *)
     | `Already_owner
         (** You already have the name *) ]
- with obus(basic)
+
+val obus_request_name_result : request_name_result OBus_type.basic
 
 val request_name : t ->
   ?allow_replacement:bool ->
@@ -107,7 +108,8 @@ type release_name_result =
     [ `Released
     | `Non_existent
     | `Not_owner ]
- with obus(basic)
+
+val obus_release_name_result : release_name_result OBus_type.basic
 
 val release_name : t -> OBus_name.bus -> release_name_result Lwt.t
 
@@ -120,7 +122,8 @@ exception Service_unknown of string
 type start_service_by_name_result =
     [ `Success
     | `Already_running ]
- with obus(basic)
+
+val obus_start_service_by_name_result : start_service_by_name_result OBus_type.basic
 
 val start_service_by_name : t -> OBus_name.bus -> start_service_by_name_result Lwt.t
   (** Start a service on the given bus by its name *)

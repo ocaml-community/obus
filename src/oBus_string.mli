@@ -27,7 +27,13 @@ type error = {
 
   msg : string;
   (** explain why the string failed to validate *)
-} with projection
+}
+
+val typ : error -> string
+val str : error -> string
+val ofs : error -> int
+val msg : error -> string
+  (** Projections *)
 
 val error_message : error -> string
   (** [error_message error] return a human-readabe error message *)

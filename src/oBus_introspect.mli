@@ -25,7 +25,9 @@ type member =
 type interface = name * member list * annotation list
 type node = OBus_path.element
 
-type document = interface list * node list with obus(basic)
+type document = interface list * node list
+
+val obus_document : document OBus_type.basic
 
 (** {6 Xml conversion} *)
 

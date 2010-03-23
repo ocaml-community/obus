@@ -56,6 +56,20 @@ type tsequence = tsingle list
 
 type signature = tsequence
 
+let tsbyte = Tbasic Tbyte
+let tsboolean = Tbasic Tboolean
+let tsint16 = Tbasic Tint16
+let tsint32 = Tbasic Tint32
+let tsint64 = Tbasic Tint64
+let tsuint16 = Tbasic Tuint16
+let tsuint32 = Tbasic Tuint32
+let tsuint64 = Tbasic Tuint64
+let tsdouble = Tbasic Tdouble
+let tsstring = Tbasic Tstring
+let tssignature = Tbasic Tsignature
+let tsobject_path = Tbasic Tobject_path
+let tsunix_fd = Tbasic Tunix_fd
+
 (* +-----------------------------------------------------------------+
    | D-Bus types pretty-printing                                     |
    +-----------------------------------------------------------------+ *)

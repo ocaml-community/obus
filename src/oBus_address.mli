@@ -22,7 +22,11 @@ type t = {
 
   args : (string * string) list;
   (** Arguments of the address *)
-} with projection
+}
+
+val name : t -> string
+val args : t -> (string * string) list
+  (** Projections *)
 
 val make : name : string -> args : (string * string) list -> t
   (** Creates an address *)

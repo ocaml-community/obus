@@ -33,7 +33,19 @@ type rule = private {
   destination : OBus_name.bus option;
   arguments : (int * argument_filter) list;
   (** [arguments] is always a sorted list. *)
-} with projection, obus(basic)
+}
+
+val obus_rule : rule OBus_type.basic
+  (** The type combinator for matching-rules *)
+
+val typ : rule -> [ `Signal | `Error | `Method_call | `Method_return ] option
+val sender : rule -> OBus_name.bus option
+val interface : rule -> OBus_name.interface option
+val member : rule -> OBus_name.member option
+val path : rule -> OBus_path.t option
+val destination : rule -> OBus_name.bus option
+val arguments : rule -> (int * argument_filter) list
+  (** Projections *)
 
 val rule :
   ?typ : [ `Signal | `Error | `Method_call | `Method_return ] ->
@@ -62,5 +74,5 @@ val string_of_rule : rule -> string
 val rule_of_string : string -> rule
   (** Parse a string representation of a matching rule.
 
-      @raise [Failure] if the given string does not contain a valid
+      @raise Failure if the given string does not contain a valid
       matching rule. *)

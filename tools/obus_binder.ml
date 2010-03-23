@@ -38,9 +38,10 @@ let choose_output_file_prefix () = match !output_file_prefix with
       | [f] -> begin
           try
             let i = String.rindex f '.' in
-            if String.lowercase (Str.string_after f i) = ".xml"
-            then String.sub f 0 i
-            else f
+            if Filename.check_suffix (String.lowercase f) ".xml" then
+              String.sub f 0 i
+            else
+              f
           with
               Not_found -> f
         end

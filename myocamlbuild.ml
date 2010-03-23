@@ -170,7 +170,7 @@ let _ =
           rule "best" ~dep:"%.byte" ~prod:"%.best"
             (fun env _ -> cp (env "%.byte") (env "%.best"));
 
-        let byte = "syntax/pa_obus.cma" :: List.concat [
+        let byte = "pa_obus.cma" :: List.concat [
           List.map (sprintf "%s.cma") libs;
           List.map (sprintf "examples/%s.byte") examples;
           List.map (sprintf "tools/%s.byte") tools;

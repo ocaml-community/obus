@@ -7,12 +7,15 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-type t = OBus_proxy.t with obus(basic)
+type t = OBus_proxy.t
     (** Type of devices *)
 
+val obus_t : t OBus_type.basic
+
 type udi = OBus_path.t
- with obus(basic)
-     (** Unique Device Identifier *)
+    (** Unique Device Identifier *)
+
+val obus_udi : udi OBus_type.basic
 
 val udi : t -> udi
   (** Return the udi of a device *)
@@ -33,7 +36,8 @@ type property =
   | Pbool of bool
   | Pdouble of float
       (** IEEE754 double precision floating point number  *)
- with obus(container)
+
+val obus_property : property OBus_type.container
 
 (** {6 Common device interface} *)
 

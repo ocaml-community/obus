@@ -12,10 +12,13 @@
 (** This module allow you to create D-Bus objects and export them on a
     connection, allowing other programs to acccess them. *)
 
-type t with obus(basic)
+type t
   (** Default type for local D-Bus objects. It contains informations
       needed by obus to export it on a connection and dispatch
       incomming method calls. *)
+
+val obus_t : t OBus_type.basic
+  (** The type combinator for objects *)
 
 val remove_by_path : OBus_connection.t -> OBus_path.t -> unit
   (** [remove_by_path connection path] removes the object with path
@@ -122,8 +125,10 @@ end
 (** Local object signature *)
 module type S = sig
 
-  type obj with obus(basic)
+  type obj
     (** The type of objects *)
+
+  val obus_obj : obj OBus_type.basic
 
   (** {6 Interfaces} *)
 
@@ -192,6 +197,7 @@ module type S = sig
             bar = bar;
             ...
           }
+        ]}
     *)
 
   val make' : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> unit -> t
@@ -321,7 +327,7 @@ module type Custom = sig
                                     type obj = t
                                     let info obj = obj.obus
                                   end)
-
+    ]}
 *)
 end
 

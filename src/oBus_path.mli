@@ -27,7 +27,7 @@ val after : t -> t -> t option
 val of_string : string -> t
   (** Create an object path from a string.
 
-      @raise [OBus_string.Invalid_string] if the given string does not
+      @raise OBus_string.Invalid_string if the given string does not
       represent a valid object path *)
 
 val to_string : t -> string

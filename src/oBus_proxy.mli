@@ -19,7 +19,9 @@ type t = {
 
   path : OBus_path.t;
   (** Path of the object on the peer *)
-} with obus(basic)
+}
+
+val obus_t : t OBus_type.basic
 
 val make : peer : OBus_peer.t -> path : OBus_path.t -> t
   (** Creates a proxy from the given peer and path *)
@@ -108,7 +110,7 @@ module Interface : sig
         Or, with the syntax extension:
 
         {[
-          OBUS_signal DBusName : signal_type
+          OP_signal DBusName : signal_type
         ]}
     *)
 
@@ -137,9 +139,9 @@ module Interface : sig
       can be defined like this:
 
       {[
-        OBUS_property_r DBusName : property_type
-        OBUS_property_w DBusName : property_type
-        OBUS_property_rw DBusName : property_type
+        OP_property_r DBusName : property_type
+        OP_property_w DBusName : property_type
+        OP_property_rw DBusName : property_type
       ]}
   *)
 end
@@ -147,8 +149,10 @@ end
 (** Proxy signature *)
 module type S = sig
 
-  type proxy with obus(basic)
+  type proxy
     (** Type of proxy objects *)
+
+  val obus_proxy : proxy OBus_type.basic
 
   val make_interface : OBus_name.interface -> proxy Interface.t
     (** Create an interface using proxies of type {!proxy} *)

@@ -75,4 +75,4 @@ val haskell_lid : string -> string
 val haskell_uid : string -> string
   (** Translate a D-Bus name into an haskell-style upper-identifier:
 
-      [haskell_uid "org.freedesktop.DBus" = "OrgFreedesktopDBus" *)
+      [haskell_uid "org.freedesktop.DBus" = "OrgFreedesktopDBus"] *)

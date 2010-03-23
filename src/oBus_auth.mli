@@ -71,7 +71,11 @@ module Client : sig
     (** Name of the mechanism *)
     mech_exec : unit -> mechanism_handler;
     (** Mechanism creator *)
-  } with projection
+  }
+
+  val mech_name : mechanism -> string
+  val mech_exec : mechanism -> unit -> mechanism_handler
+    (** Mechanisms *)
 
   val mech_external : mechanism
   val mech_anonymous : mechanism
@@ -127,7 +131,11 @@ module Server : sig
     mech_exec : int option -> mechanism_handler;
     (** The mechanism creator. It receive the user id of the client,
         if available. *)
-  } with projection
+  }
+
+  val mech_name : mechanism -> string
+  val mech_exec : mechanism -> int option -> mechanism_handler
+    (** Projections *)
 
   val mech_anonymous : mechanism
   val mech_external : mechanism
