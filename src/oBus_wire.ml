@@ -26,11 +26,6 @@ let () =
        | _ ->
            None)
 
-type byte_order = Little_endian | Big_endian
-let native_byte_order = match OBus_config.native_byte_order with
-  | `little_endian -> Little_endian
-  | `big_endian -> Big_endian
-
 let padding2 i = i land 1
 let padding4 i = (4 - i) land 3
 let padding8 i = (8 - i) land 7
@@ -826,12 +821,12 @@ end
 module LE_writer = Make_writer(LE_integer_writers)
 module BE_writer = Make_writer(BE_integer_writers)
 
-let string_of_message ?(byte_order=native_byte_order) msg =
+let string_of_message ?(byte_order=Lwt_io.system_byte_order) msg =
   try
     match byte_order with
-      | Little_endian ->
+      | Lwt_io.Little_endian ->
           LE_writer.write_message 'l' msg
-      | Big_endian ->
+      | Lwt_io.Big_endian ->
           BE_writer.write_message 'B' msg
   with exn ->
     raise (map_exn data_error exn)

@@ -29,12 +29,7 @@ class type ['a] signal = object
   method event : 'a React.event
     (** The event which occurs each time the signal is received. *)
 
-  method start : unit
-    (** By default obus will wait until the next main loop iteration
-        before dispatching this even, to prevent event loss. Calling
-        [start] will immediatly start dispatching it. *)
-
-  method set_filters : (int * OBus_match.argument_filter) list -> unit Lwt.t
+  method set_filters : (int * OBus_match.argument_filter) list -> unit
     (** Sets the list of argument filters for the given signal. This
         means that the message bus will filter signals that must be
         delivered to the current running program.
@@ -43,7 +38,7 @@ class type ['a] signal = object
         messages received, and so to reduce the number of wakeup of
         the program. *)
 
-  method disconnect : unit Lwt.t
+  method disconnect : unit
     (** Stop receiving the signal *)
 end
 

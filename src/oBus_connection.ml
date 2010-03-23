@@ -367,10 +367,11 @@ let dispatch_message connection message = match message with
               | Some set ->
                   Lwt_sequence.iter_l
                     (fun receiver ->
-                       try
-                         receiver.sr_push (connection.packed, message)
-                       with exn ->
-                         ignore (Lwt_log.exn ~section ~exn "signal event failed with"))
+                       if receiver.sr_active then
+                         try
+                           receiver.sr_push (connection.packed, message)
+                         with exn ->
+                           ignore (Lwt_log.exn ~section ~exn "signal event failed with"))
                     set.srs_receivers
               | None ->
                  ()
@@ -459,7 +460,7 @@ let dispatch_message connection message = match message with
                 | Some set ->
                     Lwt_sequence.iter_l
                       (fun receiver ->
-                         if match_sender receiver message then
+                         if receiver.sr_active && match_sender receiver message then
                            try
                              receiver.sr_push (connection.packed, message)
                            with exn ->

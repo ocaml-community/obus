@@ -117,7 +117,11 @@ and name_resolver_state =
    +-----------------------------------------------------------------+ *)
 
 and signal_receiver = {
-  sr_sender : OBus_name.bus option React.signal option;
+  mutable sr_active : bool;
+  (* Whether this receiver is active or not. Initially receiver are
+     not active. *)
+
+  mutable sr_sender : OBus_name.bus option React.signal option;
   (* The sender that must be matched *)
 
   mutable sr_rule : OBus_match.rule;
@@ -129,7 +133,7 @@ and signal_receiver = {
 
 and signal_receiver_set = {
   mutable srs_rules : RuleSet.t;
-  (* The set of rules used by receivers, that are actually set on the
+  (* The set of rules used by receivers, that are currently set on the
      message bus *)
 
   mutable srs_mutex : Lwt_mutex.t;
@@ -267,3 +271,10 @@ let unpack_connection packed =
         raise exn
     | Running connection ->
         connection
+
+let check_connection packed =
+  match packed#get with
+    | Crashed exn ->
+        raise exn
+    | Running connection ->
+        ()

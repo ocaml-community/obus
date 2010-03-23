@@ -26,17 +26,11 @@ exception Protocol_error of string
       - a boolean value is other than 0 or 1
       - ... *)
 
-type byte_order = Little_endian | Big_endian
-
-val native_byte_order : byte_order
-  (** Byte order of the current architecture. It is used as default
-      for sending messages. *)
-
 val read_message : Lwt_io.input_channel -> OBus_message.t Lwt.t
   (** [read_message ic] deserializes a message from a channel. It
       fails if the message contains file descriptors. *)
 
-val write_message : Lwt_io.output_channel -> ?byte_order : byte_order -> OBus_message.t -> unit Lwt.t
+val write_message : Lwt_io.output_channel -> ?byte_order : Lwt_io.byte_order -> OBus_message.t -> unit Lwt.t
   (** [write_message oc ?byte_order message] serializes a message to a
       channel. It fails if the message contains file descriptors. *)
 
@@ -45,7 +39,7 @@ val message_of_string : string -> Unix.file_descr array -> OBus_message.t
       string. [fds] is used to resolv file descriptors the message may
       contains. *)
 
-val string_of_message : ?byte_order : byte_order -> OBus_message.t -> string * Unix.file_descr array
+val string_of_message : ?byte_order : Lwt_io.byte_order -> OBus_message.t -> string * Unix.file_descr array
   (** Marshal a message into a string. Returns also the list of file
       descriptors that must be sent with the message. *)
 
@@ -68,7 +62,7 @@ type writer
 val writer : Lwt_unix.file_descr -> writer
   (** [writer unix_socket] creates a writer from a unix socket *)
 
-val write_message_with_fds : writer -> ?byte_order : byte_order -> OBus_message.t -> unit Lwt.t
+val write_message_with_fds : writer -> ?byte_order : Lwt_io.byte_order -> OBus_message.t -> unit Lwt.t
   (** Write a message with its file descriptors on the given writer *)
 
 val close_writer : writer -> unit Lwt.t

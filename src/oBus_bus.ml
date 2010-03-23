@@ -42,20 +42,18 @@ let error_handler = function
       ignore (Lwt_log.exn ~section ~exn "the D-Bus connection with the message bus has been closed due to this uncaught exception");
       exit 1
 
-let register_connection ?(set_on_disconnect=true) connection = match connection#get with
-  | Crashed exn ->
-      fail exn
+let register_connection ?(set_on_disconnect=true) packed =
+  let connection = unpack_connection packed in
+  match connection.name with
+    | Some _ ->
+        (* Do not call two times the Hello method *)
+        return ()
 
-  | Running connection -> match connection.name with
-      | Some _ ->
-          (* Do not call two times the Hello method *)
-          return ()
-
-      | None ->
-          if set_on_disconnect then connection.on_disconnect := error_handler;
-          lwt name = hello connection.packed in
-          connection.name <- Some name;
-          return ()
+    | None ->
+        if set_on_disconnect then connection.on_disconnect := error_handler;
+        lwt name = hello connection.packed in
+        connection.name <- Some name;
+        return ()
 
 let of_addresses addresses =
   lwt bus = OBus_connection.of_addresses addresses ~shared:true in
