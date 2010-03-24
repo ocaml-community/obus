@@ -73,8 +73,7 @@ test-syntax:
 # +------------------------------------------------------------------+
 
 doc:
-	$(OC) obus.docdir/index.html
-	cp utils/doc/style.css _build/obus.docdir/style.css
+	$(OC) doc
 
 dot:
 	$(OC) obus.docdir/index.dot

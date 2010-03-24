@@ -16,7 +16,7 @@ open Ocamlbuild_plugin
 
 let try_exec command =
   try
-    let _ = run_and_read command in
+    Command.execute ~quiet:true (Cmd(S[Sh command; Sh"> /dev/null"; Sh"2> /dev/null"]));
     true
   with _ ->
     false
@@ -134,6 +134,8 @@ let _ =
   dispatch begin function
     | Before_options ->
 
+        Options.make_links := false;
+
         (* override default commands by ocamlfind ones *)
         let ocamlfind x = S[A"ocamlfind"; A x] in
         Options.ocamlc   := ocamlfind "ocamlc";
@@ -186,7 +188,7 @@ let _ =
           List.map (sprintf "examples/%s.d.byte") examples;
           List.map (sprintf "tools/%s.d.byte") tools;
         ]
-        and common = "META" :: "obus.docdir/index.html" :: List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools in
+        and common = "META" :: "doc" :: List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools in
 
         virtual_rule "all" & byte @ (if have_native then native else []) @ List.map (sprintf "tools/%s.best") tools @ common;
         virtual_rule "byte" & byte @ common;
@@ -258,6 +260,9 @@ let _ =
         (* Use an introduction page with categories *)
         dep ["file:obus.docdir/index.html"] ["utils/doc/apiref-intro"];
         flag ["file:obus.docdir/index.html"] & S[A"-intro"; P"utils/doc/apiref-intro"; A"-colorize-code"];
+
+        rule "doc" ~deps:["obus.docdir/index.html"; "utils/doc/style.css"] ~stamp:"doc"
+          (fun _ _ -> cp "utils/doc/style.css" "obus.docdir/style.css");
 
         (* Generation of "META" *)
         rule "META" ~deps:["META.in"; "obus.mllib"; "VERSION"] ~prod:"META"
