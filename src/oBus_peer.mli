@@ -24,8 +24,10 @@ type t = {
 }
 
 val connection : t -> OBus_connection.t
+  (** [connection] projection *)
+
 val name : t -> OBus_name.bus option
-  (** Projections *)
+  (** [name] projection *)
 
 val obus_t : t OBus_type.sequence
   (** This return the peer sending a message.

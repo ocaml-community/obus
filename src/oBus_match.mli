@@ -9,6 +9,8 @@
 
 (** Matching rules *)
 
+(** {6 Rules} *)
+
 (** Type of an argument filter. Argument filters are used in match
     rules to match message arguments. *)
 type argument_filter =
@@ -38,6 +40,8 @@ type rule = private {
 val obus_rule : rule OBus_type.basic
   (** The type combinator for matching-rules *)
 
+(** {8 Rule projections} *)
+
 val typ : rule -> [ `Signal | `Error | `Method_call | `Method_return ] option
 val sender : rule -> OBus_name.bus option
 val interface : rule -> OBus_name.interface option
@@ -45,7 +49,8 @@ val member : rule -> OBus_name.member option
 val path : rule -> OBus_path.t option
 val destination : rule -> OBus_name.bus option
 val arguments : rule -> (int * argument_filter) list
-  (** Projections *)
+
+(** {8 Rule construction} *)
 
 val rule :
   ?typ : [ `Signal | `Error | `Method_call | `Method_return ] ->
@@ -60,9 +65,13 @@ val rule :
         the argument filters use a number outside of the range
         [1..63] *)
 
+(** {6 Matching} *)
+
 val match_message : rule -> OBus_message.t -> bool
   (** [match_message rule message] returns wether [message] is matched
       by [rule] *)
+
+(** {6 Parsing/printing} *)
 
 exception Parse_failure of string * int * string
   (** [Parse_failure(string, position, reason)] is raised when parsing

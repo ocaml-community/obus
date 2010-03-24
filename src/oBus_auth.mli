@@ -44,6 +44,8 @@ val stream_of_fd : Lwt_unix.file_descr -> stream
 (** Client-side authentication *)
 module Client : sig
 
+  (** {6 Mechanisms} *)
+
   type mechanism_return =
       (** Value returned by the client-side of an auth mechanism *)
     | Mech_continue of data
@@ -74,13 +76,19 @@ module Client : sig
   }
 
   val mech_name : mechanism -> string
+    (** [mech_name] projection *)
+
   val mech_exec : mechanism -> unit -> mechanism_handler
-    (** Mechanisms *)
+    (** [mech_exec] projection *)
+
+  (** {8 Predefined mechanisms} *)
 
   val mech_external : mechanism
   val mech_anonymous : mechanism
   val mech_dbus_cookie_sha1 : mechanism
   val default_mechanisms : mechanism list
+
+  (** {6 Authentication} *)
 
   val authenticate :
     ?capabilities : capability list ->
@@ -101,6 +109,8 @@ end
 
 (** Server-side authentication *)
 module Server : sig
+
+  (** {6 Mechanisms} *)
 
   type mechanism_return =
       (** Value returned by the server-side of an auth mechanism *)
@@ -134,13 +144,18 @@ module Server : sig
   }
 
   val mech_name : mechanism -> string
+    (** [mech_name projection] *)
   val mech_exec : mechanism -> int option -> mechanism_handler
-    (** Projections *)
+    (** [mech_exec projection] *)
+
+  (** {8 Predefined mechanisms} *)
 
   val mech_anonymous : mechanism
   val mech_external : mechanism
   val mech_dbus_cookie_sha1 : mechanism
   val default_mechanisms : mechanism list
+
+  (** {6 Authentication} *)
 
   val authenticate :
     ?capabilities : capability list ->

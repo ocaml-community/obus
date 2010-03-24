@@ -25,8 +25,10 @@ type t = {
 }
 
 val name : t -> string
+  (** [name] projection *)
+
 val args : t -> (string * string) list
-  (** Projections *)
+  (** [args] Projection *)
 
 val make : name : string -> args : (string * string) list -> t
   (** Creates an address *)

@@ -190,12 +190,14 @@ val sobject_path : OBus_path.t -> single
 val sunix_fd : Unix.file_descr -> single
   (** [sunix_fd x = basic (unix_fd x)] *)
 
-(** {6 OBus_utils} *)
+(** {6 Typing} *)
 
 val type_of_basic : basic -> tbasic
 val type_of_single : single -> tsingle
 val type_of_sequence : sequence -> tsequence
   (** Return the type of a value *)
+
+(** {6 Printing} *)
 
 val print_tbasic : Format.formatter -> tbasic -> unit
 val print_tsingle : Format.formatter -> tsingle -> unit

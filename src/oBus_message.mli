@@ -11,7 +11,7 @@
 
 type serial = int32
 
-(** Message types with their recquired/optinnal parameters *)
+(** {6 Message structure} *)
 
 type body = OBus_value.sequence
     (** The body is a sequence of dynamically typed values *)
@@ -30,11 +30,14 @@ type flags = {
 }
 
 val no_reply_expected : flags -> bool
+  (** [no_reply_expected] projection *)
+
 val no_auto_start : flags -> bool
-  (** Projections *)
+  (** [no_auto_start] projection *)
 
 val make_flags : ?no_reply_expected:bool -> ?no_auto_start:bool -> unit -> flags
-  (** Optionnal arguments default to true *)
+  (** Creates message flags. All optionnal arguments default to
+      [false] *)
 
 val default_flags : flags
   (** All false *)
@@ -48,13 +51,14 @@ type t = {
   body : body;
 }
 
+(** {8 Message projections} *)
+
 val flags : t -> flags
 val serial : t -> serial
 val typ : t -> typ
 val destination : t -> OBus_name.bus option
 val sender : t -> OBus_name.bus option
 val body : t -> body
-  (** Projections *)
 
 (** {6 Creation of header} *)
 

@@ -29,14 +29,17 @@ type error = {
   (** explain why the string failed to validate *)
 }
 
+val error_message : error -> string
+  (** [error_message error] returns a human-readabe error message *)
+
+(** {8 Error projections} *)
+
 val typ : error -> string
 val str : error -> string
 val ofs : error -> int
 val msg : error -> string
-  (** Projections *)
 
-val error_message : error -> string
-  (** [error_message error] return a human-readabe error message *)
+(** {6 Validators} *)
 
 type validator = string -> error option
   (** Function which test if a string is correct.

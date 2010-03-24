@@ -74,7 +74,7 @@ test-syntax:
 
 doc:
 	$(OC) obus.docdir/index.html
-	cp utils/style.css _build/obus.docdir/style.css
+	cp utils/doc/style.css _build/obus.docdir/style.css
 
 dot:
 	$(OC) obus.docdir/index.dot

@@ -15,7 +15,7 @@ body {
 pre, p, div, span, img, table, td, ol, ul, li
      { padding: 0em; border: 0em; margin: 0em }
 
-h1, h2, h3, h4, h5, h6, h7, h8, h9 {
+h1, h2, h3, h4, h5, h6, div.h7, div.h8, div.h9 {
     fontsize: 100%;
     margin-bottom: 1em
     padding: 1ex 0em 0em 0em;
@@ -31,26 +31,21 @@ h1 {
     font-size : 140%
 }
 
-h2 {
-    font-size : 120%;
+h2, h3, h4, h5, h6, div.h7, div.h8, div.h9 {
+    font-size : 100%;
     border-top-style : none;
     margin: 1ex 0em 0em 0em;
     border: 1px solid #000000;
     margin-top: 5px;
     margin-bottom: 2px;
     text-align: center;
+    padding: 2px;
+}
+
+h2 {
+    font-size : 120%;
     background-color: #90BDFF ;
-    padding: 2px;
 }
-
-h3, h4, h5, h6, h7, h8, h9 {
-    border: 1px solid #000000;
-    margin-top: 5px;
-    margin-bottom: 2px;
-    text-align: center;
-    padding: 2px;
-}
-
 h3 {
     background-color: #90DDFF;
 }
@@ -63,13 +58,13 @@ h5 {
 h6 {
     background-color: #C0FFFF;
 }
-h7 {
+div.h7 {
     background-color: #E0FFFF;
 }
-h8 {
+div.h8 {
     background-color: #F0FFFF;
 }
-h9 {
+div.h9 {
     background-color: #FFFFFF;
 }
 
@@ -112,29 +107,37 @@ pre {
 }
 .keyword {
     font-weight: bold;
-    color: blacl;
+    color: #a020f0;
+}
+.keywordsign {
+    font-weight: bold;
+    color: #a020f0;
+}
+.typefieldcomment {
+    color : #b22222;
 }
 .keywordsign {
     color : black;
 
 }
 .code {
-    color : black
+    font-size: 120%;
+    color: #5f5f5f;
 }
 .info {
     margin: 0em 0em 0em 2em
 }
 .comment {
-    color : red
+    color : #b22222;
 }
 .constructor {
     color : #072
 }
 .type {
-    color : black
+    color : #228b22;
 }
 .string {
-    color : #bc8f8f
+    color : #bc8f8f;
 }
 .warning {
     color : Red;
@@ -145,6 +148,7 @@ div.sig_block {
     margin-left: 2em
 }
 .typetable {
+    color : #b8860b;
     border-style : hidden
 }
 .indextable {
