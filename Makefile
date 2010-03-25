@@ -23,29 +23,49 @@ ifeq ($(shell if which ocamlopt >/dev/null; then echo yes; fi),)
 OC += -byte-plugin
 endif
 
+# The library version
+VERSION := $(shell head -n 1 VERSION)
+
 # +------------------------------------------------------------------+
 # | General rules                                                    |
 # +------------------------------------------------------------------+
 
+# Compiles everything (libraries, tools, doc and examples).
+#
+# Libraries are compiled in byte-code and in native-code if possible,
+# and binaries are compiled in native-code if possible and in
+# byte-code otherwise
 .PHONY: all
 all:
 	$(OC) all
 
+# Same as "all" except that libraries and binaries are compiled only
+# in byte-code
 .PHONY: byte
 byte:
 	$(OC) byte
 
+# Same as "all" except that libraries and binaries are compiled only
+# in native-code
 .PHONY: native
 native:
-	$(OC) native
+	$(OC) byte
 
+# Same as "byte" except that everything is compiled with debugging
+# support
 .PHONY: debug
 debug:
-	$(OC) debug
+	$(OC) byte
 
+# Compiles only libraries in byte-code and in native-code if possible
+.PHONY: libs
+libs:
+	$(OC) libs
+
+# Creates a distributable tarball
 .PHONY: dist
 dist:
-	DARCS_REPO=$(PWD) darcs dist --dist-name obus-`head -n 1 VERSION`
+	DARCS_REPO=$(PWD) darcs dist --dist-name obus-$(VERSION)
 
 .PHONY: clean
 clean:
@@ -55,6 +75,10 @@ clean:
 .PHONY: list-deps
 list-deps:
 	@grep -o 'pkg_[^ ,]*' _tags | cut -c 5- | sort | uniq
+
+# +------------------------------------------------------------------+
+# | Tests                                                            |
+# +------------------------------------------------------------------+
 
 .PHONY: tests
 tests:
@@ -73,7 +97,7 @@ test-syntax:
 # +------------------------------------------------------------------+
 
 doc:
-	$(OC) doc
+	$(OC) obus.docdir/index.html
 
 dot:
 	$(OC) obus.docdir/index.dot
@@ -82,15 +106,8 @@ dot:
 # | Installation stuff                                               |
 # +------------------------------------------------------------------+
 
-.PHONY: prefix
-prefix:
-	@if [ -z "$(PREFIX)" ]; then \
-	  echo "please define PREFIX"; \
-	  exit 1; \
-	fi
-
-.PHONY: install
-install: prefix
+.PHONY: install-libs
+install-libs:
 	$(OF) install obus _build/META \
 	 _build/pa_obus.cma \
 	 src/*.mli \
@@ -103,6 +120,23 @@ install: prefix
 	 $(wildcard _build/*.cmxa) \
 	 $(wildcard _build/*.cmxs) \
 	 $(wildcard _build/*.a)
+
+.PHONY: uninstall-libs
+uninstall-libs:
+	$(OF) remove obus
+
+.PHONY: reinstall-libs
+reinstall-libs: uninstall-libs install-libs
+
+.PHONY: prefix
+prefix:
+	@if [ -z "$(PREFIX)" ]; then \
+	  echo "please define PREFIX"; \
+	  exit 1; \
+	fi
+
+.PHONY: install
+install: prefix install-libs
 	install -vm 755 _build/tools/obus_introspect.best $(PREFIX)/bin/obus-introspect
 	install -vm 755 _build/tools/obus_binder.best $(PREFIX)/bin/obus-binder
 	install -vm 755 _build/tools/obus_dump.best $(PREFIX)/bin/obus-dump
@@ -119,8 +153,7 @@ install: prefix
 	install -vm 0644 _build/man/obus-dump.1.gz $(PREFIX)/share/man/man1
 
 .PHONY: uninstall
-uninstall: prefix
-	$(OF) remove obus
+uninstall: prefix uninstall-libs
 	rm -vf $(PREFIX)/bin/obus-introspect
 	rm -vf $(PREFIX)/bin/obus-binder
 	rm -vf $(PREFIX)/bin/obus-dump

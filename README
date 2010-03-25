@@ -19,6 +19,11 @@ url: https://forge.ocamlcore.org/projects/obus/
 
   Packagers may patch the file "oBus_config.ml".
 
+  If you want to only compile/install the libraries, type:
+
+  $ make libs
+  $ make install-libs
+
 * Using the library
 
   OBus install the following packages:

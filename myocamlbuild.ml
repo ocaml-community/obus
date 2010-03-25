@@ -165,35 +165,71 @@ let _ =
           rule name ~stamp:name ~deps (fun _ _ -> Nop)
         in
 
+        (* Choose between native and byte-code for compiling
+           binaries *)
         if have_native then
           rule "best" ~dep:"%.native" ~prod:"%.best"
-            (fun env _ -> cp (env "%.native") (env "%.best"))
+            (fun env _ -> ln_s (Filename.basename (env "%.native")) (env "%.best"))
         else
           rule "best" ~dep:"%.byte" ~prod:"%.best"
-            (fun env _ -> cp (env "%.byte") (env "%.best"));
+            (fun env _ -> ln_s (Filename.basename (env "%.byte")) (env "%.best"));
 
-        let byte = "pa_obus.cma" :: List.concat [
-          List.map (sprintf "%s.cma") libs;
+        let libs_byte =
+          List.map (sprintf "%s.cma") libs
+        and libs_native = List.concat [
+          List.map (sprintf "%s.cmxa") libs;
+          List.map (sprintf "%s.cmxs") libs;
+        ]
+        and libs_debug =
+          List.map (sprintf "%s.d.cma") libs
+        and bins_byte = List.concat [
           List.map (sprintf "examples/%s.byte") examples;
           List.map (sprintf "tools/%s.byte") tools;
         ]
-        and native = List.concat [
-          List.map (sprintf "%s.cmxa") libs;
-          List.map (sprintf "%s.cmxs") libs;
+        and bins_native = List.concat [
           List.map (sprintf "examples/%s.native") examples;
           List.map (sprintf "tools/%s.native") tools;
         ]
-        and debug = List.concat [
-          List.map (sprintf "%s.d.cma") libs;
+        and bins_debug = List.concat [
           List.map (sprintf "examples/%s.d.byte") examples;
           List.map (sprintf "tools/%s.d.byte") tools;
         ]
-        and common = "META" :: "doc" :: List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools in
+        and bins_best = List.concat [
+          List.map (sprintf "examples/%s.best") examples;
+          List.map (sprintf "tools/%s.best") tools;
+        ]
+        and common = List.concat [
+          ["pa_obus.cma"; "META"; "obus.docdir/index.html"; "copy-css"];
+          (* Man pages for tools: *)
+          List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools
+        ] in
 
-        virtual_rule "all" & byte @ (if have_native then native else []) @ List.map (sprintf "tools/%s.best") tools @ common;
-        virtual_rule "byte" & byte @ common;
-        virtual_rule "native" & native @ common;
-        virtual_rule "debug" & debug @ common;
+        virtual_rule "all" & List.concat [
+          common;
+          libs_byte;
+          if have_native then libs_native else [];
+          bins_best;
+        ];
+        virtual_rule "byte" & List.concat [
+          common;
+          libs_byte;
+          bins_byte;
+        ];
+        virtual_rule "native" & List.concat [
+          common;
+          libs_native;
+          bins_native;
+        ];
+        virtual_rule "debug" & List.concat [
+          common;
+          libs_debug;
+          bins_debug;
+        ];
+        virtual_rule "libs" & List.concat [
+          ["pa_obus.cma"; "META"];
+          libs_byte;
+          if have_native then libs_native else [];
+        ];
         virtual_rule "test_programs" & (List.map (sprintf "tests/%s.d.byte") tests);
 
         (* +---------------------------------------------------------+
@@ -261,7 +297,7 @@ let _ =
         dep ["file:obus.docdir/index.html"] ["utils/doc/apiref-intro"];
         flag ["file:obus.docdir/index.html"] & S[A"-intro"; P"utils/doc/apiref-intro"; A"-colorize-code"];
 
-        rule "doc" ~deps:["obus.docdir/index.html"; "utils/doc/style.css"] ~stamp:"doc"
+        rule "copy-css" ~deps:["obus.docdir/index.html"; "utils/doc/style.css"] ~stamp:"copy-css"
           (fun _ _ -> cp "utils/doc/style.css" "obus.docdir/style.css");
 
         (* Generation of "META" *)
