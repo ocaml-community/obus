@@ -17,7 +17,7 @@ let op_interface = OBus_proxy.make_interface "org.plop.foo"
 OP_method Ping : string -> string
 
 let _ = Lwt_main.run begin
-  lwt bus = Lazy.force OBus_bus.session in
+  lwt bus = OBus_bus.session () in
 
   (* Create a proxy for the remote object *)
   let proxy = OBus_proxy.make (OBus_peer.make bus "org.plop") ["plip"] in

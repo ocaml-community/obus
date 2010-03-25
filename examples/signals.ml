@@ -23,7 +23,7 @@ let handle_multimedia_keys device =
     (Hal_device.condition device)#event
 
 lwt () =
-  lwt session = Lazy.force OBus_bus.session in
+  lwt session = OBus_bus.session () in
 
   (* +---------------------------------------------------------------+
      | Signals from message bus                                      |
@@ -51,7 +51,7 @@ lwt () =
      | Some Hal signals                                              |
      +---------------------------------------------------------------+ *)
 
-  lwt manager = Lazy.force Hal_manager.manager in
+  lwt manager = Hal_manager.manager () in
 
   Lwt_event.always_notify_p
     (fun device ->

@@ -20,8 +20,8 @@ let filter what_bus message =
   (* Drop the message so we do not respond to method call *)
   None
 
-let add_filter what_bus lbus =
-  lwt bus = Lazy.force lbus in
+let add_filter what_bus get_bus =
+  lwt bus = get_bus () in
   let _ = Lwt_sequence.add_r (filter what_bus) (OBus_connection.incoming_filters bus) in
   Lwt_list.iter_p
     (fun typ -> OBus_bus.add_match bus (OBus_match.rule ~typ ()))

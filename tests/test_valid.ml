@@ -18,15 +18,17 @@ let test f s =
     | None ->
         ()
 
-let testc b s =
-  catch (fun _ -> OBus_connection.method_call b
-           ~interface:"toto"
-           ~member:"toto"
-           ~path:[]
-           <:obus_func< string -> unit >> s)
-    (fun exn -> prerr_endline (Printexc.to_string exn); return ())
+let testc bus str =
+  try_lwt
+    OBus_connection.method_call bus
+      ~interface:"toto"
+      ~member:"toto"
+      ~path:[]
+      <:obus_func< string -> unit >> str
+  with exn ->
+    Lwt_log.error ~exn "error"
 
-let _ =
+lwt () =
   test OBus_path.validate "";
   test OBus_path.validate "/";
   test OBus_path.validate "/dd//dd";
@@ -36,13 +38,11 @@ let _ =
   test validate_bus ":er..dsf";
   test validate_bus "erdsf.1ze";
   test validate_bus "toto";
-  Lwt_main.run (
-    lwt b = Lazy.force OBus_bus.session in
-    lwt () = testc b "aa\x81oo" in
-    lwt () = testc b "dfsdf\x00kljsd" in
-    OBus_connection.method_call b
-      ~interface:"aa.$.e"
-      ~member:"toto"
-      ~path:[]
-      <:obus_func< unit >>
-  )
+  lwt bus = OBus_bus.session () in
+  lwt () = testc bus "aa\x81oo" in
+  lwt () = testc bus "dfsdf\x00kljsd" in
+  OBus_connection.method_call bus
+    ~interface:"aa.$.e"
+    ~member:"toto"
+    ~path:[]
+    <:obus_func< unit >>

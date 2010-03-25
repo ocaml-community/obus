@@ -59,7 +59,7 @@ val close : t -> unit Lwt.t
   *)
 
 val running : t -> bool React.signal
-  (** Return weather a connection is running. *)
+  (** Return whether a connection is running. *)
 
 val watch : t -> unit Lwt.t
   (** Return a waiting thread which is wakeup when the connection is
@@ -266,7 +266,7 @@ val of_transport : ?guid : OBus_address.guid -> ?up : bool -> OBus_transport.t -
   (** Create a D-Bus connection on the given transport. If [guid] is
       provided the connection will be shared.
 
-      [up] tell weather the connection is initially up or down,
+      [up] tell whether the connection is initially up or down,
       default is [true]. *)
 
 (** A connection can be up or down, expect for connection created with

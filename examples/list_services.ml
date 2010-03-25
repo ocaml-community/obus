@@ -12,9 +12,9 @@
 open Lwt
 open Lwt_io
 
-let list n lbus =
-  lwt () = printlf "service name mapping on %s bus:" n in
-  lwt bus = Lazy.force lbus in
+let list name get_bus =
+  lwt () = printlf "service name mapping on %s bus:" name in
+  lwt bus = get_bus () in
 
   (* Get the list of all names on the session bus *)
   lwt names = OBus_bus.list_names bus in

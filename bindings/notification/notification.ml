@@ -155,7 +155,7 @@ let monitor_peer peer =
   end
 
 let init_callbacks =
-  lazy(lwt bus = Lazy.force OBus_bus.session in
+  lazy(lwt bus = OBus_bus.session () in
 
        (* Create an anymous proxy for connecting signals, so we will
           receive signals comming from any daemon *)
@@ -191,7 +191,7 @@ let init_callbacks =
        return ())
 
 let get_proxy =
-  lazy(lwt bus = Lazy.force OBus_bus.session in
+  lazy(lwt bus = OBus_bus.session () in
        return (OBus_proxy.make (OBus_peer.make bus server_name) server_path))
 
 let get_server_information _ =

@@ -87,6 +87,6 @@ let rec gen_messages progress acc = function
 let _ =
   let msgs = gen_messages (Progress.make (sprintf "generating %d messages" test_count) test_count) [] test_count in
   printf "try to serialize/deserialize all messages and compare the result to the original message.\n";
-  print_result (run_tests "  - in little endian" OBus_wire.Little_endian msgs);
-  print_result (run_tests "  - in big endian" OBus_wire.Big_endian msgs);
+  print_result (run_tests "  - in little endian" Lwt_io.Little_endian msgs);
+  print_result (run_tests "  - in big endian" Lwt_io.Big_endian msgs);
   printf "failing tests have been saved in %s\n%!" save_dir

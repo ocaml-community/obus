@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-module Log = Lwt_log.Make(struct let section = "" end)
-
 open Lwt
 
 let server_ic, client_oc = Lwt_io.pipe ()
@@ -30,7 +28,7 @@ let test mech =
                        >> return ()] in
     Lwt_io.eprintlf "authentication %s works!" (OBus_auth.Server.mech_name mech)
   with exn ->
-    lwt () = Log.exn_f exn "authentication %s do not works" (OBus_auth.Server.mech_name mech) in
+    lwt () = Lwt_log.error_f ~exn "authentication %s do not works" (OBus_auth.Server.mech_name mech) in
     return ()
 
 lwt () =

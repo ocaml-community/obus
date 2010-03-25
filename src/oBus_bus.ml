@@ -60,25 +60,33 @@ let of_addresses addresses =
   lwt () = register_connection bus in
   return bus
 
-let of_laddresses name laddr =
+let session_bus = lazy(
   try_lwt
-    Lazy.force laddr >>= of_addresses
+    Lazy.force OBus_address.session >>= of_addresses
   with exn ->
-    lwt () =
-      Lwt_log.warning_f ~section "Failed to open a connection to the %s bus: %s"
-        name
-        (match exn with
-           | Unix.Unix_error(error, func, "") ->
-               Printf.sprintf "%s: %s" func (Unix.error_message error)
-           | Unix.Unix_error(error, func, arg) ->
-               Printf.sprintf "%s(%s): %s" func arg (Unix.error_message error)
-           | exn ->
-               Printexc.to_string exn)
-    in
+    lwt () = Lwt_log.warning ~exn ~section "Failed to open a connection to the session bus" in
     fail exn
+)
 
-let session = lazy(of_laddresses "session" OBus_address.session)
-let system = lazy(of_laddresses "system" OBus_address.system)
+let session () = Lazy.force session_bus
+
+let system_bus_state = ref None
+let system_bus_mutex = Lwt_mutex.create ()
+
+let system () =
+  Lwt_mutex.with_lock system_bus_mutex
+    (fun () ->
+       match !system_bus_state with
+         | Some bus when React.S.value (OBus_connection.running bus) ->
+             return bus
+         | _ ->
+             try_lwt
+               lwt bus = Lazy.force OBus_address.system >>= of_addresses in
+               system_bus_state := Some bus;
+               return bus
+             with exn ->
+               lwt () = Lwt_log.warning ~exn ~section "Failed to open a connection to the system bus" in
+               fail exn)
 
 let prefix = OBus_proxy.Interface.name op_interface ^ ".Error."
 

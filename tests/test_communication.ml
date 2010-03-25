@@ -33,12 +33,12 @@ let rec wait_for_name con =
 let () = Lwt_main.run (
   lwt () = printlf "sending and receiving %d messages through the message bus." test_count in
   if Unix.fork () = 0 then
-    lwt con = Lazy.force OBus_bus.session in
+    lwt con = OBus_bus.session () in
     lwt () = wait_for_name con in
     lwt () = run_tests con test_count in
     OBus_connection.dyn_emit_signal con ~destination:name ~interface:"a.a" ~member:"exit_now" ~path:[] []
   else
-    lwt bus = Lazy.force OBus_bus.session in
+    lwt bus = OBus_bus.session () in
     lwt _ = OBus_bus.request_name bus name in
     let progress = Progress.make "received" test_count and waiter, wakener = wait () in
     ignore (Lwt_sequence.add_r

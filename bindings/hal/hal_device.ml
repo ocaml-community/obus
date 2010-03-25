@@ -19,11 +19,11 @@ type udi = path
 
 let udi = OBus_proxy.path
 
-let computer =
-  lazy(lwt bus = Lazy.force OBus_bus.system in
-       return (OBus_proxy.make
-                 (OBus_peer.make bus "org.freedesktop.Hal")
-                 ["org"; "freedesktop"; "Hal"; "devices"; "computer"]))
+let computer () =
+  lwt bus = OBus_bus.system () in
+  return (OBus_proxy.make
+            (OBus_peer.make bus "org.freedesktop.Hal")
+            ["org"; "freedesktop"; "Hal"; "devices"; "computer"])
 
 
 type property =

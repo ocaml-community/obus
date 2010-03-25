@@ -61,8 +61,8 @@ let main service path =
         Arg.usage args usage_msg;
         exit 1
     | false, false, None
-    | true, false, None -> Lazy.force OBus_bus.session
-    | false, true, None -> Lazy.force OBus_bus.system
+    | true, false, None -> OBus_bus.session ()
+    | false, true, None -> OBus_bus.system ()
     | false, false, Some addr -> OBus_bus.of_addresses (OBus_address.of_string addr)
   in
   lwt nodes, map = get (OBus_proxy.make (OBus_peer.make bus service) path) in

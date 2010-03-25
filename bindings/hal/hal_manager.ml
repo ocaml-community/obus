@@ -13,11 +13,11 @@ open OBus_pervasives
 
 type t = OBus_proxy.t with obus
 
-let manager =
-  lazy(lwt bus = Lazy.force OBus_bus.system in
-       return (OBus_proxy.make
-                 (OBus_peer.make bus "org.freedesktop.Hal")
-                 [ "org"; "freedesktop"; "Hal"; "Manager" ]))
+let manager () =
+  lwt bus = OBus_bus.system () in
+  return (OBus_proxy.make
+            (OBus_peer.make bus "org.freedesktop.Hal")
+            [ "org"; "freedesktop"; "Hal"; "Manager" ])
 
 let op_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Manager"
 

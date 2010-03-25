@@ -19,7 +19,7 @@ let name = "org.ocamlcore.forge.obus"
 module Name_set = Set.Make(String)
 
 lwt () =
-  lwt bus = Lazy.force OBus_bus.session in
+  lwt bus = OBus_bus.session () in
 
   lwt id = OBus_bus.get_id bus in
   lwt () = printlf "the message bus id is: %S" (OBus_uuid.to_string id) in

@@ -14,7 +14,7 @@ type t = OBus_proxy.t
 
 val obus_t : t OBus_type.basic
 
-val manager : t Lwt.t Lazy.t
+val manager : unit -> t Lwt.t
   (** The Hal manager *)
 
 val get_all_devices : t -> Hal_device.t list Lwt.t

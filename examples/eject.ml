@@ -13,7 +13,7 @@ open Lwt
 open Lwt_io
 
 lwt () =
-  lwt manager = Lazy.force Hal_manager.manager in
+  lwt manager = Hal_manager.manager () in
   lwt cdroms = Hal_manager.find_device_by_capability manager "storage.cdrom" in
   lwt () = printlf "cdrom(s) found: %d" (List.length cdroms) in
   Lwt_list.iter_p begin function cdrom ->

@@ -13,12 +13,15 @@ type t = OBus_connection.t
 
 (** {6 Well-known instances} *)
 
-val session : t Lwt.t Lazy.t
-  (** The session message bus. This is the one which is started at the
-      beginning of each user session. *)
+val session : unit -> t Lwt.t
+  (** [session ()] returns a connection to the user session message
+      bus. Subsequent calls to {!session} will return the same bus. *)
 
-val system : t Lwt.t Lazy.t
-  (** The system message bus. It is unique given one system. *)
+val system : unit -> t Lwt.t
+  (** [system ()] returns a connection to the system message bus. As
+      for {!session}, subsequent calls to {!system} will return the
+      same bus. However, if the connection is closed or it crashes,
+      {!system} will try to reopen it. *)
 
 (** {6 Creation} *)
 

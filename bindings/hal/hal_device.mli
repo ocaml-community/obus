@@ -22,7 +22,7 @@ val obus_udi : udi OBus_type.basic
 val udi : t -> udi
   (** Return the udi of a device *)
 
-val computer : t Lwt.t Lazy.t
+val computer : unit -> t Lwt.t
   (** The computer device *)
 
 type property =
