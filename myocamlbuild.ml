@@ -199,7 +199,7 @@ let _ =
           List.map (sprintf "tools/%s.best") tools;
         ]
         and common = List.concat [
-          ["pa_obus.cma"; "META"; "obus.docdir/index.html"; "copy-css"];
+          ["pa_obus.cma"; "META"; "doc"];
           (* Man pages for tools: *)
           List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools
         ] in
@@ -297,7 +297,7 @@ let _ =
         dep ["file:obus.docdir/index.html"] ["utils/doc/apiref-intro"];
         flag ["file:obus.docdir/index.html"] & S[A"-intro"; P"utils/doc/apiref-intro"; A"-colorize-code"];
 
-        rule "copy-css" ~deps:["obus.docdir/index.html"; "utils/doc/style.css"] ~stamp:"copy-css"
+        rule "Documentation with custom css" ~deps:["utils/doc/style.css"; "obus.docdir/html.stamp"] ~stamp:"doc"
           (fun _ _ -> cp "utils/doc/style.css" "obus.docdir/style.css");
 
         (* Generation of "META" *)

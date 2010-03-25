@@ -97,7 +97,7 @@ test-syntax:
 # +------------------------------------------------------------------+
 
 doc:
-	$(OC) obus.docdir/index.html copy-css
+	$(OC) doc
 
 dot:
 	$(OC) obus.docdir/index.dot
