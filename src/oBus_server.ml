@@ -207,7 +207,7 @@ let handle_client server listener fd address =
               server.srv_callback server (OBus_transport.socket ~capabilities fd);
               return ()
             with exn ->
-              Lwt_log.exn ~section ~exn "server callback failed failed with"
+              Lwt_log.error ~section ~exn "server callback failed failed with"
           end
       | _ ->
           assert false
@@ -215,7 +215,7 @@ let handle_client server listener fd address =
     | OBus_auth.Auth_failure msg ->
         Lwt_log.notice_f ~section "authentication failure for client from %s: %s" (string_of_address address) msg
     | exn ->
-        Lwt_log.exn_f ~section ~exn "authentication for client from %s failed with" (string_of_address address)
+        Lwt_log.error_f ~section ~exn "authentication for client from %s failed with" (string_of_address address)
 
 (* Accept clients until the server is shutdown, or an accept fails: *)
 let rec lst_loop server listener =

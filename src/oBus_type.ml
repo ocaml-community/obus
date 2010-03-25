@@ -68,7 +68,7 @@ let close_fds map =
                 try
                   Unix.close fd_dup
                 with exn ->
-                  ignore (Lwt_log.exn ~section ~exn "failed to close file descriptor")) map
+                  ignore (Lwt_log.error ~section ~exn "failed to close file descriptor")) map
 
 let cast f ?(context=No_context) x =
   let context = { ctx_data = context; ctx_fds = FDMap.empty } in

@@ -79,7 +79,7 @@ let apply_filters typ message filters =
          | None -> None)
       filters (Some message)
   with exn ->
-    ignore (Lwt_log.exn_f ~section ~exn "an %s filter failed with" typ);
+    ignore (Lwt_log.error_f ~section ~exn "an %s filter failed with" typ);
     None
 
 (* Get the error message of an error *)
@@ -298,7 +298,7 @@ let send_exn packed method_call exn =
     | Some(name, msg) ->
         send_error packed method_call name msg
     | None ->
-        lwt () = Lwt_log.exn ~section ~exn "sending an unregistred ocaml exception as a D-Bus error" in
+        lwt () = Lwt_log.error ~section ~exn "sending an unregistred ocaml exception as a D-Bus error" in
         send_error packed method_call "ocaml.Exception" (Printexc.to_string exn)
 
 let ignore_send_exn packed method_call exn = ignore(send_exn packed method_call exn)
@@ -371,7 +371,7 @@ let dispatch_message connection message = match message with
                          try
                            receiver.sr_push (connection.packed, message)
                          with exn ->
-                           ignore (Lwt_log.exn ~section ~exn "signal event failed with"))
+                           ignore (Lwt_log.error ~section ~exn "signal event failed with"))
                     set.srs_receivers
               | None ->
                  ()
@@ -464,7 +464,7 @@ let dispatch_message connection message = match message with
                            try
                              receiver.sr_push (connection.packed, message)
                            with exn ->
-                             ignore (Lwt_log.exn ~section ~exn "signal event failed with"))
+                             ignore (Lwt_log.error ~section ~exn "signal event failed with"))
                       set.srs_receivers
                 | None ->
                     ()
@@ -511,7 +511,7 @@ let dispatch_message connection message = match message with
                     lwt obj = dynobj.do_create path in
                     return (Some obj)
                   with exn ->
-                    lwt () = Lwt_log.exn ~section ~exn "dynamic object handler failed with" in
+                    lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
                     return None
           else
             return obj
@@ -521,7 +521,7 @@ let dispatch_message connection message = match message with
               ignore (try_lwt
                         obj.oo_handle obj.oo_object connection.packed message
                       with exn ->
-                        Lwt_log.exn ~section ~exn "method call handler failed with");
+                        Lwt_log.error ~section ~exn "method call handler failed with");
               return ()
           | None ->
               (* Handle introspection for missing intermediate object:
@@ -599,7 +599,7 @@ let rec dispatch_forever connection =
              !(connection.on_disconnect) exn;
              return ()
            with exn ->
-             Lwt_log.exn ~section ~exn "the error handler (OBus_connection.on_disconnect) failed with")
+             Lwt_log.error ~section ~exn "the error handler (OBus_connection.on_disconnect) failed with")
 
 (* +-----------------------------------------------------------------+
    | ``Packed'' connection                                           |
@@ -662,7 +662,7 @@ object(self)
             try_lwt
               OBus_transport.shutdown connection.transport
             with exn ->
-              Lwt_log.exn ~section ~exn "failed to abort/shutdown the transport"
+              Lwt_log.error ~section ~exn "failed to abort/shutdown the transport"
         in
         return exn
 end

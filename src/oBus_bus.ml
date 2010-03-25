@@ -39,7 +39,7 @@ let error_handler = function
       ignore (Lwt_log.error_f ~section "the D-Bus connection with the message bus has been closed due to a transport error: %s" (Printexc.to_string exn));
       exit 1
   | exn ->
-      ignore (Lwt_log.exn ~section ~exn "the D-Bus connection with the message bus has been closed due to this uncaught exception");
+      ignore (Lwt_log.error ~section ~exn "the D-Bus connection with the message bus has been closed due to this uncaught exception");
       exit 1
 
 let register_connection ?(set_on_disconnect=true) packed =
