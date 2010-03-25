@@ -46,8 +46,6 @@ let bindings = [
   "notification";
 ]
 
-let libs = "obus" :: bindings
-
 let tools = [
   "obus_introspect";
   "obus_binder";
@@ -113,22 +111,16 @@ let flag_all_stages tags f =
   flag_all_stages_except_link tags f;
   flag ("ocaml" :: "link" :: tags) f
 
-let define_lib ?dir name =
-  ocaml_lib ?dir name;
-  dep ["ocaml"; "byte"; "use_" ^ name] [name ^ ".cma"];
-  dep ["ocaml"; "native"; "use_" ^ name] [name ^ ".cmxa"]
+let substitute resolv text =
+  let buf = Buffer.create (String.length text) in
+  Buffer.add_substitute buf resolv text;
+  Buffer.contents buf
 
-let substitute env text =
-  List.fold_left (fun text (patt, repl) -> String.subst patt repl text) text env
-
-let get_public_modules () =
-  List.filter (fun s -> not (String.is_prefix "src/private/" s) && String.is_prefix "src/" s)
-    (string_list_of_file "obus.mllib")
-
-let get_version () =
+let version = lazy(
   match string_list_of_file "VERSION" with
     | version :: _ -> version
     | _ -> failwith "invalid VERSION file"
+)
 
 let _ =
   dispatch begin function
@@ -175,13 +167,13 @@ let _ =
             (fun env _ -> ln_s (Filename.basename (env "%.byte")) (env "%.best"));
 
         let libs_byte =
-          List.map (sprintf "%s.cma") libs
+          "obus.cma" :: List.map (fun name -> "bindings" / name / name ^ ".cma") bindings
         and libs_native = List.concat [
-          List.map (sprintf "%s.cmxa") libs;
-          List.map (sprintf "%s.cmxs") libs;
+          "obus.cmxa" :: List.map (fun name -> "bindings" / name / name ^ ".cmxa") bindings;
+          "obus.cmxs" :: List.map (fun name -> "bindings" / name / name ^ ".cmxs") bindings;
         ]
         and libs_debug =
-          List.map (sprintf "%s.d.cma") libs
+          "obus.d.cma" :: List.map (fun name -> "bindings" / name / name ^ ".d.cma") bindings
         and bins_byte = List.concat [
           List.map (sprintf "examples/%s.byte") examples;
           List.map (sprintf "tools/%s.byte") tools;
@@ -236,9 +228,16 @@ let _ =
            | Libraries                                               |
            +---------------------------------------------------------+ *)
 
-        define_lib ~dir:"src" "obus";
-        define_lib ~dir:"bindings/hal" "hal";
-        define_lib ~dir:"bindings/notification" "notification";
+        ocaml_lib ~dir:"src" "obus";
+        dep ["ocaml"; "byte"; "use_obus"] ["obus.cma"];
+        dep ["ocaml"; "native"; "use_obus"] ["obus.cmxa"];
+
+        List.iter
+          (fun name ->
+             ocaml_lib ~dir:("bindings" / name) ("bindings" / name / name);
+             dep ["ocaml"; "byte"; "use_" ^ name] ["bindings" / name / name ^ ".cma"];
+             dep ["ocaml"; "native"; "use_" ^ name] ["bindings" / name / name ^ ".cmxa"])
+          bindings;
 
         (* +---------------------------------------------------------+
            | Shared libraries                                        |
@@ -287,25 +286,45 @@ let _ =
 
         (* Generation of the OBus_version.ml file *)
         rule "version" ~prod:"src/private/OBus_version.ml" ~dep:"VERSION"
-          (fun _ _ -> Echo(["let version = \"" ^ get_version () ^ "\"\n"], "src/private/OBus_version.ml"));
+          (fun _ _ -> Echo([sprintf "let version = %S\n" (Lazy.force version)], "src/private/OBus_version.ml"));
 
         (* Generation of the obus.odocl file *)
-        rule "obus_doc" ~prod:"obus.odocl" ~dep:"obus.mllib"
-          (fun _ _ -> Echo(List.map (fun s -> s ^ "\n") (get_public_modules ()), "obus.odocl"));
+        let mllibs = "obus.mllib" :: List.map (fun name -> "bindings" / name / name ^ ".mllib") bindings in
+        rule "obus doc" ~prod:"obus.odocl" ~deps:mllibs
+          (fun _ _ -> Echo(List.map (sprintf "%s\n")
+                             (List.concat
+                                (List.filter (fun module_name -> Filename.dirname module_name = "src") (string_list_of_file "obus.mllib")
+                                 :: List.map
+                                 (fun name ->
+                                    List.map
+                                      (fun module_name -> "bindings" / name / module_name)
+                                      (string_list_of_file ("bindings" / name / name ^ ".mllib")))
+                                 bindings)),
+                           "obus.odocl"));
 
         (* Use an introduction page with categories *)
         dep ["file:obus.docdir/index.html"] ["utils/doc/apiref-intro"];
         flag ["file:obus.docdir/index.html"] & S[A"-intro"; P"utils/doc/apiref-intro"; A"-colorize-code"];
 
+        (* Build documentation then copy our css to the documentation
+           directory *)
         rule "Documentation with custom css" ~deps:["utils/doc/style.css"; "obus.docdir/html.stamp"] ~stamp:"doc"
           (fun _ _ -> cp "utils/doc/style.css" "obus.docdir/style.css");
 
         (* Generation of "META" *)
         rule "META" ~deps:["META.in"; "obus.mllib"; "VERSION"] ~prod:"META"
           (fun _ _ ->
-             Echo([substitute [("@VERSION@", get_version ())] (read_file "META.in")], "META"));
+             Echo([substitute
+                     (function
+                        | "version" -> Lazy.force version
+                        | name -> ksprintf failwith "unknown variable %s" name)
+                     (read_file "META.in")],
+                  "META"));
 
+        (* Compress manual pages *)
         rule "gzip" ~dep:"%" ~prod:"%.gz"
           (fun env _ -> Cmd(S[A"gzip"; A"-c"; A(env "%"); Sh">"; A(env "%.gz")]))
-    | _ -> ()
+
+    | _ ->
+        ()
   end

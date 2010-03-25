@@ -71,6 +71,27 @@ OBus_info
 OBus_uuid
 }
 
+{2 Service bindings}
+
+This section describe bindings to D-Bus services shipped with OBus.
+
+{3 Notifications}
+
+Bindings to the freedesktop popup notification service.
+
+{!modules:
+Notification
+}
+
+{3 Hal}
+
+Bindings to the freedesktop Hal service.
+
+{!modules:
+Hal_manager
+Hal_device
+}
+
 {3 Index}
 
 {!indexlist}

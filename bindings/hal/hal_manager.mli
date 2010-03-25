@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+(** The Hal manager *)
+
 type t = OBus_proxy.t
     (** Type of the Hal manager *)
 

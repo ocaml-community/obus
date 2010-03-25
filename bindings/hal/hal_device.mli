@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+(** Hal devices *)
+
 type t = OBus_proxy.t
     (** Type of devices *)
 

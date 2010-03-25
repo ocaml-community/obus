@@ -1,7 +1,7 @@
 # -*- conf -*-
 
 description = "Pure OCaml implementation of D-Bus"
-version = "@VERSION@"
+version = "$(version)"
 requires = "lwt.react lwt.unix xmlm"
 archive(byte) = "obus.cma"
 archive(native) = "obus.cmxa"

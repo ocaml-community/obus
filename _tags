@@ -56,8 +56,8 @@
 
 # Use obus everywhere:
 <**/*>: use_obus
-# Except for obus itself and syntax extensions and libraries:
-<*.cm{a,xa,xs}>: -use_obus
+# Except for obus itself, syntax extensions and sub-libraries:
+<**/*.cm{a,xa,xs}>: -use_obus
 <{syntax,src}/**/*>: -use_obus
 <oBus_config.*>: -use_obus
 
