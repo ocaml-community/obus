@@ -111,7 +111,7 @@ exception Name_has_no_owner of string
 exception Adt_audit_data_unknown of string
  with obus(prefix ^ "AdtAuditDataUnknown")
 
-exception SELinux_security_context_unknown of string
+exception Selinux_security_context_unknown of string
  with obus(prefix ^ "SELinuxSecurityContextUnknown")
 
 let acquired_names bus = match bus#get with
