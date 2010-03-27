@@ -112,10 +112,10 @@ let validate_bus_other str =
   if len > OBus_constant.max_name_length then
     fail (-1) "name too long"
   else match unsafe_get str 1 with
-    | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' ->
-        first_element 1
+    | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' | '0' .. '9'->
+        first_element 2
     | '.' ->
-        fail 1 "empty element"
+        element_start 2
     | _ ->
         fail 1 "invalid character"
 
