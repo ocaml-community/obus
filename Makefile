@@ -82,7 +82,7 @@ list-deps:
 
 .PHONY: tests
 tests:
-	$(OC) test_programs
+	$(OC) tests/main.d.byte
 
 .PHONY: test-syntax
 test-syntax:

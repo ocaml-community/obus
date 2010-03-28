@@ -52,16 +52,6 @@ let tools = [
   "obus_dump";
 ]
 
-let tests = [
-  "test_serialization";
-  "test_printing";
-  "test_communication";
-  "test_valid";
-  "test_auth";
-  "test_server";
-  "test_errors";
-]
-
 (* Syntax extensions used internally, (tag and the byte-code file). *)
 let intern_syntaxes = [
   "pa_obus", "pa_obus.cma";
@@ -222,7 +212,6 @@ let _ =
           libs_byte;
           if have_native then libs_native else [];
         ];
-        virtual_rule "test_programs" & (List.map (sprintf "tests/%s.d.byte") tests);
 
         (* +---------------------------------------------------------+
            | Libraries                                               |

@@ -11,11 +11,11 @@
 
 type t
 
-val make : string -> int -> t
+val make : string -> int -> t Lwt.t
   (** [make prefix max] *)
 
-val incr : t -> unit
+val incr : t -> unit Lwt.t
   (** [incr progress] *)
 
-val close : t -> unit
+val close : t -> unit Lwt.t
   (** [close progress] *)

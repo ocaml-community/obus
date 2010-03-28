@@ -9,27 +9,11 @@
 
 (* Testing of serialization/deserialization *)
 
-open Printf
+open Lwt
+open Lwt_io
 
 (* number of message to generate *)
 let test_count = 100
-
-let save_dir = Filename.concat Filename.temp_dir_name "obus-test-serialization"
-let make_save_dir = lazy(if not (Sys.file_exists save_dir) then Unix.mkdir save_dir 0o755)
-
-let save_message_to_file fname msg =
-  Lazy.force make_save_dir;
-  let oc = open_out (Filename.concat save_dir fname) in
-  let pp = Format.formatter_of_out_channel oc in
-  OBus_message.print pp msg;
-  Format.pp_print_flush pp ();
-  close_out oc
-
-let num = ref 0
-let save msg1 msg2 =
-  save_message_to_file (sprintf "%03d-a" !num) msg1;
-  save_message_to_file (sprintf "%03d-b" !num) msg2;
-  incr num
 
 type result = {
   success : int;
@@ -49,7 +33,6 @@ let run_one_test byte_order msg acc =
     if msg' = msg then
       { acc with success = acc.success + 1 }
     else begin
-      save msg msg';
       { acc with failure = acc.failure + 1 }
     end
   with
@@ -59,34 +42,43 @@ let run_one_test byte_order msg acc =
         { acc with reading_error = acc.reading_error + 1 }
 
 let run_tests prefix byte_order l =
-  let progress = Progress.make prefix test_count in
+  lwt progress = Progress.make prefix test_count in
   let rec aux acc n = function
     | [] ->
-        Progress.close progress;
-        acc
+        lwt () = Progress.close progress in
+        return acc
     | msg :: l ->
-        Progress.incr progress;
+        lwt () = Progress.incr progress in
         aux (run_one_test byte_order msg acc) (n + 1) l
   in
   aux { success = 0; failure = 0; reading_error = 0; writing_error = 0 } 0 l
 
 let print_result result =
-  printf "     success: %d\n" result.success;
-  printf "     failure: %d\n" result.failure;
-  printf "     writing error: %d\n" result.writing_error;
-  printf "     reading error: %d\n" result.reading_error
+  lwt () = printf "     success: %d\n" result.success in
+  lwt () = printf "     failure: %d\n" result.failure in
+  lwt () = printf "     writing error: %d\n" result.writing_error in
+  lwt () = printf "     reading error: %d\n" result.reading_error in
+  return ()
 
 let rec gen_messages progress acc = function
   | 0 ->
-      Progress.close progress;
-      acc
+      lwt () = Progress.close progress in
+      return acc
   | n ->
-      Progress.incr progress;
+      lwt () = Progress.incr progress in
       gen_messages progress (Gen_random.message () :: acc) (n - 1)
 
-let _ =
-  let msgs = gen_messages (Progress.make (sprintf "generating %d messages" test_count) test_count) [] test_count in
-  printf "try to serialize/deserialize all messages and compare the result to the original message.\n";
-  print_result (run_tests "  - in little endian" Lwt_io.Little_endian msgs);
-  print_result (run_tests "  - in big endian" Lwt_io.Big_endian msgs);
-  printf "failing tests have been saved in %s\n%!" save_dir
+let test () =
+  lwt progress = Progress.make (Printf.sprintf "generating %d messages" test_count) test_count in
+  lwt msgs = gen_messages progress [] test_count in
+  lwt () = printl "try to serialize/deserialize all messages and compare the result to the original message." in
+  lwt result_le = run_tests "  - in little endian" Lwt_io.Little_endian msgs in
+  lwt () = print_result result_le in
+  lwt result_be = run_tests "  - in big endian" Lwt_io.Big_endian msgs in
+  lwt () = print_result result_be in
+  return (result_le.failure = 0
+      && result_le.reading_error = 0
+      && result_le.writing_error = 0
+      && result_be.failure = 0
+      && result_be.reading_error = 0
+      && result_be.writing_error = 0)
