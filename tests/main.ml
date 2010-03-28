@@ -36,17 +36,31 @@ let rec run_tests failures total = function
           test ()
         with exn ->
           lwt () = Lwt_io.printlf "test failed with: %s" (Printexc.to_string exn) in
+          lwt () = Lwt_io.printl (Printexc.get_backtrace ()) in
           return false
       end >>= function
         | true ->
-            lwt () = Lwt_io.print "\n" in
+            lwt () =
+              if tty then
+                Lwt_io.print "\n\027[32;1mTest passed.\n\027[0m\n"
+              else
+                Lwt_io.print "\nTest failed.\n\n"
+            in
             run_tests failures (total + 1) rest
         | false ->
-            lwt () = Lwt_io.print "\n" in
+            lwt () =
+              if tty then
+                Lwt_io.print "\n\027[31;1mTest failed.\n\027[0m\n"
+              else
+                Lwt_io.print "\nTest failed.\n\n"
+            in
             run_tests (failures + 1) (total + 1) rest
 
 lwt () =
   run_tests 0 0 [
     "serialization", Test_serialization.test;
+    "string validation", Test_validation.test;
+    "authentication", Test_auth.test;
+    "communication", Test_communication.test;
   ]
 

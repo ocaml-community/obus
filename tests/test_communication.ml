@@ -22,7 +22,11 @@ let rec run_tests con = function
   | 0 ->
       return ()
   | n ->
-      lwt () = OBus_connection.send_message con { Gen_random.message () with destination = Some name } in
+      lwt () = OBus_connection.send_message con {
+        Gen_random.message () with
+          destination = Some name;
+          typ = Signal(["obus"; "test"], "obus.test", "test");
+      } in
       run_tests con (n - 1)
 
 let rec wait_for_name con =
@@ -30,28 +34,33 @@ let rec wait_for_name con =
     | true -> return ()
     | false -> lwt () = Lwt_unix.sleep 0.1 in wait_for_name con
 
-let () = Lwt_main.run (
-  lwt () = printlf "sending and receiving %d messages through the message bus." test_count in
-  if Unix.fork () = 0 then
-    lwt con = OBus_bus.session () in
-    lwt () = wait_for_name con in
-    lwt () = run_tests con test_count in
-    OBus_connection.dyn_emit_signal con ~destination:name ~interface:"a.a" ~member:"exit_now" ~path:[] []
-  else
-    lwt bus = OBus_bus.session () in
-    lwt _ = OBus_bus.request_name bus name in
-    let progress = Progress.make "received" test_count and waiter, wakener = wait () in
-    ignore (Lwt_sequence.add_r
-              (function
-                 | { typ = Signal(_, _, "exit_now") } ->
-                     Progress.close progress;
-                     ignore_result (printf "\nexit signal received.\n");
-                     wakeup wakener ();
-                     None
-                 | { destination = Some n } when n = name ->
-                     Progress.incr progress;
-                     None
-                 | msg -> Some msg)
-              (OBus_connection.incoming_filters bus));
-    waiter
-)
+let test () =
+  lwt () = Lwt_io.flush Lwt_io.stdout in
+  match Unix.fork () with
+    | 0 ->
+        lwt con = OBus_bus.session () in
+        lwt () = wait_for_name con in
+        lwt () = run_tests con test_count in
+        exit 0
+    | pid ->
+        lwt () = printlf "sending and receiving %d messages through the message bus." test_count in
+        lwt bus = OBus_bus.session () in
+        lwt _ = OBus_bus.request_name bus name in
+        lwt progress = Progress.make "received" test_count in
+        let waiter, wakener = wait () in
+        let count = ref 0 in
+        ignore (Lwt_sequence.add_r
+                  (function
+                     | {  typ = Signal(["obus"; "test"], "obus.test", "test") } ->
+                         ignore (Progress.incr progress);
+                         incr count;
+                         if !count = test_count then
+                           wakeup wakener true;
+                         None
+                     | msg ->
+                         Some msg)
+                  (OBus_connection.incoming_filters bus));
+        lwt result = waiter in
+        lwt () = Progress.close progress in
+        lwt _ = Lwt_unix.waitpid [] pid in
+        return result
