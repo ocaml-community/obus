@@ -1,6 +1,6 @@
 (*
  * network_state.ml
- * --------
+ * ----------------
  * Copyright : (c) 2010, Pierre Chambart <chambart@crans.org>
  * Licence   : BSD3
  *
@@ -10,14 +10,11 @@
 (* simple example showing how to monitor network state *)
 
 open Lwt
-open Lwt_term
 open React
 open NetworkManager
 
-let print (s:string) =
-  lwt () = clear_line () in
-  lwt () = goto_beginning_of_line 0 in
-  printc [text s]
+let print s =
+  Lwt_io.printf "\r\027[2K%s" s
 
 let () =
   Lwt_main.run
