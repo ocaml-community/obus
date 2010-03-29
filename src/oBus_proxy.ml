@@ -28,6 +28,9 @@ let make ~peer ~path = { peer = peer; path = path }
 class type ['a] signal = object
   method event : 'a React.event
   method set_filters : (int * OBus_match.argument_filter) list -> unit
+  method auto_match_rule : bool
+  method set_auto_match_rule : bool -> unit
+  method init : ?filters : (int * OBus_match.argument_filter) list -> ?auto_match_rule : bool -> unit -> 'a React.event
   method disconnect : unit
 end
 
@@ -217,7 +220,17 @@ struct
 
   (* Commit rule changes on the message bus *)
   let commit_rules connection set =
-    let rules = Lwt_sequence.fold_l (fun sr rules -> if sr.sr_active then RuleSet.add sr.sr_rule rules else rules) set.srs_receivers RuleSet.empty in
+    let rules =
+      Lwt_sequence.fold_l
+        (fun sr rules ->
+           if sr.sr_active then
+             match sr.sr_rule with
+               | Some rule -> RuleSet.add rule rules
+               | None -> rules
+           else
+             rules)
+        set.srs_receivers RuleSet.empty
+    in
     (* If rules have changed, compute the minimal set of changes to
        make with the message bus and do them: *)
     if RuleSet.compare rules set.srs_rules <> 0 then
@@ -269,13 +282,13 @@ struct
     let receiver = {
       sr_active = false;
       sr_sender = None;
-      sr_rule = (OBus_match.rule
-                   ~typ:`Signal
-                   ?sender:proxy.peer.name
-                   ~path:proxy.path
-                   ~interface
-                   ~member
-                   ());
+      sr_rule = Some(OBus_match.rule
+                       ~typ:`Signal
+                       ?sender:proxy.peer.name
+                       ~path:proxy.path
+                       ~interface
+                       ~member
+                       ());
       sr_push = push;
     } in
     (* Immediatly add the recevier to avoid race condition *)
@@ -294,25 +307,63 @@ struct
 
     (* Disable the receiver on garbage collection: *)
     let event = Lwt_event.with_finaliser (stop disconnect) event in
-  object
+  object(self)
     method event = event
 
+    val mutable auto_match_rule_enabled = true
+    val mutable current_filters = []
+
+    method auto_match_rule = auto_match_rule_enabled
+
+    method set_auto_match_rule auto_match_rule  =
+      if auto_match_rule <> auto_match_rule_enabled then begin
+        auto_match_rule_enabled <- auto_match_rule;
+        if auto_match_rule then
+          receiver.sr_rule <- Some(OBus_match.rule
+                                     ~typ:`Signal
+                                     ?sender:proxy.peer.name
+                                     ~path:proxy.path
+                                     ~interface
+                                     ~member
+                                     ~arguments:current_filters
+                                     ())
+        else
+          receiver.sr_rule <- None;
+        match !state with
+          | Sig_init ->
+              ()
+          | Sig_disconnected ->
+              invalid_arg "OBus_proxy.signal#set_auto_match_rule: disconnected signal"
+          | Sig_connected ->
+              ignore (commit_rules connection.packed set)
+      end
+
     method set_filters filters =
-      receiver.sr_rule <-OBus_match.rule
-        ~typ:`Signal
-        ?sender:proxy.peer.name
-        ~path:proxy.path
-        ~interface
-        ~member
-        ~arguments:filters
-        ();
-      match !state with
-        | Sig_init ->
-            ()
-        | Sig_disconnected ->
-            invalid_arg "OBus_proxy.signal#set_filters: disconnected signal"
-        | Sig_connected ->
-            ignore (commit_rules connection.packed set)
+      current_filters <- filters;
+      if auto_match_rule_enabled then begin
+        receiver.sr_rule <-Some(OBus_match.rule
+                                  ~typ:`Signal
+                                  ?sender:proxy.peer.name
+                                  ~path:proxy.path
+                                  ~interface
+                                  ~member
+                                  ~arguments:filters
+                                  ());
+        match !state with
+          | Sig_init ->
+              ()
+          | Sig_disconnected ->
+              invalid_arg "OBus_proxy.signal#set_filters: disconnected signal"
+          | Sig_connected ->
+              ignore (commit_rules connection.packed set)
+      end
+
+    method init ?(filters=[]) ?(auto_match_rule=true) () =
+      current_filters <- filters;
+      (* Force a refresh of the match rule if necessary: *)
+      auto_match_rule_enabled <- not auto_match_rule;
+      self#set_auto_match_rule auto_match_rule;
+      event
 
     method disconnect =
       Lazy.force disconnect

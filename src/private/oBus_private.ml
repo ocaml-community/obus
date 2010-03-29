@@ -124,7 +124,7 @@ and signal_receiver = {
   mutable sr_sender : OBus_name.bus option React.signal option;
   (* The sender that must be matched *)
 
-  mutable sr_rule : OBus_match.rule;
+  mutable sr_rule : OBus_match.rule option;
   (* The rule used for this receiver *)
 
   sr_push : packed_connection * OBus_message.t -> unit;

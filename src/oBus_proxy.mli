@@ -40,6 +40,30 @@ class type ['a] signal = object
         messages received, and so to reduce the number of wakeup of
         the program. *)
 
+  method auto_match_rule : bool
+    (** Returns whether automatic match rules management is enabled
+        for this signal. It is always activated by default. *)
+
+  method set_auto_match_rule : bool -> unit
+    (** Enable/disable the automatic management of matching rules. If
+        you disable it, it is then up to you to add the correct rule
+        on the bus by using {!OBus_bus.add_match}. *)
+
+  method init : ?filters : (int * OBus_match.argument_filter) list -> ?auto_match_rule : bool -> unit -> 'a React.event
+    (** [init ?filters ?auto_match_rule ()] is an helper to sets
+        signals parameters; instead of
+        {[
+          let signal = Foo.bar proxy in
+          signal#set_auto_match_rule false;
+          signal#set_filters filters;
+          let x = React.E.map (...) signal#event
+        ]}
+        you can write:
+        {[
+          let x = React.E.map (...) ((Foo.bar proxy)#init ~filters ~auto_match_rule:false ())
+        ]}
+    *)
+
   method disconnect : unit
     (** Stop receiving the signal *)
 end
