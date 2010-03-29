@@ -116,6 +116,9 @@ install-libs:
 	 $(wildcard _build/bindings/*/*.cmi) \
 	 $(wildcard _build/src/*.cmx) \
 	 $(wildcard _build/bindings/*/*.cmx) \
+	 $(wildcard _build/bindings/*/*.cma) \
+	 $(wildcard _build/bindings/*/*.cmxa) \
+	 $(wildcard _build/bindings/*/*.cmxs) \
 	 $(wildcard _build/*.cma) \
 	 $(wildcard _build/*.cmxa) \
 	 $(wildcard _build/*.cmxs) \

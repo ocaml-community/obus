@@ -39,11 +39,13 @@ let examples = [
   "list_services";
   "ping";
   "pong";
+  "network_state";
 ]
 
 let bindings = [
   "hal";
   "notification";
+  "NetworkManager";
 ]
 
 let tools = [
@@ -78,6 +80,7 @@ let packages = [
   "lwt.syntax";
   "lwt.syntax.log";
   "lwt.react";
+  "lwt.text";
   "str";
   "xmlm";
   "react";

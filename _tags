@@ -64,3 +64,4 @@
 # Examples
 <examples/{eject,signals}.*>: use_hal
 <examples/notify.*>: use_notification
+<examples/network_state.*>: use_NetworkManager, pkg_lwt.text

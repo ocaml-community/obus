@@ -35,3 +35,13 @@ package "notification" (
   archive(plugin,byte) = "notification.cma"
   archive(plugin,native) = "notification.cmxs"
 )
+
+package "NetworkManager" (
+  version = "[distrubuted with OBus]"
+  description = "Freedesktop NetworkManager service binding"
+  requires = "obus"
+  archive(byte) = "NetworkManager.cma"
+  archive(native) = "NetworkManager.cmxa"
+  archive(plugin,byte) = "NetworkManager.cma"
+  archive(plugin,native) = "NetworkManager.cmxs"
+)
