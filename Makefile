@@ -109,7 +109,6 @@ dot:
 .PHONY: install-libs
 install-libs:
 	$(OF) install obus _build/META \
-	 _build/pa_obus.cma \
 	 src/*.mli \
 	 bindings/*/*.mli \
 	 $(wildcard _build/src/*.cmi) \
