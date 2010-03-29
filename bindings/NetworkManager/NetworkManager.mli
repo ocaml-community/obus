@@ -1,3 +1,11 @@
+(*
+ * NetworkManager.mli
+ * ------------------
+ * Copyright : (c) 2010, Pierre Chambart <chambart@crans.org>
+ * Licence   : BSD3
+ *
+ * This file is a part of obus, an ocaml implementation of D-Bus.
+ *)
 
 type t = OBus_proxy.t
 type -'a device_proxy

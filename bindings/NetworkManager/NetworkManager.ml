@@ -1,3 +1,12 @@
+(*
+ * NetworkManager.ml
+ * -----------------
+ * Copyright : (c) 2010, Pierre Chambart <chambart@crans.org>
+ * Licence   : BSD3
+ *
+ * This file is a part of obus, an ocaml implementation of D-Bus.
+ *)
+
 open Lwt
 open OBus_pervasives
 
