@@ -9,13 +9,6 @@
 
 open Lwt
 
-let out = ref "/dev/stderr"
-
-let args = [
-  "-o", Arg.Set_string out,
-  "<file> output messages to this file instead of stderr";
-]
-
 let usage_msg = Printf.sprintf "Usage: %s <options> cmd args
 Execute 'cmd' and dump all messages it sent to session and system bus
 options are:" (Filename.basename (Sys.argv.(0)))
@@ -41,12 +34,15 @@ let launch pp what_bus laddresses =
   Unix.putenv (Printf.sprintf "DBUS_%s_BUS_ADDRESS" (String.uppercase what_bus)) (OBus_address.to_string (OBus_server.addresses server));
   return ()
 
-let cmd_args = ref []
 
 let () =
-  Arg.parse args
-    (fun s -> cmd_args := s :: !cmd_args)
-    usage_msg;
+  let out = ref "/dev/stderr" and cmd_args = ref [] in
+  let anon_fun s = cmd_args := s :: !cmd_args in
+  let args = [
+    "-o", Arg.Set_string out, "<file> output messages to this file instead of stderr";
+    "--", Arg.Rest anon_fun, "command separator";
+  ] in
+  Arg.parse args anon_fun usage_msg;
 
   let cmd_args = List.rev !cmd_args in
   let cmd = match cmd_args with
