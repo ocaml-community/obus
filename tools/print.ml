@@ -74,7 +74,7 @@ let print_proxy_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
   p "  type t = OBus_proxy.t with obus\n";
-  p "  OP_interface %S\n" name;
+  p "  let op_interface = OBus_proxy.make_interface %S\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  OP_method %s : %a\n" name (print_func (tuple (im_term_of_args  outs))) (im_term_of_args ins)
@@ -96,7 +96,7 @@ let print_proxy_implem pp (name, content, annots) =
 let print_service_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
   p "module %a = struct\n" puid name;
-  p "  OL_interface(M) %S as %a\n" name plid name;
+  p "  let ol_interface = M.make_interface %S\n" name;
   List.iter begin function
     | Signal(name, args, annots) ->
         let args = match args with
