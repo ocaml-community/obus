@@ -22,18 +22,8 @@ let readable_writable = Readable_writable
 type ('a, 'access) t = {
   cast : OBus_type.context -> OBus_value.single -> 'a;
   make : 'a -> OBus_value.single;
-
-  connection : OBus_connection.t;
-  sender : OBus_name.bus option;
-  path : OBus_path.t;
-  interface : OBus_name.interface;
   member : OBus_name.member;
-
   changed : OBus_name.member option;
-
-  mutable signal : OBus_value.sequence OBus_signal.t option;
-  (* The signal used to monitor changes *)
-
   core : OBus_private.property;
   (* The ``core'' property. It is used by the connection *)
 }
@@ -41,46 +31,48 @@ type ('a, 'access) t = {
 let interface = "org.freedesktop.DBus.Properties"
 
 let get property =
-  match property.core.prop_state with
+  let core = property.core in
+  match core.prop_state with
     | Prop_simple ->
         lwt variant, context =
           OBus_connection.method_call
-            property.connection
-            ?destination:property.sender
-            ~path:property.path
+            core.prop_connection
+            ?destination:core.prop_sender
+            ~path:core.prop_path
             ~interface
             ~member:"Get"
             <:obus_func< string -> string -> variant * OBus_connection.context >>
-            property.interface
+            core.prop_interface
             property.member
         in
         return (property.cast (OBus_connection.make_context context) variant)
-    | Prop_monitor properties ->
+    | Prop_monitor(properties, stop) ->
         lwt map, context = properties >|= React.S.value in
         return (property.cast context (StringMap.find property.member map))
 
 let set property value =
+  let core = property.core in
   OBus_connection.method_call
-    property.connection
-    ?destination:property.sender
-    ~path:property.path
+    core.prop_connection
+    ?destination:core.prop_sender
+    ~path:core.prop_path
     ~interface
     ~member:"Set"
     <:obus_func< string -> string -> variant -> unit >>
-    property.interface
+    core.prop_interface
     property.member
     (property.make value)
 
-let get_all property =
+let get_all core =
   lwt variants, context =
     OBus_connection.method_call
-      property.connection
-      ?destination:property.sender
-      ~path:property.path
+      core.prop_connection
+      ?destination:core.prop_sender
+      ~path:core.prop_path
       ~interface
       ~member:"GetAll"
       <:obus_func< string -> (string, variant) dict * OBus_connection.context >>
-      property.interface
+      core.prop_interface
   in
   return (List.fold_left
             (fun acc (name, variant) -> StringMap.add name variant acc)
@@ -95,45 +87,44 @@ let rec contents property =
     | Some changed ->
         let core = property.core in
         match core.prop_state with
-          | Prop_monitor properties ->
+          | Prop_monitor(properties, stop) ->
               lwt signal = properties in
               return (React.S.map
                         (fun (properties, context) ->
                            property.cast context (StringMap.find property.member properties))
                         signal)
           | Prop_simple ->
-              let waiter, wakener = wait () in
-              core.prop_state <- Prop_monitor waiter;
               let signal =
                 OBus_signal.dyn_connect
-                  ~connection:property.connection
-                  ?sender:property.sender
-                  ~path:property.path
-                  ~interface:property.interface
+                  ~connection:core.prop_connection
+                  ?sender:core.prop_sender
+                  ~path:core.prop_path
+                  ~interface:core.prop_interface
                   ~member:changed
                   ()
               in
-              property.signal <- Some signal;
-              lwt initial = get_all property in
+              let waiter, wakener = wait () in
+              core.prop_state <- Prop_monitor(waiter, (fun () -> OBus_signal.disconnect signal));
+              lwt initial = get_all core in
               wakeup wakener
                 (React.S.hold ~eq:(==)
                    initial
                    (Lwt_event.map_s
-                      (fun _ -> get_all property)
+                      (fun _ -> get_all core)
                       (OBus_signal.event signal)));
               contents property
 
 let cleanup property =
-  let connection = unpack_connection property.connection in
   let core = property.core in
+  let connection = unpack_connection core.prop_connection in
   core.prop_ref_count <- core.prop_ref_count - 1;
   if core.prop_ref_count = 0 then begin
-    connection.properties <- PropertyMap.remove (property.sender, property.path, property.interface) connection.properties;
-    match property.signal with
-      | None ->
+    connection.properties <- PropertyMap.remove (core.prop_sender, core.prop_path, core.prop_interface) connection.properties;
+    match core.prop_state with
+      | Prop_simple ->
           ()
-      | Some signal ->
-          OBus_signal.disconnect signal
+      | Prop_monitor(properties, stop) ->
+          stop ()
   end
 
 let make_backend ~connection ?sender ~path ~interface ~member ~access ?changed ~cast ~make () =
@@ -147,6 +138,10 @@ let make_backend ~connection ?sender ~path ~interface ~member ~access ?changed ~
           let core = {
             prop_ref_count = 1;
             prop_state = Prop_simple;
+            prop_connection = connection.packed;
+            prop_sender = sender;
+            prop_path = path;
+            prop_interface = interface;
           } in
           connection.properties <- PropertyMap.add (sender, path, interface) core connection.properties;
           core
@@ -154,14 +149,9 @@ let make_backend ~connection ?sender ~path ~interface ~member ~access ?changed ~
   let property = {
     cast = cast;
     make = make;
-    connection = connection.packed;
-    sender = sender;
-    path = path;
-    interface = interface;
     member = member;
     changed = changed;
     core = core;
-    signal = None;
   } in
   Gc.finalise cleanup property;
   property

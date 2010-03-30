@@ -155,9 +155,10 @@ and signal_receiver_set = {
 and property_state =
   | Prop_simple
       (* Simpe state: no property is monitored for this interface *)
-  | Prop_monitor of (OBus_value.single StringMap.t * OBus_private_type.context) React.signal Lwt.t
-      (* At least one property is monitored. In this we use [GetAll]
-         to minimise the number fo method calls *)
+  | Prop_monitor of (OBus_value.single StringMap.t * OBus_private_type.context) React.signal Lwt.t * (unit -> unit)
+      (* [Proxy_monitor(signal, close)] where [signal] is the signal
+         holding the current values of all properties and [close] is
+         used to stop monitoring the ``changed'' signal. *)
 
 and property = {
   mutable prop_ref_count : int;
@@ -165,6 +166,11 @@ and property = {
      property ? *)
 
   mutable prop_state : property_state;
+
+  prop_connection : packed_connection;
+  prop_sender : OBus_name.bus option;
+  prop_path : OBus_path.t;
+  prop_interface : OBus_name.interface;
 }
 
 (* +-----------------------------------------------------------------+
