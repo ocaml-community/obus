@@ -92,6 +92,17 @@ Hal_manager
 Hal_device
 }
 
+{3 UPower}
+
+Bindings to the freedesktop UPower service.
+
+{!modules:
+UPower
+UPower_device
+UPower_policy
+UPower_wakeups
+}
+
 {3 Index}
 
 {!indexlist}

@@ -45,3 +45,13 @@ package "NetworkManager" (
   archive(plugin,byte) = "NetworkManager.cma"
   archive(plugin,native) = "NetworkManager.cmxs"
 )
+
+package "upower" (
+  version = "[distrubuted with OBus]"
+  description = "Freedesktop UPower service binding"
+  requires = "obus"
+  archive(byte) = "upower.cma"
+  archive(native) = "upower.cmxa"
+  archive(plugin,byte) = "upower.cma"
+  archive(plugin,native) = "upower.cmxs"
+)

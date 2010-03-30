@@ -342,7 +342,7 @@ module type Private = sig
   external to_proxy : t -> proxy = "%identity"
 end
 
-(** Minimal implementation of priate proxies *)
+(** Minimal implementation of private proxies *)
 module Private : sig
   type t = proxy
   val obus_t : t OBus_type.basic

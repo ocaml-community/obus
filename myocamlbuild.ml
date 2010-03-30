@@ -46,6 +46,7 @@ let bindings = [
   "hal";
   "notification";
   "NetworkManager";
+  "upower";
 ]
 
 let tools = [

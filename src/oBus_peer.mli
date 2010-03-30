@@ -96,3 +96,25 @@ val wait_for_exit : t -> unit Lwt.t
   (** [wait_for_exit peer] wait until [peer] exit. If [peer] is not
       running then it returns immediatly. Raises [Invalid_argument] if
       the peer has no name. *)
+
+(** {6 Private peers} *)
+
+type peer = t
+
+(** Minimal interface of private peers *)
+module type Private = sig
+  type t = private peer
+  val obus_t : t OBus_type.sequence
+
+  external of_peer : peer -> t = "%identity"
+  external to_peer : t -> peer = "%identity"
+end
+
+(** Minimal implementation of private peers *)
+module Private : sig
+  type t = peer
+  val obus_t : t OBus_type.sequence
+
+  external of_peer : peer -> t = "%identity"
+  external to_peer : t -> peer = "%identity"
+end

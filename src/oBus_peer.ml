@@ -57,3 +57,23 @@ let wait_for_exit peer =
 
     | None ->
         fail (Invalid_argument "OBus_peer.wait_for_exit: peer has no name")
+
+(* +-----------------------------------------------------------------+
+   | Private peers                                                   |
+   +-----------------------------------------------------------------+ *)
+
+type peer = t with obus
+
+module type Private = sig
+  type t = private peer
+  val obus_t : t OBus_type.sequence
+  external of_peer : peer -> t = "%identity"
+  external to_peer : t -> peer = "%identity"
+end
+
+module Private =
+struct
+  type t = peer with obus
+  external of_peer : peer -> t = "%identity"
+  external to_peer : t -> peer = "%identity"
+end
