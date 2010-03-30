@@ -313,14 +313,13 @@ EXTEND Gram
           <:str_item< let $lid:cname$ = OBus_proxy.Interface.signal op_interface $str:dname$ $typ$ >>
 
       | "OP_property_r"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property_reader op_interface $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property op_interface $str:dname$ OBus_property.readable $typ$ >>
 
       | "OP_property_w"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:prepend_lid "set" cname$ = OBus_proxy.Interface.property_writer op_interface $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property op_interface $str:dname$ OBus_property.writable $typ$ >>
 
       | "OP_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type ->
-          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property_reader op_interface $str:dname$ $typ$;;
-                      let $lid:prepend_lid "set" cname$ = OBus_proxy.Interface.property_writer op_interface $str:dname$ $typ$ >>
+          <:str_item< let $lid:cname$ = OBus_proxy.Interface.property op_interface $str:dname$ OBus_property.readable_writable $typ$ >>
 
   (* +---------------------------------------------------------------+
      | Extension for local code                                      |

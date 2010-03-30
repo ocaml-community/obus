@@ -31,18 +31,12 @@ val device_added : t -> UPower_device.t OBus_signal.t
 
 (** {6 Properties} *)
 
-val lid_is_present : t -> bool Lwt.t
-val set_lid_is_present : t -> bool -> unit Lwt.t
+val lid_is_present : t -> (bool, [ `readable | `writable ]) OBus_property.t
+val lid_is_closed : t -> (bool, [ `readable | `writable ]) OBus_property.t
 
-val lid_is_closed : t -> bool Lwt.t
-val set_lid_is_closed : t -> bool -> unit Lwt.t
+val on_low_battery : t -> (bool, [ `readable | `writable ]) OBus_property.t
+val on_battery : t -> (bool, [ `readable | `writable ]) OBus_property.t
 
-val on_low_battery : t -> bool Lwt.t
-val set_on_low_battery : t -> bool -> unit Lwt.t
-
-val on_battery : t -> bool Lwt.t
-val set_on_battery : t -> bool -> unit Lwt.t
-
-val can_hibernate : t -> bool Lwt.t
-val can_suspend : t -> bool Lwt.t
-val daemon_version : t -> string Lwt.t
+val can_hibernate : t -> (bool, [ `readable ]) OBus_property.t
+val can_suspend : t -> (bool, [ `readable ]) OBus_property.t
+val daemon_version : t -> (string, [ `readable ]) OBus_property.t

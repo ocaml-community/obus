@@ -11,4 +11,4 @@ val get_data : UPower.t -> (bool * int * float * string * string) list Lwt.t
 val get_total : UPower.t -> int Lwt.t
 val data_changed : UPower.t -> unit OBus_signal.t
 val total_changed : UPower.t -> int OBus_signal.t
-val has_capability : UPower.t -> bool Lwt.t
+val has_capability : UPower.t -> (bool, [ `readable ]) OBus_property.t

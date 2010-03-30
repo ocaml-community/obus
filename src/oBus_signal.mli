@@ -68,9 +68,9 @@ val connect :
   interface : OBus_name.interface ->
   member : OBus_name.member ->
   ('a, _) OBus_type.cl_sequence -> 'a t
-  (** [connect ~connection ?name ~path ~interface ~member typ] creates
-      a signal which will receives event emited by the object with
-      path [path] on peer with bus name [sender]. *)
+  (** [connect ~connection ?sender ~path ~interface ~member typ]
+      creates a signal which will receives event emited by the object
+      with path [path] on peer with bus name [sender]. *)
 
 val dyn_connect :
   connection : OBus_connection.t ->

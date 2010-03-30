@@ -97,36 +97,25 @@ module Interface : sig
         ]}
     *)
 
-  val property_reader : 'proxy t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> 'proxy -> 'a Lwt.t
-    (** [property_reader iface member typ] defines a property reader.
+  val  property : 'proxy t -> OBus_name.member -> 'access OBus_property.access -> ('a, _) OBus_type.cl_single -> 'proxy -> ('a, 'access) OBus_property.t
+    (** [property member typ] defines a property.
 
-        A property reader definition looks like:
-
-        {[
-          let caml_name = OBus_proxy.Interface.property_reader obus_proxy_interface "DBusName" property_type
-        ]}
-    *)
-
-  val  property_writer : 'proxy t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> 'proxy -> 'a -> unit Lwt.t
-    (** [property_writer member typ] defines a property writer.
-
-        A property writer definition looks like:
+        A property definition looks like:
 
         {[
-          let set_caml_name = OBus_proxy.Interface.property_writer obus_proxy_interface "DBusName" property_type
+          let set_caml_name = OBus_proxy.Interface.property obus_proxy_interface access "DBusName" property_type
+        ]}
+
+        With the syntax extension, read-only properties
+        (resp. write-only properties, resp. read and write properties)
+        can be defined like this:
+
+        {[
+          OP_property_r DBusName : property_type
+          OP_property_w DBusName : property_type
+          OP_property_rw DBusName : property_type
         ]}
     *)
-
-  (** With the syntax extension, read-only properties
-      (resp. write-only properties, resp. read and write properties)
-      can be defined like this:
-
-      {[
-        OP_property_r DBusName : property_type
-        OP_property_w DBusName : property_type
-        OP_property_rw DBusName : property_type
-      ]}
-  *)
 end
 
 (** Proxy signature *)
@@ -144,8 +133,13 @@ module type S = sig
   val obus_broken : broken OBus_type.basic
     (** Same as {!OBus_pervasives.obus_broken_path} but for proxies *)
 
-  val make_interface : OBus_name.interface -> proxy Interface.t
-    (** Create an interface using proxies of type {!proxy} *)
+  val make_interface : ?changed : OBus_name.member -> OBus_name.interface -> proxy Interface.t
+    (** [make_interface ?changed name] create an interface using
+        proxies of type {!proxy}.
+
+        [changed] is the name of the signal which is sent each time a
+        property changes. Setting this parameter will make it possible
+        to use {!OBus_property.contents} on properties. *)
 
   (** {6 Informations} *)
 
@@ -231,36 +225,18 @@ module type S = sig
 
   (** {6 Properties} *)
 
-  val get : proxy ->
+  val property : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
-    ('a, _) OBus_type.cl_single -> 'a Lwt.t
-    (** [get proxy ~interface ~member typ] returns the value of the
-        given property *)
+    access : 'access OBus_property.access ->
+    ?changed : OBus_name.member ->
+    ('a, _) OBus_type.cl_single -> ('a, 'access) OBus_property.t
 
-  val set : proxy ->
+  val dyn_property : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
-    ('a, _) OBus_type.cl_single -> 'a -> unit Lwt.t
-    (** [set proxy ~interface ~member typ value] sets the value of the
-        given property *)
-
-  val dyn_get : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member -> OBus_value.single Lwt.t
-    (** [dyn_get proxy ~interface ~member] returns the value of the
-        given property as a dynamically typed value *)
-
-  val dyn_set : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    OBus_value.single -> unit Lwt.t
-    (** [dyn_set proxy ~interface ~member value] sets the value of the
-        given property *)
-
-  val dyn_get_all : proxy -> interface : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
-    (** [dyn_get_all t ~interface] returns the list of all properties of
-        the given proxy with their values *)
+    access : 'access OBus_property.access ->
+    ?changed : OBus_name.member -> unit -> (OBus_value.single, 'access) OBus_property.t
 end
 
 (** The default proxy implementation *)

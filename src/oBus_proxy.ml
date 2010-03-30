@@ -30,15 +30,13 @@ struct
     name : OBus_name.interface;
     method_call : 'a 'b. OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'proxy -> 'a;
     signal : 'a 'cl. OBus_name.member -> ('a, 'cl) OBus_type.cl_sequence -> 'proxy -> 'a OBus_signal.t;
-    property_reader : 'a 'cl. OBus_name.member -> ('a, 'cl) OBus_type.cl_single -> 'proxy -> 'a Lwt.t;
-    property_writer : 'a 'cl. OBus_name.member -> ('a, 'cl) OBus_type.cl_single -> 'proxy -> 'a -> unit Lwt.t;
+    property : 'a 'cl 'access. OBus_name.member -> 'access OBus_property.access -> ('a, 'cl) OBus_type.cl_single -> 'proxy -> ('a, 'access) OBus_property.t;
   }
 
   let name iface = iface.name
-  let method_call iface = iface.method_call
-  let signal iface = iface.signal
-  let property_reader iface = iface.property_reader
-  let property_writer iface = iface.property_writer
+  let method_call iface member typ = iface.method_call member typ
+  let signal iface member typ = iface.signal member typ
+  let property iface member access = iface.property member access
 end
 
 (* +-----------------------------------------------------------------+
@@ -54,7 +52,7 @@ end
 module type S = sig
   type proxy with obus(basic)
   type broken = proxy with obus(basic)
-  val make_interface : OBus_name.interface -> proxy Interface.t
+  val make_interface : ?changed : OBus_name.member -> OBus_name.interface -> proxy Interface.t
   val peer : proxy -> OBus_peer.t
   val path : proxy -> OBus_path.t
   val connection : proxy -> OBus_connection.t
@@ -89,22 +87,17 @@ module type S = sig
   val dyn_connect : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member -> OBus_value.sequence OBus_signal.t
-  val get : proxy ->
+  val property : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
-    ('a, _) OBus_type.cl_single -> 'a Lwt.t
-  val set : proxy ->
+    access : 'access OBus_property.access ->
+    ?changed : OBus_name.member ->
+    ('a, _) OBus_type.cl_single -> ('a, 'access) OBus_property.t
+  val dyn_property : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
-    ('a, _) OBus_type.cl_single -> 'a -> unit Lwt.t
-  val dyn_get : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member -> OBus_value.single Lwt.t
-  val dyn_set : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    OBus_value.single -> unit Lwt.t
-  val dyn_get_all : proxy -> interface : OBus_name.interface -> (OBus_name.member * OBus_value.single) list Lwt.t
+    access : 'access OBus_property.access ->
+    ?changed : OBus_name.member -> unit -> (OBus_value.single, 'access) OBus_property.t
 end
 
 (* +-----------------------------------------------------------------+
@@ -195,23 +188,29 @@ struct
      | Properties                                                    |
      +---------------------------------------------------------------+ *)
 
-  let interface = "org.freedesktop.DBus.Properties"
+  let property proxy ~interface ~member ~access ?changed typ =
+    let proxy = Proxy.cast proxy in
+    OBus_property.make
+      ~connection:proxy.peer.connection
+      ?sender:proxy.peer.name
+      ~path:proxy.path
+      ~interface
+      ~member
+      ~access
+      ?changed
+      typ
 
-  let dyn_get proxy = method_call proxy ~interface ~member:"Get" <:obus_func< string -> string -> variant >>
-  let dyn_set proxy = method_call proxy ~interface ~member:"Set" <:obus_func< string -> string -> variant -> unit >>
-  let dyn_get_all proxy = method_call proxy ~interface ~member:"GetAll" <:obus_func< string -> (string, variant) dict >>
-  let dyn_get_with_context proxy = method_call proxy ~interface ~member:"Get" <:obus_func< string -> string -> variant * OBus_connection.context >>
-
-  let dyn_get proxy ~interface ~member = dyn_get proxy interface member
-  let dyn_set proxy ~interface ~member value = dyn_set proxy interface member value
-  let dyn_get_all proxy ~interface = dyn_get_all proxy interface
-
-  let get proxy ~interface ~member typ =
-    lwt value, (connection, message) = dyn_get_with_context proxy interface member in
-    return (OBus_type.cast_single typ ~context:(OBus_connection.make_context (connection, message)) value)
-
-  let set proxy ~interface ~member typ x =
-    dyn_set proxy ~interface ~member (OBus_type.make_single typ x)
+  let dyn_property proxy ~interface ~member ~access ?changed () =
+    let proxy = Proxy.cast proxy in
+    OBus_property.dyn_make
+      ~connection:proxy.peer.connection
+      ?sender:proxy.peer.name
+      ~path:proxy.path
+      ~interface
+      ~member
+      ~access
+      ?changed
+      ()
 
   (* +---------------------------------------------------------------+
      | Signals                                                       |
@@ -241,12 +240,11 @@ struct
      | Interface creation                                            |
      +---------------------------------------------------------------+ *)
 
-  let make_interface interface = {
+  let make_interface ?changed interface = {
     Interface.name = interface;
     Interface.method_call = (fun member typ proxy -> method_call proxy ~interface ~member typ);
     Interface.signal = (fun member typ proxy -> connect proxy ~interface ~member typ);
-    Interface.property_reader = (fun member typ proxy -> get proxy ~interface ~member typ);
-    Interface.property_writer = (fun member typ proxy value -> set proxy ~interface ~member typ value);
+    Interface.property = (fun member access typ proxy -> property proxy ~interface ~member ~access ?changed typ);
   }
 end
 

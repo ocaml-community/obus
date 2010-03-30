@@ -22,6 +22,8 @@ src/OBus_name
 src/OBus_path
 src/OBus_peer
 src/OBus_proxy
+src/OBus_signal
+src/OBus_property
 src/OBus_resolver
 src/OBus_string
 src/OBus_type

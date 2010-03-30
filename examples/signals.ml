@@ -61,7 +61,7 @@ lwt () =
        Hal_device.query_capability device "input.keyboard" >>= function
          | true -> handle_multimedia_keys device; return ()
          | false -> return ())
-    (Hal_manager.device_added manager)#event;
+    (OBus_signal.event (Hal_manager.device_added manager));
 
   (* Find all keyboards and handle events on them *)
   lwt keyboards = Hal_manager.find_device_by_capability manager "input.keyboard" in

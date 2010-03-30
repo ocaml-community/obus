@@ -709,6 +709,7 @@ let of_transport ?guid ?(up=true) transport =
       outgoing_filters = Lwt_sequence.create ();
       reply_waiters = SerialMap.empty;
       signal_receivers = SignalMap.empty;
+      properties = PropertyMap.empty;
       packed = (packed_connection :> t);
     } in
     packed_connection#set_connection connection;

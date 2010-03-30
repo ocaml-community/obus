@@ -11,7 +11,7 @@ open OBus_pervasives
 
 include OBus_proxy.Private
 
-let op_interface = OBus_proxy.make_interface "org.freedesktop.UPower.Device"
+let op_interface = OBus_proxy.make_interface ~changed:"Changed" "org.freedesktop.UPower.Device"
 
 OP_method GetStatistics : string -> (float * float) structure list
 OP_method GetHistory : string -> uint -> uint -> (uint * float * uint) structure list

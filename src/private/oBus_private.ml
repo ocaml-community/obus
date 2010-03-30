@@ -36,6 +36,12 @@ module RuleSet = Set.Make
      let compare = Pervasives.compare
    end)
 
+module PropertyMap = OBus_util.MakeMap
+  (struct
+     type t = OBus_name.bus option * OBus_path.t * OBus_name.interface
+     let compare = Pervasives.compare
+   end)
+
 module StringMap = OBus_util.MakeMap(String)
 module StringSet = Set.Make(String)
 
@@ -143,6 +149,25 @@ and signal_receiver_set = {
 }
 
 (* +-----------------------------------------------------------------+
+   | Properties                                                      |
+   +-----------------------------------------------------------------+ *)
+
+and property_state =
+  | Prop_simple
+      (* Simpe state: no property is monitored for this interface *)
+  | Prop_monitor of (OBus_value.single StringMap.t * OBus_private_type.context) React.signal Lwt.t
+      (* At least one property is monitored. In this we use [GetAll]
+         to minimise the number fo method calls *)
+
+and property = {
+  mutable prop_ref_count : int;
+  (* How many user properties (of type OBus_property.t) are using this
+     property ? *)
+
+  mutable prop_state : property_state;
+}
+
+(* +-----------------------------------------------------------------+
    | Connection                                                      |
    +-----------------------------------------------------------------+ *)
 
@@ -214,6 +239,9 @@ and connection = {
 
   mutable signal_receivers : signal_receiver_set SignalMap.t;
   (* Mapping (inteface, member, path) -> set of signal receivers *)
+
+  mutable properties : property PropertyMap.t;
+  (* Mapping holding all properties currently in use *)
 
   packed : packed_connection;
   (* The pack containing the connection *)
