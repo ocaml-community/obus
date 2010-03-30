@@ -21,20 +21,11 @@ let manager () =
 
 let op_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Manager"
 
-(* Hal seems to returns string instead of object path... *)
-let obus_broken_device = OBus_type.map_with_context obus_string
-  (fun context path ->
-     let connection, message = OBus_connection.cast_context context in
-     { OBus_proxy.peer = { OBus_peer.connection = connection;
-                           OBus_peer.name = OBus_message.sender message };
-       OBus_proxy.path = OBus_path.of_string path })
-  (fun proxy -> OBus_path.to_string (OBus_proxy.path proxy))
-
-OP_method GetAllDevices : broken_device list
-OP_method GetAllDevicesWithProperties : (broken_device * (string, Hal_device.property) dict) structure list
-OP_method DeviceExists : broken_device -> bool
-OP_method FindDeviceStringMatch : string -> string -> broken_device list
-OP_method FindDeviceByCapability : string -> broken_device list
+OP_method GetAllDevices : OBus_proxy.broken list
+OP_method GetAllDevicesWithProperties : (OBus_proxy.broken * (string, Hal_device.property) dict) structure list
+OP_method DeviceExists : OBus_proxy.broken -> bool
+OP_method FindDeviceStringMatch : string -> string -> OBus_proxy.broken list
+OP_method FindDeviceByCapability : string -> OBus_proxy.broken list
 OP_method NewDevice : string
 OP_method Remove : string -> unit
 OP_method CommitToGdl : string -> string -> unit
@@ -42,8 +33,8 @@ OP_method AcquireGlobalInterfaceLock : string -> bool -> unit
 OP_method ReleaseGlobalInterfaceLock : string -> unit
 OP_method SingletonAddonIsReady : string -> unit
 
-OP_signal DeviceAdded : broken_device
-OP_signal DeviceRemoved : broken_device
-OP_signal NewCapability : broken_device * string
+OP_signal DeviceAdded : OBus_proxy.broken
+OP_signal DeviceRemoved : OBus_proxy.broken
+OP_signal NewCapability : OBus_proxy.broken * string
 OP_signal GlobalInterfaceLockAcquired : string * string * int
 OP_signal GlobalInterfaceLockReleased : string * string * int

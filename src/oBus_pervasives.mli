@@ -11,6 +11,8 @@
 
 open OBus_type
 
+(** {6 Type combinators for basic types} *)
+
 val obus_byte : char basic
 val obus_char : char basic
 val obus_boolean : bool basic
@@ -34,16 +36,33 @@ val obus_path : OBus_path.t basic
 val obus_file_descr : Lwt_unix.file_descr basic
 val obus_unix_file_descr : Unix.file_descr basic
 
+(** {6 Type combinators for container types} *)
+
 val obus_list : ('a, _) cl_single -> 'a list container
 val obus_array : ('a, _) cl_single -> 'a array container
+val obus_byte_array : string container
 val obus_dict : ('a, _) cl_basic -> ('b, _) cl_single -> (('a * 'b) list) container
 val obus_structure : ('a, _) cl_sequence -> 'a container
 val obus_variant : OBus_value.single container
 
-val obus_byte_array : string container
-  (** Array of bytes seen as string *)
+(** {6 Type combinators for sequences} *)
 
 val obus_unit : unit sequence
+
+(** {6 Broken types} *)
+
+(** It often happen that people confuse string and object-path, and
+    use strings where they should use object pathes. *)
+
+val obus_broken_path : OBus_path.t basic
+  (** Type combinator with caml type {!OBus_path.t} and D-Bus type
+      [STRING]. *)
+
+(** {6 Dummy types} *)
+
+(** Dummy type definition, they should be used in combination with the
+    syntax extension, to define the dbus type and the caml type at the
+    same time *)
 
 type byte = char
 type boolean = bool
@@ -64,6 +83,4 @@ type variant = OBus_value.single
 type byte_array = string
 type file_descr = Lwt_unix.file_descr
 type unix_file_descr = Unix.file_descr
-    (** Dummy type definition, they should be used in combination with
-        the syntax extension, to define the dbus type and the caml
-        type at the same time *)
+type broken_path = OBus_path.t

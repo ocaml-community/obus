@@ -22,6 +22,7 @@ type t = {
 }
 
 val obus_t : t OBus_type.basic
+  (** The type combinator for proxies *)
 
 val make : peer : OBus_peer.t -> path : OBus_path.t -> t
   (** Creates a proxy from the given peer and path *)
@@ -177,6 +178,13 @@ module type S = sig
     (** Type of proxy objects *)
 
   val obus_proxy : proxy OBus_type.basic
+    (** Type combinator for this proxy type *)
+
+  type broken = proxy
+    (** Type of broken proxies. See {!obus_broken}. *)
+
+  val obus_broken : broken OBus_type.basic
+    (** Same as {!OBus_pervasives.obus_broken_path} but for proxies *)
 
   val make_interface : OBus_name.interface -> proxy Interface.t
     (** Create an interface using proxies of type {!proxy} *)

@@ -63,6 +63,7 @@ end
 
 module type S = sig
   type proxy with obus(basic)
+  type broken = proxy with obus(basic)
   val make_interface : OBus_name.interface -> proxy Interface.t
   val peer : proxy -> OBus_peer.t
   val path : proxy -> OBus_path.t
@@ -125,6 +126,14 @@ struct
   type proxy = Proxy.proxy
 
   let obus_proxy = OBus_type.map_with_context <:obus_type< object_path >>
+    (fun context path ->
+       let connection, message = OBus_connection.cast_context context in
+       Proxy.make { peer = { connection = connection; name = OBus_message.sender message }; path = path })
+    (fun proxy -> (Proxy.cast proxy).path)
+
+  type broken = proxy
+
+  let obus_broken = OBus_type.map_with_context <:obus_type< broken_path >>
     (fun context path ->
        let connection, message = OBus_connection.cast_context context in
        Proxy.make { peer = { connection = connection; name = OBus_message.sender message }; path = path })

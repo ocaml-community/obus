@@ -128,6 +128,8 @@ let obus_object_path = Btype {
 
 let obus_path = obus_object_path
 
+let obus_broken_path = map obus_string OBus_path.of_string OBus_path.to_string
+
 let obus_unix_file_descr = Btype {
   b_type = Tunix_fd;
   b_make = unix_fd;
@@ -232,3 +234,4 @@ type variant = OBus_value.single
 type byte_array = string
 type file_descr = Lwt_unix.file_descr
 type unix_file_descr = Unix.file_descr
+type broken_path = OBus_path.t
