@@ -16,6 +16,15 @@ type ('a, 'access) t
   (** Type of a property holding a value of type ['a]. [access] is the
       access mode of the property. *)
 
+type 'a r = ('a, [ `readable ]) t
+  (** Type of read-only properties *)
+
+type 'a w = ('a, [ `writable ]) t
+  (** Type of write-only properties *)
+
+type 'a rw = ('a, [ `readable | `writable ]) t
+  (** Type of read and write properties *)
+
 (** {6 Operation on properties} *)
 
 val get : ('a, [> `readable ]) t -> 'a Lwt.t

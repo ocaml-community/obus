@@ -28,6 +28,10 @@ type ('a, 'access) t = {
   (* The ``core'' property. It is used by the connection *)
 }
 
+type 'a r = ('a, [ `readable ]) t
+type 'a w = ('a, [ `writable ]) t
+type 'a rw = ('a, [ `readable | `writable ]) t
+
 let interface = "org.freedesktop.DBus.Properties"
 
 let get property =

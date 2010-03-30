@@ -18,13 +18,13 @@ module Proxy = OBus_proxy.Make(struct
 
 type cookie = uint with obus
 
-type request = [ `Cpu_dma | `Network ]
+type latency = [ `Cpu_dma | `Network ]
 
-let obus_request = OBus_type.map obus_string
+let obus_latency = OBus_type.map obus_string
   (function
      | "cpu_dma" -> `Cpu_dma
      | "network" -> `Network
-     | request -> raise (OBus_type.Cast_failure("UPower_policy.obus_request", Printf.sprintf "unknown request type (%S)" request)))
+     | latency -> raise (OBus_type.Cast_failure("UPower_policy.obus_latency", Printf.sprintf "unknown latency type (%S)" latency)))
   (function
      | `Cpu_dma -> "cpu_dma"
      | `Network -> "network")
@@ -36,7 +36,7 @@ type latency_request = {
   lr_exec : string;
   lr_timespec : int64;
   lr_persistent : bool;
-  lr_typ : request;
+  lr_typ : latency;
   lr_reserved : string;
   lr_value : int;
 } with obus
@@ -44,9 +44,10 @@ type latency_request = {
 let op_interface = Proxy.make_interface "org.freedesktop.UPower.QoS"
 
 OP_method GetLatencyRequests : latency_request structure list
-OP_method GetLatency : string -> int
-OP_method CancelRequest : request -> cookie -> unit
-OP_method RequestLatency : request -> int -> bool -> cookie
-OP_method SetMinimumLatency : string -> int -> unit
+OP_method GetLatency : latency : latency -> int
+OP_method CancelRequest : latency : latency -> cookie : cookie -> unit
+OP_method RequestLatency : latency : latency -> value : int -> persistent : bool -> cookie
+OP_method SetMinimumLatency : latency : latency -> value : int -> unit
+
 OP_signal RequestsChanged : unit
-OP_signal LatencyChanged : (string * bool)
+OP_signal LatencyChanged : (latency * bool)
