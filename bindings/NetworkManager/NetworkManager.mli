@@ -61,9 +61,9 @@ val sleep : t -> bool -> unit Lwt.t
 val deactivate_connection : t -> connection -> unit Lwt.t
 val activate_connection : t -> string -> connection -> 'a device_proxy -> specific_object -> connection Lwt.t
 val get_devices : t -> unknown_kind device_proxy list Lwt.t
-val device_removed : t -> unknown_kind device_proxy OBus_proxy.signal
-val device_added : t -> unknown_kind device_proxy OBus_proxy.signal
-val properties_changed : t -> (string * OBus_value.single) list OBus_proxy.signal
+val device_removed : t -> unknown_kind device_proxy OBus_signal.t
+val device_added : t -> unknown_kind device_proxy OBus_signal.t
+val properties_changed : t -> (string * OBus_value.single) list OBus_signal.t
 val state : t -> < signal : state React.signal; disconnect : unit >  Lwt.t
 val active_connections : t -> active_connection list Lwt.t
 val wwan_hardware_enabled : t -> bool Lwt.t
@@ -237,7 +237,7 @@ object
   method ip6_config : ip6_config Lwt.t
   method managed : bool Lwt.t
   method state : device_state Lwt.t
-  method state_changed : (device_state * device_state * state_reason) OBus_proxy.signal
+  method state_changed : (device_state * device_state * state_reason) OBus_signal.t
   method udi : string Lwt.t
 
   method device_proxy : unknown_kind device_proxy
@@ -246,7 +246,7 @@ end
 and wired_device =
 object
   inherit device
-  method properties_changed : (string * OBus_value.single) list OBus_proxy.signal
+  method properties_changed : (string * OBus_value.single) list OBus_signal.t
   method carrier : bool Lwt.t
   method speed : int Lwt.t
   method hw_address : string Lwt.t
@@ -256,9 +256,9 @@ and wireless_device =
 object
   inherit device
   method get_access_points : access_point list Lwt.t
-  method access_point_removed : access_point OBus_proxy.signal
-  method access_point_added : access_point OBus_proxy.signal
-  method properties_changed : (string * OBus_value.single) list OBus_proxy.signal
+  method access_point_removed : access_point OBus_signal.t
+  method access_point_added : access_point OBus_signal.t
+  method properties_changed : (string * OBus_value.single) list OBus_signal.t
   method wireless_capabilities : wireless_capability list Lwt.t
   method active_access_point : access_point Lwt.t
   method bitrate : int Lwt.t
@@ -305,7 +305,7 @@ type ap_flag =
     [ `Privacy (** Access point supports privacy measures. *) ]
 
 module Access_point : sig
-  val properties_changed : access_point -> (string * OBus_value.single) list OBus_proxy.signal
+  val properties_changed : access_point -> (string * OBus_value.single) list OBus_signal.t
   val strength : access_point -> int Lwt.t
   val max_bitrate : access_point -> int Lwt.t
   val mode : access_point -> wifi_mode Lwt.t
@@ -334,7 +334,7 @@ module Access_point : sig
 end
 
 module Dhcp4_config : sig
-  val properties_changed : dhcp4_config -> (string * OBus_value.single) list OBus_proxy.signal
+  val properties_changed : dhcp4_config -> (string * OBus_value.single) list OBus_signal.t
   val options : dhcp4_config -> (string * OBus_value.single) list Lwt.t
 end
 
@@ -384,7 +384,7 @@ type active_connection_state =
       (** The connection is activated. *) ]
 
 module Active_connection : sig
-  val properties_changed : active_connection -> (string * OBus_value.single) list OBus_proxy.signal
+  val properties_changed : active_connection -> (string * OBus_value.single) list OBus_signal.t
   val vpn : active_connection -> bool Lwt.t
   val default : active_connection -> bool Lwt.t
   val state : active_connection -> active_connection_state Lwt.t
@@ -400,13 +400,13 @@ module Settings : sig
   val user : t Lwt.t Lazy.t
   val add_connection : t -> (string * (string * OBus_value.single) list) list -> unit Lwt.t
   val list_connections : t -> connection list Lwt.t
-  val new_connection : t -> connection OBus_proxy.signal
+  val new_connection : t -> connection OBus_signal.t
 
   module System : sig
     val get_permissions : t -> int Lwt.t
     val save_hostname : t -> string -> unit Lwt.t
-    val check_permissions : t -> unit OBus_proxy.signal
-    val properties_changed : t -> (string * OBus_value.single) list OBus_proxy.signal
+    val check_permissions : t -> unit OBus_signal.t
+    val properties_changed : t -> (string * OBus_value.single) list OBus_signal.t
     val can_modify : t -> bool Lwt.t
     val hostname : t -> string Lwt.t
   end
@@ -417,8 +417,8 @@ module Connection : sig
   val get_settings : connection -> (string * (string * OBus_value.single) list) list Lwt.t
   val delete : connection -> unit Lwt.t
   val update : connection -> (string * (string * OBus_value.single) list) list -> unit Lwt.t
-  val removed : connection -> unit OBus_proxy.signal
-  val updated : connection -> (string * (string * OBus_value.single) list) list OBus_proxy.signal
+  val removed : connection -> unit OBus_signal.t
+  val updated : connection -> (string * (string * OBus_value.single) list) list OBus_signal.t
   val get_secrets : connection -> string -> string list -> bool -> (string * (string * OBus_value.single) list) list Lwt.t
     (** [get_secrets c setting_name hints request_new]
 	@param setting_name Name of the setting to return. 

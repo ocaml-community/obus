@@ -51,5 +51,5 @@ val cancel_request : UPower.t -> request -> cookie -> unit Lwt.t
 val request_latency : UPower.t -> request -> int -> bool -> cookie Lwt.t
 val set_minimum_latency : UPower.t -> string -> int -> unit Lwt.t
 
-val requests_changed : UPower.t -> unit OBus_proxy.signal
-val latency_changed : UPower.t -> (string * bool) OBus_proxy.signal
+val requests_changed : UPower.t -> unit OBus_signal.t
+val latency_changed : UPower.t -> (string * bool) OBus_signal.t

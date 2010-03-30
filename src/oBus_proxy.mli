@@ -27,48 +27,6 @@ val obus_t : t OBus_type.basic
 val make : peer : OBus_peer.t -> path : OBus_path.t -> t
   (** Creates a proxy from the given peer and path *)
 
-(** A signal definition. ['a] is the type of signals contents. *)
-class type ['a] signal = object
-  method event : 'a React.event
-    (** The event which occurs each time the signal is received. *)
-
-  method set_filters : (int * OBus_match.argument_filter) list -> unit
-    (** Sets the list of argument filters for the given signal. This
-        means that the message bus will filter signals that must be
-        delivered to the current running program.
-
-        The goal of argument filters is to reduce the number of
-        messages received, and so to reduce the number of wakeup of
-        the program. *)
-
-  method auto_match_rule : bool
-    (** Returns whether automatic match rules management is enabled
-        for this signal. It is always activated by default. *)
-
-  method set_auto_match_rule : bool -> unit
-    (** Enable/disable the automatic management of matching rules. If
-        you disable it, it is then up to you to add the correct rule
-        on the bus by using {!OBus_bus.add_match}. *)
-
-  method init : ?filters : (int * OBus_match.argument_filter) list -> ?auto_match_rule : bool -> unit -> 'a React.event
-    (** [init ?filters ?auto_match_rule ()] is an helper to sets
-        signals parameters; instead of
-        {[
-          let signal = Foo.bar proxy in
-          signal#set_auto_match_rule false;
-          signal#set_filters filters;
-          let x = React.E.map (...) signal#event
-        ]}
-        you can write:
-        {[
-          let x = React.E.map (...) ((Foo.bar proxy)#init ~filters ~auto_match_rule:false ())
-        ]}
-    *)
-
-  method disconnect : unit
-    (** Stop receiving the signal *)
-end
-
 (** Note: if you are just interested in the event, it is safe to
     write:
 
@@ -123,7 +81,7 @@ module Interface : sig
         ]}
       *)
 
-  val signal : 'proxy t -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> 'proxy -> 'a signal
+  val signal : 'proxy t -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> 'proxy -> 'a OBus_signal.t
     (** [signal iface member typ] defines a signal.
 
         A signal defintion looks like:
@@ -262,13 +220,13 @@ module type S = sig
   val connect : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
-    ('a, _) OBus_type.cl_sequence -> 'a signal
+    ('a, _) OBus_type.cl_sequence -> 'a OBus_signal.t
     (** [connect proxy ~interface ~member typ] connect to given signals
         emitted by [proxy]. *)
 
   val dyn_connect : proxy ->
     interface : OBus_name.interface ->
-    member : OBus_name.member -> OBus_value.sequence signal
+    member : OBus_name.member -> OBus_value.sequence OBus_signal.t
     (** Same thing but return signals as a dynamically typed values *)
 
   (** {6 Properties} *)

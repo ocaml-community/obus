@@ -21,13 +21,13 @@ val suspend : t -> unit Lwt.t
 val about_to_sleep : t -> unit Lwt.t
 
 val enumerate_devices : t -> UPower_device.t list Lwt.t
-val resuming : t -> unit OBus_proxy.signal
-val sleeping : t -> unit OBus_proxy.signal
-val changed : t -> unit OBus_proxy.signal
+val resuming : t -> unit OBus_signal.t
+val sleeping : t -> unit OBus_signal.t
+val changed : t -> unit OBus_signal.t
 
-val device_changed : t -> UPower_device.t OBus_proxy.signal
-val device_removed : t -> UPower_device.t OBus_proxy.signal
-val device_added : t -> UPower_device.t OBus_proxy.signal
+val device_changed : t -> UPower_device.t OBus_signal.t
+val device_removed : t -> UPower_device.t OBus_signal.t
+val device_added : t -> UPower_device.t OBus_signal.t
 
 (** {6 Properties} *)
 

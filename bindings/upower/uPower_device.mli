@@ -12,7 +12,7 @@ include OBus_proxy.Private
 val get_statistics : t -> string -> (float * float) list Lwt.t
 val get_history : t -> string -> int -> int -> (int * float * int) list Lwt.t
 val refresh : t -> unit Lwt.t
-val changed : t -> unit OBus_proxy.signal
+val changed : t -> unit OBus_signal.t
 val recall_url : t -> string Lwt.t
 val set_recall_url : t -> string -> unit Lwt.t
 val recall_vendor : t -> string Lwt.t

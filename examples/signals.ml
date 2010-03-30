@@ -20,7 +20,7 @@ let handle_multimedia_keys device =
        lwt () = printlf "from Hal: action %S on key %S!" action key in
        lwt () = printlf "          the signal come from the device %S" (OBus_path.to_string (Hal_device.udi device)) in
        return ())
-    (Hal_device.condition device)#event
+    (OBus_signal.event (Hal_device.condition device))
 
 lwt () =
   lwt session = OBus_bus.session () in
@@ -37,15 +37,15 @@ lwt () =
        in
        printlf "from D-Bus: the owner of the name %S changed: %S -> %S"
          name (opt old_owner) (opt new_owner))
-    (OBus_bus.name_owner_changed session)#event;
+    (OBus_signal.event (OBus_bus.name_owner_changed session));
 
   Lwt_event.always_notify_p
     (printlf "from D-Bus: i lost the name %S!")
-    (OBus_bus.name_lost session)#event;
+    (OBus_signal.event (OBus_bus.name_lost session));
 
   Lwt_event.always_notify_p
     (printf "from D-Bus: i got the name '%S!")
-    (OBus_bus.name_acquired session)#event;
+    (OBus_signal.event (OBus_bus.name_acquired session));
 
   (* +---------------------------------------------------------------+
      | Some Hal signals                                              |

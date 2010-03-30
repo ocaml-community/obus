@@ -48,7 +48,7 @@ let print_proxy_interf pp (name, content, annots) =
     | Signal(name, args, annots) ->
         p "  val %a : t -> %a\n" plid name
           (print_term true)
-          (term "OBus_proxy.signal"
+          (term "OBus_signal.t"
              [match args with
                 | [] -> unit
                 | _ -> tuple (if_term_of_args args)])

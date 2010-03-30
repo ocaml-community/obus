@@ -130,14 +130,14 @@ end
 
 let state t =
   let e = Internal.state_changed t in
-  let event = e#event in
+  let event = OBus_signal.event e in
   lwt state = Internal.state t in
   let signal = React.S.hold state event in
   let s = React.S.map state_of_int signal in
   return
     ( object
       method signal = s
-      method disconnect = e#disconnect
+      method disconnect = OBus_signal.disconnect e
       end )
 
 let ip4_to_string v =
@@ -551,7 +551,7 @@ object
   method ip6_config : OBus_proxy.t Lwt.t
   method managed : bool Lwt.t
   method state : device_state Lwt.t
-  method state_changed : (device_state * device_state * state_reason) OBus_proxy.signal
+  method state_changed : (device_state * device_state * state_reason) OBus_signal.t
   method udi : string Lwt.t
 
   method device_proxy : unknown_kind device_proxy
@@ -560,7 +560,7 @@ end
 and wired_device =
 object
   inherit device
-  method properties_changed : (string * OBus_value.single) list OBus_proxy.signal
+  method properties_changed : (string * OBus_value.single) list OBus_signal.t
   method carrier : bool Lwt.t
   method speed : int Lwt.t
   method hw_address : string Lwt.t
@@ -570,9 +570,9 @@ and wireless_device =
 object
   inherit device
   method get_access_points : access_point list Lwt.t
-  method access_point_removed : access_point OBus_proxy.signal
-  method access_point_added : access_point OBus_proxy.signal
-  method properties_changed : (string * OBus_value.single) list OBus_proxy.signal
+  method access_point_removed : access_point OBus_signal.t
+  method access_point_added : access_point OBus_signal.t
+  method properties_changed : (string * OBus_value.single) list OBus_signal.t
   method wireless_capabilities : wireless_capability list Lwt.t
   method active_access_point : access_point Lwt.t
   method bitrate : int Lwt.t
@@ -705,9 +705,9 @@ let devices t =
   lwt device_list = get_devices_obj t in
   let init_set = DeviceSet.of_list device_list in
   let add_signal = device_added t in
-  let add_event = React.E.map (fun d -> ()) add_signal#event in
+  let add_event = React.E.map (fun d -> ()) (OBus_signal.event add_signal) in
   let remove_signal = device_removed t in
-  let remove_event = React.E.map (fun d -> ()) remove_signal#event in
+  let remove_event = React.E.map (fun d -> ()) (OBus_signal.event remove_signal) in
   let changes = React.E.select [add_event;remove_event] in
   let f () =
     lwt devs = get_devices_obj t in
@@ -719,8 +719,8 @@ let devices t =
     object
       method signal = s
       method disconnect =
-	add_signal#disconnect;
-	remove_signal#disconnect
+	OBus_signal.disconnect add_signal;
+	OBus_signal.disconnect remove_signal
     end )
 
 type ap_security_flag =

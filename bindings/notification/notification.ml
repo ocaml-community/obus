@@ -174,7 +174,7 @@ let init_callbacks =
 
                   return ()
               | None ->
-                  return ()) (notification_closed anonymous_proxy)#event in
+                  return ()) (OBus_signal.event (notification_closed anonymous_proxy)) in
 
        (* Handle signals for actions *)
        let _ = Lwt_event.notify_p
@@ -186,7 +186,7 @@ let init_callbacks =
                   notif.notif_action action;
                   return ()
               | None ->
-                  return ()) (action_invoked anonymous_proxy)#event in
+                  return ()) (OBus_signal.event (action_invoked anonymous_proxy)) in
 
        return ())
 
