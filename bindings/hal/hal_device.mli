@@ -9,10 +9,7 @@
 
 (** Hal devices *)
 
-type t = OBus_proxy.t
-    (** Type of devices *)
-
-val obus_t : t OBus_type.basic
+include OBus_proxy.Private
 
 type udi = OBus_path.t
     (** Unique Device Identifier *)

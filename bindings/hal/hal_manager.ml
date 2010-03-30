@@ -11,7 +11,7 @@ open Lwt
 open OBus_value
 open OBus_pervasives
 
-type t = OBus_proxy.t with obus
+include OBus_proxy.Private
 
 let manager () =
   lwt bus = OBus_bus.system () in
@@ -21,11 +21,11 @@ let manager () =
 
 let op_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Manager"
 
-OP_method GetAllDevices : OBus_proxy.broken list
-OP_method GetAllDevicesWithProperties : (OBus_proxy.broken * (string, Hal_device.property) dict) structure list
-OP_method DeviceExists : OBus_proxy.broken -> bool
-OP_method FindDeviceStringMatch : string -> string -> OBus_proxy.broken list
-OP_method FindDeviceByCapability : string -> OBus_proxy.broken list
+OP_method GetAllDevices : Hal_device.broken list
+OP_method GetAllDevicesWithProperties : (Hal_device.broken * (string, Hal_device.property) dict) structure list
+OP_method DeviceExists : Hal_device.broken -> bool
+OP_method FindDeviceStringMatch : string -> string -> Hal_device.broken list
+OP_method FindDeviceByCapability : string -> Hal_device.broken list
 OP_method NewDevice : string
 OP_method Remove : string -> unit
 OP_method CommitToGdl : string -> string -> unit
@@ -33,8 +33,8 @@ OP_method AcquireGlobalInterfaceLock : string -> bool -> unit
 OP_method ReleaseGlobalInterfaceLock : string -> unit
 OP_method SingletonAddonIsReady : string -> unit
 
-OP_signal DeviceAdded : OBus_proxy.broken
-OP_signal DeviceRemoved : OBus_proxy.broken
-OP_signal NewCapability : OBus_proxy.broken * string
+OP_signal DeviceAdded : Hal_device.broken
+OP_signal DeviceRemoved : Hal_device.broken
+OP_signal NewCapability : Hal_device.broken * string
 OP_signal GlobalInterfaceLockAcquired : string * string * int
 OP_signal GlobalInterfaceLockReleased : string * string * int

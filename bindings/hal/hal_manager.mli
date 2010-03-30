@@ -9,10 +9,7 @@
 
 (** The Hal manager *)
 
-type t = OBus_proxy.t
-    (** Type of the Hal manager *)
-
-val obus_t : t OBus_type.basic
+include OBus_proxy.Private
 
 val manager : unit -> t Lwt.t
   (** The Hal manager *)

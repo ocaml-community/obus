@@ -11,8 +11,7 @@ open Lwt
 open OBus_value
 open OBus_pervasives
 
-type t = OBus_proxy.t
-  with obus
+include OBus_proxy.Private
 
 type udi = path
   with obus

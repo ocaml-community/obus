@@ -323,3 +323,33 @@ end
 
 module Make(Proxy : Custom) : S with type proxy = Proxy.proxy
   (** [Make(Proxy)] creates a custom proxy module *)
+
+(** {6 Private proxies} *)
+
+(** The two following module interface and implementation are helpers
+    for using private proxies. A private proxy is just a bormal proxy
+    but defined as a private type, to avoid incorrect use. *)
+
+(** Minimal interface of private proxies *)
+module type Private = sig
+  type t = private proxy
+  val obus_t : t OBus_type.basic
+
+  type broken = t
+  val obus_broken : broken OBus_type.basic
+
+  external of_proxy : proxy -> t = "%identity"
+  external to_proxy : t -> proxy = "%identity"
+end
+
+(** Minimal implementation of priate proxies *)
+module Private : sig
+  type t = proxy
+  val obus_t : t OBus_type.basic
+
+  type broken = t
+  val obus_broken : broken OBus_type.basic
+
+  external of_proxy : proxy -> t = "%identity"
+  external to_proxy : t -> proxy = "%identity"
+end

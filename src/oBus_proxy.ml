@@ -468,3 +468,26 @@ include Make(struct
              end)
 
 let obus_t = obus_proxy
+
+(* +-----------------------------------------------------------------+
+   | Private proxyes                                                 |
+   +-----------------------------------------------------------------+ *)
+
+module type Private = sig
+  type t = private proxy
+  val obus_t : t OBus_type.basic
+  type broken = t
+  val obus_broken : broken OBus_type.basic
+  external of_proxy : proxy -> t = "%identity"
+  external to_proxy : t -> proxy = "%identity"
+end
+
+module Private =
+struct
+  type t = proxy
+  let obus_t = obus_t
+  type broken = t
+  let obus_broken = obus_broken
+  external of_proxy : proxy -> t = "%identity"
+  external to_proxy : t -> proxy = "%identity"
+end
