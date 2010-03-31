@@ -65,6 +65,9 @@ exception Not_found of string
 exception Not_supported of string
  with obus("org.freedesktop.UDisks.Error.NotSupported")
 
+exception Permission_denied of string
+ with obus("org.freedesktop.UDisks.Error.PermissionDenied")
+
 (* +-----------------------------------------------------------------+
    | D-Bus definitions                                               |
    +-----------------------------------------------------------------+ *)

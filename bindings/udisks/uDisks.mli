@@ -25,6 +25,7 @@ exception Inhibited of string
 exception Invalid_option of string
 exception Not_found of string
 exception Not_supported of string
+exception Permission_denied of string
 
 (** {6 Methods} *)
 
