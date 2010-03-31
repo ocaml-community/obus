@@ -157,8 +157,12 @@ let input input node =
   let rec make () =
     let pos = Xmlm.pos input in
     match Xmlm.input input with
-      | `El_start((uri, name), attrs) ->
+      | `El_start(("", name), attrs) ->
           Element(pos, name, List.map (fun ((uri, name), value) -> (name, value)) attrs, make_list ())
+      | `El_start((_, name), attrs) ->
+          (* Drops elements that are not part of the specification *)
+          drop 0;
+          make ()
       | `El_end ->
           raise (Parse_failure(pos, "unexpected end of element"))
       | `Data str ->
@@ -168,9 +172,12 @@ let input input node =
   and make_list () =
     let pos = Xmlm.pos input in
     match Xmlm.input input with
-      | `El_start((uri, name), attrs) ->
+      | `El_start(("", name), attrs) ->
           let xml = Element(pos, name, List.map (fun ((uri, name), value) -> (name, value)) attrs, make_list ()) in
           xml :: make_list ()
+      | `El_start((_, name), attrs) ->
+          drop 0;
+          make_list ()
       | `El_end ->
           []
       | `Data str ->
@@ -178,6 +185,16 @@ let input input node =
           xml :: make_list ()
       | `Dtd _ ->
           make_list ()
+  and drop deep =
+    match Xmlm.input input with
+      | `El_start _ ->
+          drop (deep + 1)
+      | `El_end ->
+          if deep <> 0 then drop (deep - 1)
+      | `Data str ->
+          drop deep
+      | `Dtd _ ->
+          drop deep
   in
   try
     parse node (make ())
