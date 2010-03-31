@@ -113,6 +113,18 @@ UPower_policy
 UPower_wakeups
 }
 
+{3 UPower}
+
+Bindings to the freedesktop UDisks service.
+
+{!modules:
+UDisks
+UDisks_device
+UDisks_port
+UDisks_adapter
+UDisks_expander
+}
+
 {3 Index}
 
 {!indexlist}

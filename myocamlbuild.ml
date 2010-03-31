@@ -47,6 +47,7 @@ let bindings = [
   "notification";
 (*  "NetworkManager";*)
   "upower";
+  "udisks";
   "policykit";
 ]
 

@@ -56,6 +56,16 @@ package "upower" (
   archive(plugin,native) = "upower.cmxs"
 )
 
+package "udisks" (
+  version = "[distrubuted with OBus]"
+  description = "Freedesktop UDisks service binding"
+  requires = "obus"
+  archive(byte) = "udisks.cma"
+  archive(native) = "udisks.cmxa"
+  archive(plugin,byte) = "udisks.cma"
+  archive(plugin,native) = "udisks.cmxs"
+)
+
 package "policykit" (
   version = "[distrubuted with OBus]"
   description = "Freedesktop Policykit service binding"
