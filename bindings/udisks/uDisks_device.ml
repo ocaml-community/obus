@@ -40,12 +40,12 @@ OP_method DriveUninhibitPolling : cookie : inhibit_polling_cookie -> unit
 OP_method LinuxMdCheck : options : string list -> uint64
 OP_method LinuxLvm2LVStop : options : string list -> unit
 OP_method LinuxMdStop : options : string list -> unit
-OP_method LinuxMdRemoveComponent : component : OBus_proxy.t -> options : string list -> unit
-OP_method LinuxMdExpand : components : OBus_proxy.t list -> options : string list -> unit
-OP_method LinuxMdAddSpare : component : OBus_proxy.t -> options : string list -> unit
+OP_method LinuxMdRemoveComponent : component : t -> options : string list -> unit
+OP_method LinuxMdExpand : components : t list -> options : string list -> unit
+OP_method LinuxMdAddSpare : component : t -> options : string list -> unit
 OP_method LuksChangePassphrase : current_passphrase : string -> new_passphrase : string -> unit
 OP_method LuksLock : options : string list -> unit
-OP_method LuksUnlock : passphrase : string -> options : string list -> OBus_proxy.t
+OP_method LuksUnlock : passphrase : string -> options : string list -> t
 
 type process = {
   pr_pid : uint;
@@ -61,7 +61,7 @@ OP_method FilesystemSetLabel : new_label : string -> unit
 OP_method FilesystemCreate : fstype : string -> options : string list -> unit
 
 OP_method PartitionModify : typ : string -> label : string -> flags : string list -> unit
-OP_method PartitionCreate : offset : uint64 -> size : uint64 -> typ : string -> label : string -> flags : string list -> options : string list -> fstype : string -> fsoptions : string list -> OBus_proxy.t
+OP_method PartitionCreate : offset : uint64 -> size : uint64 -> typ : string -> label : string -> flags : string list -> options : string list -> fstype : string -> fsoptions : string list -> t
 OP_method PartitionDelete : options : string list -> unit
 OP_method PartitionTableCreate : scheme : string -> options : string list -> unit
 

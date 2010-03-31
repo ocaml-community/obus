@@ -17,6 +17,6 @@ OP_signal Changed : unit
 
 OP_property_r ConnectorType : string
 OP_property_r Number : int
-OP_property_r Parent : OBus_proxy.t
-OP_property_r Adapter : OBus_proxy.t
+OP_property_r Parent : UDisks_adapter.t
+OP_property_r Adapter : UDisks_adapter.t
 OP_property_r NativePath : string

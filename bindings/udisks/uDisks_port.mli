@@ -19,6 +19,6 @@ val changed : t -> unit OBus_signal.t
 
 val connector_type : t -> string OBus_property.r
 val number : t -> int OBus_property.r
-val parent : t -> OBus_proxy.t OBus_property.r
-val adapter : t -> OBus_proxy.t OBus_property.r
+val parent : t -> UDisks_adapter.t OBus_property.r
+val adapter : t -> UDisks_adapter.t OBus_property.r
 val native_path : t -> string OBus_property.r

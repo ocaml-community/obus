@@ -58,7 +58,7 @@ val linux_md_add_spare : t -> component : t -> options : string list -> unit Lwt
 
 val luks_change_passphrase : t -> current_passphrase : string -> new_passphrase : string -> unit Lwt.t
 val luks_lock : t -> options : string list -> unit Lwt.t
-val luks_unlock : t -> passphrase : string -> options : string list -> OBus_proxy.t Lwt.t
+val luks_unlock : t -> passphrase : string -> options : string list -> t Lwt.t
 
 type process = {
   pr_pid : int;
@@ -74,7 +74,7 @@ val filesystem_set_label : t -> new_label : string -> unit Lwt.t
 val filesystem_create : t -> fstype : string -> options : string list -> unit Lwt.t
 
 val partition_modify : t -> typ : string -> label : string -> flags : string list -> unit Lwt.t
-val partition_create : t -> offset : int64 -> size : int64 -> typ : string -> label : string -> flags : string list -> options : string list -> fstype : string -> fsoptions : string list -> OBus_proxy.t Lwt.t
+val partition_create : t -> offset : int64 -> size : int64 -> typ : string -> label : string -> flags : string list -> options : string list -> fstype : string -> fsoptions : string list -> t Lwt.t
 val partition_delete : t -> options : string list -> unit Lwt.t
 val partition_table_create : t -> scheme : string -> options : string list -> unit Lwt.t
 
