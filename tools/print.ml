@@ -138,7 +138,7 @@ let print_service_implem pp (name, content, annots) =
                                                | Read -> "r"
                                                | Write -> "w"
                                                | Read_write -> "rw")
-          name (print_term true) (interf_term_of_single typ)
+          name (print_term true) (implem_term_of_single typ)
     | _ ->
         ()
   end content;
