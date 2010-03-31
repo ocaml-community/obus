@@ -34,7 +34,7 @@ let str_of_access = function
    | Printing of proxy code signature                                |
    +-----------------------------------------------------------------+ *)
 
-let if_term_of_args = List.map (fun (name, typ) -> interf_term_of_single typ)
+let if_term_of_args = List.map (fun (name, typ) -> (name, interf_term_of_single typ))
 
 let print_proxy_interf pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
@@ -43,15 +43,15 @@ let print_proxy_interf pp (name, content, annots) =
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  val %a : %a\n" plid name
-          (print_func (term "Lwt.t" [tuple (if_term_of_args  outs)]))
-          (term "t" [] :: if_term_of_args ins)
+          (print_func (term "Lwt.t" [tuple (List.map snd (if_term_of_args  outs))]))
+          ((None, term "t" []) :: if_term_of_args ins)
     | Signal(name, args, annots) ->
         p "  val %a : t -> %a\n" plid name
           (print_term true)
           (term "OBus_signal.t"
              [match args with
                 | [] -> unit
-                | _ -> tuple (if_term_of_args args)])
+                | _ -> tuple (List.map snd (if_term_of_args args))])
     | Property(name, typ, access, annots) ->
         p "  val %a : t -> %a\n" plid name
           (print_term true)
@@ -68,7 +68,7 @@ let print_proxy_interf pp (name, content, annots) =
    | Printing of proxy code structure                                |
    +-----------------------------------------------------------------+ *)
 
-let im_term_of_args = List.map (fun (name, typ) -> implem_term_of_single typ)
+let im_term_of_args = List.map (fun (name, typ) -> (name, implem_term_of_single typ))
 
 let print_proxy_implem pp (name, content, annots) =
   let p fmt = fprintf pp fmt in
@@ -77,11 +77,11 @@ let print_proxy_implem pp (name, content, annots) =
   p "  let op_interface = OBus_proxy.make_interface %S\n" name;
   List.iter begin function
     | Method(name, ins, outs, annots) ->
-        p "  OP_method %s : %a\n" name (print_func (tuple (im_term_of_args  outs))) (im_term_of_args ins)
+        p "  OP_method %s : %a\n" name (print_func (tuple (List.map snd (im_term_of_args  outs)))) (im_term_of_args ins)
     | Signal(name, args, annots) ->
         let args = match args with
           | [] -> unit
-          | _ -> tuple (im_term_of_args args)
+          | _ -> tuple (List.map snd (im_term_of_args args))
         in
         p "  OP_signal %s : %a\n" name (print_term false) args
     | Property(name, typ, access, annots) ->
@@ -101,7 +101,7 @@ let print_service_implem pp (name, content, annots) =
     | Signal(name, args, annots) ->
         let args = match args with
           | [] -> unit
-          | _ -> tuple (if_term_of_args args)
+          | _ -> tuple (List.map snd (if_term_of_args args))
         in
         p "  OL_signal %s : %a\n" name
           (print_term true) args
@@ -131,7 +131,7 @@ let print_service_implem pp (name, content, annots) =
   List.iter begin function
     | Method(name, ins, outs, annots) ->
         p "  OL_method %s : %a\n" name
-          (print_func (tuple (im_term_of_args  outs)))
+          (print_func (tuple (List.map snd (im_term_of_args  outs))))
           (im_term_of_args ins)
     | Property(name, typ, access, annots) ->
         p "  OL_property_%s %s : %a\n" (match access with

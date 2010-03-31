@@ -101,7 +101,8 @@ and print_seq top sep pp = function
 
 let rec print_func ret pp = function
   | [] -> print_term true pp ret
-  | arg :: args -> fprintf pp "%a -> %a" (print_term true) arg (print_func ret) args
+  | (None, arg) :: args -> fprintf pp "%a -> %a" (print_term true) arg (print_func ret) args
+  | (Some name, arg) :: args -> fprintf pp "%s : %a -> %a" name (print_term true) arg (print_func ret) args
 
 let paren top pp f = match top with
   | true -> f pp ()
