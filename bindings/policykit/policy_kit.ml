@@ -9,6 +9,9 @@
 
 open OBus_pervasives
 
+exception Not_authorized of string
+ with obus("org.freedesktop.PolicyKit.Error.NotAuthorized")
+
 let op_interface = OBus_proxy.make_interface "org.freedesktop.PolicyKit.AuthenticationAgent"
 
 OP_method ObtainAuthorization : action_id : string -> xid : uint -> pid : uint -> bool
