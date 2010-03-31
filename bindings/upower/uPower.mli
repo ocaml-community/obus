@@ -14,6 +14,8 @@ include OBus_peer.Private
 val daemon : unit -> t Lwt.t
   (** [daemon ()] returns the peer object for the upower daemon *)
 
+exception General_error of string
+
 (** {6 Methods} *)
 
 val hibernate_allowed : t -> bool Lwt.t

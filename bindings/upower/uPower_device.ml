@@ -11,6 +11,9 @@ open OBus_pervasives
 
 include OBus_proxy.Private
 
+exception General_error of string
+ with obus("org.freedesktop.UPower.Device.GeneralError")
+
 type typ =
     [ `Unknown
     | `Line_power

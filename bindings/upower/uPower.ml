@@ -12,6 +12,9 @@ open OBus_pervasives
 
 include OBus_peer.Private
 
+exception General_error of string
+ with obus("org.freedesktop.UPower.GeneralError")
+
 let daemon () =
   lwt bus = OBus_bus.system () in
   return (OBus_peer.make bus "org.freedesktop.UPower")

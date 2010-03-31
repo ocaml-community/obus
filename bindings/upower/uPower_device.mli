@@ -45,6 +45,8 @@ type technology =
     | `Nickel_cadmium
     | `Nickel_metal_hydride ]
 
+exception General_error of string
+
 (** {6 Methods} *)
 
 val get_statistics : t -> string -> (float * float) list Lwt.t
