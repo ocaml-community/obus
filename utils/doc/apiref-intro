@@ -85,6 +85,14 @@ Bindings to the freedesktop popup notification service.
 Notification
 }
 
+{3 PolicyKit}
+
+Bindings to the freedesktop popup PolicyKit service.
+
+{!modules:
+Policy_kit
+}
+
 {3 Hal}
 
 Bindings to the freedesktop Hal service.
