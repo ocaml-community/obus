@@ -39,18 +39,17 @@ let tree_get_boundary t =
 
 module FDMap = Map.Make(struct type t = Unix.file_descr let compare = Pervasives.compare end)
 
-type context = exn
+type context = OBus_connection.t * OBus_message.t
 
+(* The context really used by combinators *)
 type full_context = {
-  ctx_data : exn;
-  (* The data of the context *)
+  ctx_user : context option;
+  (* The context passed by the user *)
 
   mutable ctx_fds : Unix.file_descr FDMap.t;
   (* Mapping from file descriptors of the message to duplicated
      ones. *)
 }
-
-exception No_context
 
 exception Cast_failure of string * string
 let signature_mismatch = "signature mismatch"
@@ -85,17 +84,17 @@ type ('a, 'cl) t =
    | Helpers for primitives (OBus_pervasives)                        |
    +-----------------------------------------------------------------+ *)
 
-let make_basic = function
-  | Btype { b_make = f } -> f
-  | _ -> assert false
-let make_single = function
-  | Btype { b_make = f } -> (fun x -> basic(f x))
-  | Ctype { c_make = f } -> f
-  | _ -> assert false
-let make_sequence = function
-  | Btype { b_make = f } -> (fun x -> [basic(f x)])
-  | Ctype { c_make = f } -> (fun x -> [f x])
-  | Stype { s_make = f } -> (fun x -> tree_get_boundary (f x))
+ let make_basic = function
+   | Btype { b_make = f } -> f
+   | _ -> assert false
+ let make_single = function
+   | Btype { b_make = f } -> (fun x -> basic(f x))
+   | Ctype { c_make = f } -> f
+   | _ -> assert false
+ let make_sequence = function
+   | Btype { b_make = f } -> (fun x -> [basic(f x)])
+   | Ctype { c_make = f } -> (fun x -> [f x])
+   | Stype { s_make = f } -> (fun x -> tree_get_boundary (f x))
 
 let _cast_basic = function
   | Btype { b_cast = f } -> f
@@ -121,10 +120,3 @@ let _cast_sequence = function
          | v, [] -> v
          | _ -> raise (Cast_failure("OBus_type.cast_sequence", signature_mismatch)))
 
-let obus_string = Btype {
-  b_type = Tstring;
-  b_make = string;
-  b_cast = (fun context -> function
-              | String x -> x
-              | _ -> raise (Cast_failure("OBus_pervasives.obus_string", signature_mismatch)));
-}

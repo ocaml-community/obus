@@ -162,7 +162,7 @@ OP_method GetConnectionUnixProcessID : string -> uint
 OP_method GetAdtAuditSessionData : string -> byte_array
 OP_method GetConnectionSELinuxSecurityContext : string -> byte_array
 OP_method ReloadConfig : unit
-OP_method GetId : OBus_uuid.t
+OP_method GetId : uuid
 
 let obus_name_opt = OBus_type.map obus_string
   (function

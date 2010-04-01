@@ -7,10 +7,44 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Client-side signals *)
+(** D-Bus signals *)
+
+(** This module provides high-level functions for:
+
+    - emiting signals to other applications
+    - receiving signals from other applications
+*)
+
+(** {6 Emitting signals} *)
+
+val emit :
+  connection : OBus_connection.t ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
+  (** Emits a signal *)
+
+val dyn_emit :
+  connection : OBus_connection.t ->
+  ?flags : OBus_message.flags ->
+  ?sender : OBus_name.bus ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  OBus_message.body -> unit Lwt.t
+  (** Dynamically-typed version of {!emit} (see {!OBus_method} for
+      explanation) *)
+
+(** {6 Receving signals} *)
 
 type 'a t
-  (** Type of signals returning values of type ['a] *)
+  (** Type of a signal receiver, which occurs with values of type
+      ['a] *)
 
 val event : 'a t -> 'a React.event
   (** The event which occurs each time the signal is received. *)
@@ -21,7 +55,7 @@ val disconnect : 'a t -> unit
       Note that [disconnect] is automatically called when [event
       signal] is garbage collected *)
 
-(** {6 Signal configuration} *)
+(** {8 Signals configuration} *)
 
 val set_filters : 'a t -> (int * OBus_match.argument_filter) list -> unit
   (** Sets the list of argument filters for the given signal. This
@@ -46,9 +80,9 @@ val init : ?filters : (int * OBus_match.argument_filter) list -> ?auto_match_rul
       signals parameters. Instead of
       {[
         let signal = Foo.bar proxy in
-        OBus_signal.set_auto_match_rule false;
-        OBus_signal.set_filters filters;
-        let x = React.E.map (...) signal#event
+        OBus_signal.set_auto_match_rule signal false;
+        OBus_signal.set_filters signal filters;
+        let x = React.E.map (...) (OBus_signal.event signal)
       ]}
       you can write:
       {[
@@ -56,10 +90,7 @@ val init : ?filters : (int * OBus_match.argument_filter) list -> ?auto_match_rul
       ]}
   *)
 
-(** {6 Signal creation} *)
-
-(** These are primitives for creating signals. {!OBus_proxy} offers
-    more convenient functions to define signls. *)
+(** {8 Connecting to signals} *)
 
 val connect :
   connection : OBus_connection.t ->
@@ -78,4 +109,4 @@ val dyn_connect :
   path : OBus_path.t ->
   interface : OBus_name.interface ->
   member : OBus_name.member -> unit -> OBus_value.sequence t
-  (** Same as {!make} but returns dynamically typed values *)
+  (** Same as {!make} but using dynamically typed values *)

@@ -159,10 +159,11 @@ struct
     and osig = OBus_type.osignature typ in
     cr.members <- Method(member, with_names isig, with_names osig, []) :: cr.members;
     let handler pack connection message =
+      let context = (connection, message) in
       try_bind
-        (fun () -> OBus_type.cast_func typ ~context:(OBus_connection.make_context (connection, message)) message.body (f (cr.unpack pack)))
-        (send_reply connection message (OBus_type.func_reply typ))
-        (send_exn connection message)
+        (fun () -> OBus_type.cast_func typ ~context message.body (f (cr.unpack pack)))
+        (OBus_method.return ~context (OBus_type.func_reply typ))
+        (OBus_method.fail ~context)
     in
     cr.methods <- MethodMap.add (Some cr.name, member, isig) handler (MethodMap.add (None, member, isig) handler cr.methods)
 
@@ -178,10 +179,10 @@ struct
     match peer, obj.owner with
       | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
       | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
-          dyn_emit_signal connection ?destination ~interface ~member ~path:obj.path body
+          OBus_signal.dyn_emit ~connection ?destination ~interface ~member ~path:obj.path body
       | None, None ->
           join (ConnectionSet.fold
-                  (fun connection l -> dyn_emit_signal connection ~interface ~member ~path:obj.path body :: l)
+                  (fun connection l -> OBus_signal.dyn_emit ~connection ~interface ~member ~path:obj.path body :: l)
                   (React.S.value obj.exports)
                   [])
 
@@ -268,8 +269,7 @@ struct
   type obj = Object.obj
 
   let obus_obj = OBus_type.map_with_context obus_path
-    (fun context path ->
-       let connection, message = OBus_connection.cast_context context in
+    (fun (connection, context) path ->
        match connection#get with
          | Crashed _ ->
              raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj", "connection crashed"))
@@ -308,9 +308,8 @@ struct
       | { typ = Method_call(path, interface, member) } -> begin
           match MethodMap.lookup (interface, member, type_of_sequence message.body) info.methods with
             | Some f -> f packed_object packed_connection message
-            | None -> send_exn packed_connection message (unknown_method_exn message)
+            | None -> OBus_method.fail  (packed_connection, message) (unknown_method_exn message)
         end
-
       | _ ->
           invalid_arg "OBus_object.Make.handle_call"
 
@@ -371,10 +370,10 @@ struct
     match peer, obj.owner with
       | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
       | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
-          dyn_emit_signal connection ?destination ~interface ~member ~path:obj.path body
+          OBus_signal.dyn_emit ~connection ?destination ~interface ~member ~path:obj.path body
       | None, None ->
           join (ConnectionSet.fold
-                  (fun connection l -> dyn_emit_signal connection ~interface ~member ~path:obj.path body :: l)
+                  (fun connection l -> OBus_signal.dyn_emit ~connection ~interface ~member ~path:obj.path body :: l)
                   (React.S.value obj.exports)
                   [])
 
@@ -415,8 +414,8 @@ struct
   let introspectable = make_interface "org.freedesktop.DBus.Introspectable"
 
   let () =
-    Interface.method_call introspectable "Introspect" <:obus_func< OBus_connection.t -> OBus_introspect.document >>
-      (fun obj connection ->
+    Interface.method_call introspectable "Introspect" <:obus_func< context -> OBus_introspect.document >>
+      (fun obj (connection, message) ->
          let obj = Object.cast obj in
          return (List.map (fun ui -> ui.ui_introspect) obj.interfaces,
                  match connection#get with

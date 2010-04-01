@@ -10,7 +10,6 @@
 let section = Lwt_log.Section.make "obus(connection)"
 
 open Printf
-open OBus_private_type
 open OBus_message
 open OBus_private
 open OBus_value
@@ -38,31 +37,6 @@ let compare = Pervasives.compare
 
 type filter = OBus_private.filter
 
-type context = t * OBus_message.t
-
-exception Context of context
-
-let make_context context = Context context
-let cast_context = function
-  | Context context -> context
-  | _ -> raise (OBus_type.Cast_failure("OBus_connection.cast_context", "context missing"))
-
-let obus_t = Stype {
-  s_type = Tnil;
-  s_make = (fun _ -> Tnil);
-  s_cast = (fun context l -> match context.ctx_data with
-              | Context(connection, message) -> (connection, l)
-              | _ -> raise (OBus_type.Cast_failure("OBus_connection.obus_t", "context missing")));
-}
-
-let obus_context = Stype {
-  s_type = Tnil;
-  s_make = (fun _ -> Tnil);
-  s_cast = (fun context l -> match context.ctx_data with
-              | Context context -> (context, l)
-              | _ -> raise (OBus_type.Cast_failure("OBus_connection.obus_context", "context missing")));
-}
-
 (* Mapping from server guid to connection. *)
 module GuidMap = OBus_util.MakeMap(struct
                                      type t = OBus_address.guid
@@ -81,11 +55,6 @@ let apply_filters typ message filters =
   with exn ->
     ignore (Lwt_log.error_f ~section ~exn "an %s filter failed with" typ);
     None
-
-(* Get the error message of an error *)
-let get_error msg = match msg.body with
-  | Basic String x :: _ -> x
-  | _ -> ""
 
 (* +-----------------------------------------------------------------+
    | FDs closing                                                     |
@@ -215,75 +184,17 @@ let send_message_with_reply packed message =
   lwt () = send_message_backend packed (Some v) message in
   waiter
 
-let method_call' packed ?flags ?sender ?destination ~path ?interface ~member body ty_reply =
-  lwt msg = send_message_with_reply packed
-    (OBus_message.method_call ?flags ?sender ?destination ~path ?interface ~member body) in
-  match msg with
-    | { typ = Method_return _ } ->
-        begin
-          try
-            return (OBus_type.cast_sequence ty_reply ~context:(Context(packed, msg)) msg.body)
-          with OBus_type.Cast_failure _ as exn ->
-            (* If not, check why the cast fail *)
-            let expected_sig = OBus_type.type_sequence ty_reply
-            and got_sig = type_of_sequence msg.body in
-            if expected_sig = got_sig then
-              (* If the signature match, this means that the user
-                 defined a combinator raising a Cast_failure *)
-              fail exn
-            else
-              (* In other case this means that the expected
-                 signature is wrong *)
-              fail
-                (Failure (sprintf "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
-                            member (match interface with Some i -> i | None -> "")
-                            (string_of_signature expected_sig)
-                            (string_of_signature got_sig)))
-        end
+(* +-----------------------------------------------------------------+
+   | Helpers for the message dispatcher                              |
+   +-----------------------------------------------------------------+ *)
 
-    | { typ = Error(_, error_name) } ->
-        fail (OBus_error.make error_name (get_error msg))
-
-    | _ ->
-        assert false
-
-let method_call_no_reply packed ?(flags=default_flags) ?sender ?destination ~path ?interface ~member ty =
-  OBus_type.make_func ty begin fun body ->
-    send_message packed (OBus_message.method_call ~flags:{ flags with no_reply_expected = true }
-                               ?sender ?destination ~path ?interface ~member body)
-  end
-
-let dyn_method_call packed ?flags ?sender ?destination ~path ?interface ~member body =
-  lwt { body = x } = send_message_with_reply packed
-    (OBus_message.method_call ?flags ?sender ?destination ~path ?interface ~member body) in
-  return x
-
-let dyn_method_call_no_reply packed ?(flags=default_flags) ?sender ?destination ~path ?interface ~member body =
-  send_message packed
-    (OBus_message.method_call ~flags:{ flags with no_reply_expected = true }
-       ?sender ?destination ~path ?interface ~member body)
-
-let method_call packed ?flags ?sender ?destination ~path ?interface ~member ty =
-  OBus_type.make_func ty begin fun body ->
-    method_call' packed ?flags ?sender ?destination ~path ?interface ~member body (OBus_type.func_reply ty)
-  end
-
-let emit_signal packed ?flags ?sender ?destination ~path ~interface ~member ty x =
-  send_message packed (OBus_message.signal ?flags ?sender ?destination ~path ~interface ~member (OBus_type.make_sequence ty x))
-
-let dyn_emit_signal packed ?flags ?sender ?destination ~path ~interface ~member body =
-  send_message packed (OBus_message.signal ?flags ?sender ?destination ~path ~interface ~member body)
-
-let dyn_send_reply packed { sender = sender; serial = serial } body =
+let send_reply packed { sender = sender; serial = serial } body =
   send_message packed { destination = sender;
                         sender = None;
                         flags = { no_reply_expected = true; no_auto_start = true };
                         serial = 0l;
                         typ = Method_return(serial);
                         body = body }
-
-let send_reply packed mc typ v =
-  dyn_send_reply packed mc (OBus_type.make_sequence typ v)
 
 let send_error packed { sender = sender; serial = serial } name msg =
   send_message packed { destination = sender;
@@ -300,11 +211,6 @@ let send_exn packed method_call exn =
     | None ->
         lwt () = Lwt_log.error ~section ~exn "sending an unregistred ocaml exception as a D-Bus error" in
         send_error packed method_call "ocaml.Exception" (Printexc.to_string exn)
-
-let ignore_send_exn packed method_call exn = ignore(send_exn packed method_call exn)
-
-let unknown_method packed message =
-  ignore_send_exn packed message (unknown_method_exn message)
 
 (* +-----------------------------------------------------------------+
    | Signal matching                                                 |
@@ -334,6 +240,16 @@ let match_sender signal_receiver message =
    | Reading/dispatching                                             |
    +-----------------------------------------------------------------+ *)
 
+let introspectable = "\
+<node>
+  <interface name=\"org.freedesktop.DBus.Introspectable\">
+    <method name=\"Introspect\">
+      <arg name=\"data\" direction=\"out\" type=\"s\"/>
+    </method>
+  </interface>
+</node>
+"
+
 let dispatch_message connection message = match message with
 
   (* For method return and errors, we lookup at the reply waiters. If
@@ -352,7 +268,10 @@ let dispatch_message connection message = match message with
                 reply_serial (match message with
                                 | { typ = Error(_, error_name) } ->
                                     sprintf ", the reply is the error: %S: %S"
-                                      error_name (get_error message)
+                                      error_name
+                                      (match msg.body with
+                                         | Basic (String x) :: _ -> x
+                                         | _ -> "")
                                 | _ ->
                                     "")
             )
@@ -475,16 +394,16 @@ let dispatch_message connection message = match message with
       match member, body with
         | "Ping", [] ->
             (* Just pong *)
-            ignore (dyn_send_reply connection.packed message [])
+            ignore (send_reply connection.packed message [])
         | "GetMachineId", [] ->
             ignore
               (try_bind (fun _ -> Lazy.force OBus_info.machine_uuid)
-                 (fun machine_uuid -> dyn_send_reply connection.packed message [basic(string (OBus_uuid.to_string machine_uuid))])
+                 (fun machine_uuid -> send_reply connection.packed message [basic(string (OBus_uuid.to_string machine_uuid))])
                  (fun exn ->
                     lwt () = send_exn connection.packed message (Failure "cannot get machine uuuid") in
                     fail exn))
         | _ ->
-            unknown_method connection.packed message
+            ignore (send_exn connection.packed message (unknown_method_exn message))
     end
 
   | { typ = Method_call(path, interface_opt, member) } ->
@@ -537,19 +456,14 @@ let dispatch_message connection message = match message with
                       | [] ->
                           true
                       | l ->
-                          ignore
-                            (send_reply connection.packed message <:obus_type< OBus_introspect.document >>
-                               ([("org.freedesktop.DBus.Introspectable",
-                                  [OBus_introspect.Method("Introspect", [],
-                                                          [(None, Tbasic Tstring)], [])],
-                                  [])], l));
+                          ignore (send_reply connection.packed message [OBus_value.sstring introspectable]);
                           false
                     end
                 | _ ->
                     true
               then
-                ignore_send_exn connection.packed message
-                  (Failure (sprintf "No such object: %S" (OBus_path.to_string path)));
+                ignore (send_exn connection.packed message
+                          (Failure (sprintf "No such object: %S" (OBus_path.to_string path))));
               return ()
       end
 

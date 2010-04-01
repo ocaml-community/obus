@@ -16,16 +16,17 @@ type t = {
 } with projection
 
 let obus_t = OBus_type.map_with_context <:obus_type< unit >>
-  (fun context () ->
-     let connection, message = OBus_connection.cast_context context in
-     { connection = connection; name = OBus_message.sender message })
+  (fun (connection, message) () ->
+     { connection = connection;
+       name = OBus_message.sender message })
   ignore
 
 let make ~connection ~name = { connection = connection; name = Some name }
 let anonymous c = { connection = c; name = None }
 
 let ping peer =
-  OBus_connection.method_call peer.connection
+  OBus_method.call
+    ~connection:peer.connection
     ?destination:peer.name
     ~path:[]
     ~interface:"org.freedesktop.DBus.Peer"
@@ -33,12 +34,13 @@ let ping peer =
     <:obus_func< t >>
 
 let get_machine_id peer =
-  OBus_connection.method_call peer.connection
+  OBus_method.call
+    ~connection:peer.connection
     ?destination:peer.name
     ~path:[]
     ~interface:"org.freedesktop.DBus.Peer"
     ~member:"GetMachineId"
-    <:obus_func< OBus_uuid.t >>
+    <:obus_func< uuid >>
 
 let wait_for_exit peer =
   match peer.name with

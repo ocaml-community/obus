@@ -39,7 +39,7 @@ constraint 'cl = [< `Basic | `Container | `Sequence ]
 type ('a, 'b, 'c) func
   (** Functionnal types *)
 
-type context = OBus_private_type.context
+type context = OBus_connection.t * OBus_message.t
     (** The context is used to pass extra informations to
         combinators. See {!OBus_connection.Context}. *)
 

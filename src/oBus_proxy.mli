@@ -162,49 +162,26 @@ module type S = sig
 
   (** {6 Method calls} *)
 
-  val method_call : proxy ->
+  val call : proxy ->
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
     (** Call a method of the given proxy *)
 
-  val method_call_no_reply : proxy ->
+  val call_no_reply : proxy ->
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     ('a, unit Lwt.t, unit) OBus_type.func -> 'a
     (** Same as call but do not wait for a reply *)
 
-  val method_call' : proxy ->
-    ?interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    OBus_message.body ->
-    ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
-    (** Take the body of the call as a dynamically-typed value. This can
-        be used to write some generic function, for example:
-
-        {[
-          let f member ty =
-            OBus_type.make_func ty
-              (fun body ->
-                 lwt bus = Lazy.force OBus_bus.session in
-                 lwt peer = OBus_bus.get_peer "some.well.known.bus.name" in
-                 method_call' { peer = peer;
-                                path = [ "some"; "well"; "known"; "path" ] }
-                   ~interface:"some.well.known.interface"
-                   ~member
-                   body
-                   (OBus_type.func_reply ty))
-        ]}
-    *)
-
-  val dyn_method_call : proxy ->
+  val dyn_call : proxy ->
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     OBus_message.body ->
     OBus_message.body Lwt.t
     (** Use only dynamically typed values *)
 
-  val dyn_method_call_no_reply : proxy ->
+  val dyn_call_no_reply : proxy ->
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     OBus_message.body -> unit Lwt.t

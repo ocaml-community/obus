@@ -26,5 +26,3 @@ let generate () =
   uuid.[14] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
   uuid.[15] <- (Char.unsafe_chr (Int32.to_int v));
   uuid
-
-let obus_t = OBus_type.map OBus_private_type.obus_string of_string to_string

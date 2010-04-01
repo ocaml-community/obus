@@ -33,9 +33,6 @@ val args : t -> (string * string) list
 val make : name : string -> args : (string * string) list -> t
   (** Creates an address *)
 
-val obus_list : t list OBus_type.basic
-  (** Type combinator *)
-
 val arg : string -> t -> string option
   (** [arg key address] returns the value of argument [key], if any *)
 

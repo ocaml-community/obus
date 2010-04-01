@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Inerface to D-Bus connection *)
+(** D-Bus connections *)
 
 (** This module implement manipulation of a D-Bus connection. A D-Bus
     connection is a channel opened with another application which also
@@ -15,10 +15,7 @@
     messages. *)
 
 type t = OBus_private.packed_connection
-
-val obus_t : t OBus_type.sequence
-  (** The type combinator. It returns the connection from which a
-      message come. *)
+    (** Type of D-Bus connections *)
 
 val compare : t -> t -> int
   (** Same as [Pervasives.compare]. It allows this module to be used
@@ -59,19 +56,19 @@ val close : t -> unit Lwt.t
   *)
 
 val running : t -> bool React.signal
-  (** Return whether a connection is running. *)
+  (** Returns whether a connection is running. *)
 
 val watch : t -> unit Lwt.t
   (** Return a waiting thread which is wakeup when the connection is
       closed.
 
-      If the connection is closed using {!close} then it return [()].
+      If the connection is closed using {!close} then it returns [()].
 
       If the connection is closed for an external reason it fail with
       the exception which make the connection to crash. *)
 
 exception Connection_closed
-  (** Raise when tring to use a normally closed connection *)
+  (** Raise when trying to use a normally closed connection *)
 
 exception Connection_lost
   (** Raised when a connection has been lost *)
@@ -99,22 +96,6 @@ val support_unix_fd_passing : t -> bool
   (** Tell whether the underlying transport support file descriptors
       passing. *)
 
-(** {6 Contextes} *)
-
-type context = t * OBus_message.t
-    (** The context contains the necessary informations to cast a
-        message body *)
-
-val obus_context : context OBus_type.sequence
-  (** The type combinator for obtaining the context *)
-
-val make_context : context -> OBus_type.context
-  (** [context context] creates an obus-type context *)
-
-val cast_context : OBus_type.context -> context
-  (** [get_context context] extract informations from an obus-type
-      context. *)
-
 (** {6 Sending messages} *)
 
 (** These functions are the low-level functions for sending
@@ -128,98 +109,6 @@ val send_message_with_reply : t -> OBus_message.t -> OBus_message.t Lwt.t
   (** [send_message_with_reply connection message] Send a message and
       return a thread which wait for the reply (which is a method
       return or an error) *)
-
-(** {6 Helpers} *)
-
-val method_call : t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  ?interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
-  (** Send a method call and wait for the reply *)
-
-val method_call_no_reply : t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  ?interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  ('a, unit Lwt.t, unit) OBus_type.func -> 'a
-  (** Send a method call without waiting for the reply. The
-      [no_reply_expected] flag is automatically set to [true]. *)
-
-val method_call' : t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  ?interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  OBus_message.body ->
-  ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
-  (** Same thing but take the body of the message as a
-      dynamically-typed value. *)
-
-val dyn_method_call : t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  ?interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  OBus_message.body -> OBus_message.body Lwt.t
-  (** Send a method call and wait for the reply. *)
-
-val dyn_method_call_no_reply : t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  ?interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  OBus_message.body -> unit Lwt.t
-
-val emit_signal : t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
-  (** Emit a signal *)
-
-val dyn_emit_signal : t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  OBus_message.body -> unit Lwt.t
-
-val send_reply : t -> OBus_message.t -> ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
-  (** [send_reply connection method_call reply] Send a reply to a
-      method call *)
-
-val dyn_send_reply : t -> OBus_message.t -> OBus_value.sequence -> unit Lwt.t
-
-val send_error : t -> OBus_message.t -> OBus_error.name -> OBus_error.message -> unit Lwt.t
-  (** Send an error message in reply to a method call *)
-
-val send_exn : t -> OBus_message.t -> exn -> unit Lwt.t
-  (** [send_exn connection method_call exn] is a short-hand for
-      passing [exn] through [OBus_error.cast] then calling
-      [send_error].
-
-      It send the dbus error ["ocaml.Exception"] with the exception as
-      message if it is not registred as a D-Bus exception. Note that
-      this is bad thing since D-Bus errors are supposed to be user
-      readable. *)
 
 (** {6 Filters} *)
 
@@ -275,5 +164,10 @@ val of_transport : ?guid : OBus_address.guid -> ?up : bool -> OBus_transport.t -
     When a connection is down, messages will not be dispatched *)
 
 val state : t -> [ `Up | `Down ] React.signal
+  (** Signal holding the current state of the connection *)
+
 val set_up : t -> unit
+  (** Sets up the connection if it is not already up *)
+
 val set_down : t -> unit
+  (** Sets down the connection if it is not already down *)

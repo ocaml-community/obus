@@ -16,8 +16,6 @@
 
 type t
 
-val obus_t : t OBus_type.basic
-
 val generate : unit -> t
   (** Generate a new uuid *)
 

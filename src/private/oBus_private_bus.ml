@@ -15,14 +15,14 @@ let path = ["org"; "freedesktop"; "DBus"]
 let interface = "org.freedesktop.DBus"
 
 let add_match connection =
-  OBus_connection.method_call_no_reply connection ~member:"AddMatch" ~destination ~path ~interface <:obus_func< OBus_match.rule -> unit >>
+  OBus_method.call_no_reply ~connection ~member:"AddMatch" ~destination ~path ~interface <:obus_func< string -> unit >>
 
 let remove_match connection =
-  OBus_connection.method_call_no_reply connection ~member:"RemoveMatch" ~destination ~path ~interface <:obus_func< OBus_match.rule -> unit >>
+  OBus_method.call_no_reply ~connection ~member:"RemoveMatch" ~destination ~path ~interface <:obus_func< string -> unit >>
 
 let get_name_owner connection name =
   try_lwt
-    lwt n = OBus_connection.method_call connection ~member:"GetNameOwner" ~destination ~path ~interface <:obus_func< string -> string >> name in
+    lwt n = OBus_method.call ~connection ~member:"GetNameOwner" ~destination ~path ~interface <:obus_func< string -> string >> name in
     return (Some n)
   with _ ->
     return None

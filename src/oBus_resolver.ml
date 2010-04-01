@@ -51,13 +51,15 @@ let make packed name =
             end;
 
         | None ->
-            let match_rule = OBus_match.rule
-              ~typ:`Signal
-              ~sender:"org.freedesktop.DBus"
-              ~interface:"org.freedesktop.DBus"
-              ~member:"NameOwnerChanged"
-              ~path:["org"; "freedesktop"; "DBus"]
-              ~arguments:[(0, OBus_match.AF_string name)] () in
+            let match_rule =
+              OBus_match.string_of_rule
+                (OBus_match.rule
+                   ~typ:`Signal
+                   ~sender:"org.freedesktop.DBus"
+                   ~interface:"org.freedesktop.DBus"
+                   ~member:"NameOwnerChanged"
+                   ~path:["org"; "freedesktop"; "DBus"]
+                   ~arguments:[(0, OBus_match.AF_string name)] ()) in
 
             let init_waiter, init_wakener = Lwt.wait () and owner, set = React.S.create None in
             let name_resolver = {

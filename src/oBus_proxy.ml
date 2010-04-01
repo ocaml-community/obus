@@ -58,25 +58,20 @@ module type S = sig
   val connection : proxy -> OBus_connection.t
   val name : proxy -> OBus_name.bus option
   val introspect : proxy -> OBus_introspect.document Lwt.t
-  val method_call : proxy ->
+  val call : proxy ->
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
-  val method_call_no_reply : proxy ->
+  val call_no_reply : proxy ->
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     ('a, unit Lwt.t, unit) OBus_type.func -> 'a
-  val method_call' : proxy ->
-    ?interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    OBus_message.body ->
-    ('a, _) OBus_type.cl_sequence -> 'a Lwt.t
-  val dyn_method_call : proxy ->
+  val dyn_call : proxy ->
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     OBus_message.body ->
     OBus_message.body Lwt.t
-  val dyn_method_call_no_reply : proxy ->
+  val dyn_call_no_reply : proxy ->
     ?interface : OBus_name.interface ->
     member : OBus_name.member ->
     OBus_message.body -> unit Lwt.t
@@ -109,17 +104,19 @@ struct
   type proxy = Proxy.proxy
 
   let obus_proxy = OBus_type.map_with_context <:obus_type< object_path >>
-    (fun context path ->
-       let connection, message = OBus_connection.cast_context context in
-       Proxy.make { peer = { connection = connection; name = OBus_message.sender message }; path = path })
+    (fun (connection, message) path ->
+       Proxy.make { peer = { connection = connection;
+                             name = OBus_message.sender message };
+                    path = path })
     (fun proxy -> (Proxy.cast proxy).path)
 
   type broken = proxy
 
   let obus_broken = OBus_type.map_with_context <:obus_type< broken_path >>
-    (fun context path ->
-       let connection, message = OBus_connection.cast_context context in
-       Proxy.make { peer = { connection = connection; name = OBus_message.sender message }; path = path })
+    (fun (connection, message) path ->
+       Proxy.make { peer = { connection = connection;
+                             name = OBus_message.sender message };
+                    path = path })
     (fun proxy -> (Proxy.cast proxy).path)
 
   let peer proxy = (Proxy.cast proxy).peer
@@ -131,46 +128,40 @@ struct
      | Method calls                                                  |
      +---------------------------------------------------------------+ *)
 
-  let method_call proxy ?interface ~member typ =
+  let call proxy ?interface ~member typ =
     let proxy = Proxy.cast proxy in
-    OBus_connection.method_call proxy.peer.connection
+    OBus_method.call
+      ~connection:proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
       ?interface
       ~member
       typ
 
-  let method_call_no_reply proxy ?interface ~member typ =
+  let call_no_reply proxy ?interface ~member typ =
     let proxy = Proxy.cast proxy in
-    OBus_connection.method_call_no_reply proxy.peer.connection
+    OBus_method.call_no_reply
+      ~connection:proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
       ?interface
       ~member
       typ
 
-  let method_call' proxy ?interface ~member body typ =
+  let dyn_call proxy ?interface ~member body =
     let proxy = Proxy.cast proxy in
-    OBus_connection.method_call' proxy.peer.connection
-      ?destination:proxy.peer.name
-      ~path:proxy.path
-      ?interface
-      ~member
-      body
-      typ
-
-  let dyn_method_call proxy ?interface ~member body =
-    let proxy = Proxy.cast proxy in
-    OBus_connection.dyn_method_call proxy.peer.connection
+    OBus_method.dyn_call
+      ~connection:proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
       ?interface
       ~member
       body
 
-  let dyn_method_call_no_reply proxy ?interface ~member body =
+  let dyn_call_no_reply proxy ?interface ~member body =
     let proxy = Proxy.cast proxy in
-    OBus_connection.dyn_method_call_no_reply proxy.peer.connection
+    OBus_method.dyn_call_no_reply
+      ~connection:proxy.peer.connection
       ?destination:proxy.peer.name
       ~path:proxy.path
       ?interface
@@ -182,7 +173,7 @@ struct
      +---------------------------------------------------------------+ *)
 
   let introspect proxy =
-    method_call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" <:obus_func< OBus_introspect.document >>
+    call proxy ~interface:"org.freedesktop.DBus.Introspectable" ~member:"Introspect" <:obus_func< OBus_introspect.document >>
 
   (* +---------------------------------------------------------------+
      | Properties                                                    |
@@ -192,7 +183,7 @@ struct
     let proxy = Proxy.cast proxy in
     OBus_property.make
       ~connection:proxy.peer.connection
-      ?sender:proxy.peer.name
+      ?owner:proxy.peer.name
       ~path:proxy.path
       ~interface
       ~member
@@ -204,7 +195,7 @@ struct
     let proxy = Proxy.cast proxy in
     OBus_property.dyn_make
       ~connection:proxy.peer.connection
-      ?sender:proxy.peer.name
+      ?owner:proxy.peer.name
       ~path:proxy.path
       ~interface
       ~member
@@ -242,7 +233,7 @@ struct
 
   let make_interface ?changed interface = {
     Interface.name = interface;
-    Interface.method_call = (fun member typ proxy -> method_call proxy ~interface ~member typ);
+    Interface.method_call = (fun member typ proxy -> call proxy ~interface ~member typ);
     Interface.signal = (fun member typ proxy -> connect proxy ~interface ~member typ);
     Interface.property = (fun member access typ proxy -> property proxy ~interface ~member ~access ?changed typ);
   }

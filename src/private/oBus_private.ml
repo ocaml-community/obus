@@ -30,12 +30,6 @@ module SignalMap = OBus_util.MakeMap
      let compare = Pervasives.compare
    end)
 
-module RuleSet = Set.Make
-  (struct
-     type t = OBus_match.rule
-     let compare = Pervasives.compare
-   end)
-
 module PropertyMap = OBus_util.MakeMap
   (struct
      type t = OBus_name.bus option * OBus_path.t * OBus_name.interface
@@ -104,7 +98,7 @@ and name_resolver = {
   (* Number of resolver for this name. When this number is 0, the name
      resolver can be removed. *)
 
-  nr_match_rule : OBus_match.rule;
+  nr_match_rule : string;
   (* The matching rule, for the message bus *)
 
   mutable nr_state : name_resolver_state;
@@ -130,7 +124,7 @@ and signal_receiver = {
   mutable sr_sender : OBus_name.bus option React.signal option;
   (* The sender that must be matched *)
 
-  mutable sr_rule : OBus_match.rule option;
+  mutable sr_rule : string;
   (* The rule used for this receiver *)
 
   sr_push : packed_connection * OBus_message.t -> unit;
@@ -138,7 +132,7 @@ and signal_receiver = {
 }
 
 and signal_receiver_set = {
-  mutable srs_rules : RuleSet.t;
+  mutable srs_rules : StringSet.t;
   (* The set of rules used by receivers, that are currently set on the
      message bus *)
 
@@ -155,7 +149,7 @@ and signal_receiver_set = {
 and property_state =
   | Prop_simple
       (* Simpe state: no property is monitored for this interface *)
-  | Prop_monitor of (OBus_value.single StringMap.t * OBus_private_type.context) React.signal Lwt.t * (unit -> unit)
+  | Prop_monitor of (OBus_value.single StringMap.t * (packed_connection * OBus_message.t)) React.signal Lwt.t * (unit -> unit)
       (* [Proxy_monitor(signal, close)] where [signal] is the signal
          holding the current values of all properties and [close] is
          used to stop monitoring the ``changed'' signal. *)
@@ -168,7 +162,7 @@ and property = {
   mutable prop_state : property_state;
 
   prop_connection : packed_connection;
-  prop_sender : OBus_name.bus option;
+  prop_owner : OBus_name.bus option;
   prop_path : OBus_path.t;
   prop_interface : OBus_name.interface;
 }

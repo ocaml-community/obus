@@ -171,7 +171,7 @@ let rule_of_string str =
   with Fail(pos, msg) ->
     raise (Parse_failure(str, pos, msg))
 
-let obus_rule = OBus_type.map OBus_private_type.obus_string rule_of_string string_of_rule
+let obus_rule = OBus_type.map OBus_pervasives.obus_string rule_of_string string_of_rule
 
 let match_key matcher value = match matcher with
   | None -> true

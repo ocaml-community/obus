@@ -37,6 +37,7 @@ OBus_pervasives
 {!modules:
 OBus_peer
 OBus_proxy
+OBus_method
 OBus_signal
 OBus_property
 }

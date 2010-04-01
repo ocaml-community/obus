@@ -68,23 +68,23 @@ let commit_rules signal =
       (fun sr rules ->
          if sr.sr_active then
            match sr.sr_rule with
-             | Some rule -> RuleSet.add rule rules
-             | None -> rules
+             | "" -> rules
+             | rule -> StringSet.add rule rules
          else
            rules)
-      set.srs_receivers RuleSet.empty
+      set.srs_receivers StringSet.empty
   in
 
   (* If rules have changed, compute the minimal set of changes to make
      with the message bus and do them: *)
-  if RuleSet.compare rules set.srs_rules <> 0 then
+  if not (StringSet.equal rules set.srs_rules) then
     Lwt_mutex.with_lock set.srs_mutex
       (fun () ->
-         let new_rules = RuleSet.diff rules set.srs_rules
-         and old_rules = RuleSet.diff set.srs_rules rules in
+         let new_rules = StringSet.diff rules set.srs_rules
+         and old_rules = StringSet.diff set.srs_rules rules in
          set.srs_rules <- new_rules;
-         lwt () = RuleSet.fold (fun rule thread -> thread <&> OBus_private_bus.add_match signal.connection rule) new_rules (return ())
-         and () = RuleSet.fold (fun rule thread -> thread <&> OBus_private_bus.remove_match signal.connection rule) old_rules (return ()) in
+         lwt () = StringSet.fold (fun rule thread -> thread <&> OBus_private_bus.add_match signal.connection rule) new_rules (return ())
+         and () = StringSet.fold (fun rule thread -> thread <&> OBus_private_bus.remove_match signal.connection rule) old_rules (return ()) in
          return ())
   else
     return ()
@@ -159,7 +159,7 @@ let connect_backend ~connection ?sender ~path ~interface ~member ~event ~push ()
       | None ->
           (* If the set do not exists, create a new one *)
           let set = {
-            srs_rules = RuleSet.empty;
+            srs_rules = StringSet.empty;
             srs_mutex = Lwt_mutex.create ();
             srs_receivers = Lwt_sequence.create ();
           } in
@@ -169,7 +169,7 @@ let connect_backend ~connection ?sender ~path ~interface ~member ~event ~push ()
   let receiver = {
     sr_active = false;
     sr_sender = None;
-    sr_rule = Some(OBus_match.rule ~typ:`Signal ?sender ~path ~interface ~member ());
+    sr_rule = OBus_match.string_of_rule (OBus_match.rule ~typ:`Signal ?sender ~path ~interface ~member ());
     sr_push = push;
   } in
   (* Immediatly add the recevier to avoid race condition *)
@@ -206,16 +206,17 @@ let set_auto_match_rule signal auto_match_rule  =
   if auto_match_rule <> signal.auto_match_rule then begin
     signal.auto_match_rule <- auto_match_rule;
     if auto_match_rule then
-      signal.receiver.sr_rule <- Some(OBus_match.rule
-                                        ~typ:`Signal
-                                        ?sender:signal.sender
-                                        ~path:signal.path
-                                        ~interface:signal.interface
-                                        ~member:signal.member
-                                        ~arguments:signal.filters
-                                        ())
+      signal.receiver.sr_rule <- (OBus_match.string_of_rule
+                                    (OBus_match.rule
+                                       ~typ:`Signal
+                                       ?sender:signal.sender
+                                       ~path:signal.path
+                                       ~interface:signal.interface
+                                       ~member:signal.member
+                                       ~arguments:signal.filters
+                                       ()))
     else
-      signal.receiver.sr_rule <- None;
+      signal.receiver.sr_rule <- "";
     match signal.state with
       | Sig_init ->
           ()
@@ -228,14 +229,15 @@ let set_auto_match_rule signal auto_match_rule  =
 let set_filters signal filters =
   signal.filters <- filters;
   if signal.auto_match_rule then begin
-    signal.receiver.sr_rule <-Some(OBus_match.rule
+    signal.receiver.sr_rule <- (OBus_match.string_of_rule
+                                  (OBus_match.rule
                                      ~typ:`Signal
                                      ?sender:signal.sender
                                      ~path:signal.path
                                      ~interface:signal.interface
                                      ~member:signal.member
                                      ~arguments:signal.filters
-                                     ());
+                                     ()));
     match signal.state with
       | Sig_init ->
           ()
@@ -270,7 +272,7 @@ let dyn_connect ~connection ?sender ~path ~interface ~member () =
 
 let cast interface member typ (connection, message) =
   try
-    Some(OBus_type.cast_sequence typ ~context:(OBus_connection.make_context (connection, message)) (OBus_message.body message))
+    Some(OBus_type.cast_sequence typ ~context:(connection, message) (OBus_message.body message))
   with exn ->
     ignore (
       Lwt_log.error_f ~section ~exn "failed to cast signal from %S, interface %S, member %S with signature %S to %S"
@@ -291,3 +293,13 @@ let connect ~connection ?sender ~path ~interface ~member typ =
     ~push
     ~event:(React.E.fmap (cast interface member typ) event)
     ()
+
+(* +-----------------------------------------------------------------+
+   | Emitting signals                                                |
+   +-----------------------------------------------------------------+ *)
+
+let emit ~connection ?flags ?sender ?destination ~path ~interface ~member ty x =
+  OBus_connection.send_message connection (OBus_message.signal ?flags ?sender ?destination ~path ~interface ~member (OBus_type.make_sequence ty x))
+
+let dyn_emit ~connection ?flags ?sender ?destination ~path ~interface ~member body =
+  OBus_connection.send_message connection (OBus_message.signal ?flags ?sender ?destination ~path ~interface ~member body)

@@ -36,6 +36,8 @@ val obus_path : OBus_path.t basic
 val obus_file_descr : Lwt_unix.file_descr basic
 val obus_unix_file_descr : Unix.file_descr basic
 
+val obus_uuid : OBus_uuid.t basic
+
 (** {6 Type combinators for container types} *)
 
 val obus_list : ('a, _) cl_single -> 'a list container
@@ -48,6 +50,11 @@ val obus_variant : OBus_value.single container
 (** {6 Type combinators for sequences} *)
 
 val obus_unit : unit sequence
+
+(** {6 Context} *)
+
+val obus_context : OBus_type.context sequence
+  (** Type combinator which returns the context of a message. *)
 
 (** {6 Broken types} *)
 
@@ -84,3 +91,4 @@ type byte_array = string
 type file_descr = Lwt_unix.file_descr
 type unix_file_descr = Unix.file_descr
 type broken_path = OBus_path.t
+type uuid = OBus_uuid.t

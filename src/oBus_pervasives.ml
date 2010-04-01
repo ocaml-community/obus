@@ -148,6 +148,8 @@ let obus_unix_file_descr = Btype {
 
 let obus_file_descr = map obus_unix_file_descr Lwt_unix.of_unix_file_descr Lwt_unix.unix_file_descr
 
+let obus_uuid = OBus_type.map obus_string OBus_uuid.of_string OBus_uuid.to_string
+
 let obus_list elt =
   let typ = type_single elt in
   Ctype {
@@ -215,6 +217,15 @@ let obus_unit = Stype {
   s_cast = (fun context l -> ((), l));
 }
 
+let obus_context = Stype {
+  s_type = Tnil;
+  s_make = (fun _ -> Tnil);
+  s_cast = (fun context l ->
+              match context.ctx_user with
+                | Some context -> (context, l)
+                | None -> raise (Cast_failure("OBus_pervasives.context", "no context provided")));
+}
+
 type byte = char
 type boolean = bool
 type int8 = int
@@ -235,3 +246,4 @@ type byte_array = string
 type file_descr = Lwt_unix.file_descr
 type unix_file_descr = Unix.file_descr
 type broken_path = OBus_path.t
+type uuid = OBus_uuid.t

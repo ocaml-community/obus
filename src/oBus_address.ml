@@ -77,8 +77,6 @@ let to_string l =
   end l;
   Buffer.contents buf
 
-let obus_list = OBus_type.map OBus_private_type.obus_string of_string to_string
-
 (* +-----------------------------------------------------------------+
    | Well known addresses                                            |
    +-----------------------------------------------------------------+ *)

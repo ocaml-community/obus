@@ -9,8 +9,8 @@
 
 (** Shared bus functions *)
 
-val add_match : OBus_connection.t -> OBus_match.rule -> unit Lwt.t
-val remove_match : OBus_connection.t -> OBus_match.rule -> unit Lwt.t
+val add_match : OBus_connection.t -> string -> unit Lwt.t
+val remove_match : OBus_connection.t -> string -> unit Lwt.t
   (** Add/remove a match rule. These function do not wait for a reply,
       so errors are ignored. *)
 

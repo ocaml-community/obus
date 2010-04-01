@@ -70,8 +70,8 @@ let close_fds map =
                 with exn ->
                   ignore (Lwt_log.error ~section ~exn "failed to close file descriptor")) map
 
-let cast f ?(context=No_context) x =
-  let context = { ctx_data = context; ctx_fds = FDMap.empty } in
+let cast f ?context x =
+  let context = { ctx_user = context; ctx_fds = FDMap.empty } in
   try
     f context x
   with exn ->
@@ -84,8 +84,8 @@ let cast_basic t = cast (_cast_basic t)
 let cast_single t = cast (_cast_single t)
 let cast_sequence t = cast (_cast_sequence t)
 
-let opt_cast f ?(context=No_context) x =
-  let context = { ctx_data = context; ctx_fds = FDMap.empty } in
+let opt_cast f ?context x =
+  let context = { ctx_user = context; ctx_fds = FDMap.empty } in
   try
     Some(f context x)
   with
@@ -102,8 +102,8 @@ let opt_cast_sequence t = opt_cast (_cast_sequence t)
 
 let make_func { f_make = f } cont = f Tnil cont
 
-let cast_func { f_cast = f } ?(context=No_context) x g =
-  let context = { ctx_data = context; ctx_fds = FDMap.empty } in
+let cast_func { f_cast = f } ?context x g =
+  let context = { ctx_user = context; ctx_fds = FDMap.empty } in
   match try `OK(f context x) with exn -> `Fail exn with
     | `OK apply ->
         apply g
@@ -111,8 +111,8 @@ let cast_func { f_cast = f } ?(context=No_context) x g =
         close_fds context.ctx_fds;
         raise exn
 
-let opt_cast_func { f_cast = f } ?(context=No_context) x g =
-  let context = { ctx_data = context; ctx_fds = FDMap.empty } in
+let opt_cast_func { f_cast = f } ?context x g =
+  let context = { ctx_user = context; ctx_fds = FDMap.empty } in
   match try `OK(f context x) with exn -> `Fail exn with
     | `OK apply ->
         Some(apply g)
@@ -142,23 +142,29 @@ let map t f g = match t with
       s_cast = (fun context l -> let v, rest = t.s_cast context l in (f v, rest))
     }
 
+let get_user_context ctx = match ctx.ctx_user with
+  | Some context ->
+      context
+  | None ->
+      raise (Cast_failure("OBus_type.map_with_context", "no context provided"))
+
 let map_with_context t f g = match t with
   | Btype t -> Btype{
       b_type = t.b_type;
       b_make = (fun x -> t.b_make (g x));
-      b_cast = (fun context x -> f context.ctx_data (t.b_cast context x));
+      b_cast = (fun context x -> f (get_user_context context) (t.b_cast context x));
     }
   | Ctype t -> Ctype{
       c_type = t.c_type;
       c_make = (fun x -> t.c_make (g x));
-      c_cast = (fun context x -> f context.ctx_data (t.c_cast context x));
+      c_cast = (fun context x -> f (get_user_context context) (t.c_cast context x));
     }
   | Stype t -> Stype{
       s_type = t.s_type;
       s_make = (fun x -> t.s_make (g x));
       s_cast = (fun context l ->
                   let v, rest = t.s_cast context l in
-                  (f context.ctx_data v, rest))
+                  (f (get_user_context context) v, rest))
     }
 
 (* +-----------------------------------------------------------------+
