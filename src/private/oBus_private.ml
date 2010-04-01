@@ -127,6 +127,9 @@ and signal_receiver = {
   mutable sr_rule : string;
   (* The rule used for this receiver *)
 
+  mutable sr_filter : OBus_message.t -> bool;
+  (* Filtering on messabe body *)
+
   sr_push : packed_connection * OBus_message.t -> unit;
   (* Function used to send new events *)
 }

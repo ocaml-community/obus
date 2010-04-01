@@ -209,6 +209,9 @@ and match_arguments_aux num num' filter matcher arguments = match arguments with
   | _ ->
       false
 
+let match_values filters values =
+  match_arguments 0 filters values
+
 let match_message mr msg =
   (match OBus_message.typ msg, mr.typ with
      | OBus_message.Method_call(path, interface, member), (Some `Method_call | None) ->

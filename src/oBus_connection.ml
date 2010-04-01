@@ -269,7 +269,7 @@ let dispatch_message connection message = match message with
                                 | { typ = Error(_, error_name) } ->
                                     sprintf ", the reply is the error: %S: %S"
                                       error_name
-                                      (match msg.body with
+                                      (match message.body with
                                          | Basic (String x) :: _ -> x
                                          | _ -> "")
                                 | _ ->
@@ -286,7 +286,7 @@ let dispatch_message connection message = match message with
               | Some set ->
                   Lwt_sequence.iter_l
                     (fun receiver ->
-                       if receiver.sr_active then
+                       if receiver.sr_active && receiver.sr_filter message then
                          try
                            receiver.sr_push (connection.packed, message)
                          with exn ->
@@ -379,7 +379,7 @@ let dispatch_message connection message = match message with
                 | Some set ->
                     Lwt_sequence.iter_l
                       (fun receiver ->
-                         if receiver.sr_active && match_sender receiver message then
+                         if receiver.sr_active && match_sender receiver message && receiver.sr_filter message then
                            try
                              receiver.sr_push (connection.packed, message)
                            with exn ->

@@ -71,6 +71,13 @@ val match_message : rule -> OBus_message.t -> bool
   (** [match_message rule message] returns wether [message] is matched
       by [rule] *)
 
+val match_values : (int * argument_filter) list -> OBus_value.sequence -> bool
+  (** [match_values filters values] returns whether [values] are
+      matched by the given list of argument filters.
+
+      [filters] must be sorted by argument number, and must not
+      contains to filters with the same argument number. *)
+
 (** {6 Parsing/printing} *)
 
 exception Parse_failure of string * int * string

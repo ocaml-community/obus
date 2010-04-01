@@ -170,6 +170,7 @@ let connect_backend ~connection ?sender ~path ~interface ~member ~event ~push ()
     sr_active = false;
     sr_sender = None;
     sr_rule = OBus_match.string_of_rule (OBus_match.rule ~typ:`Signal ?sender ~path ~interface ~member ());
+    sr_filter = (fun _ -> true);
     sr_push = push;
   } in
   (* Immediatly add the recevier to avoid race condition *)
@@ -205,17 +206,22 @@ let connect_backend ~connection ?sender ~path ~interface ~member ~event ~push ()
 let set_auto_match_rule signal auto_match_rule  =
   if auto_match_rule <> signal.auto_match_rule then begin
     signal.auto_match_rule <- auto_match_rule;
-    if auto_match_rule then
-      signal.receiver.sr_rule <- (OBus_match.string_of_rule
-                                    (OBus_match.rule
-                                       ~typ:`Signal
-                                       ?sender:signal.sender
-                                       ~path:signal.path
-                                       ~interface:signal.interface
-                                       ~member:signal.member
-                                       ~arguments:signal.filters
-                                       ()))
-    else
+    if auto_match_rule then begin
+      let rule =
+        OBus_match.rule
+          ~typ:`Signal
+          ?sender:signal.sender
+          ~path:signal.path
+          ~interface:signal.interface
+          ~member:signal.member
+          ~arguments:signal.filters
+          ()
+      in
+      (* Use the sorted list of argument filters: *)
+      let filters = OBus_match.arguments rule in
+      signal.receiver.sr_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
+      signal.receiver.sr_rule <- OBus_match.string_of_rule rule
+    end else
       signal.receiver.sr_rule <- "";
     match signal.state with
       | Sig_init ->
@@ -229,15 +235,19 @@ let set_auto_match_rule signal auto_match_rule  =
 let set_filters signal filters =
   signal.filters <- filters;
   if signal.auto_match_rule then begin
-    signal.receiver.sr_rule <- (OBus_match.string_of_rule
-                                  (OBus_match.rule
-                                     ~typ:`Signal
-                                     ?sender:signal.sender
-                                     ~path:signal.path
-                                     ~interface:signal.interface
-                                     ~member:signal.member
-                                     ~arguments:signal.filters
-                                     ()));
+    let rule =
+      OBus_match.rule
+        ~typ:`Signal
+        ?sender:signal.sender
+        ~path:signal.path
+        ~interface:signal.interface
+        ~member:signal.member
+        ~arguments:signal.filters
+        ()
+    in
+    let filters = OBus_match.arguments rule in
+    signal.receiver.sr_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
+    signal.receiver.sr_rule <- OBus_match.string_of_rule rule;
     match signal.state with
       | Sig_init ->
           ()
