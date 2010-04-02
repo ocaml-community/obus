@@ -112,7 +112,7 @@ let rec contents property =
                         signal)
           | Prop_simple ->
               let signal =
-                OBus_signal.dyn_connect
+                OBus_signal.raw_connect
                   ~connection:core.prop_connection
                   ?sender:core.prop_owner
                   ~path:core.prop_path
@@ -124,11 +124,23 @@ let rec contents property =
               core.prop_state <- Prop_monitor(waiter, (fun () -> OBus_signal.disconnect signal));
               lwt initial = get_all core in
               wakeup wakener
-                (React.S.hold ~eq:(==)
+                (Lwt_signal.fold_s ~eq:(==)
+                   (fun (properties, context) message ->
+                      let context = (core.prop_connection, message) in
+                      match OBus_type.opt_cast_sequence ~context <:obus_type< (string, variant) dict >> (OBus_message.body message) with
+                        | Some dict ->
+                            (* If the signal contains update
+                               informations, then use them
+                               directly: *)
+                            return (List.fold_left
+                                      (fun map (key, value) -> StringMap.add key value map)
+                                      properties dict,
+                                    context)
+                        | None ->
+                            (* Otherwise retreive all properties: *)
+                            get_all core)
                    initial
-                   (Lwt_event.map_s
-                      (fun _ -> get_all core)
-                      (OBus_signal.event signal)));
+                   (OBus_signal.event signal));
               contents property
 
 (* +-----------------------------------------------------------------+

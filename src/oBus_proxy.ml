@@ -82,6 +82,9 @@ module type S = sig
   val dyn_connect : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member -> OBus_value.sequence OBus_signal.t
+  val raw_connect : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member -> OBus_message.t OBus_signal.t
   val property : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
@@ -220,6 +223,16 @@ struct
   let dyn_connect proxy ~interface ~member =
     let proxy = Proxy.cast proxy in
     OBus_signal.dyn_connect
+      ~connection:proxy.peer.connection
+      ?sender:proxy.peer.name
+      ~path:proxy.path
+      ~interface
+      ~member
+      ()
+
+  let raw_connect proxy ~interface ~member =
+    let proxy = Proxy.cast proxy in
+    OBus_signal.raw_connect
       ~connection:proxy.peer.connection
       ?sender:proxy.peer.name
       ~path:proxy.path

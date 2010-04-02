@@ -109,4 +109,13 @@ val dyn_connect :
   path : OBus_path.t ->
   interface : OBus_name.interface ->
   member : OBus_name.member -> unit -> OBus_value.sequence t
-  (** Same as {!make} but using dynamically typed values *)
+  (** Same as {!connect} but using dynamically typed values *)
+
+val raw_connect :
+  connection : OBus_connection.t ->
+  ?sender : OBus_name.bus ->
+  path : OBus_path.t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member -> unit -> OBus_message.t t
+  (** Same as {!connect} except that the receiver will receive the raw
+      D-Bus message, without any processing *)

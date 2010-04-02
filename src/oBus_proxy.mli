@@ -200,6 +200,11 @@ module type S = sig
     member : OBus_name.member -> OBus_value.sequence OBus_signal.t
     (** Same thing but return signals as a dynamically typed values *)
 
+  val raw_connect : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member -> OBus_message.t OBus_signal.t
+    (** Same thing but return raw D-Bus messages *)
+
   (** {6 Properties} *)
 
   val property : proxy ->

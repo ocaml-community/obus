@@ -79,11 +79,17 @@ val make :
       ?changed typ] creates a property with the given interface and
       member.
 
-      [owner] is the name of the peer owning the property.
+      @param owner name of the peer owning the property.
 
-      [changed] is the name of a signal of the interface which is used
-      to notify that one or more properties have changed. Usually it
-      is called [Changed] or [PropertiesChanged]. *)
+      @param changed name of a the signal used to notify that one or
+      more properties have changed. Usually it is called [Changed] or
+      [PropertiesChanged].
+
+      Note: when [changed] is received, if it carries exactly one
+      argument of type [Tdict(Tstring, Tvariabt)] (the D-Bus type
+      ["a{sv}"]), then property values' are updated using this
+      dictionary. Otherwise the [GetAll] method of the object is
+      invoked. *)
 
 val dyn_make :
   connection : OBus_connection.t ->
@@ -92,7 +98,8 @@ val dyn_make :
   interface : OBus_name.interface ->
   member : OBus_name.member ->
   access : 'access access ->
-  ?changed : OBus_name.member -> unit -> (OBus_value.single, 'access) t
+  ?changed : OBus_name.member ->
+  unit -> (OBus_value.single, 'access) t
   (** Same as {!make} but using dynamically typed values *)
 
 (** {6 Receving all properties} *)

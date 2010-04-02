@@ -268,6 +268,18 @@ let init ?(filters=[]) ?(auto_match_rule=true) signal =
    | Signal connection                                               |
    +-----------------------------------------------------------------+ *)
 
+let raw_connect ~connection ?sender ~path ~interface ~member () =
+  let event, push = React.E.create () in
+  connect_backend
+    ~connection
+    ?sender
+    ~path
+    ~interface
+    ~member
+    ~push
+    ~event:(React.E.map snd event)
+    ()
+
 let dyn_connect ~connection ?sender ~path ~interface ~member () =
   let event, push = React.E.create () in
   connect_backend
