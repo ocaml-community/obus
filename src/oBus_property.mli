@@ -56,13 +56,17 @@ val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
 
     Note that when at least one property of an interface is monitored,
     obus will keep a local state of all the properties of the
-    interface, until all signals (see {!contents}) are garbage
-    collected, or disconnected with {!disconnect}.
+    interface, until all signals (see {!monitor}) are garbage
+    collected, or stopped with {!unmonitor}.
 *)
 
-val contents : ('a, [> `readable ]) t -> 'a React.signal Lwt.t
-  (** [contents property] returns the signal holding the current
+val monitor : ('a, [> `readable ]) t -> 'a React.signal Lwt.t
+  (** [monitor property] returns the signal holding the current
       contents of [property] *)
+
+val unmonitor : ('a, [> `readable ]) t -> unit
+  (** Stop monitoring the property. If it was not monitored, it does
+      nothing. *)
 
 (** {6 Property creation} *)
 

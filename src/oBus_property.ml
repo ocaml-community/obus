@@ -97,7 +97,7 @@ let get_all core =
             variants,
           context)
 
-let rec contents property =
+let rec monitor property =
   match property.changed with
     | None ->
         fail (Failure "OBus_property.contents: this property can not be used here")
@@ -141,7 +141,16 @@ let rec contents property =
                             get_all core)
                    initial
                    (OBus_signal.event signal));
-              contents property
+              monitor property
+
+let unmonitor property =
+  let core = property.core in
+  match core.prop_state with
+    | Prop_simple ->
+        ()
+    | Prop_monitor(properties, stop) ->
+        core.prop_state <- Prop_simple;
+        stop ()
 
 (* +-----------------------------------------------------------------+
    | Property creation                                               |
