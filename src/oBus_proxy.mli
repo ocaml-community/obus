@@ -207,6 +207,8 @@ module type S = sig
 
   (** {6 Properties} *)
 
+  (** {8 Property creation} *)
+
   val property : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
@@ -219,6 +221,36 @@ module type S = sig
     member : OBus_name.member ->
     access : 'access OBus_property.access ->
     ?changed : OBus_name.member -> unit -> (OBus_value.single, 'access) OBus_property.t
+
+  (** {8 Direct access to properties} *)
+
+  val get : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member ->
+    ('a, _) OBus_type.cl_single -> 'a Lwt.t
+    (** [get proxy ~interface ~member typ] reads the value of the
+        property of [proxy] described by [interface] and [member] *)
+
+  val set : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member ->
+    ('a, _) OBus_type.cl_single -> 'a -> unit Lwt.t
+    (** [get proxy ~interface ~member typ value] writes the value of
+        the property of [proxy] described by [interface] and
+        [member] *)
+
+  val get_all : proxy -> interface : OBus_name.interface -> OBus_value.single Map.Make(String).t Lwt.t
+    (** [get_all proxy ~interface] returns the value of all properties
+        of [proxy] for [interface] *)
+
+  val dyn_get : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member -> OBus_value.single Lwt.t
+
+  val dyn_set : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member ->
+    OBus_value.single -> unit Lwt.t
 end
 
 (** The default proxy implementation *)

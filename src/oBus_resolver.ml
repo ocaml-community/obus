@@ -38,7 +38,7 @@ let make packed name =
     }
   else
     lwt name_resolver =
-      match NameMap.lookup name connection.name_resolvers with
+      match try Some(NameMap.find name connection.name_resolvers) with Not_found -> None with
         | Some name_resolver ->
             (* add a reference to the resolver *)
             name_resolver.nr_ref_count <- name_resolver.nr_ref_count + 1;

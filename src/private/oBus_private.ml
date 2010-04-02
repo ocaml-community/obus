@@ -12,31 +12,31 @@
 
 open Lwt
 
-module SerialMap = OBus_util.MakeMap
+module SerialMap = Map.Make
   (struct
      type t = OBus_message.serial
      let compare : int32 -> int32 -> int = compare
    end)
 
-module ObjectMap = OBus_util.MakeMap
+module ObjectMap = Map.Make
   (struct
      type t = OBus_path.t
      let compare = Pervasives.compare
    end)
 
-module SignalMap = OBus_util.MakeMap
+module SignalMap = Map.Make
   (struct
      type t = OBus_path.t * OBus_name.interface * OBus_name.member
      let compare = Pervasives.compare
    end)
 
-module PropertyMap = OBus_util.MakeMap
+module PropertyMap = Map.Make
   (struct
      type t = OBus_name.bus option * OBus_path.t * OBus_name.interface
      let compare = Pervasives.compare
    end)
 
-module StringMap = OBus_util.MakeMap(String)
+module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
 
 module NameMap = StringMap

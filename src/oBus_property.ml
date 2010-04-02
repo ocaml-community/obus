@@ -163,7 +163,7 @@ let cleanup property =
 let make_backend ~connection ?owner ~path ~interface ~member ~access ?changed ~cast ~make () =
   let connection = unpack_connection connection in
   let core =
-    match PropertyMap.lookup (owner, path, interface) connection.properties with
+    match try Some(PropertyMap.find (owner, path, interface) connection.properties) with Not_found -> None with
       | Some core ->
           core.prop_ref_count <- core.prop_ref_count + 1;
           core
@@ -206,11 +206,22 @@ let dyn_make ~connection ?owner ~path ~interface ~member ~access ?changed () =
    +-----------------------------------------------------------------+ *)
 
 let get_all ~connection ?owner ~path ~interface () =
-  OBus_method.call
-    ~connection
-    ?destination:owner
-    ~path
-    ~interface:"org.freedesktop.DBus.Properties"
-    ~member:"GetAll"
-    <:obus_func< string -> (string, variant) dict >>
-    interface
+  let connection = unpack_connection connection in
+  match try Some(PropertyMap.find (owner, path, interface) connection.properties) with Not_found -> None with
+    | None | Some{ prop_state = Prop_simple } ->
+        lwt dict =
+          OBus_method.call
+            ~connection:connection.packed
+            ?destination:owner
+            ~path
+            ~interface:"org.freedesktop.DBus.Properties"
+            ~member:"GetAll"
+            <:obus_func< string -> (string, variant) dict >>
+            interface
+        in
+        return (List.fold_left
+                  (fun map (key, value) -> StringMap.add key value map)
+                  StringMap.empty
+                  dict)
+    | Some{ prop_state = Prop_monitor(properties, stop) } ->
+        properties >|= (fun s -> fst (React.S.value s))

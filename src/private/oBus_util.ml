@@ -236,14 +236,3 @@ let sha_1 s =
   i2s h 12 !h3;
   i2s h 16 !h4;
   h
-
-module MakeMap(Key : Map.OrderedType) =
-struct
-  include Map.Make(Key)
-
-  let lookup key map =
-    try
-      Some(find key map)
-    with
-        Not_found -> None
-end

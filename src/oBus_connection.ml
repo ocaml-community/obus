@@ -38,10 +38,10 @@ let compare = Pervasives.compare
 type filter = OBus_private.filter
 
 (* Mapping from server guid to connection. *)
-module GuidMap = OBus_util.MakeMap(struct
-                                     type t = OBus_address.guid
-                                     let compare = Pervasives.compare
-                                   end)
+module GuidMap = Map.Make(struct
+                            type t = OBus_address.guid
+                            let compare = Pervasives.compare
+                          end)
 let guid_connection_map = ref GuidMap.empty
 
 (* Apply a list of filter on a message, logging failure *)
@@ -257,7 +257,7 @@ let dispatch_message connection message = match message with
      dropped. *)
   | { typ = Method_return(reply_serial) }
   | { typ = Error(reply_serial, _) } ->
-      begin match SerialMap.lookup reply_serial connection.reply_waiters with
+      begin match try Some(SerialMap.find reply_serial connection.reply_waiters) with Not_found -> None with
         | Some w ->
             connection.reply_waiters <- SerialMap.remove reply_serial connection.reply_waiters;
             wakeup w message
@@ -282,7 +282,7 @@ let dispatch_message connection message = match message with
         | None, _ ->
             (* If this is a peer-to-peer connection, we do not match
                on the sender *)
-            begin match SignalMap.lookup (path, interface, member) connection.signal_receivers with
+            begin match try Some(SignalMap.find (path, interface, member) connection.signal_receivers) with Not_found -> None with
               | Some set ->
                   Lwt_sequence.iter_l
                     (fun receiver ->
@@ -317,7 +317,7 @@ let dispatch_message connection message = match message with
                        this information here. *)
                     OBus_cache.add connection.exited_peers name;
 
-                  begin match NameMap.lookup name connection.name_resolvers with
+                  begin match try Some(NameMap.find name connection.name_resolvers) with Not_found -> None with
                     | Some nr ->
                         ignore (
                           Lwt_log.debug_f ~section "updating internal name resolver: %S -> %S"
@@ -375,7 +375,7 @@ let dispatch_message connection message = match message with
 
             (* Only handle signals broadcasted or destined to us *)
             if message.destination = None || message.destination = connection.name then
-              match SignalMap.lookup (path, interface, member) connection.signal_receivers with
+              match try Some(SignalMap.find (path, interface, member) connection.signal_receivers) with Not_found -> None with
                 | Some set ->
                     Lwt_sequence.iter_l
                       (fun receiver ->
@@ -409,7 +409,7 @@ let dispatch_message connection message = match message with
   | { typ = Method_call(path, interface_opt, member) } ->
       ignore begin
         (* Look in static objects *)
-        let obj = ObjectMap.lookup path connection.exported_objects in
+        let obj = try Some(ObjectMap.find path connection.exported_objects) with Not_found -> None in
         lwt obj =
           if obj = None then
             (* Look in dynamic objects *)
@@ -634,7 +634,7 @@ let of_transport ?guid ?(up=true) transport =
   match guid with
     | None -> make ()
     | Some guid ->
-        match GuidMap.lookup guid !guid_connection_map with
+        match try Some(GuidMap.find guid !guid_connection_map) with Not_found -> None with
           | Some connection -> connection
           | None ->
               let connection = make () in
@@ -651,7 +651,7 @@ let of_addresses ?(shared=true) addresses = match shared with
   | true ->
       (* Try to find a guid that we already have *)
       let guids = OBus_util.filter_map OBus_address.guid addresses in
-      match OBus_util.find_map (fun guid -> GuidMap.lookup guid !guid_connection_map) guids with
+      match OBus_util.find_map (fun guid -> try Some(GuidMap.find guid !guid_connection_map) with Not_found -> None) guids with
         | Some packed ->
             return packed
         | None ->

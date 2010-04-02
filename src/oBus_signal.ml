@@ -153,7 +153,7 @@ let connect_backend ~connection ?sender ~path ~interface ~member ~event ~push ()
   (* Signal sets are indexed by tuples [(path, interface, member)]: *)
   let key = (path, interface, member) in
   let set =
-    match SignalMap.lookup key connection.signal_receivers with
+    match try Some(SignalMap.find key connection.signal_receivers) with Not_found -> None with
       | Some set ->
           set
       | None ->

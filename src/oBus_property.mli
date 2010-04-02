@@ -109,4 +109,4 @@ val get_all :
   ?owner : OBus_name.bus ->
   path : OBus_path.t ->
   interface : OBus_name.interface ->
-  unit -> (string * OBus_value.single) list Lwt.t
+  unit -> OBus_value.single Map.Make(String).t Lwt.t

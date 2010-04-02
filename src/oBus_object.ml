@@ -23,13 +23,13 @@ let object_unique_id = ref(0, 0)
    | Types                                                           |
    +-----------------------------------------------------------------+ *)
 
-module MethodMap = OBus_util.MakeMap
+module MethodMap = Map.Make
   (struct
      type t = OBus_name.interface option * OBus_name.member * signature
      let compare = Pervasives.compare
    end)
 
-module PropertyMap = OBus_util.MakeMap
+module PropertyMap = Map.Make
   (struct
      type t = OBus_name.interface * OBus_name.member
      let compare = Pervasives.compare
@@ -274,7 +274,7 @@ struct
          | Crashed _ ->
              raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj", "connection crashed"))
          | Running connection ->
-             match ObjectMap.lookup path connection.exported_objects with
+             match try Some(ObjectMap.find path connection.exported_objects) with Not_found -> None with
                | Some{ oo_object = Pack obj } ->
                    obj
                | Some{ oo_object = pack } ->
@@ -306,7 +306,7 @@ struct
     let info = Object.cast (unpack_object packed_object) in
     match message with
       | { typ = Method_call(path, interface, member) } -> begin
-          match MethodMap.lookup (interface, member, type_of_sequence message.body) info.methods with
+          match try Some(MethodMap.find (interface, member, type_of_sequence message.body) info.methods) with Not_found -> None with
             | Some f -> f packed_object packed_connection message
             | None -> OBus_method.fail  (packed_connection, message) (unknown_method_exn message)
         end
@@ -430,7 +430,7 @@ struct
   let () =
     Interface.method_call properties "Get" <:obus_func< string -> string -> variant >>
       (fun obj interface member ->
-         match PropertyMap.lookup (interface, member) (Object.cast obj).properties with
+         match try Some(PropertyMap.find (interface, member) (Object.cast obj).properties) with Not_found -> None with
            | Some{ up_reader = Some f } ->
                f (Pack obj)
            | Some{ up_reader = None } ->
@@ -439,7 +439,7 @@ struct
                fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
     Interface.method_call properties "Set" <:obus_func< string -> string -> variant -> unit >>
       (fun obj interface member x ->
-         match PropertyMap.lookup (interface, member) (Object.cast obj).properties with
+         match try Some(PropertyMap.find (interface, member) (Object.cast obj).properties) with Not_found -> None with
            | Some{ up_writer = Some f } ->
                f (Pack obj) x
            | Some{ up_writer = None } ->
@@ -517,7 +517,7 @@ let obus_t = obus_obj
 let remove_by_path packed path =
   let connection = unpack_connection packed in
   connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> path) connection.dynamic_objects;
-  match ObjectMap.lookup path connection.exported_objects with
+  match try Some(ObjectMap.find path connection.exported_objects) with Not_found -> None with
     | Some obj ->
         connection.exported_objects <- ObjectMap.remove path connection.exported_objects;
         obj.oo_connection_closed connection.packed

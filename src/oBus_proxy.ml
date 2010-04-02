@@ -96,6 +96,22 @@ module type S = sig
     member : OBus_name.member ->
     access : 'access OBus_property.access ->
     ?changed : OBus_name.member -> unit -> (OBus_value.single, 'access) OBus_property.t
+  val get : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member ->
+    ('a, _) OBus_type.cl_single -> 'a Lwt.t
+  val set : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member ->
+    ('a, _) OBus_type.cl_single -> 'a -> unit Lwt.t
+  val get_all : proxy -> interface : OBus_name.interface -> OBus_value.single Map.Make(String).t Lwt.t
+  val dyn_get : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member -> OBus_value.single Lwt.t
+  val dyn_set : proxy ->
+    interface : OBus_name.interface ->
+    member : OBus_name.member ->
+    OBus_value.single -> unit Lwt.t
 end
 
 (* +-----------------------------------------------------------------+
@@ -204,6 +220,27 @@ struct
       ~member
       ~access
       ?changed
+      ()
+
+  let get proxy ~interface ~member typ =
+    OBus_property.get (property proxy ~interface ~member ~access:OBus_property.readable typ)
+
+  let set proxy ~interface ~member typ value =
+    OBus_property.set (property proxy ~interface ~member ~access:OBus_property.writable typ) value
+
+  let dyn_get proxy ~interface ~member =
+    OBus_property.get (dyn_property proxy ~interface ~member ~access:OBus_property.readable ())
+
+  let dyn_set proxy ~interface ~member value =
+    OBus_property.set (dyn_property proxy ~interface ~member ~access:OBus_property.writable ()) value
+
+  let get_all proxy ~interface =
+    let proxy = Proxy.cast proxy in
+    OBus_property.get_all
+      ~connection:proxy.peer.connection
+      ?owner:proxy.peer.name
+      ~path:proxy.path
+      ~interface
       ()
 
   (* +---------------------------------------------------------------+
