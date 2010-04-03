@@ -11,7 +11,7 @@ open OBus_pervasives
 
 include OBus_proxy.Private
 
-let op_interface = OBus_proxy.make_interface ~changed:"Changed" "org.freedesktop.UDisks.Device"
+let op_interface = OBus_proxy.make_interface ~notify:(OBus_property.notify_global "Changed") "org.freedesktop.UDisks.Device"
 
 type benchmark_result = {
   bench_read_transfer_rate_results : (uint64 * float) structure list;

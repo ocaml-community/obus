@@ -25,7 +25,7 @@ module Proxy = OBus_proxy.Make(struct
                                  let make = OBus_proxy.peer
                                end)
 
-let op_interface = Proxy.make_interface ~changed:"Changed" "org.freedesktop.UPower"
+let op_interface = Proxy.make_interface ~notify:(OBus_property.notify_global "Changed") "org.freedesktop.UPower"
 
 OP_method HibernateAllowed : bool
 OP_method Hibernate : unit

@@ -52,7 +52,7 @@ end
 module type S = sig
   type proxy with obus(basic)
   type broken = proxy with obus(basic)
-  val make_interface : ?changed : OBus_name.member -> OBus_name.interface -> proxy Interface.t
+  val make_interface : ?notify : OBus_property.notify_mode -> OBus_name.interface -> proxy Interface.t
   val peer : proxy -> OBus_peer.t
   val path : proxy -> OBus_path.t
   val connection : proxy -> OBus_connection.t
@@ -89,13 +89,14 @@ module type S = sig
     interface : OBus_name.interface ->
     member : OBus_name.member ->
     access : 'access OBus_property.access ->
-    ?changed : OBus_name.member ->
+    ?notify : OBus_property.notify_mode ->
     ('a, _) OBus_type.cl_single -> ('a, 'access) OBus_property.t
   val dyn_property : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
     access : 'access OBus_property.access ->
-    ?changed : OBus_name.member -> unit -> (OBus_value.single, 'access) OBus_property.t
+    ?notify : OBus_property.notify_mode ->
+    unit -> (OBus_value.single, 'access) OBus_property.t
   val get : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
@@ -198,7 +199,7 @@ struct
      | Properties                                                    |
      +---------------------------------------------------------------+ *)
 
-  let property proxy ~interface ~member ~access ?changed typ =
+  let property proxy ~interface ~member ~access ?notify typ =
     let proxy = Proxy.cast proxy in
     OBus_property.make
       ~connection:proxy.peer.connection
@@ -207,10 +208,10 @@ struct
       ~interface
       ~member
       ~access
-      ?changed
+      ?notify
       typ
 
-  let dyn_property proxy ~interface ~member ~access ?changed () =
+  let dyn_property proxy ~interface ~member ~access ?notify () =
     let proxy = Proxy.cast proxy in
     OBus_property.dyn_make
       ~connection:proxy.peer.connection
@@ -219,7 +220,7 @@ struct
       ~interface
       ~member
       ~access
-      ?changed
+      ?notify
       ()
 
   let get proxy ~interface ~member typ =
@@ -281,11 +282,11 @@ struct
      | Interface creation                                            |
      +---------------------------------------------------------------+ *)
 
-  let make_interface ?changed interface = {
+  let make_interface ?notify interface = {
     Interface.name = interface;
     Interface.method_call = (fun member typ proxy -> call proxy ~interface ~member typ);
     Interface.signal = (fun member typ proxy -> connect proxy ~interface ~member typ);
-    Interface.property = (fun member access typ proxy -> property proxy ~interface ~member ~access ?changed typ);
+    Interface.property = (fun member access typ proxy -> property proxy ~interface ~member ~access ?notify typ);
   }
 end
 

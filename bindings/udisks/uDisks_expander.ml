@@ -11,7 +11,7 @@ open OBus_pervasives
 
 include OBus_proxy.Private
 
-let op_interface = OBus_proxy.make_interface ~changed:"Changed" "toto.titi"
+let op_interface = OBus_proxy.make_interface ~notify:(OBus_property.notify_global "Changed") "toto.titi"
 
 OP_signal Changed : unit
 

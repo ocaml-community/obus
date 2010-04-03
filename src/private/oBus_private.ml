@@ -151,11 +151,7 @@ and signal_receiver_set = {
 
 and property_state =
   | Prop_simple
-      (* Simpe state: no property is monitored for this interface *)
-  | Prop_monitor of (OBus_value.single StringMap.t * (packed_connection * OBus_message.t)) React.signal Lwt.t * (unit -> unit)
-      (* [Proxy_monitor(signal, close)] where [signal] is the signal
-         holding the current values of all properties and [close] is
-         used to stop monitoring the ``changed'' signal. *)
+  | Prop_monitor of notifier Lwt.t
 
 and property = {
   mutable prop_ref_count : int;
@@ -168,6 +164,13 @@ and property = {
   prop_owner : OBus_name.bus option;
   prop_path : OBus_path.t;
   prop_interface : OBus_name.interface;
+}
+
+and notify_data = ((packed_connection * OBus_message.t) * OBus_value.single) StringMap.t
+
+and notifier = {
+  notify_signal : notify_data React.signal;
+  notify_stop : unit -> unit;
 }
 
 (* +-----------------------------------------------------------------+

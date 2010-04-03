@@ -133,13 +133,12 @@ module type S = sig
   val obus_broken : broken OBus_type.basic
     (** Same as {!OBus_pervasives.obus_broken_path} but for proxies *)
 
-  val make_interface : ?changed : OBus_name.member -> OBus_name.interface -> proxy Interface.t
-    (** [make_interface ?changed name] create an interface using
+  val make_interface : ?notify : OBus_property.notify_mode -> OBus_name.interface -> proxy Interface.t
+    (** [make_interface ?notify name] create an interface using
         proxies of type {!proxy}.
 
-        [changed] is the name of the signal which is sent each time a
-        property changes. Setting this parameter will make it possible
-        to use {!OBus_property.contents} on properties. *)
+        @param notify indicates how property changes are announced.
+    *)
 
   (** {6 Informations} *)
 
@@ -213,14 +212,14 @@ module type S = sig
     interface : OBus_name.interface ->
     member : OBus_name.member ->
     access : 'access OBus_property.access ->
-    ?changed : OBus_name.member ->
+    ?notify : OBus_property.notify_mode ->
     ('a, _) OBus_type.cl_single -> ('a, 'access) OBus_property.t
 
   val dyn_property : proxy ->
     interface : OBus_name.interface ->
     member : OBus_name.member ->
     access : 'access OBus_property.access ->
-    ?changed : OBus_name.member -> unit -> (OBus_value.single, 'access) OBus_property.t
+    ?notify : OBus_property.notify_mode -> unit -> (OBus_value.single, 'access) OBus_property.t
 
   (** {8 Direct access to properties} *)
 
