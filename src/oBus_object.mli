@@ -115,10 +115,10 @@ module Interface : sig
   val property_r : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a React.signal) -> unit
     (** Registers a read-only property *)
 
-  val property_w : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a -> unit) -> unit
+  val property_w : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a -> unit Lwt.t) -> unit
     (** Registers a write-only property *)
 
-  val property_rw : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a React.signal) -> ('obj -> 'a -> unit) -> unit
+  val property_rw : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a React.signal) -> ('obj -> 'a -> unit Lwt.t) -> unit
     (** Registers a read and write property *)
 end
 

@@ -23,76 +23,108 @@ let object_unique_id = ref(0, 0)
    | Types                                                           |
    +-----------------------------------------------------------------+ *)
 
-module Method_map = Map.Make
-  (struct
-     type t = OBus_name.interface option * OBus_name.member * signature
-     let compare = Pervasives.compare
-   end)
-
-module Property_map = Map.Make
-  (struct
-     type t = OBus_name.interface * OBus_name.member
-     let compare = Pervasives.compare
-   end)
-
 module Connection_set = Set.Make(OBus_connection)
 module Interface_map = String_map
 module Member_map = String_map
 
-(* Type of a method call handler *)
-type untyped_method = OBus_pack.t -> OBus_connection.t -> OBus_message.t -> unit Lwt.t
-
-(* Type of a property handlers *)
-type untyped_property = {
-  up_signal : (OBus_pack.t -> OBus_value.single React.signal) option;
-  up_setter : (OBus_pack.t -> OBus_value.single -> unit) option;
+(* A method descriptor *)
+type method_desc = {
+  method_name : OBus_name.member;
+  method_handler : OBus_pack.t -> OBus_connection.t -> OBus_message.t -> unit Lwt.t;
 }
 
-(* Result of an untyped property applied to an object *)
-type applied_property = {
-  ap_signal : (OBus_value.single React.signal) option;
-  ap_setter : (OBus_value.single -> unit) option;
+(* A proeprty descriptor *)
+type property_desc = {
+  property_name : OBus_name.member;
+  property_signal : (OBus_pack.t -> OBus_value.single React.signal) option;
+  property_setter : (OBus_pack.t -> OBus_value.single -> unit Lwt.t) option;
 }
 
-(* An interface description *)
-type untyped_interface = {
-  ui_introspect : OBus_introspect.interface;
+(* Result of an property applied to an object *)
+type property_instance = {
+  property_instance_name : OBus_name.member;
+  property_instance_signal : (OBus_value.single React.signal) option;
+  property_instance_setter : (OBus_pack.t -> OBus_value.single -> unit Lwt.t) option;
+  property_instance_monitor : unit React.event;
+  (* The signal monitoring the property *)
+}
+
+(* An interface descriptor *)
+type interface_desc = {
+  interface_name : OBus_name.interface;
+  (* The name of the interface *)
+
+  interface_introspect : OBus_introspect.interface;
   (* For introspection *)
 
-  ui_methods : untyped_method Method_map.t;
-  (* For dispatching *)
+  interface_methods : method_desc array;
+  (* For dispatching method calls *)
 
-  ui_properties : untyped_property Property_map.t;
+  interface_properties : property_desc array;
   (* List for properties, for reading/writing properties *)
 }
 
 (* D-Bus object informations *)
 type info = {
-  mutable packed : OBus_pack.t;
+  mutable pack : OBus_pack.t;
+  (* The pack containing the user object assiociated for this
+     descriptor *)
+
   path : OBus_path.t;
+  (* The path of the object *)
+
   exports : Connection_set.t React.signal;
+  (* Set of connection on which the object is exported *)
+
   set_exports : Connection_set.t -> unit;
+  (* Setter for [exports] *)
+
   owner : OBus_peer.t option;
-  mutable methods : untyped_method Method_map.t;
-  mutable properties : applied_property Property_map.t;
-  mutable interfaces : untyped_interface list;
-  mutable monitored_properties : unit React.signal list;
+  (* The optionnal object owner *)
+
+  mutable interfaces : interface_desc Interface_map.t;
+  (* Interfaces implemented byu the object *)
+
+  mutable methods : (OBus_name.interface * method_desc array) array;
+  (* All methods of the object *)
+
+  mutable properties : (OBus_name.interface * property_instance array) array;
+  (* All properties of the object *)
+
   mutable changed : OBus_value.single Member_map.t Interface_map.t;
+  (* Properties that changed since the last upadte *)
 }
 
 type t = info
     (* The doefault type for object is directly D-Bus informations *)
 
-let apply_property up packed = {
-  ap_signal = (match up.up_signal with
-                 | Some f -> Some(f packed)
-                 | None -> None);
-  ap_setter = (match up.up_setter with
-                 | Some f -> Some(f packed)
-                 | None -> None);
-}
+(* +-----------------------------------------------------------------+
+   | Searching                                                       |
+   +-----------------------------------------------------------------+ *)
 
-let handle_change info interface member value =
+let binary_search get key array =
+  let rec loop a b =
+    if a = b then
+      None
+    else begin
+      let middle = (a + b) / 2 in
+      let element = Array.unsafe_get array middle in
+      let cmp = String.compare key (get element) in
+      if cmp = 0 then
+        Some element
+      else if cmp < 0 then
+        loop a middle
+      else
+        loop (middle + 1) b
+    end
+  in
+  loop 0 (Array.length array)
+
+(* +-----------------------------------------------------------------+
+   | Property change notifications                                   |
+   +-----------------------------------------------------------------+ *)
+
+let handle_property_change info interface member value =
   let empty = Interface_map.is_empty info.changed in
   info.changed <- (
     Interface_map.add interface
@@ -140,37 +172,51 @@ let handle_change info interface member value =
           return ()
   end
 
+let dummy = ("", [||])
+
 (* Generate the [methods] and [properties] fields from the
    [interfaces] field: *)
 let generate info =
-  (* Stop monitoring of previous values *)
-  List.iter React.S.stop info.monitored_properties;
-  info.methods <- (
-    List.fold_left
-      (fun map ui ->
-         Method_map.fold Method_map.add ui.ui_methods map)
-      Method_map.empty info.interfaces
+  (* Stop monitoring of previous properties *)
+  Array.iter
+    (fun (interface, properties) ->
+       Array.iter
+         (fun property -> React.E.stop property.property_instance_monitor)
+         properties)
+    info.properties;
+  let count = Interface_map.fold (fun _ _ count -> succ count) info.interfaces 0 in
+  let properties = Array.make count dummy and methods = Array.make count dummy in
+  ignore (
+    Interface_map.fold
+      (fun name interface i ->
+         Array.unsafe_set properties i
+           (name,
+            Array.map
+              (fun property ->
+                 let signal, monitor =
+                   match property.property_signal with
+                     | Some f ->
+                         let signal = f info.pack in
+                         (Some signal,
+                          React.E.map
+                            (handle_property_change info interface.interface_name property.property_name)
+                            (React.S.changes signal))
+                     | None ->
+                         (None, React.E.never)
+                 in
+                 {
+                   property_instance_name = property.property_name;
+                   property_instance_signal = signal;
+                   property_instance_setter = property.property_setter;
+                   property_instance_monitor = monitor;
+                 })
+              interface.interface_properties);
+         Array.unsafe_set methods i (name, interface.interface_methods);
+         i + 1)
+      info.interfaces 0
   );
-  info.properties <- (
-    List.fold_left
-      (fun map ui ->
-         Property_map.fold
-           (fun name up map ->
-              Property_map.add name (apply_property up info.packed) map)
-           ui.ui_properties map)
-      Property_map.empty info.interfaces
-  );
-  info.monitored_properties <- (
-    Property_map.fold
-      (fun (interface, member) ap acc ->
-         match ap.ap_signal with
-           | Some signal ->
-               React.S.map (handle_change info interface member) signal :: acc
-           | None ->
-               acc)
-      info.properties
-      []
-  )
+  info.properties <- properties;
+  info.methods <- methods
 
 let default_destroy info =
   Connection_set.iter
@@ -186,117 +232,177 @@ let default_destroy info =
    | Interface                                                       |
    +-----------------------------------------------------------------+ *)
 
+let dummy_method = { method_name = ""; method_handler = (fun pack connection message -> return ()) }
+let dummy_property = { property_name = ""; property_signal = None; property_setter = None }
+
 module Interface =
 struct
-  type 'obj creation = {
+  (* An interface builder: *)
+  type 'obj builder = {
     name : OBus_name.interface;
+    (* Name of the interface *)
+
     unpack : OBus_pack.t -> 'obj;
-    get : 'obj -> t;
+    (* Unpack a packed object *)
+
+    get : 'obj -> info;
+    (* Retreive object informations *)
+
     mutable members : OBus_introspect.member Member_map.t;
-    mutable methods : untyped_method Method_map.t;
-    mutable properties : untyped_property Property_map.t;
+    (* Members of the interface, for introspection *)
+
+    mutable methods : method_desc Member_map.t;
+    (* Descriptoins of all methods of the interface *)
+
+    mutable properties : property_desc Member_map.t;
+    (* Descriptions of all properties of the interface *)
   }
 
+  (* State of an interface *)
   type 'obj state =
-    | Creation of 'obj creation
-        (* Members are being added to the interface *)
-    | Finished of ('obj -> t) * untyped_interface
-        (* Registration is done. *)
+    | Building of 'obj builder
+        (* The interface is being built *)
+    | Finished of ('obj -> t) * interface_desc
+        (* Building done *)
 
   type 'obj t = 'obj state ref
+      (* Type of an interface *)
 
   let make name unpack get =
-    ref (Creation{
+    ref (Building{
            name = name;
            unpack = unpack;
            get = get;
            members = Member_map.empty;
-           methods = Method_map.empty;
-           properties = Property_map.empty;
+           methods = Member_map.empty;
+           properties = Member_map.empty;
          })
 
-  let untyped_interface iface = match !iface with
-    | Creation cr ->
-        let ui = {
-          ui_introspect = (cr.name, List.rev (Member_map.fold (fun name definition acc -> definition :: acc) cr.members []), []);
-          ui_methods = cr.methods;
-          ui_properties = cr.properties;
-        } in
-        iface := Finished(cr.get, ui);
-        ui
-    | Finished(_, ui) ->
-        ui
+  let array_of_member_map map dummy =
+    let count = Member_map.fold (fun key value n -> n + 1) map 0 in
+    let array = Array.make count dummy in
+    ignore (Member_map.fold
+              (fun key value i ->
+                 Array.unsafe_set array i value;
+                 i + 1)
+              map 0);
+    array
 
-  let close iface = ignore (untyped_interface iface)
+  let finished iface = match !iface with
+    | Building builder ->
+        let interface_desc = {
+          interface_name = builder.name;
+          interface_introspect = (builder.name, List.rev (Member_map.fold (fun name definition acc -> definition :: acc) builder.members []), []);
+          interface_methods = array_of_member_map builder.methods dummy_method;
+          interface_properties = array_of_member_map builder.properties dummy_property;
+        } in
+        iface := Finished(builder.get, interface_desc);
+        interface_desc
+    | Finished(_, interface_desc) ->
+        interface_desc
+
+  let close iface = ignore (finished iface)
 
   let name iface = match !iface with
-    | Creation{ name = name }
-    | Finished(_, { ui_introspect = (name, _, _) }) -> name
+    | Building{ name = name }
+    | Finished(_, { interface_name = name }) -> name
 
-  let introspect iface = (untyped_interface iface).ui_introspect
+  let introspect iface = (finished iface).interface_introspect
 
-  let get_creation caller iface = match !iface with
-    | Creation cr ->
-        cr
-    | Finished(_, { ui_introspect = (name, _, _) }) ->
-        Printf.ksprintf failwith "OBus_object.Interface.%s: The interface %S cannot register any new member" caller name
+  let get_builder caller iface = match !iface with
+    | Building builder ->
+        builder
+    | Finished(_, { interface_name = name }) ->
+        ksprintf failwith "OBus_object.Interface.%s: The interface %S cannot register any new member" caller name
 
   let with_names typs = List.map (fun t -> (None, t)) typs
 
+  type 'a result =
+    | Value of 'a
+    | Error of exn
+
   let method_call iface member typ f =
-    let cr = get_creation "method_call" iface
+    let builder = get_builder "method_call" iface
     and isig = OBus_type.isignature typ
     and osig = OBus_type.osignature typ in
-    cr.members <- Member_map.add member (Method(member, with_names isig, with_names osig, [])) cr.members;
+    builder.members <- Member_map.add member (Method(member, with_names isig, with_names osig, [])) builder.members;
+    let unpack = builder.unpack in
     let handler pack connection message =
       let context = (connection, message) in
       try_bind
-        (fun () -> OBus_type.cast_func typ ~context message.body (f (cr.unpack pack)))
+        (fun () ->
+           match try Value(OBus_type.cast_func typ ~context message.body) with exn -> Error exn with
+             | Value apply ->
+                 apply (f (unpack pack))
+             | Error(OBus_type.Cast_failure(func, reason)) ->
+                 let body_sig = type_of_sequence message.body in
+                 if body_sig <> isig then
+                   ksprintf failwith
+                     "invalid signature for method %S of interface %S: '%s', should be '%s'"
+                     member
+                     builder.name
+                     (string_of_signature (type_of_sequence message.body))
+                     (string_of_signature isig)
+                 else
+                   ksprintf failwith "%s.%s: failed to cast method-call contents: %s" builder.name member reason
+             | Error exn ->
+                 fail exn)
         (OBus_method.return ~context (OBus_type.func_reply typ))
         (OBus_method.fail ~context)
     in
-    cr.methods <- Method_map.add (Some cr.name, member, isig) handler (Method_map.add (None, member, isig) handler cr.methods)
+    builder.methods <- Member_map.add member { method_name = member; method_handler = handler } builder.methods
 
   let signal iface member typ =
-    let cr = get_creation "signal" iface in
-    cr.members <- Member_map.add member (Signal(member, with_names (OBus_type.type_sequence typ), [])) cr.members
+    let builder = get_builder "signal" iface in
+    builder.members <- Member_map.add member (Signal(member, with_names (OBus_type.type_sequence typ), [])) builder.members
 
   let emit iface member typ obj ?peer value =
-    let interface, obj = match !iface with
-      | Creation{ name = name; get = get }
-      | Finished(get, { ui_introspect = (name, _, _) }) -> (name, get obj)
+    let interface_name, info = match !iface with
+      | Building{ name = name; get = get }
+      | Finished(get, { interface_name = name }) -> (name, get obj)
     and body = OBus_type.make_sequence typ value in
-    match peer, obj.owner with
+    match peer, info.owner with
       | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
       | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
-          OBus_signal.dyn_emit ~connection ?destination ~interface ~member ~path:obj.path body
+          OBus_signal.dyn_emit ~connection ?destination ~interface:interface_name ~member ~path:info.path body
       | None, None ->
           join (Connection_set.fold
-                  (fun connection l -> OBus_signal.dyn_emit ~connection ~interface ~member ~path:obj.path body :: l)
-                  (React.S.value obj.exports)
+                  (fun connection l -> OBus_signal.dyn_emit ~connection ~interface:interface_name ~member ~path:info.path body :: l)
+                  (React.S.value info.exports)
                   [])
 
   let property iface member typ signal setter mode =
-    let cr = get_creation "property" iface
-    and ty = OBus_type.type_single typ in
-    cr.members <- Member_map.add member (Property(member, ty, mode, [])) cr.members;
-    cr.properties <- Property_map.add (cr.name, member) {
-      up_signal = (match signal with
-                     | None ->
-                         None
-                     | Some f ->
-                         Some(fun pack -> React.S.map (OBus_type.make_single typ) (f (cr.unpack pack))));
-      up_setter = (match setter with
-                     | None ->
-                         None
-                     | Some f ->
-                         Some(fun pack x -> match OBus_type.opt_cast_single typ x with
-                                | Some x -> f (cr.unpack pack) x
-                                | None -> failwith (sprintf "invalid type for property %S: '%s', should be '%s'"
-                                                      member
-                                                      (string_of_signature [type_of_single x])
-                                                      (string_of_signature [ty]))));
-    } cr.properties
+    let builder = get_builder "property" iface and ty = OBus_type.type_single typ in
+    builder.members <- Member_map.add member (Property(member, ty, mode, [])) builder.members;
+    let unpack = builder.unpack in
+    builder.properties <- Member_map.add member {
+      property_name = member;
+      property_signal = (match signal with
+                           | None ->
+                               None
+                           | Some f ->
+                               Some(fun pack -> React.S.map (OBus_type.make_single typ) (f (unpack pack))));
+      property_setter = (match setter with
+                           | None ->
+                               None
+                           | Some f ->
+                               Some(fun pack value ->
+                                      match try Value(OBus_type.cast_single typ value) with exn -> Error exn with
+                                        | Value x ->
+                                            f (unpack pack) x
+                                        | Error(OBus_type.Cast_failure(func, reason)) ->
+                                            let value_type = type_of_single value in
+                                            if value_type <> ty then
+                                              ksprintf failwith "invalid type for property %S of interface %S: '%s', should be '%s'"
+                                                member
+                                                builder. name
+                                                (string_of_signature [value_type])
+                                                (string_of_signature [ty])
+                                            else
+                                              ksprintf failwith "%s.%s: failed to cast property contents: %s" builder.name member reason
+                                        | Error exn ->
+                                            fail exn));
+    } builder.properties
 
   let property_r iface member typ signal = property iface member typ (Some signal) None Read
   let property_w iface member typ setter = property iface member typ None (Some setter) Write
@@ -363,25 +469,30 @@ struct
                      Pack.unpack pack
                    with Invalid_argument _ ->
                      raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj",
-                                                   Printf.sprintf
+                                                   sprintf
                                                      "unexpected type for object with path %S"
                                                      (OBus_path.to_string path)))
                  end
                | None ->
                    raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj",
-                                                 Printf.sprintf
+                                                 sprintf
                                                    "cannot find object with path %S"
                                                    (OBus_path.to_string path))))
     (fun obj -> (Object.cast obj).path)
 
   (* +---------------------------------------------------------------+
-     | Properties                                                    |
+     | Parameters                                                    |
      +---------------------------------------------------------------+ *)
 
   let path obj = (Object.cast obj).path
   let owner obj = (Object.cast obj).owner
   let exports obj = (Object.cast obj).exports
-  let introspect obj = List.map (fun ui -> ui.ui_introspect) (Object.cast obj).interfaces
+  let introspect obj =
+    List.rev
+      (Interface_map.fold
+         (fun name iface acc -> iface.interface_introspect :: acc)
+         (Object.cast obj).interfaces
+         [])
 
   (* +---------------------------------------------------------------+
      | Export/remove                                                 |
@@ -390,10 +501,30 @@ struct
   let handle_call pack connection message =
     let info = Object.cast (Pack.unpack pack) in
     match message with
-      | { typ = Method_call(path, interface, member) } -> begin
-          match try Some(Method_map.find (interface, member, type_of_sequence message.body) info.methods) with Not_found -> None with
-            | Some f -> f pack connection message
-            | None -> OBus_method.fail  (connection, message) (unknown_method_exn message)
+      | { typ = Method_call(path, Some interface, member) } -> begin
+          match binary_search fst interface info.methods with
+            | None ->
+                OBus_method.fail (connection, message) (unknown_method_exn message)
+            | Some(interface, methods) ->
+                match binary_search (fun meth -> meth.method_name) member methods with
+                  | None ->
+                      OBus_method.fail  (connection, message) (unknown_method_exn message)
+                  | Some meth ->
+                      meth.method_handler pack connection message
+        end
+      | { typ = Method_call(path, None, member) } -> begin
+          let count = Array.length info.methods in
+          let rec loop i =
+            if i = count then
+              OBus_method.fail  (connection, message) (unknown_method_exn message)
+            else
+              match binary_search (fun meth -> meth.method_name) member (snd info.methods.(i)) with
+                | Some meth ->
+                    meth.method_handler pack connection message
+                | None ->
+                    loop (i + 1)
+          in
+          loop 0
         end
       | _ ->
           invalid_arg "OBus_object.Make.handle_call"
@@ -404,8 +535,8 @@ struct
     if not (Connection_set.mem connection (React.S.value info.exports)) then begin
       running.running_static_objects <- Object_map.add info.path {
         static_object_handle = handle_call;
-        static_object_object = info.packed;
-        static_object_connection_closed = (fun packed -> info.set_exports (Connection_set.remove packed (React.S.value info.exports)));
+        static_object_object = info.pack;
+        static_object_connection_closed = (fun connection -> info.set_exports (Connection_set.remove connection (React.S.value info.exports)));
       } running.running_static_objects;
       info.set_exports (Connection_set.add connection (React.S.value info.exports))
     end
@@ -459,17 +590,14 @@ struct
 
   let make_interface name = Interface.make name Pack.unpack Object.cast
 
-  let interface_name { ui_introspect = (name, _, _) } = name
-
   let add_interface obj iface =
-    let info = Object.cast obj and ui = Interface.untyped_interface iface in
-    let name = interface_name ui in
-    info.interfaces <- ui :: List.filter (fun ui' -> name <> interface_name ui') info.interfaces;
+    let info = Object.cast obj and iface = Interface.finished iface in
+    info.interfaces <- Interface_map.add iface.interface_name iface info.interfaces;
     generate info
 
   let remove_interface_by_name obj name =
     let info = Object.cast obj in
-    info.interfaces <- List.filter (fun ui' -> name <> interface_name ui') info.interfaces;
+    info.interfaces <- Interface_map.remove name info.interfaces;
     generate info
 
   let remove_interface obj iface =
@@ -482,52 +610,63 @@ struct
   let introspectable = make_interface "org.freedesktop.DBus.Introspectable"
 
   let () =
-    Interface.method_call introspectable "Introspect" <:obus_func< context -> OBus_introspect.document >>
+    Interface.method_call introspectable "Introspect" (<:obus_func< context -> OBus_introspect.document >>)
       (fun obj (connection, message) ->
-         let obj = Object.cast obj in
-         return (List.map (fun ui -> ui.ui_introspect) obj.interfaces,
+         let info = Object.cast obj in
+         return (introspect obj,
                  match connection#get with
                    | Crashed _ ->
                        []
                    | Running connection ->
-                       children connection obj.path));
+                       children connection info.path));
     Interface.close introspectable
 
   let properties = make_interface "org.freedesktop.DBus.Properties"
 
   let () =
-    Interface.method_call properties "Get" <:obus_func< string -> string -> variant >>
+    Interface.method_call properties "Get" (<:obus_func< string -> string -> variant >>)
       (fun obj interface member ->
-         match try Some(Property_map.find (interface, member) (Object.cast obj).properties) with Not_found -> None with
-           | Some{ ap_signal = Some s } ->
-               return (React.S.value s)
-           | Some{ ap_signal = None } ->
-               fail (Failure (sprintf "property %S on interface %S is not readable" member interface))
+         let info = Object.cast obj in
+         match binary_search fst interface info.properties with
            | None ->
-               fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
-    Interface.method_call properties "Set" <:obus_func< string -> string -> variant -> unit >>
+               fail (Failure (sprintf "no such interface: %S" interface))
+           | Some(interface, properties) ->
+               match binary_search (fun prop -> prop.property_instance_name) member properties with
+                 | Some{ property_instance_signal = Some s } ->
+                     return (React.S.value s)
+                 | Some{ property_instance_signal = None } ->
+                     fail (Failure (sprintf "property %S on interface %S is not readable" member interface))
+                 | None ->
+                     fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
+    Interface.method_call properties "Set" (<:obus_func< string -> string -> variant -> unit >>)
       (fun obj interface member x ->
-         match try Some(Property_map.find (interface, member) (Object.cast obj).properties) with Not_found -> None with
-           | Some{ ap_setter = Some f } ->
-               f x;
-               return ()
-           | Some{ ap_setter = None } ->
-               fail (Failure (sprintf "property %S on interface %S is not writable" member interface))
+         let info = Object.cast obj in
+         match binary_search fst interface info.properties with
            | None ->
-               fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
-    Interface.method_call properties "GetAll" <:obus_func< string -> (string, variant) dict >>
+               fail (Failure (sprintf "no such interface: %S" interface))
+           | Some(interface, properties) ->
+               match binary_search (fun prop -> prop.property_instance_name) member properties with
+                 | Some{ property_instance_setter = Some f } ->
+                     f info.pack x
+                 | Some{ property_instance_setter = None } ->
+                     fail (Failure (sprintf "property %S on interface %S is not writable" member interface))
+                 | None ->
+                     fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
+    Interface.method_call properties "GetAll" (<:obus_func< string -> (string, variant) dict >>)
       (fun obj interface ->
-         return (Property_map.fold
-                   (fun (interface', member) ap acc ->
-                      if interface = interface' then
-                        match ap.ap_signal with
-                          | Some s -> (member, React.S.value s) :: acc
-                          | None -> acc
-                      else
-                        acc)
-                   (Object.cast obj).properties
-                   []));
-    Interface.signal properties "OBusPropertiesChanged" <:obus_type< string * (string, variant) dict >>;
+         let info = Object.cast obj in
+         match binary_search fst interface info.properties with
+           | Some(interface, properties) ->
+               return (Array.fold_left
+                         (fun acc property ->
+                            match property.property_instance_signal with
+                              | Some s -> (property.property_instance_name, React.S.value s) :: acc
+                              | None -> acc)
+                         []
+                         properties)
+           | None ->
+               return []);
+    Interface.signal properties "OBusPropertiesChanged" (<:obus_type< string * (string, variant) dict >>);
     Interface.close properties
 
   (* +---------------------------------------------------------------+
@@ -538,19 +677,24 @@ struct
     let interfaces = if common then introspectable :: properties :: interfaces else interfaces in
     let exports, set_exports = React.S.create ~eq:Connection_set.equal Connection_set.empty in
     let info = {
-      packed = OBus_pack.dummy;
+      pack = OBus_pack.dummy;
       path = path;
       exports = exports;
       set_exports = set_exports;
       owner = owner;
-      methods = Method_map.empty;
-      properties = Property_map.empty;
-      interfaces = List.map Interface.untyped_interface interfaces;
-      monitored_properties = [];
+      methods = [||];
+      properties = [||];
+      interfaces =
+        List.fold_left
+          (fun acc iface ->
+             let iface = Interface.finished iface in
+             Interface_map.add iface.interface_name iface acc)
+          Interface_map.empty
+          interfaces;
       changed = Interface_map.empty;
     } in
     let obj = f info in
-    info.packed <- Pack.pack obj;
+    info.pack <- Pack.pack obj;
     generate info;
     let () =
       match owner with
@@ -571,7 +715,7 @@ struct
       object_unique_id := (id1 + 1, 0)
     else
       object_unique_id := (id1, id2);
-    make ?owner ?common ?interfaces ["ocaml"; Printf.sprintf "%d_%d" id1 id2] f
+    make ?owner ?common ?interfaces ["ocaml"; sprintf "%d_%d" id1 id2] f
 end
 
 (* +-----------------------------------------------------------------+

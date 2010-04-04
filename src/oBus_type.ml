@@ -84,44 +84,15 @@ let cast_basic t = cast (_cast_basic t)
 let cast_single t = cast (_cast_single t)
 let cast_sequence t = cast (_cast_sequence t)
 
-let opt_cast f ?context x =
-  let context = { ctx_user = context; ctx_fds = FD_map.empty } in
-  try
-    Some(f context x)
-  with
-    | Cast_failure _ ->
-        close_fds context.ctx_fds;
-        None
-    | exn ->
-        close_fds context.ctx_fds;
-        raise exn
-
-let opt_cast_basic t = opt_cast (_cast_basic t)
-let opt_cast_single t = opt_cast (_cast_single t)
-let opt_cast_sequence t = opt_cast (_cast_sequence t)
-
 let make_func { f_make = f } cont = f Tnil cont
 
-let cast_func { f_cast = f } ?context x g =
+let cast_func { f_cast = f } ?context x =
   let context = { ctx_user = context; ctx_fds = FD_map.empty } in
-  match try `OK(f context x) with exn -> `Fail exn with
-    | `OK apply ->
-        apply g
-    | `Fail exn ->
-        close_fds context.ctx_fds;
-        raise exn
-
-let opt_cast_func { f_cast = f } ?context x g =
-  let context = { ctx_user = context; ctx_fds = FD_map.empty } in
-  match try `OK(f context x) with exn -> `Fail exn with
-    | `OK apply ->
-        Some(apply g)
-    | `Fail(Cast_failure _) ->
-        close_fds context.ctx_fds;
-        None
-    | `Fail exn ->
-        close_fds context.ctx_fds;
-        raise exn
+  try
+    f context x
+  with exn ->
+    close_fds context.ctx_fds;
+    raise exn
 
 let func_reply { f_reply = r } = r
 

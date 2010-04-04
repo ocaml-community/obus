@@ -103,9 +103,11 @@ let obus_hints = OBus_type.map <:obus_type< (string, variant) dict >>
   (fun l ->
      List.map (fun (name, value) ->
                  match name with
-                   | "image_data" -> begin match OBus_type.opt_cast_single obus_image value with
-                       | None -> Hint_variant(name, value)
-                       | Some img -> Hint_image img
+                   | "image_data" -> begin
+                       try
+                         Hint_image(OBus_type.cast_single obus_image value)
+                       with exn ->
+                         Hint_variant(name, value)
                      end
                    | _ -> Hint_variant(name, value)) l)
   (fun l ->

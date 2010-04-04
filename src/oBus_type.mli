@@ -73,25 +73,17 @@ exception Cast_failure of string * string
 val cast_basic : ('a, _) cl_basic -> ?context : context -> OBus_value.basic -> 'a
 val cast_single : ('a, _) cl_single -> ?context : context -> OBus_value.single -> 'a
 val cast_sequence : ('a, _) cl_sequence -> ?context : context -> OBus_value.sequence -> 'a
-  (** Cast a dynamically typed value into a statically typed one. It
-      raise a [Cast_failure] if types do not match. *)
-
-val opt_cast_basic : ('a, _) cl_basic -> ?context : context -> OBus_value.basic -> 'a option
-val opt_cast_single : ('a, _) cl_single -> ?context : context -> OBus_value.single -> 'a option
-val opt_cast_sequence : ('a, _) cl_sequence -> ?context : context -> OBus_value.sequence -> 'a option
-  (** Same thing but return an option instead of raising an
-      exception *)
+  (** Casts a dynamically typed value into a statically typed one. It
+      raises a [Cast_failure] if types do not match. *)
 
 val make_func : ('a, 'b, 'c) func -> (OBus_value.sequence -> 'b) -> 'a
-  (** [make_func typ cont ...] make a sequence from extra parameters
+  (** [make_func typ cont ...] makes a sequence from extra parameters
       and pass it to [cont] *)
 
-val cast_func : ('a, 'b, 'c) func -> ?context : context -> OBus_value.sequence -> 'a -> 'b
-  (** [cast_func typ context seq f] cast [seq] using [typ] and pass the
-      resulting values to [f] *)
-
-val opt_cast_func : ('a, 'b, 'c) func -> ?context : context -> OBus_value.sequence -> 'a -> 'b option
-  (** Same as [cast_func] but do not raise an exception *)
+val cast_func : ('a, 'b, 'c) func -> ?context : context -> OBus_value.sequence -> ('a -> 'b)
+  (** [cast_func typ context seq] casts [seq] using [typ] and returns
+      a function which, when applied on a function, pass it the
+      resulting values. *)
 
 val func_reply : ('a, 'b, 'c) func -> 'c sequence
   (** Return the return type of a functionnal type *)

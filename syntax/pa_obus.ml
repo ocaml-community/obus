@@ -354,14 +354,14 @@ EXTEND Gram
              | Some e ->
                  <:str_item< let () = OBus_object.Interface.property_w ol_interface $str:dname$ $typ$ $e$ >>
              | None ->
-                 <:str_item< let () = OBus_object.Interface.property_w ol_interface $str:dname$ $typ$ (fun __obj -> __obj.$lid:prepend_lid "set" cname$) >>)
+                 <:str_item< let () = OBus_object.Interface.property_w ol_interface $str:dname$ $typ$ (fun __obj __x -> __obj.$lid:prepend_lid "set" cname$ __x; Lwt.return ()) >>)
 
       | "OL_property_rw"; (dname, cname) = obus_member; ":"; typ = obus_type; es = equal_expr2 ->
           (match es with
              | Some(reader, writer) ->
                  <:str_item< let () = OBus_object.Interface.property_rw ol_interface $str:dname$ $typ$ $reader$ $writer$ >>
              | None ->
-                 <:str_item< let () = OBus_object.Interface.property_rw ol_interface $str:dname$ $typ$ (fun __ obj -> __obj. $lid:cname$) (fun __obj -> __obj.$lid:prepend_lid "set" cname$) >>)
+                 <:str_item< let () = OBus_object.Interface.property_rw ol_interface $str:dname$ $typ$ (fun __ obj -> __obj. $lid:cname$) (fun __obj __x -> __obj.$lid:prepend_lid "set" cname$ __x; Lwt.return ()) >>)
 
       ] ];
 

@@ -330,9 +330,8 @@ let unknown_method_exn message = match message with
               (Printf.sprintf "Method %S with signature %S doesn't exist"
                  member signature)
       end
-
   | _ ->
-      invalid_arg "OBus_internals.unknown_mehtod_exn"
+      invalid_arg "OBus_private_connection.unknown_mehtod_exn"
 
 (* Returns the list of children of a node *)
 let children running prefix =
