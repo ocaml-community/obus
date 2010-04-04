@@ -104,9 +104,6 @@ val notify_egg_dbus : notify_mode
   (** EggDBus notification mode. It is used by services using the
       EggDBus library. *)
 
-val notify_obus : notify_mode
-  (** The obus notification mode *)
-
 type notify_data = (OBus_type.context * OBus_value.single) Map.Make(String).t
     (** Data that must be returned by notifiers. It is a mapping from
         property names to their value and the context in which they

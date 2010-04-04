@@ -25,6 +25,10 @@ val remove_by_path : OBus_connection.t -> OBus_path.t -> unit
       [path] on [connection]. Works for normal objects and dynamic
       nodes. *)
 
+type notify_mode
+  (** Describe how property changes should be announced to other
+      applications *)
+
 (** Interface definition *)
 module Interface : sig
   (** This module is aimed to be use with the [obus.syntax] syntax
@@ -132,9 +136,10 @@ module type S = sig
 
   (** {6 Interfaces} *)
 
-  val make_interface : OBus_name.interface -> obj Interface.t
-    (** [make_interface name] creates an empty interface. New members
-        can be added using the module {!Interface}. *)
+  val make_interface : ?notify : notify_mode -> OBus_name.interface -> obj Interface.t
+    (** [make_interface ?notify name] creates an empty interface. New
+        members can be added using the module {!Interface}. [notify]
+        defaults to {!notify_none}. *)
 
   val add_interface : obj -> obj Interface.t -> unit
     (** [add_interface obj iface] adds suport for the interface
@@ -335,3 +340,11 @@ end
 
 module Make(Object : Custom) : S with type obj = Object.obj
   (** [Make(Object)] creates a custom object module *)
+
+(** {6 Notification modes} *)
+
+(** For a description of these modes, look at {!OBus_property} *)
+
+val notify_none : notify_mode
+val notify_global : OBus_name.member -> notify_mode
+val notify_update : OBus_name.member -> notify_mode

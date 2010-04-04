@@ -27,6 +27,14 @@ module Connection_set = Set.Make(OBus_connection)
 module Interface_map = String_map
 module Member_map = String_map
 
+type notify_mode = {
+  notify_send : OBus_connection.t -> OBus_name.bus option -> OBus_path.t -> OBus_name.interface -> OBus_value.single Member_map.t -> unit Lwt.t;
+  (* The function which send the notification *)
+
+  notify_signature : OBus_introspect.member option;
+  (* Additional members for the interface *)
+}
+
 (* A method descriptor *)
 type method_desc = {
   method_name : OBus_name.member;
@@ -46,7 +54,6 @@ type property_instance = {
   property_instance_signal : (OBus_value.single React.signal) option;
   property_instance_setter : (OBus_pack.t -> OBus_value.single -> unit Lwt.t) option;
   property_instance_monitor : unit React.event;
-  (* The signal monitoring the property *)
 }
 
 (* An interface descriptor *)
@@ -62,6 +69,9 @@ type interface_desc = {
 
   interface_properties : property_desc array;
   (* List for properties, for reading/writing properties *)
+
+  interface_notify : notify_mode;
+  (* Notification mode for this interface *)
 }
 
 (* D-Bus object informations *)
@@ -99,7 +109,7 @@ type t = info
     (* The doefault type for object is directly D-Bus informations *)
 
 (* +-----------------------------------------------------------------+
-   | Searching                                                       |
+   | Binary search                                                   |
    +-----------------------------------------------------------------+ *)
 
 let binary_search get key array =
@@ -124,12 +134,18 @@ let binary_search get key array =
    | Property change notifications                                   |
    +-----------------------------------------------------------------+ *)
 
-let handle_property_change info interface member value =
+let notify_none = {
+  notify_send = (fun _ _ _ _ _ -> return ());
+  notify_signature = None;
+}
+
+(* The function which send the notification *)
+let handle_property_change info interface_name member_name value =
   let empty = Interface_map.is_empty info.changed in
   info.changed <- (
-    Interface_map.add interface
-      (Member_map.add member value
-         (try Interface_map.find interface info.changed with Not_found -> Member_map.empty))
+    Interface_map.add interface_name
+      (Member_map.add member_name value
+         (try Interface_map.find interface_name info.changed with Not_found -> Member_map.empty))
       info.changed
   );
   if empty then ignore begin
@@ -141,16 +157,16 @@ let handle_property_change info interface member value =
       | Some peer ->
           Interface_map.iter
             (fun name properties ->
-               ignore begin
-                 OBus_signal.emit
-                   ~connection:(OBus_peer.connection peer)
-                   ?destination:(OBus_peer.name peer)
-                   ~path:info.path
-                   ~interface:"org.freedesktop.Properties"
-                   ~member:"OBusPropertiesChanged"
-                 <:obus_type< (string, variant) dict >>
-                   (Member_map.fold (fun name value acc -> (name, value) :: acc) properties [])
-               end)
+               match try Some(Interface_map.find name info.interfaces) with Not_found -> None with
+                 | Some interface ->
+                     ignore (interface.interface_notify.notify_send
+                               (OBus_peer.connection peer)
+                               (OBus_peer.name peer)
+                               info.path
+                               name
+                               properties)
+                 | None ->
+                     ())
             changed;
           return ()
       | None ->
@@ -158,19 +174,24 @@ let handle_property_change info interface member value =
             (fun connection ->
                Interface_map.iter
                  (fun name properties ->
-                    ignore begin
-                      OBus_signal.emit
-                        ~connection
-                        ~path:info.path
-                        ~interface:"org.freedesktop.Properties"
-                        ~member:"OBusPropertiesChanged"
-                      <:obus_type< (string, variant) dict >>
-                        (Member_map.fold (fun name value acc -> (name, value) :: acc) properties [])
-                    end)
+                    match try Some(Interface_map.find name info.interfaces) with Not_found -> None with
+                      | Some interface ->
+                          ignore (interface.interface_notify.notify_send
+                                    connection
+                                    None
+                                    info.path
+                                    name
+                                    properties)
+                      | None ->
+                          ())
                  changed)
             (React.S.value info.exports);
           return ()
   end
+
+(* +-----------------------------------------------------------------+
+   | Method and property maps geenration                             |
+   +-----------------------------------------------------------------+ *)
 
 let dummy = ("", [||])
 
@@ -218,16 +239,6 @@ let generate info =
   info.properties <- properties;
   info.methods <- methods
 
-let default_destroy info =
-  Connection_set.iter
-    (fun connection -> match connection#get with
-       | Crashed exn ->
-           ()
-       | Running running ->
-           running.running_static_objects <- Object_map.remove info.path running.running_static_objects)
-    (React.S.value info.exports);
-  info.set_exports Connection_set.empty
-
 (* +-----------------------------------------------------------------+
    | Interface                                                       |
    +-----------------------------------------------------------------+ *)
@@ -247,6 +258,9 @@ struct
 
     get : 'obj -> info;
     (* Retreive object informations *)
+
+    notify : notify_mode;
+    (* Property change noficiation mode *)
 
     mutable members : OBus_introspect.member Member_map.t;
     (* Members of the interface, for introspection *)
@@ -268,12 +282,23 @@ struct
   type 'obj t = 'obj state ref
       (* Type of an interface *)
 
-  let make name unpack get =
+  let make name unpack get notify =
     ref (Building{
            name = name;
            unpack = unpack;
            get = get;
-           members = Member_map.empty;
+           notify = notify;
+           members = (match notify.notify_signature with
+                        | Some member ->
+                            Member_map.add
+                              (match member with
+                                 | Method(name, _, _, _) -> name
+                                 | Signal(name, _, _) -> name
+                                 | Property(name, _, _, _) -> name)
+                              member
+                              Member_map.empty
+                        | None ->
+                            Member_map.empty);
            methods = Member_map.empty;
            properties = Member_map.empty;
          })
@@ -295,6 +320,7 @@ struct
           interface_introspect = (builder.name, List.rev (Member_map.fold (fun name definition acc -> definition :: acc) builder.members []), []);
           interface_methods = array_of_member_map builder.methods dummy_method;
           interface_properties = array_of_member_map builder.properties dummy_property;
+          interface_notify = builder.notify;
         } in
         iface := Finished(builder.get, interface_desc);
         interface_desc
@@ -415,7 +441,7 @@ end
 
 module type S = sig
   type obj with obus(basic)
-  val make_interface : OBus_name.interface -> obj Interface.t
+  val make_interface : ?notify : notify_mode -> OBus_name.interface -> obj Interface.t
   val add_interface : obj -> obj Interface.t -> unit
   val remove_interface : obj -> obj Interface.t -> unit
   val remove_interface_by_name : obj -> OBus_name.interface -> unit
@@ -446,6 +472,16 @@ end
 (* +-----------------------------------------------------------------+
    | Objects implementation                                          |
    +-----------------------------------------------------------------+ *)
+
+let default_destroy info =
+  Connection_set.iter
+    (fun connection -> match connection#get with
+       | Crashed exn ->
+           ()
+       | Running running ->
+           running.running_static_objects <- Object_map.remove info.path running.running_static_objects)
+    (React.S.value info.exports);
+  info.set_exports Connection_set.empty
 
 module Make(Object : Custom) : S with type obj = Object.obj =
 struct
@@ -588,7 +624,7 @@ struct
      | Interfaces                                                    |
      +---------------------------------------------------------------+ *)
 
-  let make_interface name = Interface.make name Pack.unpack Object.cast
+  let make_interface ?(notify=notify_none) name = Interface.make name Pack.unpack Object.cast notify
 
   let add_interface obj iface =
     let info = Object.cast obj and iface = Interface.finished iface in
@@ -742,3 +778,33 @@ let remove_by_path connection path =
         static_object.static_object_connection_closed connection
     | None ->
         ()
+
+(* +-----------------------------------------------------------------+
+   | Notification modes                                              |
+   +-----------------------------------------------------------------+ *)
+
+let notify_global name = {
+  notify_send = (fun connection owner path interface members ->
+                   OBus_signal.emit
+                     ~connection
+                     ?destination:owner
+                     ~path
+                     ~interface
+                     ~member:name
+                     <:obus_type< unit >>
+                     ());
+  notify_signature = Some(Signal(name, [], []));
+}
+
+let notify_update name = {
+  notify_send = (fun connection owner path interface members ->
+                   OBus_signal.emit
+                     ~connection
+                     ?destination:owner
+                     ~path
+                     ~interface
+                     ~member:name
+                     <:obus_type< (string, variant) dict >>
+                     (Member_map.fold (fun name value acc -> (name, value) :: acc) members []));
+  notify_signature = Some(Signal(name, [(None, Tdict(Tstring, Tvariant))], []));
+}
