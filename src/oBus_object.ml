@@ -12,7 +12,7 @@ open Lwt
 open OBus_message
 open OBus_introspect
 open OBus_value
-open OBus_private
+open OBus_private_connection
 open OBus_connection
 open OBus_pervasives
 
@@ -23,29 +23,29 @@ let object_unique_id = ref(0, 0)
    | Types                                                           |
    +-----------------------------------------------------------------+ *)
 
-module MethodMap = Map.Make
+module Method_map = Map.Make
   (struct
      type t = OBus_name.interface option * OBus_name.member * signature
      let compare = Pervasives.compare
    end)
 
-module PropertyMap = Map.Make
+module Property_map = Map.Make
   (struct
      type t = OBus_name.interface * OBus_name.member
      let compare = Pervasives.compare
    end)
 
-module ConnectionSet = Set.Make(OBus_connection)
-module InterfaceMap = StringMap
-module MemberMap = StringMap
+module Connection_set = Set.Make(OBus_connection)
+module Interface_map = String_map
+module Member_map = String_map
 
 (* Type of a method call handler *)
-type untyped_method = packed_object -> OBus_connection.t -> OBus_message.t -> unit Lwt.t
+type untyped_method = OBus_pack.t -> OBus_connection.t -> OBus_message.t -> unit Lwt.t
 
 (* Type of a property handlers *)
 type untyped_property = {
-  up_signal : (packed_object -> OBus_value.single React.signal) option;
-  up_setter : (packed_object -> OBus_value.single -> unit) option;
+  up_signal : (OBus_pack.t -> OBus_value.single React.signal) option;
+  up_setter : (OBus_pack.t -> OBus_value.single -> unit) option;
 }
 
 (* Result of an untyped property applied to an object *)
@@ -59,25 +59,29 @@ type untyped_interface = {
   ui_introspect : OBus_introspect.interface;
   (* For introspection *)
 
-  ui_methods : untyped_method MethodMap.t;
+  ui_methods : untyped_method Method_map.t;
   (* For dispatching *)
 
-  ui_properties : untyped_property PropertyMap.t;
+  ui_properties : untyped_property Property_map.t;
   (* List for properties, for reading/writing properties *)
 }
 
-type t = {
-  mutable packed : packed_object;
+(* D-Bus object informations *)
+type info = {
+  mutable packed : OBus_pack.t;
   path : OBus_path.t;
-  exports : ConnectionSet.t React.signal;
-  set_exports : ConnectionSet.t -> unit;
+  exports : Connection_set.t React.signal;
+  set_exports : Connection_set.t -> unit;
   owner : OBus_peer.t option;
-  mutable methods : untyped_method MethodMap.t;
-  mutable properties : applied_property PropertyMap.t;
+  mutable methods : untyped_method Method_map.t;
+  mutable properties : applied_property Property_map.t;
   mutable interfaces : untyped_interface list;
   mutable monitored_properties : unit React.signal list;
-  mutable changed : OBus_value.single MemberMap.t InterfaceMap.t;
+  mutable changed : OBus_value.single Member_map.t Interface_map.t;
 }
+
+type t = info
+    (* The doefault type for object is directly D-Bus informations *)
 
 let apply_property up packed = {
   ap_signal = (match up.up_signal with
@@ -89,21 +93,21 @@ let apply_property up packed = {
 }
 
 let handle_change info interface member value =
-  let empty = InterfaceMap.is_empty info.changed in
+  let empty = Interface_map.is_empty info.changed in
   info.changed <- (
-    InterfaceMap.add interface
-      (MemberMap.add member value
-         (try InterfaceMap.find interface info.changed with Not_found -> MemberMap.empty))
+    Interface_map.add interface
+      (Member_map.add member value
+         (try Interface_map.find interface info.changed with Not_found -> Member_map.empty))
       info.changed
   );
   if empty then ignore begin
     (* Sleep a bit, so multiple changes are sent only one time. *)
     lwt () = pause () in
     let changed = info.changed in
-    info.changed <- InterfaceMap.empty;
+    info.changed <- Interface_map.empty;
     match info.owner with
       | Some peer ->
-          InterfaceMap.iter
+          Interface_map.iter
             (fun name properties ->
                ignore begin
                  OBus_signal.emit
@@ -113,14 +117,14 @@ let handle_change info interface member value =
                    ~interface:"org.freedesktop.Properties"
                    ~member:"OBusPropertiesChanged"
                  <:obus_type< (string, variant) dict >>
-                   (MemberMap.fold (fun name value acc -> (name, value) :: acc) properties [])
+                   (Member_map.fold (fun name value acc -> (name, value) :: acc) properties [])
                end)
             changed;
           return ()
       | None ->
-          ConnectionSet.iter
+          Connection_set.iter
             (fun connection ->
-               InterfaceMap.iter
+               Interface_map.iter
                  (fun name properties ->
                     ignore begin
                       OBus_signal.emit
@@ -129,7 +133,7 @@ let handle_change info interface member value =
                         ~interface:"org.freedesktop.Properties"
                         ~member:"OBusPropertiesChanged"
                       <:obus_type< (string, variant) dict >>
-                        (MemberMap.fold (fun name value acc -> (name, value) :: acc) properties [])
+                        (Member_map.fold (fun name value acc -> (name, value) :: acc) properties [])
                     end)
                  changed)
             (React.S.value info.exports);
@@ -144,20 +148,20 @@ let generate info =
   info.methods <- (
     List.fold_left
       (fun map ui ->
-         MethodMap.fold MethodMap.add ui.ui_methods map)
-      MethodMap.empty info.interfaces
+         Method_map.fold Method_map.add ui.ui_methods map)
+      Method_map.empty info.interfaces
   );
   info.properties <- (
     List.fold_left
       (fun map ui ->
-         PropertyMap.fold
+         Property_map.fold
            (fun name up map ->
-              PropertyMap.add name (apply_property up info.packed) map)
+              Property_map.add name (apply_property up info.packed) map)
            ui.ui_properties map)
-      PropertyMap.empty info.interfaces
+      Property_map.empty info.interfaces
   );
   info.monitored_properties <- (
-    PropertyMap.fold
+    Property_map.fold
       (fun (interface, member) ap acc ->
          match ap.ap_signal with
            | Some signal ->
@@ -168,15 +172,15 @@ let generate info =
       []
   )
 
-let default_destroy obj =
-  ConnectionSet.iter
-    (fun packed -> match packed#get with
+let default_destroy info =
+  Connection_set.iter
+    (fun connection -> match connection#get with
        | Crashed exn ->
            ()
-       | Running connection ->
-           connection.exported_objects <- ObjectMap.remove obj.path connection.exported_objects)
-    (React.S.value obj.exports);
-  obj.set_exports ConnectionSet.empty
+       | Running running ->
+           running.running_static_objects <- Object_map.remove info.path running.running_static_objects)
+    (React.S.value info.exports);
+  info.set_exports Connection_set.empty
 
 (* +-----------------------------------------------------------------+
    | Interface                                                       |
@@ -186,11 +190,11 @@ module Interface =
 struct
   type 'obj creation = {
     name : OBus_name.interface;
-    unpack : packed_object -> 'obj;
+    unpack : OBus_pack.t -> 'obj;
     get : 'obj -> t;
-    mutable members : OBus_introspect.member MemberMap.t;
-    mutable methods : untyped_method MethodMap.t;
-    mutable properties : untyped_property PropertyMap.t;
+    mutable members : OBus_introspect.member Member_map.t;
+    mutable methods : untyped_method Method_map.t;
+    mutable properties : untyped_property Property_map.t;
   }
 
   type 'obj state =
@@ -206,15 +210,15 @@ struct
            name = name;
            unpack = unpack;
            get = get;
-           members = MemberMap.empty;
-           methods = MethodMap.empty;
-           properties = PropertyMap.empty;
+           members = Member_map.empty;
+           methods = Method_map.empty;
+           properties = Property_map.empty;
          })
 
   let untyped_interface iface = match !iface with
     | Creation cr ->
         let ui = {
-          ui_introspect = (cr.name, List.rev (MemberMap.fold (fun name definition acc -> definition :: acc) cr.members []), []);
+          ui_introspect = (cr.name, List.rev (Member_map.fold (fun name definition acc -> definition :: acc) cr.members []), []);
           ui_methods = cr.methods;
           ui_properties = cr.properties;
         } in
@@ -243,7 +247,7 @@ struct
     let cr = get_creation "method_call" iface
     and isig = OBus_type.isignature typ
     and osig = OBus_type.osignature typ in
-    cr.members <- MemberMap.add member (Method(member, with_names isig, with_names osig, [])) cr.members;
+    cr.members <- Member_map.add member (Method(member, with_names isig, with_names osig, [])) cr.members;
     let handler pack connection message =
       let context = (connection, message) in
       try_bind
@@ -251,11 +255,11 @@ struct
         (OBus_method.return ~context (OBus_type.func_reply typ))
         (OBus_method.fail ~context)
     in
-    cr.methods <- MethodMap.add (Some cr.name, member, isig) handler (MethodMap.add (None, member, isig) handler cr.methods)
+    cr.methods <- Method_map.add (Some cr.name, member, isig) handler (Method_map.add (None, member, isig) handler cr.methods)
 
   let signal iface member typ =
     let cr = get_creation "signal" iface in
-    cr.members <- MemberMap.add member (Signal(member, with_names (OBus_type.type_sequence typ), [])) cr.members
+    cr.members <- Member_map.add member (Signal(member, with_names (OBus_type.type_sequence typ), [])) cr.members
 
   let emit iface member typ obj ?peer value =
     let interface, obj = match !iface with
@@ -267,7 +271,7 @@ struct
       | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
           OBus_signal.dyn_emit ~connection ?destination ~interface ~member ~path:obj.path body
       | None, None ->
-          join (ConnectionSet.fold
+          join (Connection_set.fold
                   (fun connection l -> OBus_signal.dyn_emit ~connection ~interface ~member ~path:obj.path body :: l)
                   (React.S.value obj.exports)
                   [])
@@ -275,8 +279,8 @@ struct
   let property iface member typ signal setter mode =
     let cr = get_creation "property" iface
     and ty = OBus_type.type_single typ in
-    cr.members <- MemberMap.add member (Property(member, ty, mode, [])) cr.members;
-    cr.properties <- PropertyMap.add (cr.name, member) {
+    cr.members <- Member_map.add member (Property(member, ty, mode, [])) cr.members;
+    cr.properties <- Property_map.add (cr.name, member) {
       up_signal = (match signal with
                      | None ->
                          None
@@ -339,14 +343,7 @@ end
 
 module Make(Object : Custom) : S with type obj = Object.obj =
 struct
-  exception Pack of Object.obj
-
-  let unpack_object = function
-    | Pack obj ->
-        obj
-    | _ ->
-        (* This should never happen *)
-        failwith "OBus_object.Make.unpack"
+  module Pack = OBus_pack.Make(struct type t = Object.obj end)
 
   (* +---------------------------------------------------------------+
      | Type and type combinator                                      |
@@ -359,15 +356,17 @@ struct
        match connection#get with
          | Crashed _ ->
              raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj", "connection crashed"))
-         | Running connection ->
-             match try Some(ObjectMap.find path connection.exported_objects) with Not_found -> None with
-               | Some{ oo_object = Pack obj } ->
-                   obj
-               | Some{ oo_object = pack } ->
-                   raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj",
-                                                 Printf.sprintf
-                                                   "unexpected type for object with path %S"
-                                                   (OBus_path.to_string path)))
+         | Running running ->
+             match try Some(Object_map.find path running.running_static_objects) with Not_found -> None with
+               | Some  { static_object_object = pack } -> begin
+                   try
+                     Pack.unpack pack
+                   with Invalid_argument _ ->
+                     raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj",
+                                                   Printf.sprintf
+                                                     "unexpected type for object with path %S"
+                                                     (OBus_path.to_string path)))
+                 end
                | None ->
                    raise (OBus_type.Cast_failure("OBus_object.Make.obus_obj",
                                                  Printf.sprintf
@@ -388,56 +387,55 @@ struct
      | Export/remove                                                 |
      +---------------------------------------------------------------+ *)
 
-  let handle_call packed_object packed_connection message =
-    let info = Object.cast (unpack_object packed_object) in
+  let handle_call pack connection message =
+    let info = Object.cast (Pack.unpack pack) in
     match message with
       | { typ = Method_call(path, interface, member) } -> begin
-          match try Some(MethodMap.find (interface, member, type_of_sequence message.body) info.methods) with Not_found -> None with
-            | Some f -> f packed_object packed_connection message
-            | None -> OBus_method.fail  (packed_connection, message) (unknown_method_exn message)
+          match try Some(Method_map.find (interface, member, type_of_sequence message.body) info.methods) with Not_found -> None with
+            | Some f -> f pack connection message
+            | None -> OBus_method.fail  (connection, message) (unknown_method_exn message)
         end
       | _ ->
           invalid_arg "OBus_object.Make.handle_call"
 
-  let export packed obj =
-    let connection = unpack_connection packed in
+  let export connection obj =
+    let running = running_of_connection connection in
     let info = Object.cast obj in
-    if not (ConnectionSet.mem packed (React.S.value info.exports)) then begin
-      connection.exported_objects <- ObjectMap.add info.path {
-        oo_handle = handle_call;
-        oo_object = info.packed;
-        oo_connection_closed = (fun packed -> info.set_exports (ConnectionSet.remove packed (React.S.value info.exports)));
-      } connection.exported_objects;
-      info.set_exports (ConnectionSet.add packed (React.S.value info.exports))
+    if not (Connection_set.mem connection (React.S.value info.exports)) then begin
+      running.running_static_objects <- Object_map.add info.path {
+        static_object_handle = handle_call;
+        static_object_object = info.packed;
+        static_object_connection_closed = (fun packed -> info.set_exports (Connection_set.remove packed (React.S.value info.exports)));
+      } running.running_static_objects;
+      info.set_exports (Connection_set.add connection (React.S.value info.exports))
     end
 
-  let remove packed obj =
+  let remove connection obj =
     let info = Object.cast obj in
-    if ConnectionSet.mem packed (React.S.value info.exports) then begin
-      info.set_exports (ConnectionSet.remove packed (React.S.value info.exports));
-      match packed#get with
+    if Connection_set.mem connection (React.S.value info.exports) then begin
+      info.set_exports (Connection_set.remove connection (React.S.value info.exports));
+      match connection#get with
         | Crashed _ ->
-           ()
-        | Running connection ->
-            connection.exported_objects <- ObjectMap.remove info.path connection.exported_objects
+            ()
+        | Running running ->
+            running.running_static_objects <- Object_map.remove info.path running.running_static_objects
     end
 
   let destroy obj =
     default_destroy (Object.cast obj)
 
-  let dynamic ~connection:packed ~prefix ~handler =
-    let connection = unpack_connection packed in
+  let dynamic ~connection ~prefix ~handler =
+    let running = running_of_connection connection in
     (* Remove any dynamic node declared with the same prefix: *)
-    connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> prefix) connection.dynamic_objects;
     let create path =
       lwt obj = handler path in
       return {
-        oo_handle = handle_call;
-        oo_object = Pack obj;
-        oo_connection_closed = ignore;
+        static_object_handle = handle_call;
+        static_object_object = Pack.pack obj;
+        static_object_connection_closed = ignore;
       }
     in
-    connection.dynamic_objects <- { do_prefix = prefix; do_create = create } :: connection.dynamic_objects
+    running.running_dynamic_objects <- Object_map.add prefix create running.running_dynamic_objects
 
   (* +---------------------------------------------------------------+
      | Signals                                                       |
@@ -450,7 +448,7 @@ struct
       | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
           OBus_signal.dyn_emit ~connection ?destination ~interface ~member ~path:obj.path body
       | None, None ->
-          join (ConnectionSet.fold
+          join (Connection_set.fold
                   (fun connection l -> OBus_signal.dyn_emit ~connection ~interface ~member ~path:obj.path body :: l)
                   (React.S.value obj.exports)
                   [])
@@ -459,7 +457,7 @@ struct
      | Interfaces                                                    |
      +---------------------------------------------------------------+ *)
 
-  let make_interface name = Interface.make name unpack_object Object.cast
+  let make_interface name = Interface.make name Pack.unpack Object.cast
 
   let interface_name { ui_introspect = (name, _, _) } = name
 
@@ -500,7 +498,7 @@ struct
   let () =
     Interface.method_call properties "Get" <:obus_func< string -> string -> variant >>
       (fun obj interface member ->
-         match try Some(PropertyMap.find (interface, member) (Object.cast obj).properties) with Not_found -> None with
+         match try Some(Property_map.find (interface, member) (Object.cast obj).properties) with Not_found -> None with
            | Some{ ap_signal = Some s } ->
                return (React.S.value s)
            | Some{ ap_signal = None } ->
@@ -509,7 +507,7 @@ struct
                fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
     Interface.method_call properties "Set" <:obus_func< string -> string -> variant -> unit >>
       (fun obj interface member x ->
-         match try Some(PropertyMap.find (interface, member) (Object.cast obj).properties) with Not_found -> None with
+         match try Some(Property_map.find (interface, member) (Object.cast obj).properties) with Not_found -> None with
            | Some{ ap_setter = Some f } ->
                f x;
                return ()
@@ -519,7 +517,7 @@ struct
                fail (Failure (sprintf "no such property: %S on interface %S" member interface)));
     Interface.method_call properties "GetAll" <:obus_func< string -> (string, variant) dict >>
       (fun obj interface ->
-         return (PropertyMap.fold
+         return (Property_map.fold
                    (fun (interface', member) ap acc ->
                       if interface = interface' then
                         match ap.ap_signal with
@@ -538,21 +536,21 @@ struct
 
   let make ?owner ?(common=true) ?(interfaces=[]) path f =
     let interfaces = if common then introspectable :: properties :: interfaces else interfaces in
-    let exports, set_exports = React.S.create ~eq:ConnectionSet.equal ConnectionSet.empty in
+    let exports, set_exports = React.S.create ~eq:Connection_set.equal Connection_set.empty in
     let info = {
-      packed = Exit;
+      packed = OBus_pack.dummy;
       path = path;
       exports = exports;
       set_exports = set_exports;
       owner = owner;
-      methods = MethodMap.empty;
-      properties = PropertyMap.empty;
+      methods = Method_map.empty;
+      properties = Property_map.empty;
       interfaces = List.map Interface.untyped_interface interfaces;
       monitored_properties = [];
-      changed = InterfaceMap.empty;
+      changed = Interface_map.empty;
     } in
     let obj = f info in
-    info.packed <- Pack obj;
+    info.packed <- Pack.pack obj;
     generate info;
     let () =
       match owner with
@@ -591,12 +589,12 @@ let obus_t = obus_obj
    | Misc                                                            |
    +-----------------------------------------------------------------+ *)
 
-let remove_by_path packed path =
-  let connection = unpack_connection packed in
-  connection.dynamic_objects <- List.filter (fun dynobj -> dynobj.do_prefix <> path) connection.dynamic_objects;
-  match try Some(ObjectMap.find path connection.exported_objects) with Not_found -> None with
-    | Some obj ->
-        connection.exported_objects <- ObjectMap.remove path connection.exported_objects;
-        obj.oo_connection_closed packed
+let remove_by_path connection path =
+  let running = running_of_connection connection in
+  running.running_dynamic_objects <- Object_map.remove path running.running_dynamic_objects;
+  match try Some(Object_map.find path running.running_static_objects) with Not_found -> None with
+    | Some static_object ->
+        running.running_static_objects <- Object_map.remove path running.running_static_objects;
+        static_object.static_object_connection_closed connection
     | None ->
         ()

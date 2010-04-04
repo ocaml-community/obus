@@ -11,7 +11,7 @@ let section = Lwt_log.Section.make "obus(server)"
 
 open Unix
 open Lwt
-open OBus_private
+open OBus_private_connection
 
 (* +-----------------------------------------------------------------+
    | Types                                                           |

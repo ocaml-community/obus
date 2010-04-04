@@ -10,7 +10,7 @@
 let section = Lwt_log.Section.make "obus(signal)"
 
 open Lwt
-open OBus_private
+open OBus_private_connection
 
 (* +-----------------------------------------------------------------+
    | Types                                                           |
@@ -32,9 +32,9 @@ type 'a t = {
   mutable auto_match_rule : bool;
   mutable filters : (int * OBus_match.argument_filter) list;
 
-  receiver : signal_receiver;
-  set : signal_receiver_set;
-  node : signal_receiver Lwt_sequence.node;
+  receiver : receiver;
+  receiver_group : receiver_group;
+  node : receiver Lwt_sequence.node;
 
   connection : OBus_connection.t;
   sender : OBus_name.bus option;
@@ -62,29 +62,29 @@ let disconnect signal =
 
 (* Commit rules changes on the message bus *)
 let commit_rules signal =
-  let set = signal.set in
+  let group = signal.receiver_group in
   let rules =
     Lwt_sequence.fold_l
-      (fun sr rules ->
-         if sr.sr_active then
-           match sr.sr_rule with
+      (fun receiver rules ->
+         if receiver.receiver_active then
+           match receiver.receiver_rule with
              | "" -> rules
-             | rule -> StringSet.add rule rules
+             | rule -> String_set.add rule rules
          else
            rules)
-      set.srs_receivers StringSet.empty
+      group.receiver_group_receivers String_set.empty
   in
 
   (* If rules have changed, compute the minimal set of changes to make
      with the message bus and do them: *)
-  if not (StringSet.equal rules set.srs_rules) then
-    Lwt_mutex.with_lock set.srs_mutex
+  if not (String_set.equal rules group.receiver_group_rules) then
+    Lwt_mutex.with_lock group.receiver_group_mutex
       (fun () ->
-         let new_rules = StringSet.diff rules set.srs_rules
-         and old_rules = StringSet.diff set.srs_rules rules in
-         set.srs_rules <- new_rules;
-         lwt () = StringSet.fold (fun rule thread -> thread <&> OBus_private_bus.add_match signal.connection rule) new_rules (return ())
-         and () = StringSet.fold (fun rule thread -> thread <&> OBus_private_bus.remove_match signal.connection rule) old_rules (return ()) in
+         let new_rules = String_set.diff rules group.receiver_group_rules
+         and old_rules = String_set.diff group.receiver_group_rules rules in
+         group.receiver_group_rules <- new_rules;
+         lwt () = String_set.fold (fun rule thread -> thread <&> OBus_private_bus.add_match signal.connection rule) new_rules (return ())
+         and () = String_set.fold (fun rule thread -> thread <&> OBus_private_bus.remove_match signal.connection rule) old_rules (return ()) in
          return ())
   else
     return ()
@@ -98,7 +98,7 @@ let init_signal signal =
     if OBus_connection.name signal.connection = None then begin
       (* If the connection is a peer-to-peer connection, there is
          nothing else to do. *)
-      signal.receiver.sr_active <- true;
+      signal.receiver.receiver_active <- true;
       signal.done_waiter
     end else begin
       lwt resolver =
@@ -109,7 +109,7 @@ let init_signal signal =
               (* If we are interested on signals coming from a
                  particular peer, we need a name resolver: *)
               lwt resolver = OBus_resolver.make signal.connection name in
-              signal.receiver.sr_sender <- Some(OBus_resolver.owner resolver);
+              signal.receiver.receiver_sender <- Some(OBus_resolver.owner resolver);
               return (Some resolver)
       in
       try_lwt
@@ -120,7 +120,7 @@ let init_signal signal =
         if signal.state = Sig_disconnected then
           return ()
         else begin
-          signal.receiver.sr_active <- true;
+          signal.receiver.receiver_active <- true;
           lwt () = commit_rules signal in
           signal.done_waiter
         end
@@ -133,9 +133,9 @@ let init_signal signal =
     React.E.stop signal.event;
     Lwt_sequence.remove signal.node;
     lwt () = commit_rules signal in
-    if Lwt_sequence.is_empty signal.set.srs_receivers then begin
-      let connection = unpack_connection signal.connection in
-      connection.signal_receivers <- SignalMap.remove (signal.path, signal.interface, signal.member) connection.signal_receivers;
+    if Lwt_sequence.is_empty signal.receiver_group.receiver_group_receivers then begin
+      let running = running_of_connection signal.connection in
+      running.running_receiver_groups <- Signal_map.remove (signal.path, signal.interface, signal.member) running.running_receiver_groups;
     end;
     return ()
 
@@ -149,32 +149,32 @@ let stop signal () = disconnect signal
    the caller, and [push] the function passed to the connection to
    dispatch signals. *)
 let connect_backend ~connection ?sender ~path ~interface ~member ~event ~push () =
-  let connection = unpack_connection connection in
+  let running = running_of_connection connection in
   (* Signal sets are indexed by tuples [(path, interface, member)]: *)
   let key = (path, interface, member) in
-  let set =
-    match try Some(SignalMap.find key connection.signal_receivers) with Not_found -> None with
-      | Some set ->
-          set
+  let group =
+    match try Some(Signal_map.find key running.running_receiver_groups) with Not_found -> None with
+      | Some group ->
+          group
       | None ->
           (* If the set do not exists, create a new one *)
-          let set = {
-            srs_rules = StringSet.empty;
-            srs_mutex = Lwt_mutex.create ();
-            srs_receivers = Lwt_sequence.create ();
+          let group = {
+            receiver_group_rules = String_set.empty;
+            receiver_group_mutex = Lwt_mutex.create ();
+            receiver_group_receivers = Lwt_sequence.create ();
           } in
-          connection.signal_receivers <- SignalMap.add key set connection.signal_receivers;
-          set
+          running.running_receiver_groups <- Signal_map.add key group running.running_receiver_groups;
+          group
   in
   let receiver = {
-    sr_active = false;
-    sr_sender = None;
-    sr_rule = OBus_match.string_of_rule (OBus_match.rule ~typ:`Signal ?sender ~path ~interface ~member ());
-    sr_filter = (fun _ -> true);
-    sr_push = push;
+    receiver_active = false;
+    receiver_sender = None;
+    receiver_rule = OBus_match.string_of_rule (OBus_match.rule ~typ:`Signal ?sender ~path ~interface ~member ());
+    receiver_filter = (fun _ -> true);
+    receiver_push = push;
   } in
   (* Immediatly add the recevier to avoid race condition *)
-  let node = Lwt_sequence.add_r receiver set.srs_receivers in
+  let node = Lwt_sequence.add_r receiver group.receiver_group_receivers in
 
   (* Thread which is wake up when the signal is disconnected *)
   let done_waiter, done_wakener = Lwt.wait () in
@@ -187,9 +187,9 @@ let connect_backend ~connection ?sender ~path ~interface ~member ~event ~push ()
     done_waiter = done_waiter;
     done_wakener = done_wakener;
     receiver = receiver;
-    set = set;
+    receiver_group = group;
     node = node;
-    connection = connection.packed;
+    connection = connection;
     sender = sender;
     path = path;
     interface = interface;
@@ -219,10 +219,10 @@ let set_auto_match_rule signal auto_match_rule  =
       in
       (* Use the sorted list of argument filters: *)
       let filters = OBus_match.arguments rule in
-      signal.receiver.sr_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
-      signal.receiver.sr_rule <- OBus_match.string_of_rule rule
+      signal.receiver.receiver_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
+      signal.receiver.receiver_rule <- OBus_match.string_of_rule rule
     end else
-      signal.receiver.sr_rule <- "";
+      signal.receiver.receiver_rule <- "";
     match signal.state with
       | Sig_init ->
           ()
@@ -246,8 +246,8 @@ let set_filters signal filters =
         ()
     in
     let filters = OBus_match.arguments rule in
-    signal.receiver.sr_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
-    signal.receiver.sr_rule <- OBus_match.string_of_rule rule;
+    signal.receiver.receiver_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
+    signal.receiver.receiver_rule <- OBus_match.string_of_rule rule;
     match signal.state with
       | Sig_init ->
           ()

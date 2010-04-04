@@ -136,10 +136,10 @@ let obus_unix_file_descr = Btype {
   b_cast = (fun context -> function
               | Unix_fd fd -> begin
                   try
-                    FDMap.find fd context.ctx_fds
+                    FD_map.find fd context.ctx_fds
                   with Not_found ->
                     let fd' = Unix.dup fd in
-                    context.ctx_fds <- FDMap.add fd fd' context.ctx_fds;
+                    context.ctx_fds <- FD_map.add fd fd' context.ctx_fds;
                     fd'
                 end
               | _ ->

@@ -64,14 +64,14 @@ let make_single = OBus_private_type.make_single
 let make_sequence = OBus_private_type.make_sequence
 
 let close_fds map =
-  FDMap.iter (fun fd_src fd_dup ->
+  FD_map.iter (fun fd_src fd_dup ->
                 try
                   Unix.close fd_dup
                 with exn ->
                   ignore (Lwt_log.error ~section ~exn "failed to close file descriptor")) map
 
 let cast f ?context x =
-  let context = { ctx_user = context; ctx_fds = FDMap.empty } in
+  let context = { ctx_user = context; ctx_fds = FD_map.empty } in
   try
     f context x
   with exn ->
@@ -85,7 +85,7 @@ let cast_single t = cast (_cast_single t)
 let cast_sequence t = cast (_cast_sequence t)
 
 let opt_cast f ?context x =
-  let context = { ctx_user = context; ctx_fds = FDMap.empty } in
+  let context = { ctx_user = context; ctx_fds = FD_map.empty } in
   try
     Some(f context x)
   with
@@ -103,7 +103,7 @@ let opt_cast_sequence t = opt_cast (_cast_sequence t)
 let make_func { f_make = f } cont = f Tnil cont
 
 let cast_func { f_cast = f } ?context x g =
-  let context = { ctx_user = context; ctx_fds = FDMap.empty } in
+  let context = { ctx_user = context; ctx_fds = FD_map.empty } in
   match try `OK(f context x) with exn -> `Fail exn with
     | `OK apply ->
         apply g
@@ -112,7 +112,7 @@ let cast_func { f_cast = f } ?context x g =
         raise exn
 
 let opt_cast_func { f_cast = f } ?context x g =
-  let context = { ctx_user = context; ctx_fds = FDMap.empty } in
+  let context = { ctx_user = context; ctx_fds = FD_map.empty } in
   match try `OK(f context x) with exn -> `Fail exn with
     | `OK apply ->
         Some(apply g)

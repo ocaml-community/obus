@@ -2,12 +2,13 @@ src/private/OBus_constant
 src/private/OBus_address_lexer
 src/private/OBus_match_rule_lexer
 src/private/OBus_cache
-src/private/OBus_private
+src/private/OBus_private_connection
 src/private/OBus_private_bus
 src/private/OBus_private_type
 src/private/OBus_util
 src/private/OBus_xml_parser
 src/private/OBus_version
+src/private/OBus_pack
 src/OBus_address
 src/OBus_auth
 src/OBus_bus

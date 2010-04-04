@@ -14,7 +14,7 @@
     implement the D-Bus protocol. It is used to exchange D-Bus
     messages. *)
 
-type t = OBus_private.packed_connection
+type t = OBus_private_connection.t
     (** Type of D-Bus connections *)
 
 val compare : t -> t -> int

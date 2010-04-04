@@ -10,7 +10,7 @@
 let section = Lwt_log.Section.make "obus(property)"
 
 open Lwt
-open OBus_private
+open OBus_private_connection
 open OBus_pervasives
 
 (* +-----------------------------------------------------------------+
@@ -23,11 +23,11 @@ let readable = Readable
 let writable = Writable
 let readable_writable = Readable_writable
 
-type notify_data = OBus_private.notify_data
+type notify_data = OBus_private_connection.notify_data
 
-type notifier = OBus_private.notifier = {
-  notify_signal : notify_data React.signal;
-  notify_stop : unit -> unit;
+type notifier = OBus_private_connection.notifier = {
+  notifier_signal : notify_data React.signal;
+  notifier_stop : unit -> unit;
 }
 
 type notify_mode = OBus_connection.t -> OBus_name.bus option -> OBus_path.t -> OBus_name.interface -> notifier Lwt.t
@@ -37,7 +37,7 @@ type ('a, 'access) t = {
   make : 'a -> OBus_value.single;
   member : OBus_name.member;
   notify : notify_mode;
-  core : OBus_private.property;
+  core : OBus_private_connection.property;
   (* The ``core'' property. It is used by the connection *)
 }
 
@@ -51,35 +51,35 @@ type 'a rw = ('a, [ `readable | `writable ]) t
 
 let get property =
   let core = property.core in
-  match core.prop_state with
-    | Prop_simple ->
+  match core.property_state with
+    | Property_simple ->
         lwt variant, context =
           OBus_method.call
-            ~connection:core.prop_connection
-            ?destination:core.prop_owner
-            ~path:core.prop_path
+            ~connection:core.property_connection
+            ?destination:core.property_owner
+            ~path:core.property_path
             ~interface:"org.freedesktop.DBus.Properties"
             ~member:"Get"
             <:obus_func< string -> string -> variant * context >>
-            core.prop_interface
+            core.property_interface
             property.member
         in
         return (property.cast context variant)
-    | Prop_monitor notifier ->
+    | Property_monitor notifier ->
         lwt notifier = notifier in
-        let context, value = StringMap.find property.member (React.S.value notifier.notify_signal) in
+        let context, value = String_map.find property.member (React.S.value notifier.notifier_signal) in
         return (property.cast context value)
 
 let set property value =
   let core = property.core in
   OBus_method.call
-    ~connection:core.prop_connection
-    ?destination:core.prop_owner
-    ~path:core.prop_path
+    ~connection:core.property_connection
+    ?destination:core.property_owner
+    ~path:core.property_path
     ~interface:"org.freedesktop.DBus.Properties"
     ~member:"Set"
     <:obus_func< string -> string -> variant -> unit >>
-    core.prop_interface
+    core.property_interface
     property.member
     (property.make value)
 
@@ -90,11 +90,11 @@ let set property value =
 let obus_properties = OBus_type.map_with_context <:obus_type< (string, variant) dict >>
   (fun context list ->
      List.fold_left
-       (fun acc (name, variant) -> StringMap.add name (context, variant) acc)
-       StringMap.empty
+       (fun acc (name, variant) -> String_map.add name (context, variant) acc)
+       String_map.empty
        list)
   (fun map  ->
-     StringMap.fold (fun name (context, variant) acc -> (name, variant) :: acc) map [])
+     String_map.fold (fun name (context, variant) acc -> (name, variant) :: acc) map [])
 
 let get_all_no_cache connection owner path interface =
   OBus_method.call
@@ -124,13 +124,13 @@ let notify_global name connection owner path interface =
   in
   lwt initial = get_all_no_cache connection owner path interface in
   return {
-    notify_signal =
-      React.S.hold ~eq:(StringMap.equal equal_context_value)
+    notifier_signal =
+      React.S.hold ~eq:(String_map.equal equal_context_value)
         initial
         (Lwt_event.map_s
            (fun () -> get_all_no_cache connection owner path interface)
            (OBus_signal.event signal));
-    notify_stop =
+    notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
   }
 
@@ -146,12 +146,12 @@ let notify_update name connection owner path interface =
   in
   lwt initial = get_all_no_cache connection owner path interface in
   return {
-    notify_signal =
-      React.S.fold ~eq:(StringMap.equal equal_context_value)
-        (fun properties updates -> StringMap.fold StringMap.add updates properties)
+    notifier_signal =
+      React.S.fold ~eq:(String_map.equal equal_context_value)
+        (fun properties updates -> String_map.fold String_map.add updates properties)
         initial
         (OBus_signal.event signal);
-    notify_stop =
+    notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
   }
 
@@ -169,12 +169,12 @@ let notify_egg_dbus connection owner path interface =
   OBus_signal.set_filters signal [(0, OBus_match.AF_string interface)];
   lwt initial = get_all_no_cache connection owner path interface in
   return {
-    notify_signal =
-      React.S.fold ~eq:(StringMap.equal equal_context_value)
-        (fun properties (iface, updates) -> StringMap.fold StringMap.add updates properties)
+    notifier_signal =
+      React.S.fold ~eq:(String_map.equal equal_context_value)
+        (fun properties (iface, updates) -> String_map.fold String_map.add updates properties)
         initial
         (OBus_signal.event signal);
-    notify_stop =
+    notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
   }
 
@@ -192,12 +192,12 @@ let notify_obus connection owner path interface =
   OBus_signal.set_filters signal [(0, OBus_match.AF_string interface)];
   lwt initial = get_all_no_cache connection owner path interface in
   return {
-    notify_signal =
-      React.S.fold ~eq:(StringMap.equal equal_context_value)
-        (fun properties (iface, updates) -> StringMap.fold StringMap.add updates properties)
+    notifier_signal =
+      React.S.fold ~eq:(String_map.equal equal_context_value)
+        (fun properties (iface, updates) -> String_map.fold String_map.add updates properties)
         initial
         (OBus_signal.event signal);
-    notify_stop =
+    notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
   }
 
@@ -211,31 +211,31 @@ let monitorable property = property.notify != notify_none
 
 let rec monitor property =
   let core = property.core in
-  match core.prop_state with
-    | Prop_monitor notifier ->
+  match core.property_state with
+    | Property_monitor notifier ->
         lwt notifier = notifier in
         return (React.S.map
                   (fun properties ->
-                     let context, value = StringMap.find property.member properties in
+                     let context, value = String_map.find property.member properties in
                      property.cast context value)
-                  notifier.notify_signal)
-    | Prop_simple ->
-        core.prop_state <- Prop_monitor(property.notify core.prop_connection core.prop_owner core.prop_path core.prop_interface);
+                  notifier.notifier_signal)
+    | Property_simple ->
+        core.property_state <- Property_monitor(property.notify core.property_connection core.property_owner core.property_path core.property_interface);
         monitor property
 
 let unmonitor property =
   let core = property.core in
-  match core.prop_state with
-    | Prop_simple ->
+  match core.property_state with
+    | Property_simple ->
         ()
-    | Prop_monitor notifier ->
-        core.prop_state <- Prop_simple;
+    | Property_monitor notifier ->
+        core.property_state <- Property_simple;
         match Lwt.state notifier with
           | Sleep ->
               cancel notifier
           | Return notifier ->
-              React.S.stop notifier.notify_signal;
-              notifier.notify_stop ()
+              React.S.stop notifier.notifier_signal;
+              notifier.notifier_stop ()
           | Fail exn ->
               ()
 
@@ -245,30 +245,30 @@ let unmonitor property =
 
 let cleanup property =
   let core = property.core in
-  let connection = unpack_connection core.prop_connection in
-  core.prop_ref_count <- core.prop_ref_count - 1;
-  if core.prop_ref_count = 0 then begin
-    connection.properties <- PropertyMap.remove (core.prop_owner, core.prop_path, core.prop_interface) connection.properties;
+  let running = running_of_connection core.property_connection in
+  core.property_ref_count <- core.property_ref_count - 1;
+  if core.property_ref_count = 0 then begin
+    running.running_properties <- Property_map.remove (core.property_owner, core.property_path, core.property_interface) running.running_properties;
     unmonitor property
   end
 
 let make_backend ~connection ?owner ~path ~interface ~member ~access ?(notify=notify_none) ~cast ~make () =
-  let connection = unpack_connection connection in
+  let running = running_of_connection connection in
   let core =
-    match try Some(PropertyMap.find (owner, path, interface) connection.properties) with Not_found -> None with
+    match try Some(Property_map.find (owner, path, interface) running.running_properties) with Not_found -> None with
       | Some core ->
-          core.prop_ref_count <- core.prop_ref_count + 1;
+          core.property_ref_count <- core.property_ref_count + 1;
           core
       | None ->
           let core = {
-            prop_ref_count = 1;
-            prop_state = Prop_simple;
-            prop_connection = connection.packed;
-            prop_owner = owner;
-            prop_path = path;
-            prop_interface = interface;
+            property_ref_count = 1;
+            property_state = Property_simple;
+            property_connection = connection;
+            property_owner = owner;
+            property_path = path;
+            property_interface = interface;
           } in
-          connection.properties <- PropertyMap.add (owner, path, interface) core connection.properties;
+          running.running_properties <- Property_map.add (owner, path, interface) core running.running_properties;
           core
   in
   let property = {
@@ -298,12 +298,12 @@ let dyn_make ~connection ?owner ~path ~interface ~member ~access ?notify () =
    +-----------------------------------------------------------------+ *)
 
 let get_all ~connection ?owner ~path ~interface () =
-  let connection = unpack_connection connection in
-  match try Some(PropertyMap.find (owner, path, interface) connection.properties) with Not_found -> None with
-    | None | Some{ prop_state = Prop_simple } ->
+  let running = running_of_connection connection in
+  match try Some(Property_map.find (owner, path, interface) running.running_properties) with Not_found -> None with
+    | None | Some{ property_state = Property_simple } ->
         lwt dict =
           OBus_method.call
-            ~connection:connection.packed
+            ~connection:connection
             ?destination:owner
             ~path
             ~interface:"org.freedesktop.DBus.Properties"
@@ -312,9 +312,9 @@ let get_all ~connection ?owner ~path ~interface () =
             interface
         in
         return (List.fold_left
-                  (fun map (key, value) -> StringMap.add key value map)
-                  StringMap.empty
+                  (fun map (key, value) -> String_map.add key value map)
+                  String_map.empty
                   dict)
-    | Some{ prop_state = Prop_monitor notifier } ->
+    | Some{ property_state = Property_monitor notifier } ->
         lwt notifier = notifier in
-        return (StringMap.map snd (React.S.value notifier.notify_signal))
+        return (String_map.map snd (React.S.value notifier.notifier_signal))

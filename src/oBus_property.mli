@@ -114,11 +114,11 @@ type notify_data = (OBus_type.context * OBus_value.single) Map.Make(String).t
 
 (** Type of a notifier *)
 type notifier = {
-  notify_signal : notify_data React.signal;
+  notifier_signal : notify_data React.signal;
   (** Signal holding the current value of all properties and the
       context in which they were received *)
 
-  notify_stop : unit -> unit;
+  notifier_stop : unit -> unit;
   (** [stop ()] cleans up allocated resources when no properties are
       monitored *)
 }

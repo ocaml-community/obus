@@ -10,7 +10,7 @@
 let section = Lwt_log.Section.make "obus(bus)"
 
 open Lwt
-open OBus_private
+open OBus_private_connection
 open OBus_pervasives
 
 type t = OBus_connection.t
@@ -42,17 +42,17 @@ let error_handler = function
       ignore (Lwt_log.error ~section ~exn "the D-Bus connection with the message bus has been closed due to this uncaught exception");
       exit 1
 
-let register_connection ?(set_on_disconnect=true) packed =
-  let connection = unpack_connection packed in
-  match connection.name with
+let register_connection ?(set_on_disconnect=true) connection =
+  let running = running_of_connection connection in
+  match running.running_name with
     | Some _ ->
         (* Do not call two times the Hello method *)
         return ()
 
     | None ->
-        if set_on_disconnect then connection.on_disconnect := error_handler;
-        lwt name = hello connection.packed in
-        connection.name <- Some name;
+        if set_on_disconnect then running.running_on_disconnect := error_handler;
+        lwt name = hello connection in
+        running.running_name <- Some name;
         return ()
 
 let of_addresses addresses =
@@ -116,7 +116,7 @@ exception Selinux_security_context_unknown of string
 
 let acquired_names bus = match bus#get with
   | Crashed exn -> raise exn
-  | Running connection -> connection.acquired_names
+  | Running running -> running.running_acquired_names
 
 type request_name_result =
     [ `Primary_owner

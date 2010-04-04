@@ -37,7 +37,7 @@ let tree_get_boundary t =
    | Type combinators                                                |
    +-----------------------------------------------------------------+ *)
 
-module FDMap = Map.Make(struct type t = Unix.file_descr let compare = Pervasives.compare end)
+module FD_map = Map.Make(struct type t = Unix.file_descr let compare = Pervasives.compare end)
 
 type context = OBus_connection.t * OBus_message.t
 
@@ -46,7 +46,7 @@ type full_context = {
   ctx_user : context option;
   (* The context passed by the user *)
 
-  mutable ctx_fds : Unix.file_descr FDMap.t;
+  mutable ctx_fds : Unix.file_descr FD_map.t;
   (* Mapping from file descriptors of the message to duplicated
      ones. *)
 }

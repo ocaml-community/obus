@@ -119,7 +119,7 @@ let protocol_error msg = Protocol_error msg
    | Message size calculation                                        |
    +-----------------------------------------------------------------+ *)
 
-module FDSet = Set.Make(struct type t = Unix.file_descr let compare = compare end)
+module FD_set = Set.Make(struct type t = Unix.file_descr let compare = compare end)
 
 module Count =
 struct
@@ -130,7 +130,7 @@ struct
   type counter = {
     mutable ofs : int;
     (* Simulate an offset *)
-    mutable fds : FDSet.t;
+    mutable fds : FD_set.t;
     (* Set used to collect all file descriptors *)
   }
 
@@ -203,7 +203,7 @@ struct
         c.ofs <- pad4 c.ofs + path_length p + 5
     | Unix_fd fd ->
         c.ofs <- pad4 c.ofs + 4;
-        c.fds <- FDSet.add fd c.fds
+        c.fds <- FD_set.add fd c.fds
 
   let rec single c = function
     | Basic x ->
@@ -234,7 +234,7 @@ struct
     iter single c l
 
   let message msg =
-    let c = { ofs = 16; fds = FDSet.empty } in
+    let c = { ofs = 16; fds = FD_set.empty } in
     begin match msg.typ with
       | Method_call(path, None, member) ->
           (* +9 for:
@@ -509,14 +509,14 @@ end
    | Common writing functions                                      |
    +---------------------------------------------------------------+ *)
 
-module FDMap = Map.Make(struct type t = Unix.file_descr let compare = Pervasives.compare end)
+module FD_map = Map.Make(struct type t = Unix.file_descr let compare = Pervasives.compare end)
 
 (* A pointer for serializing data *)
 type wpointer = {
   buf : string;
   mutable ofs : int;
   max : int;
-  fds : int FDMap.t;
+  fds : int FD_map.t;
   (* Maps file descriptros to their index in the resulting fds
      array *)
 }
@@ -608,7 +608,7 @@ struct
       end
     | Signature x -> write_signature ptr x
     | Object_path x -> write_object_path ptr x
-    | Unix_fd fd -> write4 put_uint ptr (FDMap.find fd ptr.fds)
+    | Unix_fd fd -> write4 put_uint ptr (FD_map.find fd ptr.fds)
 
   let rec write_array ptr padded_on_8 write_element values =
     (* Array are serialized as follow:
@@ -716,10 +716,10 @@ struct
       buf = buffer;
       ofs = 16;
       max = size;
-      fds = snd (FDSet.fold (fun fd (n, map) -> (n + 1, FDMap.add fd n map)) fds (0, FDMap.empty));
+      fds = snd (FD_set.fold (fun fd (n, map) -> (n + 1, FD_map.add fd n map)) fds (0, FD_map.empty));
     } in
 
-    let fd_count = FDSet.cardinal fds in
+    let fd_count = FD_set.cardinal fds in
     (* Compute ``raw'' headers *)
     let code, fields = match msg.typ with
       | Method_call(path, interface, member) ->
@@ -813,7 +813,7 @@ struct
 
     (* Create the array of file descriptors *)
     let fds = Array.create fd_count Unix.stdin in
-    FDMap.iter (fun fd index -> Array.unsafe_set fds index fd) ptr.fds;
+    FD_map.iter (fun fd index -> Array.unsafe_set fds index fd) ptr.fds;
 
     (ptr.buf, fds)
 end
