@@ -18,12 +18,6 @@ module SerialMap = Map.Make
      let compare : int32 -> int32 -> int = compare
    end)
 
-module ObjectMap = Map.Make
-  (struct
-     type t = OBus_path.t
-     let compare = Pervasives.compare
-   end)
-
 module SignalMap = Map.Make
   (struct
      type t = OBus_path.t * OBus_name.interface * OBus_name.member
@@ -35,6 +29,8 @@ module PropertyMap = Map.Make
      type t = OBus_name.bus option * OBus_path.t * OBus_name.interface
      let compare = Pervasives.compare
    end)
+
+module ObjectMap = Map.Make(OBus_path)
 
 module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
@@ -293,11 +289,13 @@ let unknown_method_exn message = match message with
       invalid_arg "OBus_internals.unknown_mehtod_exn"
 
 let children connection path =
-  ObjectMap.fold
-    (fun p obj acc -> match OBus_path.after path p with
-       | Some(elt :: _) -> if List.mem elt acc then acc else elt :: acc
-       | _ -> acc)
-    connection.exported_objects []
+  StringSet.elements
+    (ObjectMap.fold
+       (fun p obj acc -> match OBus_path.after path p with
+          | Some(elt :: _) -> StringSet.add elt acc
+          | _ -> acc)
+       connection.exported_objects
+       StringSet.empty)
 
 let unpack_connection packed =
   match packed#get with

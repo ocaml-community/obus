@@ -15,6 +15,10 @@ type element = string
 type t = element list
     (** A complete path *)
 
+val compare : t -> t -> int
+  (** Same as [Pervasives.compare]. It allows this module to be used
+      as argument to the functors [Set.Make] and [Map.Make]. *)
+
 (** {6 Construction} *)
 
 val empty : t

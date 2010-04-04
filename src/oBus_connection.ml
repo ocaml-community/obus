@@ -240,15 +240,17 @@ let match_sender signal_receiver message =
    | Reading/dispatching                                             |
    +-----------------------------------------------------------------+ *)
 
-let introspectable = "\
-<node>
-  <interface name=\"org.freedesktop.DBus.Introspectable\">
-    <method name=\"Introspect\">
-      <arg name=\"data\" direction=\"out\" type=\"s\"/>
-    </method>
-  </interface>
-</node>
-"
+let introspection children =
+  let buffer = Buffer.create 42 in
+  Buffer.add_string buffer "<node>\n";
+  List.iter
+    (fun child ->
+       Buffer.add_string buffer "  <node name=\"";
+       Buffer.add_string buffer child;
+       Buffer.add_string buffer "\"/>\n")
+    children;
+  Buffer.add_string buffer "</node>\n";
+  Buffer.contents buffer
 
 let dispatch_message connection message = match message with
 
@@ -409,9 +411,10 @@ let dispatch_message connection message = match message with
   | { typ = Method_call(path, interface_opt, member) } ->
       ignore begin
         (* Look in static objects *)
-        let obj = try Some(ObjectMap.find path connection.exported_objects) with Not_found -> None in
-        lwt obj =
-          if obj = None then
+        begin
+          try
+            return (Some(ObjectMap.find path connection.exported_objects))
+          with Not_found ->
             (* Look in dynamic objects *)
             match
               OBus_util.find_map
@@ -432,10 +435,7 @@ let dispatch_message connection message = match message with
                   with exn ->
                     lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
                     return None
-          else
-            return obj
-        in
-        match obj with
+        end >>= function
           | Some obj ->
               ignore (try_lwt
                         obj.oo_handle obj.oo_object connection.packed message
@@ -446,8 +446,8 @@ let dispatch_message connection message = match message with
               (* Handle introspection for missing intermediate object:
 
                  for example if we have only one exported object with
-                 path "/a/b/c", we need to add introspection support for
-                 virtual objects with path "/", "/a", "/a/b",
+                 path "/a/b/c", we need to add introspection support
+                 for virtual objects with path "/", "/a", "/a/b",
                  "/a/b/c". *)
               if match interface_opt, member with
                 | None, "Introspect"
@@ -455,8 +455,8 @@ let dispatch_message connection message = match message with
                     begin match children connection path with
                       | [] ->
                           true
-                      | l ->
-                          ignore (send_reply connection.packed message [OBus_value.sstring introspectable]);
+                      | children ->
+                          ignore (send_reply connection.packed message [OBus_value.sstring (introspection children)]);
                           false
                     end
                 | _ ->
