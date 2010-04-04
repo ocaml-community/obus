@@ -15,11 +15,9 @@ open OBus_pervasives
 
 let ol_interface = OBus_object.make_interface "org.plop.foo"
 
-let ping obj msg =
+OL_method Ping : string -> string = fun obj msg ->
   lwt () = printlf "received: %s" msg in
   return msg
-
-OL_method Ping : string -> string
 
 lwt () =
   lwt bus = OBus_bus.session () in
@@ -28,7 +26,7 @@ lwt () =
   lwt _ = OBus_bus.request_name bus "org.plop" in
 
   (* Create the object *)
-  let obj = OBus_object.make ~interfaces:[ol_interface] ["plip"] in
+  let obj = OBus_object.make ~interfaces:[ol_interface] ["plip"] (fun x -> x) in
 
   (* Export the object on the connection *)
   OBus_object.export bus obj;

@@ -178,6 +178,29 @@ let notify_egg_dbus connection owner path interface =
       (fun () -> OBus_signal.disconnect signal);
   }
 
+let notify_obus connection owner path interface =
+  let signal =
+    OBus_signal.connect
+      ~connection
+      ?sender:owner
+      ~path
+      ~interface:"org.freedesktop.DBus.Properties"
+      ~member:"OBusPropertiesChanged"
+      <:obus_type< string * properties >>
+  in
+  (* Only monitor the properties with the same interface: *)
+  OBus_signal.set_filters signal [(0, OBus_match.AF_string interface)];
+  lwt initial = get_all_no_cache connection owner path interface in
+  return {
+    notify_signal =
+      React.S.fold ~eq:(StringMap.equal equal_context_value)
+        (fun properties (iface, updates) -> StringMap.fold StringMap.add updates properties)
+        initial
+        (OBus_signal.event signal);
+    notify_stop =
+      (fun () -> OBus_signal.disconnect signal);
+  }
+
 let notify_custom f = f
 
 (* +-----------------------------------------------------------------+

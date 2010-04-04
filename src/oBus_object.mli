@@ -112,13 +112,13 @@ module Interface : sig
   (** Note that the syntax extension both registers the signal with
       {!signal} and defines the emitter with {!emit}. *)
 
-  val property_r : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a Lwt.t) -> unit
+  val property_r : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a React.signal) -> unit
     (** Registers a read-only property *)
 
-  val property_w : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a -> unit Lwt.t) -> unit
+  val property_w : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a -> unit) -> unit
     (** Registers a write-only property *)
 
-  val property_rw : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a Lwt.t) -> ('obj -> 'a -> unit Lwt.t) -> unit
+  val property_rw : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a React.signal) -> ('obj -> 'a -> unit) -> unit
     (** Registers a read and write property *)
 end
 
@@ -161,22 +161,22 @@ module type S = sig
 
   (** {6 Constructors} *)
 
-  val make : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> OBus_path.t -> t
-    (** [make ?owner ?interfaces path] creates a new object with path
-        [path].
+  val make : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> OBus_path.t -> (t -> obj) -> obj
+    (** [make ?owner ?interfaces path f] creates a new D-Bus object
+        with path [path], pass it to [f] and return the result.
 
         If [owner] is specified, then all signals will be sent to it
-        by default, and it will be removed from all its exports when
-        the owner exit.
+        by default, the object will be removed from all its exports
+        when the owner exits and it will be initially be exported on
+        the connection of the owner.
 
         [interfaces] is the list of interfaces implemented by the
         object. New interfaces can be added latter with
         {!add_interface}. If [common] is [true] (the default) then
-        [introspectable] and [properties] are automatically aded.
+        [introspectable] and [properties] are automatically added.
 
-        Note that the returned value is of type {!t} and not
-        {!obj}. Typically, the creation of an object of type {!obj}
-        will look like this:
+        Typically, the creation of an object of type {!obj} will look
+        like this:
 
         {[
           type my_object = {
@@ -191,16 +191,18 @@ module type S = sig
                                         let get obj = obj.obus
                                       end)
 
-          let make foo bar ... = {
-            obus = M.make ~interfaces:[iface1; iface2; ...] ["some"; "path"];
-            foo = foo;
-            bar = bar;
-            ...
-          }
+          let make foo bar ... =
+            M.Make M.make ~interfaces:[iface1; iface2; ...] ["some"; "path"]
+              (fun obus -> {
+                obus = obus;
+                foo = foo;
+                bar = bar;
+                ...
+              })
         ]}
     *)
 
-  val make' : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> unit -> t
+  val make' : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> (t -> obj) -> obj
     (** Same as [make] but generate a unique path *)
 
   (** {6 Properties} *)
