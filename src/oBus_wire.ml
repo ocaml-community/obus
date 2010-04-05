@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+let section = Lwt_log.Section.make "obus(wire)"
+
 open Printf
 open Lwt
 open OBus_constant
@@ -1152,13 +1154,16 @@ struct
                                         "invalid number of file descriptor, %d expected, %d received"
                                         fields.rf_unix_fds
                                         (Array.length ptr.fds)));
-          | Some queue ->
+          | Some(consumed, queue) ->
               ptr.fds <- Array.init fields.rf_unix_fds
                 (fun i ->
                    if Queue.is_empty queue then
                      raise (Protocol_error "file descriptor missing")
-                   else
-                     Queue.take queue)
+                   else begin
+                     let fd = Queue.take queue in
+                     consumed := fd :: !consumed;
+                     fd
+                   end)
       end;
 
       read_padding8 ptr;
@@ -1216,7 +1221,16 @@ type reader = {
   (* File descriptors received and not yet taken *)
 }
 
-let close_reader reader = Lwt_io.close reader.channel
+let close_reader reader =
+  Queue.iter
+    (fun fd ->
+       try
+         Unix.close fd
+       with Unix.Unix_error(err, _, _) ->
+         ignore (Lwt_log.error_f ~section "cannot close file descriptor: %s" (Unix.error_message err)))
+    reader.pending_fds;
+  Queue.clear reader.pending_fds;
+  Lwt_io.close reader.channel
 
 let reader fd =
   let pending_fds = Queue.create () in
@@ -1232,6 +1246,7 @@ let reader fd =
   }
 
 let read_message_with_fds reader  =
+  let consumed_fds = ref [] in
   try_lwt
     Lwt_io.atomic begin fun ic ->
       let buffer = String.create 16 in
@@ -1245,9 +1260,16 @@ let read_message_with_fds reader  =
            let length = length - 16 in
            let buffer = String.create length in
            lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
-           f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some reader.pending_fds) return)
+           f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some(consumed_fds, reader.pending_fds)) return)
     end reader.channel
   with exn ->
+    List.iter
+      (fun fd ->
+         try
+           Unix.close fd
+         with Unix.Unix_error(err, _, _) ->
+           ignore (Lwt_log.error_f ~section "cannot close file descriptor: %s" (Unix.error_message err)))
+      !consumed_fds;
     raise (map_exn protocol_error exn)
 
 (* +-----------------------------------------------------------------+
