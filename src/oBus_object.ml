@@ -31,7 +31,7 @@ type notify_mode = {
   notify_send : OBus_connection.t -> OBus_name.bus option -> OBus_path.t -> OBus_name.interface -> OBus_value.single Member_map.t -> unit Lwt.t;
   (* The function which send the notification *)
 
-  notify_signature : OBus_introspect.member option;
+  notify_signature : OBus_introspect.member list;
   (* Additional members for the interface *)
 }
 
@@ -136,7 +136,7 @@ let binary_search get key array =
 
 let notify_none = {
   notify_send = (fun _ _ _ _ _ -> return ());
-  notify_signature = None;
+  notify_signature = [];
 }
 
 (* The function which send the notification *)
@@ -288,17 +288,17 @@ struct
            unpack = unpack;
            get = get;
            notify = notify;
-           members = (match notify.notify_signature with
-                        | Some member ->
-                            Member_map.add
-                              (match member with
-                                 | Method(name, _, _, _) -> name
-                                 | Signal(name, _, _) -> name
-                                 | Property(name, _, _, _) -> name)
-                              member
-                              Member_map.empty
-                        | None ->
-                            Member_map.empty);
+           members =
+             List.fold_left
+               (fun map member ->
+                  Member_map.add
+                    (match member with
+                       | Method(name, _, _, _)
+                       | Signal(name, _, _)
+                       | Property(name, _, _, _) -> name)
+                    member map)
+               Member_map.empty
+               notify.notify_signature;
            methods = Member_map.empty;
            properties = Member_map.empty;
          })
@@ -782,6 +782,11 @@ let remove_by_path connection path =
    | Notification modes                                              |
    +-----------------------------------------------------------------+ *)
 
+let notify_custom ~send ~signature = {
+  notify_send = send;
+  notify_signature = signature;
+}
+
 let notify_global name = {
   notify_send = (fun connection owner path interface members ->
                    OBus_signal.emit
@@ -792,7 +797,7 @@ let notify_global name = {
                      ~member:name
                      <:obus_type< unit >>
                      ());
-  notify_signature = Some(Signal(name, [], []));
+  notify_signature = [Signal(name, [], [])];
 }
 
 let notify_update name = {
@@ -805,5 +810,5 @@ let notify_update name = {
                      ~member:name
                      <:obus_type< (string, variant) dict >>
                      (Member_map.fold (fun name value acc -> (name, value) :: acc) members []));
-  notify_signature = Some(Signal(name, [(None, Tdict(Tstring, Tvariant))], []));
+  notify_signature = [Signal(name, [(None, Tdict(Tstring, Tvariant))], [])];
 }

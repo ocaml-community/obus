@@ -348,3 +348,20 @@ module Make(Object : Custom) : S with type obj = Object.obj
 val notify_none : notify_mode
 val notify_global : OBus_name.member -> notify_mode
 val notify_update : OBus_name.member -> notify_mode
+
+val notify_custom :
+  send : (OBus_connection.t ->
+            OBus_name.bus option ->
+              OBus_path.t ->
+                OBus_name.interface ->
+                  OBus_value.single Map.Make(String).t ->
+                    unit Lwt.t) ->
+  signature : OBus_introspect.member list -> notify_mode
+  (** [notify_custom ~send ~signature] creates a custom notification
+      mode. [send] is responsible for sending change notificartions.
+      Among arguments, [send] receives the mapping from properties
+      names to new properties values, for properties that have
+      changed.
+
+      [signature] is the signature to add to the interface when
+      creating it. *)
