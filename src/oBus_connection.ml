@@ -57,64 +57,6 @@ let apply_filters typ message filters =
     None
 
 (* +-----------------------------------------------------------------+
-   | FDs closing                                                     |
-   +-----------------------------------------------------------------+ *)
-
-(* After a message has been dispatched, all file descriptors it
-   contains are closed *)
-
-module FD_set = Set.Make(struct type t = Unix.file_descr let compare = compare end)
-
-let tbasic_contains_fds = function
-  | Tunix_fd -> true
-  | _ -> false
-
-let rec tsingle_contains_fds = function
-  | Tbasic t -> tbasic_contains_fds t
-  | Tarray t -> tsingle_contains_fds t
-  | Tdict(tk, tv) -> tbasic_contains_fds tk && tsingle_contains_fds tv
-  | Tstructure t -> tsequence_contains_fds t
-  | Tvariant -> true
-
-and tsequence_contains_fds t = List.exists tsingle_contains_fds t
-
-let basic_collect_fds acc = function
-  | Unix_fd fd -> FD_set .add fd acc
-  | _ -> acc
-
-let rec single_collect_fds acc = function
-  | Basic v ->
-      basic_collect_fds acc v
-  | Array(t, l) ->
-      if tsingle_contains_fds t then
-        List.fold_left single_collect_fds acc l
-      else
-        acc
-  | Dict(tk, tv, l) ->
-      if tbasic_contains_fds tk || tsingle_contains_fds tv then
-        List.fold_left (fun acc (k, v) -> basic_collect_fds (single_collect_fds acc v) k) acc l
-      else
-        acc
-  | Structure l ->
-      sequence_collect_fds acc l
-  | Variant v ->
-      single_collect_fds acc v
-  | Byte_array _ ->
-      acc
-
-and sequence_collect_fds acc l =
-  List.fold_left single_collect_fds acc l
-
-let close_fds message =
-  FD_set.iter
-    (fun fd ->
-       try
-         Unix.close fd
-       with exn ->
-         ignore (Lwt_log.error ~exn ~section "failed to close file descriptor of message"))
-    (sequence_collect_fds FD_set.empty message.body)
-
-(* +-----------------------------------------------------------------+
    | Sending messages                                                |
    +-----------------------------------------------------------------+ *)
 
@@ -132,8 +74,15 @@ let send_message_backend connection reply_waiter_opt message =
           (false, true)
     in
     if send_it then begin
-      match apply_filters "outgoing" { message with serial = running.running_next_serial } running.running_outgoing_filters with
+      let message = { message with
+                        (* Duplicate file descriptors. If we do not do
+                           it now, the user may closes them before the
+                           connection's transport is flushed. *)
+                        body = OBus_value.sequence_dup message.body;
+                        serial = running.running_next_serial } in
+      match apply_filters "outgoing" message running.running_outgoing_filters with
         | None ->
+            OBus_value.sequence_close message.body;
             lwt () = Lwt_log.debug ~section "outgoing message dropped by filters" in
             fail (Failure "message dropped by filters")
 
@@ -159,24 +108,26 @@ let send_message_backend connection reply_waiter_opt message =
               (* Everything went OK, continue with a new serial *)
               running.running_next_serial <- Int32.succ running.running_next_serial;
               return ()
-            with
-              | OBus_wire.Data_error _ as exn ->
-                  (* The message can not be marshaled for some
-                     reason. This is not a fatal error. *)
-                  fail exn
+            with exn ->
+              OBus_value.sequence_close message.body;
+              match exn with
+                | OBus_wire.Data_error _ ->
+                    (* The message can not be marshaled for some
+                       reason. This is not a fatal error. *)
+                    fail exn
 
-              | Canceled ->
-                  (* Message sending have been canceled by the
-                     user. This is not a fatal error either. *)
-                  fail Canceled
+                | Canceled ->
+                    (* Message sending have been canceled by the
+                       user. This is not a fatal error either. *)
+                    fail Canceled
 
-              | exn ->
-                  (* All other errors are considered as fatal. They
-                     are fatal because it is possible that a message
-                     has been partially sent on the connection, so the
-                     message stream is broken *)
-                  lwt exn = connection#set_crash (Transport_error exn) in
-                  fail exn
+                | exn ->
+                    (* All other errors are considered as fatal. They
+                       are fatal because it is possible that a message
+                       has been partially sent on the connection, so
+                       the message stream is broken *)
+                    lwt exn = connection#set_crash (Transport_error exn) in
+                    fail exn
     end else
       match connection#get with
         | Crashed exn ->
@@ -498,7 +449,7 @@ let read_dispatch connection running =
         return ()
     | Some message ->
         let result = try dispatch_message connection running message; None with exn -> Some exn in
-        close_fds message;
+        OBus_value.sequence_close message.body;
         match result with
           | None ->
               return ()

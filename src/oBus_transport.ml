@@ -69,55 +69,10 @@ let socket ?(capabilities=[]) fd =
    | Loopback transport                                              |
    +-----------------------------------------------------------------+ *)
 
-(* Note: since file descriptors will be closed by the connection
-   dispatcher, we need to duplicate all file descriptors. *)
-
-open OBus_value
-
-let tbasic_contains_fds = function
-  | Tunix_fd -> true
-  | _ -> false
-
-let rec tsingle_contains_fds = function
-  | Tbasic t -> tbasic_contains_fds t
-  | Tarray t -> tsingle_contains_fds t
-  | Tdict(tk, tv) -> tbasic_contains_fds tk && tsingle_contains_fds tv
-  | Tstructure t -> tsequence_contains_fds t
-  | Tvariant -> false
-
-and tsequence_contains_fds t = List.exists tsingle_contains_fds t
-
-let basic_dup = function
-  | Unix_fd fd -> Unix_fd(Unix.dup fd)
-  | x -> x
-
-let rec single_dup = function
-  | Basic x ->
-      basic (basic_dup x)
-  | Array(t, l) as v ->
-      if tsingle_contains_fds t then
-        array t (List.map single_dup l)
-      else
-        v
-  | Dict(tk, tv, l) as v ->
-      if tbasic_contains_fds tk || tsingle_contains_fds tv then
-        dict tk tv (List.map (fun (k, v) -> (basic_dup k, single_dup v)) l)
-      else
-        v
-  | Structure l ->
-      structure (sequence_dup l)
-  | Byte_array _ as v ->
-      v
-  | Variant x ->
-      variant (single_dup x)
-
-and sequence_dup l =
-  List.map single_dup l
-
 let loopback () =
   let mvar = Lwt_mvar.create_empty () in
   { recv = (fun _ -> Lwt_mvar.take mvar);
-    send = (fun m -> Lwt_mvar.put mvar { m with OBus_message.body = sequence_dup (OBus_message.body m) });
+    send = (fun m -> Lwt_mvar.put mvar { m with OBus_message.body = OBus_value.sequence_dup (OBus_message.body m) });
     capabilities = [`Unix_fd];
     shutdown = return }
 

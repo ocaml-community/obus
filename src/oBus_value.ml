@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+let section = Lwt_log.Section.make "obus(value)"
+
 open Format
 
 let rec print_seq left right sep f pp l =
@@ -456,3 +458,107 @@ let string_of_tsequence = string_of print_tsequence
 let string_of_basic = string_of print_basic
 let string_of_single = string_of print_single
 let string_of_sequence = string_of print_sequence
+
+(* +-----------------------------------------------------------------+
+   | FDs closing                                                     |
+   +-----------------------------------------------------------------+ *)
+
+module FD_set = Set.Make(struct type t = Unix.file_descr let compare = compare end)
+
+let tbasic_contains_fds = function
+  | Tunix_fd -> true
+  | _ -> false
+
+let rec tsingle_contains_fds = function
+  | Tbasic t -> tbasic_contains_fds t
+  | Tarray t -> tsingle_contains_fds t
+  | Tdict(tk, tv) -> tbasic_contains_fds tk || tsingle_contains_fds tv
+  | Tstructure t -> tsequence_contains_fds t
+  | Tvariant -> true
+
+and tsequence_contains_fds t = List.exists tsingle_contains_fds t
+
+let basic_collect_fds acc = function
+  | Unix_fd fd -> FD_set .add fd acc
+  | _ -> acc
+
+let rec single_collect_fds acc = function
+  | Basic v ->
+      basic_collect_fds acc v
+  | Array(t, l) ->
+      if tsingle_contains_fds t then
+        List.fold_left single_collect_fds acc l
+      else
+        acc
+  | Dict(tk, tv, l) ->
+      if tbasic_contains_fds tk || tsingle_contains_fds tv then
+        List.fold_left (fun acc (k, v) -> basic_collect_fds (single_collect_fds acc v) k) acc l
+      else
+        acc
+  | Structure l ->
+      sequence_collect_fds acc l
+  | Variant v ->
+      single_collect_fds acc v
+  | Byte_array _ ->
+      acc
+
+and sequence_collect_fds acc l =
+  List.fold_left single_collect_fds acc l
+
+let close_fds collect_fds value =
+  FD_set.iter
+    (fun fd ->
+       try
+         Unix.close fd
+       with Unix.Unix_error(err, _, _) ->
+         ignore (Lwt_log.error_f ~section "failed to close file descriptor: %s" (Unix.error_message err)))
+    (collect_fds FD_set.empty value)
+
+let basic_close = close_fds basic_collect_fds
+let single_close = close_fds single_collect_fds
+let sequence_close = close_fds sequence_collect_fds
+
+(* +-----------------------------------------------------------------+
+   | FDs duplicating                                                 |
+   +-----------------------------------------------------------------+ *)
+
+module FD_map = Map.Make(struct type t = Unix.file_descr let compare = compare end)
+
+let basic_dup map = function
+  | Unix_fd fd -> begin
+      try
+        Unix_fd(FD_map.find fd !map)
+      with Not_found ->
+        let fd' = Unix.dup fd in
+        map := FD_map.add fd fd' !map;
+        Unix_fd fd
+    end
+  | value ->
+      value
+
+let rec single_dup map = function
+  | Basic x ->
+      basic (basic_dup map x)
+  | Array(t, l) as v ->
+      if tsingle_contains_fds t then
+        array t (List.map (single_dup map) l)
+      else
+        v
+  | Dict(tk, tv, l) as v ->
+      if tbasic_contains_fds tk || tsingle_contains_fds tv then
+        dict tk tv (List.map (fun (k, v) -> (basic_dup map k, single_dup map v)) l)
+      else
+        v
+  | Structure l ->
+      structure (sequence_dup map l)
+  | Byte_array _ as v ->
+      v
+  | Variant x ->
+      variant (single_dup map x)
+
+and sequence_dup map l =
+  List.map (single_dup map) l
+
+let basic_dup value = basic_dup (ref FD_map.empty) value
+let single_dup value = single_dup (ref FD_map.empty) value
+let sequence_dup value = sequence_dup (ref FD_map.empty) value

@@ -213,3 +213,15 @@ val string_of_tsequence : tsequence -> string
 val string_of_basic : basic -> string
 val string_of_single : single -> string
 val string_of_sequence : sequence -> string
+
+(** {6 File descriptors utils} *)
+
+val basic_dup : basic -> basic
+val single_dup : single -> single
+val sequence_dup : sequence -> sequence
+  (** Duplicates all file descriptors of the given value *)
+
+val basic_close : basic -> unit
+val single_close : single -> unit
+val sequence_close : sequence -> unit
+  (** Closes all file descriptors of the given value *)
