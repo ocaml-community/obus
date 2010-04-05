@@ -702,7 +702,6 @@ struct
                          properties)
            | None ->
                return []);
-    Interface.signal properties "OBusPropertiesChanged" (<:obus_type< string * (string, variant) dict >>);
     Interface.close properties
 
   (* +---------------------------------------------------------------+
