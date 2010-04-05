@@ -42,15 +42,23 @@ val readable_writable : [ `readable | `writable ] access
 
 (** {6 Operation on properties} *)
 
-val get : ('a, [> `readable ]) t -> 'a Lwt.t
-  (** Read the contents of a property *)
+val get : ?cache : bool -> ('a, [> `readable ]) t -> 'a Lwt.t
+  (** Read the contents of a property.
+
+      If [cache] is [true] and the given property is not cached, then
+      obus automatically fill the cache. The cache is filled using the
+      "org.freedesktop.DBus.Properties.GetAll" methods. You should
+      consider sets it to [true] if you are going to read multiple
+      properties of the same interface at the same time. Note that the
+      cache will expire at the next iteration of the Lwt main
+      loop. [cache] defaults to [false]. *)
 
 val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
   (** Write the contents of a property *)
 
 (** {6 Monitoring} *)
 
-(** Lots of D-Bus services notifies other applications with a D-Bus
+(** Lots of D-Bus services notify other applications with a D-Bus
     signal when one or more properties of an object change. In this
     case it is possible to monitor the contents of a property.
 
@@ -174,6 +182,4 @@ val get_all :
   interface : OBus_name.interface ->
   unit -> OBus_value.single Map.Make(String).t Lwt.t
   (** [get_all ~connection ?owner ~path ~interface ()] returns all
-      properties of the givne object with their values.  If these
-      values are available in the cache (because one or more
-      properties are monitored), then cached values are returned. *)
+      properties of the givne object with their values. *)

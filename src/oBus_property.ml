@@ -46,45 +46,7 @@ type 'a w = ('a, [ `writable ]) t
 type 'a rw = ('a, [ `readable | `writable ]) t
 
 (* +-----------------------------------------------------------------+
-   | Property reading/writing                                        |
-   +-----------------------------------------------------------------+ *)
-
-let get property =
-  let core = property.core in
-  match core.property_state with
-    | Property_simple ->
-        lwt variant, context =
-          OBus_method.call
-            ~connection:core.property_connection
-            ?destination:core.property_owner
-            ~path:core.property_path
-            ~interface:"org.freedesktop.DBus.Properties"
-            ~member:"Get"
-            <:obus_func< string -> string -> variant * context >>
-            core.property_interface
-            property.member
-        in
-        return (property.cast context variant)
-    | Property_monitor notifier ->
-        lwt notifier = notifier in
-        let context, value = String_map.find property.member (React.S.value notifier.notifier_signal) in
-        return (property.cast context value)
-
-let set property value =
-  let core = property.core in
-  OBus_method.call
-    ~connection:core.property_connection
-    ?destination:core.property_owner
-    ~path:core.property_path
-    ~interface:"org.freedesktop.DBus.Properties"
-    ~member:"Set"
-    <:obus_func< string -> string -> variant -> unit >>
-    core.property_interface
-    property.member
-    (property.make value)
-
-(* +-----------------------------------------------------------------+
-   | Notifications                                                   |
+   | Reading all properties with their contexts                      |
    +-----------------------------------------------------------------+ *)
 
 let obus_properties = OBus_type.map_with_context <:obus_type< (string, variant) dict >>
@@ -105,6 +67,10 @@ let get_all_no_cache connection owner path interface =
     ~member:"GetAll"
     <:obus_func< string -> properties >>
     interface
+
+(* +-----------------------------------------------------------------+
+   | Notifications                                                   |
+   +-----------------------------------------------------------------+ *)
 
 let notify_none connection owner path interface =
   fail (Failure "OBus_property.monitor: this property can not be monitored")
@@ -189,45 +155,146 @@ let monitorable property = property.notify != notify_none
 let rec monitor property =
   let core = property.core in
   match core.property_state with
-    | Property_monitor notifier ->
-        lwt notifier = notifier in
+    | Property_monitor thread ->
+        lwt notifier = thread in
         return (React.S.map
                   (fun properties ->
                      let context, value = String_map.find property.member properties in
                      property.cast context value)
                   notifier.notifier_signal)
-    | Property_simple ->
+    | Property_cached _  | Property_simple ->
         core.property_state <- Property_monitor(property.notify core.property_connection core.property_owner core.property_path core.property_interface);
         monitor property
 
-let unmonitor property =
-  let core = property.core in
+let unmonitor_core core =
   match core.property_state with
-    | Property_simple ->
+    | Property_simple | Property_cached _ ->
         ()
-    | Property_monitor notifier ->
+    | Property_monitor thread ->
         core.property_state <- Property_simple;
-        match Lwt.state notifier with
+        match Lwt.state thread with
           | Sleep ->
-              cancel notifier
+              cancel thread
           | Return notifier ->
               React.S.stop notifier.notifier_signal;
               notifier.notifier_stop ()
           | Fail exn ->
               ()
 
+let unmonitor property =
+  unmonitor_core property.core
+
+(* +-----------------------------------------------------------------+
+   | Clean up                                                        |
+   +-----------------------------------------------------------------+ *)
+
+let cleanup_core core =
+  core.property_ref_count <- core.property_ref_count - 1;
+  if core.property_ref_count = 0 then begin
+    let running = running_of_connection core.property_connection in
+    running.running_properties <- Property_map.remove (core.property_owner, core.property_path, core.property_interface) running.running_properties;
+    unmonitor_core core
+  end
+
+let cleanup_property property =
+  cleanup_core property.core
+
+(* +-----------------------------------------------------------------+
+   | Caching                                                         |
+   +-----------------------------------------------------------------+ *)
+
+let load_cache connection owner path interface =
+  let running = running_of_connection connection in
+  let core =
+    match try Some(Property_map.find (owner, path, interface) running.running_properties) with Not_found -> None with
+      | None ->
+          let core = {
+            property_ref_count = 1;
+            property_state = Property_simple;
+            property_connection = connection;
+            property_owner = owner;
+            property_path = path;
+            property_interface = interface;
+          } in
+          running.running_properties <- Property_map.add (owner, path, interface) core running.running_properties;
+          core
+      | Some core ->
+          core.property_ref_count <- core.property_ref_count + 1;
+          core
+  in
+  let thread = get_all_no_cache connection owner path interface in
+  core.property_state <- Property_cached thread;
+  ignore begin
+    lwt _ = thread in
+    (* Expire the cache before the next iteration of the main loop: *)
+    lwt () = pause () in
+    cleanup_core core;
+    match core.property_state with
+      | Property_cached _ ->
+          core.property_state <- Property_simple;
+          return ()
+      | _ ->
+          return ()
+  end;
+  thread
+
+(* +-----------------------------------------------------------------+
+   | Property reading/writing                                        |
+   +-----------------------------------------------------------------+ *)
+
+let get ?(cache=false) property =
+  let core = property.core in
+  match core.property_state with
+    | Property_simple ->
+        if cache then begin
+          lwt properties =
+            load_cache
+              core.property_connection
+              core.property_owner
+              core.property_path
+              core.property_interface
+          in
+          let context, value  = String_map.find property.member properties in
+          return (property.cast context value)
+        end else begin
+          lwt context, value =
+            OBus_method.call
+              ~connection:core.property_connection
+              ?destination:core.property_owner
+              ~path:core.property_path
+              ~interface:"org.freedesktop.DBus.Properties"
+              ~member:"Get"
+            <:obus_func< string -> string -> context * variant >>
+            core.property_interface
+            property.member
+          in
+          return (property.cast context value)
+        end
+    | Property_cached thread->
+        lwt properties = thread in
+        let context, value  = String_map.find property.member properties in
+        return (property.cast context value)
+    | Property_monitor thread ->
+        lwt notifier = thread in
+        let context, value = String_map.find property.member (React.S.value notifier.notifier_signal) in
+        return (property.cast context value)
+
+let set property value =
+  let core = property.core in
+  OBus_method.call
+    ~connection:core.property_connection
+    ?destination:core.property_owner
+    ~path:core.property_path
+    ~interface:"org.freedesktop.DBus.Properties"
+    ~member:"Set"
+  <:obus_func< string -> string -> variant -> unit >>
+  core.property_interface
+  property.member
+  (property.make value)
+
 (* +-----------------------------------------------------------------+
    | Property creation                                               |
    +-----------------------------------------------------------------+ *)
-
-let cleanup property =
-  let core = property.core in
-  let running = running_of_connection core.property_connection in
-  core.property_ref_count <- core.property_ref_count - 1;
-  if core.property_ref_count = 0 then begin
-    running.running_properties <- Property_map.remove (core.property_owner, core.property_path, core.property_interface) running.running_properties;
-    unmonitor property
-  end
 
 let make_backend ~connection ?owner ~path ~interface ~member ~access ?(notify=notify_none) ~cast ~make () =
   let running = running_of_connection connection in
@@ -255,7 +322,7 @@ let make_backend ~connection ?owner ~path ~interface ~member ~access ?(notify=no
     notify = notify;
     core = core;
   } in
-  Gc.finalise cleanup property;
+  Gc.finalise cleanup_property property;
   property
 
 let make ~connection ?owner ~path ~interface ~member ~access ?notify typ =
@@ -278,20 +345,11 @@ let get_all ~connection ?owner ~path ~interface () =
   let running = running_of_connection connection in
   match try Some(Property_map.find (owner, path, interface) running.running_properties) with Not_found -> None with
     | None | Some{ property_state = Property_simple } ->
-        lwt dict =
-          OBus_method.call
-            ~connection:connection
-            ?destination:owner
-            ~path
-            ~interface:"org.freedesktop.DBus.Properties"
-            ~member:"GetAll"
-            <:obus_func< string -> (string, variant) dict >>
-            interface
-        in
-        return (List.fold_left
-                  (fun map (key, value) -> String_map.add key value map)
-                  String_map.empty
-                  dict)
-    | Some{ property_state = Property_monitor notifier } ->
-        lwt notifier = notifier in
+        lwt properties = load_cache connection owner path interface in
+        return (String_map.map snd properties)
+    | Some{ property_state = Property_cached thread } ->
+        lwt properties = thread in
+        return (String_map.map snd properties)
+    | Some{ property_state = Property_monitor thread } ->
+        lwt notifier = thread in
         return (String_map.map snd (React.S.value notifier.notifier_signal))

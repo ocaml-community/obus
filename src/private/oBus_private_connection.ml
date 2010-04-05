@@ -171,8 +171,11 @@ and property_state =
   | Property_simple
       (* The property is not monitored *)
   | Property_monitor of notifier Lwt.t
-      (* The property is monitored. The argument is the thread will
-         returns the notifier when it becomes ready. *)
+      (* The property is monitored. The argument is the thread which
+         will returns the notifier when it becomes ready. *)
+  | Property_cached of notify_data Lwt.t
+      (* The properties are cached until the next iteration of the
+         main loop *)
 
 (* Type of all properties of an interface *)
 and property = {
