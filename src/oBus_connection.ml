@@ -108,26 +108,27 @@ let send_message_backend connection reply_waiter_opt message =
               (* Everything went OK, continue with a new serial *)
               running.running_next_serial <- Int32.succ running.running_next_serial;
               return ()
-            with exn ->
+            with
+              | OBus_wire.Data_error _ as exn ->
+                  (* The message can not be marshaled for some
+                     reason. This is not a fatal error. *)
+                  fail exn
+
+              | Canceled ->
+                  (* Message sending have been canceled by the
+                     user. This is not a fatal error either. *)
+                  fail Canceled
+
+              | exn ->
+                  (* All other errors are considered as fatal. They
+                     are fatal because it is possible that a message
+                     has been partially sent on the connection, so the
+                     message stream is broken *)
+                  lwt exn = connection#set_crash (Transport_error exn) in
+                  fail exn
+            finally
               OBus_value.sequence_close message.body;
-              match exn with
-                | OBus_wire.Data_error _ ->
-                    (* The message can not be marshaled for some
-                       reason. This is not a fatal error. *)
-                    fail exn
-
-                | Canceled ->
-                    (* Message sending have been canceled by the
-                       user. This is not a fatal error either. *)
-                    fail Canceled
-
-                | exn ->
-                    (* All other errors are considered as fatal. They
-                       are fatal because it is possible that a message
-                       has been partially sent on the connection, so
-                       the message stream is broken *)
-                    lwt exn = connection#set_crash (Transport_error exn) in
-                    fail exn
+              return ()
     end else
       match connection#get with
         | Crashed exn ->
