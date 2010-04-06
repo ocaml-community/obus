@@ -25,17 +25,31 @@ type typ =
     | `Pda
     | `Phone ]
 
-let obus_typ = OBus_type.mapping obus_uint [
-  `Unknown, 0;
-  `Line_power, 1;
-  `Battery, 2;
-  `Ups, 3;
-  `Monitor, 4;
-  `Mouse, 5;
-  `Keyboard, 6;
-  `Pda, 7;
-  `Phone, 8;
-]
+let obus_typ = OBus_type.map obus_uint
+  (function
+     | 0 -> `Unknown
+     | 1 -> `Line_power
+     | 2 -> `Battery
+     | 3 -> `Ups
+     | 4 -> `Monitor
+     | 5 -> `Mouse
+     | 6 -> `Keyboard
+     | 7 -> `Pda
+     | 8 -> `Phone
+     | n ->
+         Printf.ksprintf
+           (OBus_type.cast_failure "UPower_device.obus_typ")
+           "invalid device type: %d" n)
+  (function
+     | `Unknown -> 0
+     | `Line_power -> 1
+     | `Battery -> 2
+     | `Ups -> 3
+     | `Monitor -> 4
+     | `Mouse -> 5
+     | `Keyboard -> 6
+     | `Pda -> 7
+     | `Phone -> 8)
 
 type state =
     [ `Unknown
@@ -46,15 +60,26 @@ type state =
     | `Pending_charge
     | `Pending_discharge ]
 
-let obus_state = OBus_type.mapping obus_uint [
-  `Unknown, 0;
-  `Charging, 1;
-  `Discharging, 2;
-  `Empty, 3;
-  `Fully_charged, 4;
-  `Pending_charge, 5;
-  `Pending_discharge, 6;
-]
+let obus_state = OBus_type.map obus_uint
+  (function
+     | 0 -> `Unknown
+     | 1 -> `Charging
+     | 2 -> `Discharging
+     | 3 -> `Empty
+     | 4 -> `Fully_charged
+     | 5 -> `Pending_charge
+     | 6 -> `Pending_discharge
+     | n ->
+         Printf.ksprintf (OBus_type.cast_failure "UPower_device.obus_state")
+           "invalid device state: %d" n)
+  (function
+     | `Unknown -> 0
+     | `Charging -> 1
+     | `Discharging -> 2
+     | `Empty -> 3
+     | `Fully_charged -> 4
+     | `Pending_charge -> 5
+     | `Pending_discharge -> 6)
 
 type technology =
     [ `Unknown
@@ -65,15 +90,26 @@ type technology =
     | `Nickel_cadmium
     | `Nickel_metal_hydride ]
 
-let obus_technology = OBus_type.mapping obus_uint [
-  `Unknown, 0;
-  `Lithium_ion, 1;
-  `Lithium_polymer, 2;
-  `Lithium_iron_phosphate, 3;
-  `Lead_acid, 4;
-  `Nickel_cadmium, 5;
-  `Nickel_metal_hydride, 6;
-]
+let obus_technology = OBus_type.map obus_uint
+  (function
+     | 0 -> `Unknown
+     | 1 -> `Lithium_ion
+     | 2 -> `Lithium_polymer
+     | 3 -> `Lithium_iron_phosphate
+     | 4 -> `Lead_acid
+     | 5 -> `Nickel_cadmium
+     | 6 -> `Nickel_metal_hydride
+     | n ->
+         Printf.ksprintf (OBus_type.cast_failure "UPower_device.obus_technology")
+           "invalid technolofy number: %d")
+  (function
+     | `Unknown -> 0
+     | `Lithium_ion -> 1
+     | `Lithium_polymer -> 2
+     | `Lithium_iron_phosphate -> 3
+     | `Lead_acid -> 4
+     | `Nickel_cadmium -> 5
+     | `Nickel_metal_hydride -> 6)
 
 let op_interface = OBus_proxy.make_interface ~notify:(OBus_property.notify_global "Changed") "org.freedesktop.UPower.Device"
 

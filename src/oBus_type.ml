@@ -51,6 +51,8 @@ let osignature { f_reply = r } = type_sequence r
 
 exception Cast_failure = OBus_private_type.Cast_failure
 
+let cast_failure func msg = raise (Cast_failure(func, msg))
+
 let () =
   Printexc.register_printer
     (function

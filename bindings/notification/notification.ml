@@ -37,7 +37,18 @@ let obus_image = obus_structure obus_image
 
 type urgency = [ `Low | `Normal | `Critical ]
 
-let obus_urgency = OBus_type.mapping obus_uint8 [`Low, 0; `Normal, 1; `Critical, 2]
+let obus_urgency = OBus_type.map
+  (function
+     | 0 -> `Low
+     | 1 -> `Normal
+     | 2 -> `Critical
+     | n ->
+         Printf.ksprintf (OBus_type.cast_failure "Notification.obus_urgency")
+           "invalid urgency level: %d" n)
+  (function
+     | `Low -> 0
+     | `Normal -> 1
+     | `Critical -> 2)
 
 type server_id = uint32
  with obus

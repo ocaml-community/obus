@@ -70,6 +70,9 @@ exception Cast_failure of string * string
       - the function which raised the exception
       - an error message *)
 
+val cast_failure : string -> string -> 'a
+  (** [cast_failure func msg = raise (Cast_failure(func, msg))] *)
+
 val cast_basic : ('a, _) cl_basic -> ?context : context -> OBus_value.basic -> 'a
 val cast_single : ('a, _) cl_single -> ?context : context -> OBus_value.single -> 'a
 val cast_sequence : ('a, _) cl_sequence -> ?context : context -> OBus_value.sequence -> 'a

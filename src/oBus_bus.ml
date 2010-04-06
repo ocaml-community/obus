@@ -124,8 +124,21 @@ type request_name_result =
     | `Exists
     | `Already_owner ]
 
-let obus_request_name_result = OBus_type.mapping obus_uint
-  [`Primary_owner, 1; `In_queue, 2; `Exists, 3; `Already_owner, 4]
+let obus_request_name_result = OBus_type.map obus_uint
+  (function
+     | 1 -> `Primary_owner
+     | 2 -> `In_queue
+     | 3 -> `Exists
+     | 4 -> `Already_owner
+     | n ->
+         Printf.ksprintf
+           (OBus_type.cast_failure "OBus_bus.obus_request_name_result")
+           "invalid result for RequestName: %d" n)
+  (function
+     | `Primary_owner -> 1
+     | `In_queue -> 2
+     | `Exists -> 3
+     | `Already_owner -> 4)
 
 OP_method RequestName : string -> uint -> request_name_result
 let request_name bus ?(allow_replacement=false) ?(replace_existing=false) ?(do_not_queue=false) name =
@@ -135,15 +148,35 @@ let request_name bus ?(allow_replacement=false) ?(replace_existing=false) ?(do_n
 
 type release_name_result = [ `Released | `Non_existent | `Not_owner ]
 
-let obus_release_name_result = OBus_type.mapping obus_uint
-  [`Released, 1; `Non_existent, 2; `Not_owner, 3]
+let obus_release_name_result = OBus_type.map obus_uint
+  (function
+     | 1 -> `Released
+     | 2 -> `Non_existent
+     | 3 -> `Not_owner
+     | n ->
+         Printf.ksprintf
+           (OBus_type.cast_failure "OBUs_bus.obus_release_name_result")
+           "invalid result for ReleaseName: %d" n)
+  (function
+     | `Released -> 1
+     | `Non_existent -> 2
+     | `Not_owner -> 3)
 
 OP_method ReleaseName : string -> release_name_result
 
 type start_service_by_name_result = [ `Success | `Already_running ]
 
-let obus_start_service_by_name_result = OBus_type.mapping obus_uint
-  [(`Success, 1); (`Already_running, 2)]
+let obus_start_service_by_name_result = OBus_type.map obus_uint
+  (function
+     | 1 -> `Success
+     | 2 -> `Already_running
+     | n ->
+         Printf.ksprintf
+           (OBus_type.cast_failure "OBus_bus.obus_start_service_by_name_result")
+           "invalid result for StartServiceByName: %d" n)
+  (function
+     | `Success -> 1
+     | `Already_running -> 2)
 
 OP_method StartServiceByName : string -> uint -> start_service_by_name_result
 let start_service_by_name bus name = start_service_by_name bus name 0
