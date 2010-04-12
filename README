@@ -7,7 +7,6 @@ url: https://forge.ocamlcore.org/projects/obus/
   obus depends on the following packages:
 
   lwt:        http://www.ocsigen.org/install/lwt
-  type-conv:  http://www.ocaml.info/home/ocaml_sources.html#type-conv
   xmlm:       http://erratique.ch/software/xmlm
 
 * Installation:
@@ -31,14 +30,20 @@ url: https://forge.ocamlcore.org/projects/obus/
   - obus:
       The core library, implementing the D-Bus protocol.
 
-  - obus.syntax:
-      Some syntactic sugars meant to be used with obus.
-
   - obus.notification:
-      Interface to the freedesktop notification service.
+      Interface to the freedesktop Notification service.
 
   - obus.hal:
-      Interface to the freedesktop hal service.
+      Interface to the freedesktop Hal service.
+
+  - obus.upower
+      Interface to the freedesktop UPower service
+
+  - obus.udisks
+      Interface to the freedesktop UDisks service
+
+  - obus.policykit
+      Interface to the freedesktop PolicyKit servie
 
 * Using tools:
 

@@ -75,7 +75,7 @@ val get_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t Lwt.t
 val acquired_names : t -> Set.Make(String).t React.signal
   (** Returns the list of names we currently own *)
 
-exception Access_denied of string
+exception Access_denied
   (** Exception raised when a name cannot be owned due to security
       policies *)
 
@@ -89,8 +89,6 @@ type request_name_result =
             what to do in this case *)
     | `Already_owner
         (** You already have the name *) ]
-
-val obus_request_name_result : request_name_result OBus_type.basic
 
 val request_name : t ->
   ?allow_replacement:bool ->
@@ -112,21 +110,17 @@ type release_name_result =
     | `Non_existent
     | `Not_owner ]
 
-val obus_release_name_result : release_name_result OBus_type.basic
-
 val release_name : t -> OBus_name.bus -> release_name_result Lwt.t
 
 (** {6 Service starting/discovering} *)
 
-exception Service_unknown of string
+exception Service_unknown
   (** Exception raised when a service is not present on a message bus
       and can not be started automatically *)
 
 type start_service_by_name_result =
     [ `Success
     | `Already_running ]
-
-val obus_start_service_by_name_result : start_service_by_name_result OBus_type.basic
 
 val start_service_by_name : t -> OBus_name.bus -> start_service_by_name_result Lwt.t
   (** Start a service on the given bus by its name *)
@@ -143,7 +137,7 @@ val list_activatable_names : t -> OBus_name.bus list Lwt.t
       activated when you call one of its method or when you use
       [start_service_by_name] *)
 
-exception Name_has_no_owner of string
+exception Name_has_no_owner
 
 val get_name_owner : t -> OBus_name.bus -> OBus_name.bus Lwt.t
   (** Return the connection unique name of the given service. Raise a
@@ -153,13 +147,13 @@ val list_queued_owners : t -> OBus_name.bus -> OBus_name.bus list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
-exception Service_unknown of string
+exception Service_unknown
   (** Raised when we try to contact a service which is not available
       and the bus do not known how to start it *)
 
 (** {6 Messages routing} *)
 
-exception Match_rule_invalid of string
+exception Match_rule_invalid
   (** Exception raised when the program trey to send an invalid match
       rule. This should never happen since values of type
       {!OBus_match.rule} are always valid. *)
@@ -171,7 +165,7 @@ val add_match : t -> OBus_match.rule -> unit Lwt.t
 
       It can raise an [Out_of_memory]. *)
 
-exception OBus_match_not_found of string
+exception Match_rule_not_found
 
 val remove_match : t -> OBus_match.rule -> unit Lwt.t
   (** Remove a match rule from the message bus. It raise a
@@ -181,8 +175,8 @@ val remove_match : t -> OBus_match.rule -> unit Lwt.t
 
 (** These functions are also offered by the message bus *)
 
-exception Adt_audit_data_unknown of string
-exception Selinux_security_context_unknown of string
+exception Adt_audit_data_unknown
+exception Selinux_security_context_unknown
 
 val update_activation_environment : t -> (string * string) list -> unit Lwt.t
 val get_connection_unix_user : t -> OBus_name.bus -> int Lwt.t

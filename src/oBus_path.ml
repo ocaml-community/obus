@@ -132,3 +132,14 @@ let rec after prefix path = match prefix, path with
   | [], p -> Some p
   | e1 :: p1, e2 :: p2 when e1 = e2 -> after p1 p2
   | _ -> None
+
+let unique_id = ref (0, 0)
+
+let generate () =
+  let id1 , id2 = !unique_id in
+  let id2 = id2 + 1 in
+  if id2 < 0 then
+    unique_id := (id1 + 1, 0)
+  else
+    unique_id := (id1, id2);
+  ["org"; "ocamlcore"; "forge"; "obus"; sprintf "%d_%d" id1 id2]

@@ -7,14 +7,11 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open OBus_pervasives
+exception Not_authorized
 
-exception Not_authorized of string
- with obus("org.freedesktop.PolicyKit.Error.NotAuthorized")
+let () = OBus_error.register "org.freedesktop.PolicyKit.Error.NotAuthorized" Not_authorized
 
-let op_interface = OBus_proxy.make_interface "org.freedesktop.PolicyKit.AuthenticationAgent"
-
-OP_method ObtainAuthorization : action_id : string -> xid : uint -> pid : uint -> bool
+open Policy_kit_interfaces.Org_freedesktop_PolicyKit_AuthenticationAgent
 
 let obtain_authorization ~action_id ?(xid=0) ~pid () =
   lwt session_bus = OBus_bus.session () in
@@ -23,4 +20,4 @@ let obtain_authorization ~action_id ?(xid=0) ~pid () =
       (OBus_peer.make session_bus "org.freedesktop.PolicyKit.AuthenticationAgent")
       []
   in
-  obtain_authorization proxy ~action_id ~xid ~pid
+  OBus_method.call m_ObtainAuthorization proxy (action_id, Int32.of_int xid, Int32.of_int pid)

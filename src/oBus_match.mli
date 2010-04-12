@@ -37,9 +37,6 @@ type rule = private {
   (** [arguments] is always a sorted list. *)
 }
 
-val obus_rule : rule OBus_type.basic
-  (** The type combinator for matching-rules *)
-
 (** {8 Rule projections} *)
 
 val typ : rule -> [ `Signal | `Error | `Method_call | `Method_return ] option
@@ -71,7 +68,7 @@ val match_message : rule -> OBus_message.t -> bool
   (** [match_message rule message] returns wether [message] is matched
       by [rule] *)
 
-val match_values : (int * argument_filter) list -> OBus_value.sequence -> bool
+val match_values : (int * argument_filter) list -> OBus_value.V.sequence -> bool
   (** [match_values filters values] returns whether [values] are
       matched by the given list of argument filters.
 

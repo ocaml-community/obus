@@ -8,37 +8,46 @@
  *)
 
 open Lwt
-open OBus_pervasives
-
-type string_option = string option
-let obus_string_option = OBus_type.map obus_string
-  (function
-     | "" -> None
-     | str -> Some str)
-  (function
-     | Some str -> str
-     | None -> "")
 
 type data = {
   data_is_userspace : bool;
-  data_id : uint;
+  data_id : int;
   data_value : float;
-  data_cmdline : string_option;
+  data_cmdline : string option;
   data_details : string;
-} with obus
+}
 
-module Proxy = OBus_proxy.Make(struct
-                                 type proxy = UPower.t
-                                 let cast peer = OBus_proxy.make (UPower.to_peer peer) ["org"; "freedesktop"; "UPower"; "Wakeups"]
-                                 let make proxy = UPower.of_peer (OBus_proxy.peer proxy)
-                               end)
+open UPower_interfaces.Org_freedesktop_UPower_Wakeups
 
-let op_interface = Proxy.make_interface "org.freedesktop.UPower.Wakeups"
+let proxy daemon = OBus_proxy.make (UPower.to_peer daemon) ["org"; "freedesktop"; "UPower"; "Wakeups"]
 
-OP_method GetData : data structure list
-OP_method GetTotal : uint
+let has_capability daemon =
+  OBus_property.make p_HasCapability (proxy daemon)
 
-OP_signal DataChanged : unit
-OP_signal TotalChanged : uint
+let get_total daemon =
+  lwt value = OBus_method.call m_GetTotal (proxy daemon) () in
+  let value = Int32.to_int value in
+  return value
 
-OP_property_r HasCapability : bool
+let total_changed daemon =
+  OBus_signal.map
+    (fun value ->
+       let value = Int32.to_int value in
+       value)
+    (OBus_signal.connect s_TotalChanged (proxy daemon))
+
+let get_data daemon =
+  lwt data = OBus_method.call m_GetData (proxy daemon) () in
+  return
+    (List.map
+       (fun (is_userspace, id, value, cmdline, details) -> {
+          data_is_userspace = is_userspace;
+          data_id = Int32.to_int id;
+          data_value = value;
+          data_cmdline = if cmdline = "" then None else Some cmdline;
+          data_details = details;
+        })
+       data)
+
+let data_changed daemon =
+  OBus_signal.connect s_DataChanged (proxy daemon)

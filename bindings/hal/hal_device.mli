@@ -14,8 +14,6 @@ include OBus_proxy.Private
 type udi = OBus_path.t
     (** Unique Device Identifier *)
 
-val obus_udi : udi OBus_type.basic
-
 val udi : t -> udi
   (** Return the udi of a device *)
 
@@ -36,7 +34,11 @@ type property =
   | Pdouble of float
       (** IEEE754 double precision floating point number  *)
 
-val obus_property : property OBus_type.container
+val property_of_variant : OBus_value.V.single -> property
+  (** Tries to convert the given variant into a property *)
+
+val variant_of_property : property -> OBus_value.V.single
+  (** Converts the gievn property into a D-Bus variant *)
 
 (** {6 Common device interface} *)
 
@@ -64,7 +66,7 @@ val unlock : t -> bool Lwt.t
 val acquire_interface_lock : t -> string -> bool -> unit Lwt.t
 val release_interface_lock : t -> string -> unit Lwt.t
 val is_caller_locked_out : t -> string -> string -> bool Lwt.t
-val is_caller_privileged : t -> string -> string list -> string -> string Lwt.t
+val is_caller_privileged : t -> string -> string -> string Lwt.t
 val is_locked_by_others : t -> string -> bool Lwt.t
 val string_list_append : t -> string -> string -> unit Lwt.t
 val string_list_prepend : t -> string -> string -> unit Lwt.t
@@ -125,10 +127,6 @@ end
 module Laptop_panel : sig
   val set_brightness : t -> int -> int Lwt.t
   val get_brightness : t -> int Lwt.t
-end
-
-module Dock_station : sig
-  val undock : t -> int Lwt.t
 end
 
 module Kill_switch : sig

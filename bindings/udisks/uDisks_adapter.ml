@@ -7,17 +7,31 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open OBus_pervasives
-
 include OBus_proxy.Private
 
-let op_interface = OBus_proxy.make_interface ~notify:(OBus_property.notify_global "Changed") "org.freedesktop.UDisks.Adapter"
+open UDisks_interfaces.Org_freedesktop_UDisks_Adapter
 
-OP_signal Changed : unit
+let notify_mode = OBus_property.notify_global "Changed"
 
-OP_property_r Fabric : string
-OP_property_r NumPorts : uint
-OP_property_r Driver : string
-OP_property_r Model : string
-OP_property_r Vendor : string
-OP_property_r NativePath : string
+let changed proxy =
+  OBus_signal.connect s_Changed proxy
+
+let native_path proxy =
+  OBus_property.make p_NativePath ~notify_mode proxy
+
+let vendor proxy =
+  OBus_property.make p_Vendor ~notify_mode proxy
+
+let model proxy =
+  OBus_property.make p_Model ~notify_mode proxy
+
+let driver proxy =
+  OBus_property.make p_Driver ~notify_mode proxy
+
+let num_ports proxy =
+  OBus_property.map_r
+    (fun x -> Int32.to_int x)
+    (OBus_property.make p_NumPorts ~notify_mode proxy)
+
+let fabric proxy =
+  OBus_property.make p_Fabric ~notify_mode proxy

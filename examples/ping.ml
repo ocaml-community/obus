@@ -11,10 +11,11 @@
 
 open Lwt
 open Lwt_io
-open OBus_pervasives
 
-let op_interface = OBus_proxy.make_interface "org.plop.foo"
-OP_method Ping : string -> string
+open Ping_pong.Org_foo_bar
+
+let ping proxy msg =
+  OBus_method.call m_Ping proxy msg
 
 let _ = Lwt_main.run begin
   lwt bus = OBus_bus.session () in
@@ -29,7 +30,7 @@ let _ = Lwt_main.run begin
     lwt msg = ping proxy "coucou" in
     printlf "received: %s" msg
   with
-    | OBus_bus.Service_unknown msg ->
+    | OBus_error.DBus(OBus_bus.Service_unknown, _, _) ->
         lwt () = printl "You must run pong to try this sample!" in
         exit 1
     | exn ->

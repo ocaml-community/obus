@@ -7,22 +7,46 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open OBus_pervasives
 open Lwt
+open OBus_value
 
+let interface = "org.freedesktop.DBus"
 let destination = "org.freedesktop.DBus"
 let path = ["org"; "freedesktop"; "DBus"]
-let interface = "org.freedesktop.DBus"
 
-let add_match connection =
-  OBus_method.call_no_reply ~connection ~member:"AddMatch" ~destination ~path ~interface <:obus_func< string -> unit >>
+let add_match connection match_rule =
+  OBus_private_method.call_no_reply
+    ~connection
+    ~destination
+    ~path
+    ~interface
+    ~member:"AddMatch"
+    ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+    match_rule
 
-let remove_match connection =
-  OBus_method.call_no_reply ~connection ~member:"RemoveMatch" ~destination ~path ~interface <:obus_func< string -> unit >>
+let remove_match connection match_rule =
+  OBus_private_method.call_no_reply
+    ~connection
+    ~destination
+    ~path
+    ~interface
+    ~member:"RemoveMatch"
+    ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+    match_rule
 
 let get_name_owner connection name =
   try_lwt
-    lwt n = OBus_method.call ~connection ~member:"GetNameOwner" ~destination ~path ~interface <:obus_func< string -> string >> name in
-    return (Some n)
+    lwt name =
+      OBus_private_method.call
+        ~connection
+        ~destination
+        ~path
+        ~interface
+        ~member:"GetNameOwner"
+        ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+        ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+        name
+    in
+    return (Some name)
   with _ ->
     return None

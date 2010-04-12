@@ -7,16 +7,32 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open OBus_pervasives
-
 include OBus_proxy.Private
 
-let op_interface = OBus_proxy.make_interface ~notify:(OBus_property.notify_global "Changed") "org.freedesktop.UDisks.Port"
+open UDisks_interfaces.Org_freedesktop_UDisks_Port
 
-OP_signal Changed : unit
+let notify_mode = OBus_property.notify_global "Changed"
 
-OP_property_r ConnectorType : string
-OP_property_r Number : int
-OP_property_r Parent : UDisks_adapter.t
-OP_property_r Adapter : UDisks_adapter.t
-OP_property_r NativePath : string
+let changed proxy =
+  OBus_signal.connect s_Changed proxy
+
+let native_path proxy =
+  OBus_property.make p_NativePath ~notify_mode proxy
+
+let adapter proxy =
+  OBus_property.map_r_with_context
+    (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
+    (OBus_property.make p_Adapter ~notify_mode proxy)
+
+let parent proxy =
+  OBus_property.map_r_with_context
+    (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
+    (OBus_property.make p_Parent ~notify_mode proxy)
+
+let number proxy =
+  OBus_property.map_r
+    (fun x -> Int32.to_int x)
+    (OBus_property.make p_Number ~notify_mode proxy)
+
+let connector_type proxy =
+  OBus_property.make p_ConnectorType ~notify_mode proxy

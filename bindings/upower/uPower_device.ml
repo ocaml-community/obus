@@ -7,12 +7,12 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open OBus_pervasives
+open Lwt
 
 include OBus_proxy.Private
 
-exception General_error of string
- with obus("org.freedesktop.UPower.Device.GeneralError")
+exception General_error
+let () = OBus_error.register ~name:"org.freedesktop.UPower.Device.GeneralError" ~exn:General_error
 
 type typ =
     [ `Unknown
@@ -25,32 +25,6 @@ type typ =
     | `Pda
     | `Phone ]
 
-let obus_typ = OBus_type.map obus_uint
-  (function
-     | 0 -> `Unknown
-     | 1 -> `Line_power
-     | 2 -> `Battery
-     | 3 -> `Ups
-     | 4 -> `Monitor
-     | 5 -> `Mouse
-     | 6 -> `Keyboard
-     | 7 -> `Pda
-     | 8 -> `Phone
-     | n ->
-         Printf.ksprintf
-           (OBus_type.cast_failure "UPower_device.obus_typ")
-           "invalid device type: %d" n)
-  (function
-     | `Unknown -> 0
-     | `Line_power -> 1
-     | `Battery -> 2
-     | `Ups -> 3
-     | `Monitor -> 4
-     | `Mouse -> 5
-     | `Keyboard -> 6
-     | `Pda -> 7
-     | `Phone -> 8)
-
 type state =
     [ `Unknown
     | `Charging
@@ -59,27 +33,6 @@ type state =
     | `Fully_charged
     | `Pending_charge
     | `Pending_discharge ]
-
-let obus_state = OBus_type.map obus_uint
-  (function
-     | 0 -> `Unknown
-     | 1 -> `Charging
-     | 2 -> `Discharging
-     | 3 -> `Empty
-     | 4 -> `Fully_charged
-     | 5 -> `Pending_charge
-     | 6 -> `Pending_discharge
-     | n ->
-         Printf.ksprintf (OBus_type.cast_failure "UPower_device.obus_state")
-           "invalid device state: %d" n)
-  (function
-     | `Unknown -> 0
-     | `Charging -> 1
-     | `Discharging -> 2
-     | `Empty -> 3
-     | `Fully_charged -> 4
-     | `Pending_charge -> 5
-     | `Pending_discharge -> 6)
 
 type technology =
     [ `Unknown
@@ -90,59 +43,135 @@ type technology =
     | `Nickel_cadmium
     | `Nickel_metal_hydride ]
 
-let obus_technology = OBus_type.map obus_uint
-  (function
-     | 0 -> `Unknown
-     | 1 -> `Lithium_ion
-     | 2 -> `Lithium_polymer
-     | 3 -> `Lithium_iron_phosphate
-     | 4 -> `Lead_acid
-     | 5 -> `Nickel_cadmium
-     | 6 -> `Nickel_metal_hydride
-     | n ->
-         Printf.ksprintf (OBus_type.cast_failure "UPower_device.obus_technology")
-           "invalid technolofy number: %d")
-  (function
-     | `Unknown -> 0
-     | `Lithium_ion -> 1
-     | `Lithium_polymer -> 2
-     | `Lithium_iron_phosphate -> 3
-     | `Lead_acid -> 4
-     | `Nickel_cadmium -> 5
-     | `Nickel_metal_hydride -> 6)
+open UPower_interfaces.Org_freedesktop_UPower_Device
 
-let op_interface = OBus_proxy.make_interface ~notify:(OBus_property.notify_global "Changed") "org.freedesktop.UPower.Device"
+let notify_mode = OBus_property.notify_global "Changed"
 
-OP_method GetStatistics : string -> (float * float) structure list
-OP_method GetHistory : string -> uint -> uint -> (uint * float * uint) structure list
-OP_method Refresh : unit
+let refresh proxy =
+  OBus_method.call m_Refresh proxy ()
 
-OP_signal Changed : unit
+let changed proxy =
+  OBus_signal.connect s_Changed proxy
 
-OP_property_rw RecallUrl : string
-OP_property_rw RecallVendor : string
-OP_property_rw RecallNotice : bool
-OP_property_rw Technology : technology
-OP_property_rw Capacity : float
-OP_property_rw IsRechargeable : bool
-OP_property_rw State : state
-OP_property_rw IsPresent : bool
-OP_property_rw Percentage : float
-OP_property_rw TimeToFull : int64
-OP_property_rw TimeToEmpty : int64
-OP_property_rw Voltage : float
-OP_property_rw EnergyRate : float
-OP_property_rw EnergyFullDesign : float
-OP_property_rw EnergyFull : float
-OP_property_rw EnergyEmpty : float
-OP_property_rw Energy : float
-OP_property_rw Online : bool
-OP_property_rw HasStatistics : bool
-OP_property_rw HasHistory : bool
-OP_property_rw PowerSupply : bool
-OP_property_rw Type as typ : typ
-OP_property_rw UpdateTime : uint64
-OP_property_rw Serial : string
-OP_property_rw Model : string
-OP_property_rw Vendor : string
-OP_property_rw NativePath : string
+let get_history proxy ~typ ~timespan ~resolution =
+  let timespan = Int32.of_int timespan in
+  let resolution = Int32.of_int resolution in
+  lwt data = OBus_method.call m_GetHistory proxy (typ, timespan, resolution) in
+  let data = List.map (fun (x1, x2, x3) -> (Int32.to_int x1, x2, Int32.to_int x3)) data in
+  return data
+
+let get_statistics proxy ~typ =
+  OBus_method.call m_GetStatistics proxy typ
+
+let native_path proxy =
+  OBus_property.make p_NativePath ~notify_mode proxy
+
+let vendor proxy =
+  OBus_property.make p_Vendor ~notify_mode proxy
+
+let model proxy =
+  OBus_property.make p_Model ~notify_mode proxy
+
+let serial proxy =
+  OBus_property.make p_Serial ~notify_mode proxy
+
+let update_time proxy =
+  OBus_property.make p_UpdateTime ~notify_mode proxy
+
+let typ proxy =
+  OBus_property.map_r
+    (function
+       | 0l -> `Unknown
+       | 1l -> `Line_power
+       | 2l -> `Battery
+       | 3l -> `Ups
+       | 4l -> `Monitor
+       | 5l -> `Mouse
+       | 6l -> `Keyboard
+       | 7l -> `Pda
+       | 8l -> `Phone
+       | n -> Printf.ksprintf failwith "invalid device type: %ld" n)
+    (OBus_property.make p_Type ~notify_mode proxy)
+
+let power_supply proxy =
+  OBus_property.make p_PowerSupply ~notify_mode proxy
+
+let has_history proxy =
+  OBus_property.make p_HasHistory ~notify_mode proxy
+
+let has_statistics proxy =
+  OBus_property.make p_HasStatistics ~notify_mode proxy
+
+let online proxy =
+  OBus_property.make p_Online ~notify_mode proxy
+
+let energy proxy =
+  OBus_property.make p_Energy ~notify_mode proxy
+
+let energy_empty proxy =
+  OBus_property.make p_EnergyEmpty ~notify_mode proxy
+
+let energy_full proxy =
+  OBus_property.make p_EnergyFull ~notify_mode proxy
+
+let energy_full_design proxy =
+  OBus_property.make p_EnergyFullDesign ~notify_mode proxy
+
+let energy_rate proxy =
+  OBus_property.make p_EnergyRate ~notify_mode proxy
+
+let voltage proxy =
+  OBus_property.make p_Voltage ~notify_mode proxy
+
+let time_to_empty proxy =
+  OBus_property.make p_TimeToEmpty ~notify_mode proxy
+
+let time_to_full proxy =
+  OBus_property.make p_TimeToFull ~notify_mode proxy
+
+let percentage proxy =
+  OBus_property.make p_Percentage ~notify_mode proxy
+
+let is_present proxy =
+  OBus_property.make p_IsPresent ~notify_mode proxy
+
+let state proxy =
+  OBus_property.map_r
+    (function
+       | 0l -> `Unknown
+       | 1l -> `Charging
+       | 2l -> `Discharging
+       | 3l -> `Empty
+       | 4l -> `Fully_charged
+       | 5l -> `Pending_charge
+       | 6l -> `Pending_discharge
+       | n -> Printf.ksprintf failwith "invalid device state: %ld" n)
+    (OBus_property.make p_State ~notify_mode proxy)
+
+let is_rechargeable proxy =
+  OBus_property.make p_IsRechargeable ~notify_mode proxy
+
+let capacity proxy =
+  OBus_property.make p_Capacity ~notify_mode proxy
+
+let technology proxy =
+  OBus_property.map_r
+    (function
+       | 0l -> `Unknown
+       | 1l -> `Lithium_ion
+       | 2l -> `Lithium_polymer
+       | 3l -> `Lithium_iron_phosphate
+       | 4l -> `Lead_acid
+       | 5l -> `Nickel_cadmium
+       | 6l -> `Nickel_metal_hydride
+       | n -> Printf.ksprintf failwith "invalid technolofy number: %ld" n)
+    (OBus_property.make p_Technology ~notify_mode proxy)
+
+let recall_notice proxy =
+  OBus_property.make p_RecallNotice ~notify_mode proxy
+
+let recall_vendor proxy =
+  OBus_property.make p_RecallVendor ~notify_mode proxy
+
+let recall_url proxy =
+  OBus_property.make p_RecallUrl ~notify_mode proxy

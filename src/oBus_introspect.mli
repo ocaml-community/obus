@@ -12,7 +12,7 @@
 type name = string
 
 type annotation = name * string
-type argument = name option * OBus_value.tsingle
+type argument = name option * OBus_value.T.single
 
 type access = Read | Write | Read_write
     (** Access mode of properties *)
@@ -20,14 +20,12 @@ type access = Read | Write | Read_write
 type member =
   | Method of name * argument list * argument list * annotation list
   | Signal of name * argument list * annotation list
-  | Property of name * OBus_value.tsingle * access * annotation list
+  | Property of name * OBus_value.T.single * access * annotation list
 
 type interface = name * member list * annotation list
 type node = OBus_path.element
 
 type document = interface list * node list
-
-val obus_document : document OBus_type.basic
 
 (** {6 Xml conversion} *)
 

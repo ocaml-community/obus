@@ -9,45 +9,39 @@
 
 (** D-Bus signals *)
 
-(** This module provides high-level functions for:
-
-    - emiting signals to other applications
-    - receiving signals from other applications
-*)
-
 (** {6 Emitting signals} *)
 
-val emit :
-  connection : OBus_connection.t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  ('a, _) OBus_type.cl_sequence -> 'a -> unit Lwt.t
-  (** Emits a signal *)
+val emit : 'a OBus_member.Signal.t -> 'a OBus_object.t -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t
+  (** [emit signal obj args] emit [signal] from [obj]. The
+      destinations of the signal are selected as follow:
 
-val dyn_emit :
-  connection : OBus_connection.t ->
-  ?flags : OBus_message.flags ->
-  ?sender : OBus_name.bus ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  OBus_message.body -> unit Lwt.t
-  (** Dynamically-typed version of {!emit} (see {!OBus_method} for
-      explanation) *)
+      {ol
+        {- if [peer] is provided, then the message is sent only to it,}
+        {- otherwise, if the the object has an owner, it is sent to the owner,}
+        {- otherwise, the message is boradcasted on all the connection [obj] is exported.}
+      }
+  *)
 
 (** {6 Receving signals} *)
 
 type 'a t
-  (** Type of a signal receiver, which occurs with values of type
-      ['a] *)
+  (** Type of a signal receiver, which occurs with values of type ['a] *)
+
+val map : ('a -> 'b) -> 'a t -> 'b t
+  (** [map f signal] maps the values returned by [signal] with [f] *)
+
+val map_with_context : (unit OBus_context.t -> 'a -> 'b) -> 'a t -> 'b t
+  (** [map_with_context f signal] maps the values returned by [signal]
+      with [f], and also pass to [f] the context. *)
 
 val event : 'a t -> 'a React.event
   (** The event which occurs each time the signal is received. *)
+
+val event_with_context : 'a t -> (unit OBus_context.t * 'a) React.event
+  (** Same as {!event} but adds the context to events *)
+
+val connect : 'a OBus_member.Signal.t -> OBus_proxy.t -> 'a t
+  (** [connect signal proxy] connects to signals emited by [proxy]. *)
 
 val disconnect : 'a t -> unit
   (** [disconnect signal] stops receiving the given signal.
@@ -89,33 +83,3 @@ val init : ?filters : (int * OBus_match.argument_filter) list -> ?auto_match_rul
         let x = React.E.map (...) (OBus_signal.init ~filters ~auto_match_rule:false  (Foo.bar proxy))
       ]}
   *)
-
-(** {8 Connecting to signals} *)
-
-val connect :
-  connection : OBus_connection.t ->
-  ?sender : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  ('a, _) OBus_type.cl_sequence -> 'a t
-  (** [connect ~connection ?sender ~path ~interface ~member typ]
-      creates a signal which will receives event emited by the object
-      with path [path] on peer with bus name [sender]. *)
-
-val dyn_connect :
-  connection : OBus_connection.t ->
-  ?sender : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member -> unit -> OBus_value.sequence t
-  (** Same as {!connect} but using dynamically typed values *)
-
-val raw_connect :
-  connection : OBus_connection.t ->
-  ?sender : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member -> unit -> OBus_message.t t
-  (** Same as {!connect} except that the receiver will receive the raw
-      D-Bus message, without any processing *)

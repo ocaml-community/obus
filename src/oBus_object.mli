@@ -12,356 +12,193 @@
 (** This module allow you to create D-Bus objects and export them on a
     connection, allowing other programs to acccess them. *)
 
-type t
-  (** Default type for local D-Bus objects. It contains informations
-      needed by obus to export it on a connection and dispatch
-      incomming method calls. *)
+(** {6 Types} *)
 
-val obus_t : t OBus_type.basic
-  (** The type combinator for objects *)
+type 'a t
+  (** Type of local D-Bus objects. It contains informations needed by
+      obus to export it on a connection and dispatch incomming method
+      calls.
+
+      ['a] is the type of value that may be attached to this
+      object. *)
+
+type 'a interface
+  (** An interface description *)
+
+type 'a member
+  (** Part of an inteface *)
+
+type 'a notify_mode
+  (** Describe how property changes should be announced to other
+      applications *)
+
+(** {6 Objects creation} *)
+
+val attach : 'a t -> 'a -> unit
+  (** [attach obus_object custom_obejct] attaches [custom_object] to
+      [obus_object]. [custom_object] will be the value received by
+      method call handlers. Note that you need to attach the object
+      before you can export it on a coneection.
+
+      Note that you can not attach an object multiple times. *)
+
+val get : 'a t -> 'a
+  (** [get obj] returns the data attached to the given object *)
+
+val make : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : 'a interface list -> OBus_path.t -> 'a t
+  (** [make ?owner ?common ?interfaces path] creates a new D-Bus
+      object with path [path].
+
+      If [owner] is specified, then:
+      - all signals will be sent to it by default,
+      - the object will be removed from all its exports when the owner exits,
+      - it will automatically be exported on the connection of the owner when
+        [attach] is invoked.
+
+      [interfaces] is the list of interfaces implemented by the
+      object. New interfaces can be added latter with
+      {!add_interface}. If [common] is [true] (the default) then
+      {!introspectable} and {!properties} are automatically added. *)
+
+(** {6 Properties} *)
+
+val path : 'a t -> OBus_path.t
+  (** [path obj] returns the path of the object *)
+
+val owner : 'a t -> OBus_peer.t option
+  (** [owner obj] returns the owner of the object, if any *)
+
+val exports : 'a t -> Set.Make(OBus_connection).t
+  (** [exports obj] returns the set of connnections on which the
+      object is exproted *)
+
+val introspect : 'a t -> OBus_introspect.interface list
+  (** [introspect obj] returns the introspection of all interfaces
+      implemented by [obj] *)
+
+(** {6 Exports} *)
+
+val export : OBus_connection.t -> 'a t -> unit
+  (** [export connection obj] exports [obj] on [connection] *)
+
+val remove : OBus_connection.t -> 'a t -> unit
+  (** [remove connection obj] removes [obj] from [connection] *)
 
 val remove_by_path : OBus_connection.t -> OBus_path.t -> unit
   (** [remove_by_path connection path] removes the object with path
       [path] on [connection]. Works for normal objects and dynamic
       nodes. *)
 
-type notify_mode
-  (** Describe how property changes should be announced to other
-      applications *)
-
-(** Interface definition *)
-module Interface : sig
-  (** This module is aimed to be use with the [obus.syntax] syntax
-      extension.
-
-      It allow you to easily register members.
-
-      For example, instead of:
-
-      {[
-        module M = OBus_object.Make(...)
-
-        let iface = M.make_interface "org.mydomain"
-
-        let foo a b c = return (a + b + c)
-        let bar a b = return (a ^ b)
-
-        let () =
-          OBus_object.Interface.method_call
-            obus_local_interface
-            "Foo"
-            <:obus_func< int -> int -> int -> int >>;
-          OBus_object.Interface.method_call
-            obus_local_interface
-            "Bar"
-            <:obus_func< string -> string -> string >>
-      ]}
-
-      You can simply write:
-
-      {[
-        module M = OBus_object.Make(...)
-
-        let ol_interface = M.make_interface "org.mydomain"
-
-        let foo a b c = return (a + b + c)
-        let bar a b = return (a ^ b)
-
-        OL_method Foo : int -> int -> int -> int
-        OL_method Bar : string -> string -> stirng
-      ]}
-
-      or:
-
-      {[
-        module M = OBus_object.Make(...)
-
-        let ol_interface = M.make_interface "org.mydomain"
-
-        OL_method Foo : int -> int -> int -> int =
-          fun a b c -> return (a + b + c)
-        OL_method Bar : int -> int -> int -> int =
-          fun a b c -> return (a + b + c)
-      ]}
-
-      where [OL_xxx] stands for "OBus Local xxx".
-  *)
-
-  type 'obj t
-    (** Type of an interface. ['obj] is the type of objects used. *)
-
-  val name : 'obj t -> OBus_name.interface
-    (** Name of the interface *)
-
-  val close : 'obj t -> unit
-    (** [close iface] `cloes'' the interface. This means that no more
-        members can be added. *)
-
-  val introspect : 'obj t -> OBus_introspect.interface
-    (** Returns introspection data of the interface.
-
-        Note: it also closes the interface. *)
-
-  (** {6 Member registration} *)
-
-  val method_call : 'obj t -> OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> ('obj -> 'a) -> unit
-    (** Registers a method call *)
-
-  val signal : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> unit
-    (** Registers a signal *)
-
-  val emit : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> 'obj -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t
-    (** [emit member typ obj ?peer x] emits a signal *)
-
-  (** Note that the syntax extension both registers the signal with
-      {!signal} and defines the emitter with {!emit}. *)
-
-  val property_r : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a React.signal) -> unit
-    (** Registers a read-only property *)
-
-  val property_w : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a -> unit Lwt.t) -> unit
-    (** Registers a write-only property *)
-
-  val property_rw : 'obj t -> OBus_name.member -> ('a, _) OBus_type.cl_single -> ('obj -> 'a React.signal) -> ('obj -> 'a -> unit Lwt.t) -> unit
-    (** Registers a read and write property *)
-end
-
-(** Local object signature *)
-module type S = sig
-
-  type obj
-    (** The type of objects *)
-
-  val obus_obj : obj OBus_type.basic
-
-  (** {6 Interfaces} *)
-
-  val make_interface : ?notify : notify_mode -> OBus_name.interface -> obj Interface.t
-    (** [make_interface ?notify name] creates an empty interface. New
-        members can be added using the module {!Interface}. [notify]
-        defaults to {!notify_none}. *)
-
-  val add_interface : obj -> obj Interface.t -> unit
-    (** [add_interface obj iface] adds suport for the interface
-        described by [iface] to the given object. If an interface with
-        the same name is already attached to the object, then it is
-        replaced by the new one. *)
-
-  val remove_interface : obj -> obj Interface.t -> unit
-    (** [remove_interace obj iface] removes informations about the
-        given interface from [obj]. If [obj] do not implement the
-        interface, it does nothing. *)
-
-  val remove_interface_by_name : obj -> OBus_name.interface -> unit
-    (** Same as {!remove_interface} by takes only the interface name
-        as argument. *)
-
-  (** {8 Well-known interfaces} *)
-
-  val introspectable : obj Interface.t
-    (** The [org.freedesktop.DBus.Introspectable] interface *)
-
-  val properties : obj Interface.t
-    (** The [org.freedesktop.DBus.Properties] interface *)
-
-  (** {6 Constructors} *)
-
-  val make : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> OBus_path.t -> (t -> obj) -> obj
-    (** [make ?owner ?interfaces path f] creates a new D-Bus object
-        with path [path], pass it to [f] and return the result.
-
-        If [owner] is specified, then all signals will be sent to it
-        by default, the object will be removed from all its exports
-        when the owner exits and it will be initially be exported on
-        the connection of the owner.
-
-        [interfaces] is the list of interfaces implemented by the
-        object. New interfaces can be added latter with
-        {!add_interface}. If [common] is [true] (the default) then
-        [introspectable] and [properties] are automatically added.
-
-        Typically, the creation of an object of type {!obj} will look
-        like this:
-
-        {[
-          type my_object = {
-            obus : OBus_object.t;
-            foo : string;
-            bar : int;
-            ...
-          }
-
-          module M = OBus_object.Make(struct
-                                        type obj = my_object
-                                        let get obj = obj.obus
-                                      end)
-
-          let make foo bar ... =
-            M.Make M.make ~interfaces:[iface1; iface2; ...] ["some"; "path"]
-              (fun obus -> {
-                obus = obus;
-                foo = foo;
-                bar = bar;
-                ...
-              })
-        ]}
-    *)
-
-  val make' : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : obj Interface.t list -> (t -> obj) -> obj
-    (** Same as [make] but generate a unique path *)
-
-  (** {6 Properties} *)
-
-  val path : obj -> OBus_path.t
-    (** [path obj] returns the path of the object *)
-
-  val owner : obj -> OBus_peer.t option
-    (** [owner obj] returns the owner of the object, if any *)
-
-  val exports : obj -> Set.Make(OBus_connection).t React.signal
-    (** [exports obj] is the signal holding the list of connection on
-        which the object is exported *)
-
-  val introspect : obj -> OBus_introspect.interface list
-    (** [introspect obj] returns the introspection of all interfaces
-        implemented by [obj] *)
-
-  (** {6 Exports} *)
-
-  val export : OBus_connection.t -> obj -> unit
-    (** [export connection obj] exports [obj] on [connection] *)
-
-  val remove : OBus_connection.t -> obj -> unit
-    (** [remove connection obj] removes [obj] from [connection] *)
-
-  val destroy : obj -> unit
-    (** [destroy obj] removes [obj] from all connection it is exported
-        on *)
-
-  val dynamic : connection : OBus_connection.t -> prefix : OBus_path.t -> handler : (OBus_path.t -> obj Lwt.t) -> unit
-    (** [dynamic ~connection ~prefix ~handler] defines a dynamic node
-        it the tree of object. This means that objects with a path
-        prefixed by [prefix], will be created on the fly by [handler]
-        when a process try to access them.
-
-        [handler] receive the rest of path after the prefix.
-
-        Note: if you manually export an object with a path prefixed by
-        [prefix], it will be prefered to the one created by
-        [handler].
-
-        Here is an example (a very basic VFS):
-
-        {[
-          (* The type of a file *)
-          type file = {
-            obus : OBus_object.t;
-            name : string;
-            owner : int;
-            group : int;
-            ...
-          }
-
-          module File = OBus_object.Make(struct
-                                           type obj = file
-                                           let get obj = obj.obus
-                                         end)
-
-          (* Definition and implementation of interfaces *)
-          let obus_local_interface = File.make_interface "org.foo.File"
-
-          OL_method owner : uint = fun file -> return file.owner
-          OL_method group : uint = fun file -> return file.group
-
-          let size file = Lwt_io.file_length file.name
-          OL_method Size : uint64
-
-          ...
-
-          (* The prefix used for the VFS: *)
-          let prefix = ["org"; "foo"; "VFS"]
-
-          (* Registration *)
-          let () =
-            File.dynamic ~connection ~prefix
-              ~handler:(function
-                          | [escaped_name] ->
-                              return { obus = OBus_object.make (prefix @ [escaped_name]);
-                                       name = OBus_path.unescape escaped_name;
-                                       owner = ...;
-                                       group = ...;
-                                       ... }
-                          | _ ->
-                              fail (Failure "invalid path"))
-        ]}
-    *)
-
-  (** {6 Signals} *)
-
-  val emit : obj ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    ('a, _) OBus_type.cl_sequence ->
-    ?peer : OBus_peer.t -> 'a -> unit Lwt.t
-    (** [emit obj ~interface ~member typ ?peer x] emits a signal. If
-        [peer] is specified then the signal is sent only to it,
-        otherwise it is broadcasted. *)
-end
-
-(** The default object implementation *)
-include S with type obj = t
-
-(** Signature of custom objects *)
-module type Custom = sig
-  type obj
-    (** Type of custom object *)
-
-  val cast : obj -> t
-    (** [cast obj] should returns the obus object attached to the given
-        custom object. *)
-
-(** Typical example:
-
-    {[
-      type t = {
-        obus : OBus_object.t;
-        x : int;
-        y : int;
-        ...
-      }
-
-      module M = OBus_object.Make(struct
-                                    type obj = t
-                                    let info obj = obj.obus
-                                  end)
-    ]}
-*)
-end
-
-module Make(Object : Custom) : S with type obj = Object.obj
-  (** [Make(Object)] creates a custom object module *)
+val destroy : 'a t -> unit
+  (** [destroy obj] removes [obj] from all connection it is exported
+      on *)
+
+val dynamic : connection : OBus_connection.t -> prefix : OBus_path.t -> handler : (OBus_path.t -> 'a t Lwt.t) -> unit
+  (** [dynamic ~connection ~prefix ~handler] defines a dynamic node in
+      the tree of object. This means that objects with a path prefixed
+      by [prefix], will be created on the fly by [handler] when a
+      process try to access them.
+
+      [handler] receive the rest of path after the prefix.
+
+      Note: if you manually export an object with a path prefixed by
+      [prefix], it will have precedence over the one created by
+      [handler]. *)
+
+(** {6 Interfaces} *)
+
+val make_interface : ?notify_mode : 'a notify_mode -> OBus_name.interface -> 'a member list -> 'a interface
+  (** [make_interface ?notify_mode ?sorted name members] creates a new
+      interface. [notify_mode] determines how property changes are
+      announced. It defaults to {!notify_none}. *)
+
+(**/**)
+
+val make_interface_unsafe : ?notify_mode : 'a notify_mode -> OBus_name.interface ->
+  'a member array ->
+  'a member array ->
+  'a member array -> 'a interface
+
+(**/**)
+
+val add_interface : 'a t -> 'a interface -> unit
+  (** [add_interface obj iface] adds suport for the interface
+      described by [iface] to the given object. If an interface with
+      the same name is already attached to the object, then it is
+      replaced by the new one. *)
+
+val remove_interface : 'a t -> 'a interface -> unit
+  (** [remove_interace obj iface] removes informations about the given
+      interface from [obj]. If [obj] do not implement the interface,
+      it does nothing. *)
+
+val remove_interface_by_name : 'a t -> OBus_name.interface -> unit
+  (** Same as {!remove_interface} by takes only the interface name as
+      argument. *)
+
+(** {8 Well-known interfaces} *)
+
+val introspectable : unit -> 'a interface
+  (** The [org.freedesktop.DBus.Introspectable] interface *)
+
+val properties : unit -> 'a interface
+  (** The [org.freedesktop.DBus.Properties] interface *)
+
+(** {6 Members} *)
+
+exception Done
+  (** Indicates that a method call has been handled *)
+
+val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> 'a -> 'b Lwt.t) -> 'c member
+  (** [method_info desc handler] creates a method-call
+      member. [handler] may raise {!Done} to indicates that the reply
+      have been sent. Otherwise obus will send the result of [f] as
+      reply. *)
+
+val signal_info : 'a OBus_member.Signal.t -> 'b member
+  (** Defines a signal. It is only used for introspection *)
+
+val property_r_info : ('a, [ `readable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> 'b member
+  (** [property_r_info desc get] defines a read-only property. [get]
+      is called once when data is attached to an object with
+      {!attach}. It must returns a signal holding the current value of
+      the property. *)
+
+val property_w_info : ('a, [ `writable ]) OBus_member.Property.t -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b member
+  (** [property_w_info desc set] defines a write-only property. [set]
+      is used to set the propertry contents. *)
+
+val property_rw_info : ('a, [ `readable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b member
+  (** [property_rw_info desc get set] defines a readable and writable
+      property. [get] and [set] have the same semantic as for
+      {!property_r_info} and {!property_w_info}. *)
+
+(** {6 Signals} *)
+
+val emit : 'a t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  ?peer : OBus_peer.t ->
+  'b OBus_value.C.sequence -> 'b -> unit Lwt.t
+  (** [emit obj ~interface ~member ?peer typ args] emits a signal. it
+      uses the same rules as {!OBus_signal.emit} for choosing the
+      destinations of the signal.  *)
 
 (** {6 Notification modes} *)
 
 (** For a description of these modes, look at {!OBus_property} *)
 
-val notify_none : notify_mode
-val notify_global : OBus_name.member -> notify_mode
-val notify_update : OBus_name.member -> notify_mode
+val notify_none : 'a notify_mode
+val notify_global : OBus_name.member -> 'a notify_mode
+val notify_update : OBus_name.member -> 'a notify_mode
 
 val notify_custom :
-  send : (OBus_connection.t ->
-            OBus_name.bus option ->
-              OBus_path.t ->
-                OBus_name.interface ->
-                  OBus_value.single Map.Make(String).t ->
-                    unit Lwt.t) ->
-  signature : OBus_introspect.member list -> notify_mode
+  emit : ('a t -> OBus_name.interface -> OBus_value.V.single Map.Make(String).t -> unit Lwt.t) ->
+  signature : OBus_introspect.member list -> 'a notify_mode
   (** [notify_custom ~send ~signature] creates a custom notification
-      mode. [send] is responsible for sending change notificartions.
-      Among arguments, [send] receives the mapping from properties
-      names to new properties values, for properties that have
-      changed.
+      mode. [emit] is responsible for sending change notifications.
+      [emit] receives the mapping from property names to their values,
+      for properties that have changed.
 
       [signature] is the signature to add to the interface when
       creating it. *)

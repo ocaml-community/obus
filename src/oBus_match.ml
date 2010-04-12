@@ -19,7 +19,15 @@ type rule = {
   path : OBus_path.t option;
   destination : OBus_name.bus option;
   arguments : (int * argument_filter) list;
-} with projection
+}
+
+let typ e = e.typ
+let sender e = e.sender
+let interface e = e.interface
+let member e = e.member
+let path e = e.path
+let destination e = e.destination
+let arguments e = e.arguments
 
 let rec insert_sorted num filter = function
   | [] -> [(num, filter)]
@@ -171,8 +179,6 @@ let rule_of_string str =
   with Fail(pos, msg) ->
     raise (Parse_failure(str, pos, msg))
 
-let obus_rule = OBus_type.map OBus_pervasives.obus_string rule_of_string string_of_rule
-
 let match_key matcher value = match matcher with
   | None -> true
   | Some value' -> value = value'
@@ -197,7 +203,7 @@ and match_arguments_aux num num' filter matcher arguments = match arguments with
       false
   | value :: rest when num < num' ->
       match_arguments_aux (num + 1) num' filter matcher rest
-  | OBus_value.Basic(OBus_value.String value) :: rest ->
+  | OBus_value.V.Basic(OBus_value.V.String value) :: rest ->
       (match filter with
          | AF_string str ->
              str = value

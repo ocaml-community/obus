@@ -14,31 +14,18 @@
 <**/*.ml>: syntax_camlp4o, pkg_camlp4
 
 # Use syntax extesions on all files:
-<**/*.ml>: pkg_type-conv.syntax
 <**/*.ml>: pkg_lwt.syntax
 <**/*.ml>: pkg_lwt.syntax.log
-<**/*.ml>: pa_obus
-<**/*.ml>: pa_projection
-<**/*.ml>: pa_constructor
 # Except for syntax extensions themselves:
-<syntax/*.ml>: -pkg_type-conv.syntax
 <syntax/*.ml>: -pkg_lwt.syntax
 <syntax/*.ml>: -pkg_lwt.syntax.log
-<syntax/*.ml>: -pa_obus
-<syntax/*.ml>: -pa_projection
-<syntax/*.ml>: -pa_constructor
 
 # Pa_monad for the monadic xml parser:
 <src/oBus_introspect.ml>: pa_monad
 
 # Extension for syntax extensions:
 <syntax/*.ml>: pkg_camlp4.extend
-<syntax/pa_{obus,log,projection,constructor}.ml>: pkg_camlp4.quotations.o
 <syntax/pa_monad.ml>: pkg_camlp4.quotations.r
-
-# Modules needed by pa_obus:
-<src/oBus_{string,name}.ml>: -pa_obus
-<src/private/oBus_constant.ml>: -pa_obus
 
 # +------------------------------------------------------------------+
 # | Packages                                                         |
@@ -46,7 +33,6 @@
 
 # Packages used by syntax extensons:
 <syntax/*>: pkg_camlp4.lib
-<syntax/pa_{obus,projection,constructor}.*>: pkg_type-conv
 
 # Common dependencies:
 <**/*>: pkg_lwt.unix, pkg_lwt.react, pkg_xmlm

@@ -9,10 +9,6 @@
 
 (** D-Bus properties *)
 
-(** This module offers a convenient way to deal with D-Bus
-    properties. It allows to read/write the contents of a property,
-    and, when possible, to monitor it. *)
-
 (** {6 Types} *)
 
 type ('a, 'access) t
@@ -28,30 +24,50 @@ type 'a w = ('a, [ `writable ]) t
 type 'a rw = ('a, [ `readable | `writable ]) t
     (** Type of read and write properties *)
 
-type 'a access
-  (** Type of access modes *)
+type notify_mode
+  (** Type of properties changes notification. It describes how
+      properties changes are announced. *)
 
-val readable : [ `readable ] access
-  (** Access mode for readable properties *)
+(** {6 Proxy properties creation} *)
 
-val writable : [ `writable ] access
-  (** Access mode for writable properties *)
+val make : ('a, 'access) OBus_member.Property.t -> ?notify_mode : notify_mode -> OBus_proxy.t -> ('a, 'access) t
+  (** [make property ?notify_mode proxy] returns the property object
+      for this proxy. [notify_mode] defaults to {!notify_none} *)
 
-val readable_writable : [ `readable | `writable ] access
-  (** Access mode for readable and writable properties *)
+(** {6 Properties transformation} *)
+
+val map_rw : ('a -> 'b) -> ('b -> 'a) -> 'a rw -> 'b rw
+  (** [map property f g] maps [property] with [f] and [g] *)
+
+val map_rw_with_context : (unit OBus_context.t -> 'a -> 'b) -> ('b -> 'a) -> 'a rw -> 'b rw
+  (** Same as {!map} except that the context is also passed to mapping
+      functions. *)
+
+val map_r : ('a -> 'b) -> ('a, [> `readable ]) t -> 'b r
+  (** Maps a read-only properties *)
+
+val map_r_with_context :  (unit OBus_context.t -> 'a -> 'b) -> ('a, [> `readable ]) t -> 'b r
+  (** Maps a read-only properties, passing the context to the mapping
+      function *)
+
+val map_w : ('b -> 'a) -> ('a, [> `writable ]) t -> 'b w
+  (** Maps a write-only properties *)
 
 (** {6 Operation on properties} *)
 
 val get : ?cache : bool -> ('a, [> `readable ]) t -> 'a Lwt.t
   (** Read the contents of a property.
 
-      If [cache] is [true] and the given property is not cached, then
-      obus automatically fill the cache. The cache is filled using the
-      "org.freedesktop.DBus.Properties.GetAll" methods. You should
-      consider sets it to [true] if you are going to read multiple
-      properties of the same interface at the same time. Note that the
-      cache will expire at the next iteration of the Lwt main
-      loop. [cache] defaults to [false]. *)
+      If [cache] is [true] (the default) and the given property is not
+      cached, then obus automatically fill the cache. The cache is
+      filled using the "org.freedesktop.DBus.Properties.GetAll"
+      methods.
+
+      Note that the cache will expire at the next iteration of the Lwt main
+      loop. *)
+
+val get_with_context : ?cache : bool -> ('a, [> `readable ]) t -> (unit OBus_context.t * 'a) Lwt.t
+  (** Same as {!get} but also returns the context *)
 
 val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
   (** Write the contents of a property *)
@@ -82,13 +98,8 @@ val unmonitor : ('a, [> `readable ]) t -> unit
 
 (** {6 Properties changes notifications} *)
 
-type notify_mode
-  (** Type of properties changes notification. It describes how
-      properties changes are announced. *)
-
 val notify_none : notify_mode
-  (** Properties changes are not announced. {!monitor} will fail in
-      this case. *)
+  (** Property change are not announced *)
 
 val notify_global : OBus_name.member -> notify_mode
   (** [notify_global name] means that when one or more properties of
@@ -112,7 +123,9 @@ val notify_egg_dbus : notify_mode
   (** EggDBus notification mode. It is used by services using the
       EggDBus library. *)
 
-type notify_data = (OBus_type.context * OBus_value.single) Map.Make(String).t
+type 'a name_map = 'a Map.Make(String).t
+
+type notify_data = (unit OBus_context.t * OBus_value.V.single) name_map
     (** Data that must be returned by notifiers. It is a mapping from
         property names to their value and the context in which they
         were received. *)
@@ -128,12 +141,12 @@ type notifier = {
       monitored *)
 }
 
-val notify_custom : (OBus_connection.t -> OBus_name.bus option -> OBus_path.t -> OBus_name.interface -> notifier Lwt.t) -> notify_mode
-  (** [notify_custom f] represent a cusom mode for being notified of
+val notify_custom : (OBus_proxy.t -> OBus_name.interface -> notifier Lwt.t) -> notify_mode
+  (** [notify_custom f] represents a cusom mode for being notified of
       property changes. [f] is the function used to create the
       notifier. *)
 
-val get_all_no_cache : OBus_connection.t -> OBus_name.bus option -> OBus_path.t -> OBus_name.interface -> notify_data Lwt.t
+val get_all_no_cache : OBus_proxy.t -> OBus_name.interface -> notify_data Lwt.t
   (** [get_all_no_cache connection owner path interface] returns the
       values of all properties of the given object for the given
       interface.
@@ -142,44 +155,14 @@ val get_all_no_cache : OBus_connection.t -> OBus_name.bus option -> OBus_path.t 
       values, it always send a new request. {!get_all_no_cache} is
       meant to be used with {!notify_custom}. *)
 
-(** {6 Property creation} *)
-
-val make :
-  connection : OBus_connection.t ->
-  ?owner : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  access : 'access access ->
-  ?notify : notify_mode ->
-  ('a, _) OBus_type.cl_single -> ('a, 'access) t
-  (** [make ~connection ?sender ~path ~interface ~member ~access
-      ?changed typ] creates a property with the given interface and
-      member.
-
-      @param owner name of the peer owning the property.
-
-      @param notify indicates how properties changes are announced. It
-      defaults to [notify_none]. *)
-
-val dyn_make :
-  connection : OBus_connection.t ->
-  ?owner : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  access : 'access access ->
-  ?notify : notify_mode ->
-  unit -> (OBus_value.single, 'access) t
-  (** Same as {!make} but using dynamically typed values *)
-
 (** {6 Receving all properties} *)
 
-val get_all :
-  connection : OBus_connection.t ->
-  ?owner : OBus_name.bus ->
-  path : OBus_path.t ->
-  interface : OBus_name.interface ->
-  unit -> OBus_value.single Map.Make(String).t Lwt.t
-  (** [get_all ~connection ?owner ~path ~interface ()] returns all
-      properties of the givne object with their values. *)
+val get_all : OBus_proxy.t -> interface : OBus_name.interface -> OBus_value.V.single name_map Lwt.t
+  (** [get_all proxy ~interface ()] returns all
+      properties of the givne object with their values.
+
+      Note that {!get_all} always uses the cache if it is not empty,
+      or fills it if it is. *)
+
+val get_all_with_context : OBus_proxy.t -> interface : OBus_name.interface -> (unit OBus_context.t * OBus_value.V.single) name_map Lwt.t
+  (** Same as {!get_all} but also returns the context *)

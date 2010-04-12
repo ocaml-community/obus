@@ -37,10 +37,10 @@ let pad4 i = i + padding4 i
 let pad8 i = i + padding8 i
 
 let pad8_p = function
-  | Tstructure _
-  | Tbasic Tint64
-  | Tbasic Tuint64
-  | Tbasic Tdouble -> true
+  | T.Structure _
+  | T.Basic T.Int64
+  | T.Basic T.Uint64
+  | T.Basic T.Double -> true
   | _ -> false
 
 (* Common error message *)
@@ -145,84 +145,84 @@ struct
     | x :: l -> f c x; iter f c l
 
   let rec tsingle c = function
-    | Tbasic _ ->
+    | T.Basic _ ->
         c.ofs <- c.ofs + 1
-    | Tarray t ->
+    | T.Array t ->
         c.ofs <- c.ofs + 1;
         tsingle c t
-    | Tdict(tk, tv) ->
+    | T.Dict(tk, tv) ->
         c.ofs <- c.ofs + 4;
         tsingle c tv
-    | Tstructure l ->
+    | T.Structure l ->
         c.ofs <- c.ofs + 2;
         iter tsingle c l
-    | Tvariant ->
+    | T.Variant ->
         c.ofs <- c.ofs + 1
 
   let tsequence c l =
     iter tsingle c l
 
   let rec tsingle_of_single c = function
-    | Basic x ->
+    | V.Basic x ->
         c.ofs <- c.ofs + 1
-    | Array(t, x) ->
+    | V.Array(t, x) ->
         c.ofs <- c.ofs + 1;
         tsingle c t
-    | Byte_array _ ->
+    | V.Byte_array _ ->
         c.ofs <- c.ofs + 2
-    | Dict(tk, tv, x) ->
+    | V.Dict(tk, tv, x) ->
         c.ofs <- c.ofs + 4;
         tsingle c tv
-    | Structure l ->
+    | V.Structure l ->
         c.ofs <- c.ofs + 2;
         iter tsingle_of_single c l
-    | Variant x ->
+    | V.Variant x ->
         c.ofs <- c.ofs + 1
 
   let tsequence_of_sequence c l =
     iter tsingle_of_single c l
 
   let rec basic c = function
-    | Byte _ ->
+    | V.Byte _ ->
         c.ofs <- c.ofs + 1
-    | Int16 _
-    | Uint16 _ ->
+    | V.Int16 _
+    | V.Uint16 _ ->
         c.ofs <- pad2 c.ofs + 2
-    | Boolean _
-    | Int32 _
-    | Uint32 _ ->
+    | V.Boolean _
+    | V.Int32 _
+    | V.Uint32 _ ->
         c.ofs <- pad4 c.ofs + 4
-    | Int64 _
-    | Uint64 _
-    | Double _ ->
+    | V.Int64 _
+    | V.Uint64 _
+    | V.Double _ ->
         c.ofs <- pad8 c.ofs + 8
-    | String s ->
+    | V.String s ->
         c.ofs <- pad4 c.ofs + String.length s + 5
-    | Signature s ->
+    | V.Signature s ->
         c.ofs <- c.ofs + 2;
         tsequence c s
-    | Object_path p ->
+    | V.Object_path p ->
         c.ofs <- pad4 c.ofs + path_length p + 5
-    | Unix_fd fd ->
+    | V.Unix_fd fd ->
         c.ofs <- pad4 c.ofs + 4;
         c.fds <- FD_set.add fd c.fds
 
   let rec single c = function
-    | Basic x ->
+    | V.Basic x ->
         basic c x
-    | Array(t, l) ->
+    | V.Array(t, l) ->
         c.ofs <- pad4 c.ofs + 4;
         if pad8_p t then c.ofs <- pad8 c.ofs;
         iter single c l
-    | Byte_array bytes ->
+    | V.Byte_array bytes ->
         c.ofs <- pad4 c.ofs + 4 + String.length bytes
-    | Dict(tk, tv, l) ->
+    | V.Dict(tk, tv, l) ->
         c.ofs <- pad8 (pad4 c.ofs + 4);
         iter dict_entry c l
-    | Structure l ->
+    | V.Structure l ->
         c.ofs <- pad8 c.ofs;
         iter single c l
-    | Variant x ->
+    | V.Variant x ->
         c.ofs <- c.ofs + 2;
         tsingle_of_single c x;
         single c x
@@ -593,24 +593,24 @@ struct
     write_string_no_check ptr (OBus_path.to_string path)
 
   let write_basic ptr = function
-    | Byte x -> write1 put_char ptr x
-    | Boolean x -> write4 put_uint ptr (match x with true -> 1 | false -> 0)
-    | Int16 x -> write2 put_int16 ptr x
-    | Int32 x -> write4 put_int32 ptr x
-    | Int64 x -> write8 put_int64 ptr x
-    | Uint16 x -> write2 put_uint16 ptr x
-    | Uint32 x -> write4 put_uint32 ptr x
-    | Uint64 x -> write8 put_uint64 ptr x
-    | Double x -> write8 put_uint64 ptr (Int64.bits_of_float x)
-    | String x -> begin match OBus_string.validate x with
+    | V.Byte x -> write1 put_char ptr x
+    | V.Boolean x -> write4 put_uint ptr (match x with true -> 1 | false -> 0)
+    | V.Int16 x -> write2 put_int16 ptr x
+    | V.Int32 x -> write4 put_int32 ptr x
+    | V.Int64 x -> write8 put_int64 ptr x
+    | V.Uint16 x -> write2 put_uint16 ptr x
+    | V.Uint32 x -> write4 put_uint32 ptr x
+    | V.Uint64 x -> write8 put_uint64 ptr x
+    | V.Double x -> write8 put_uint64 ptr (Int64.bits_of_float x)
+    | V.String x -> begin match OBus_string.validate x with
         | Some error ->
             raise (Data_error(OBus_string.error_message error))
         | None ->
             write_string_no_check ptr x
       end
-    | Signature x -> write_signature ptr x
-    | Object_path x -> write_object_path ptr x
-    | Unix_fd fd -> write4 put_uint ptr (FD_map.find fd ptr.fds)
+    | V.Signature x -> write_signature ptr x
+    | V.Object_path x -> write_object_path ptr x
+    | V.Unix_fd fd -> write4 put_uint ptr (FD_map.find fd ptr.fds)
 
   let rec write_array ptr padded_on_8 write_element values =
     (* Array are serialized as follow:
@@ -651,28 +651,28 @@ struct
     write_single ptr v
 
   and write_single ptr = function
-    | Basic x ->
+    | V.Basic x ->
         write_basic ptr x
-    | Array(t, x) ->
+    | V.Array(t, x) ->
         write_array ptr (pad8_p t) write_single x
-    | Byte_array s ->
+    | V.Byte_array s ->
         write_uint ptr (String.length s);
         write_bytes ptr s
-    | Dict(tk, tv, x) ->
+    | V.Dict(tk, tv, x) ->
         write_array ptr true write_dict_entry x
-    | Structure x ->
+    | V.Structure x ->
         (* Structure are serialized as follow:
 
            (1) alignement to an 8-block
            (2) serialized contents *)
         write_padding8 ptr;
         write_sequence ptr x
-    | Variant x ->
+    | V.Variant x ->
         (* Variant are serialized as follow:
 
            (1) marshaled variant signature
            (2) serialized contents *)
-        write_signature ptr [OBus_value.type_of_single x];
+        write_signature ptr [OBus_value.V.type_of_single x];
         write_single ptr x
 
   and write_sequence ptr = function
@@ -687,7 +687,7 @@ struct
     (* Each header field is a structure, so we need to be aligned on 8 *)
     write_padding8 ptr;
     write_uint8 ptr code;
-    write_signature ptr [OBus_value.Tbasic typ];
+    write_signature ptr [T.Basic typ];
     writer ptr value
 
   (* Write a field if defined *)
@@ -706,7 +706,7 @@ struct
           | Some error ->
               raise (Data_error(OBus_string.error_message error))
           | None ->
-              write_field_real ptr code Tstring write_string_no_check string
+              write_field_real ptr code T.String write_string_no_check string
 
   (* Serialize one complete message *)
   let write_message byte_order_char msg =
@@ -733,7 +733,7 @@ struct
              rf_reply_serial = None;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
-             rf_signature = type_of_sequence msg.body;
+             rf_signature = V.type_of_sequence msg.body;
              rf_unix_fds = fd_count })
       | Method_return reply_serial ->
           (2,
@@ -744,7 +744,7 @@ struct
              rf_reply_serial = Some reply_serial;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
-             rf_signature = type_of_sequence msg.body;
+             rf_signature = V.type_of_sequence msg.body;
              rf_unix_fds = fd_count })
       | Error(reply_serial, error_name) ->
           (3,
@@ -755,7 +755,7 @@ struct
              rf_reply_serial = Some reply_serial;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
-             rf_signature = type_of_sequence msg.body;
+             rf_signature = V.type_of_sequence msg.body;
              rf_unix_fds = fd_count })
       | Signal(path, interface, member) ->
           (4,
@@ -766,19 +766,19 @@ struct
              rf_reply_serial = None;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
-             rf_signature = type_of_sequence msg.body;
+             rf_signature = V.type_of_sequence msg.body;
              rf_unix_fds = fd_count })
     in
 
-    write_field ptr 1 Tobject_path write_object_path fields.rf_path;
+    write_field ptr 1 T.Object_path write_object_path fields.rf_path;
     write_name_field ptr 2 OBus_name.validate_interface fields.rf_interface;
     write_name_field ptr 3 OBus_name.validate_member fields.rf_member;
     write_name_field ptr 4 OBus_name.validate_error fields.rf_error_name;
-    write_field ptr 5 Tuint32 (write4 put_uint32) fields.rf_reply_serial;
+    write_field ptr 5 T.Uint32 (write4 put_uint32) fields.rf_reply_serial;
     write_name_field ptr 6 OBus_name.validate_bus fields.rf_destination;
     write_name_field ptr 7 OBus_name.validate_bus fields.rf_sender;
-    write_field_real ptr 8 Tsignature write_signature fields.rf_signature;
-    write_field_real ptr 9 Tuint32 (write4 put_uint) fields.rf_unix_fds;
+    write_field_real ptr 8 T.Signature write_signature fields.rf_signature;
+    write_field_real ptr 9 T.Uint32 (write4 put_uint) fields.rf_unix_fds;
 
     let fields_length = ptr.ofs - 16 in
 
@@ -971,46 +971,46 @@ struct
     let str = read_string_no_check ptr in
     OBus_path.of_string str
 
-  let read_vbyte ptr = Byte(read1 get_char ptr)
+  let read_vbyte ptr = V.Byte(read1 get_char ptr)
   let read_vboolean ptr = match read_uint ptr with
-    | 0 -> Boolean false
-    | 1 -> Boolean true
+    | 0 -> V.Boolean false
+    | 1 -> V.Boolean true
     | n -> raise (Protocol_error(sprintf "invalid boolean value: %d" n))
-  let read_vint16 ptr = Int16(read2 get_int16 ptr)
-  let read_vint32 ptr = Int32(read4 get_int32 ptr)
-  let read_vint64 ptr = Int64(read8 get_int64 ptr)
-  let read_vuint16 ptr = Uint16(read2 get_uint16 ptr)
-  let read_vuint32 ptr = Uint32(read4 get_uint32 ptr)
-  let read_vuint64 ptr = Uint64(read8 get_uint64 ptr)
-  let read_vdouble ptr = Double(Int64.float_of_bits (read8 get_uint64 ptr))
+  let read_vint16 ptr = V.Int16(read2 get_int16 ptr)
+  let read_vint32 ptr = V.Int32(read4 get_int32 ptr)
+  let read_vint64 ptr = V.Int64(read8 get_int64 ptr)
+  let read_vuint16 ptr = V.Uint16(read2 get_uint16 ptr)
+  let read_vuint32 ptr = V.Uint32(read4 get_uint32 ptr)
+  let read_vuint64 ptr = V.Uint64(read8 get_uint64 ptr)
+  let read_vdouble ptr = V.Double(Int64.float_of_bits (read8 get_uint64 ptr))
   let read_vstring ptr =
     let str = read_string_no_check ptr in
     match OBus_string.validate str with
-      | None -> String str
+      | None -> V.String str
       | Some error -> raise (Protocol_error(OBus_string.error_message error))
-  let read_vsignature ptr = Signature(read_signature ptr)
-  let read_vobject_path ptr = Object_path(read_object_path ptr)
+  let read_vsignature ptr = V.Signature(read_signature ptr)
+  let read_vobject_path ptr = V.Object_path(read_object_path ptr)
   let read_unix_fd ptr =
     let index = read4 get_uint ptr in
     if index < 0 || index >= Array.length ptr.fds then
       raise (Protocol_error "fd index out of bounds")
     else
-      Unix_fd(Array.unsafe_get ptr.fds index)
+      V.Unix_fd(Array.unsafe_get ptr.fds index)
 
   let basic_reader = function
-    | Tbyte -> read_vbyte
-    | Tboolean -> read_vboolean
-    | Tint16 -> read_vint16
-    | Tint32 -> read_vint32
-    | Tint64 -> read_vint64
-    | Tuint16 -> read_vuint16
-    | Tuint32 -> read_vuint32
-    | Tuint64 -> read_vuint64
-    | Tdouble -> read_vdouble
-    | Tstring -> read_vstring
-    | Tsignature -> read_vsignature
-    | Tobject_path -> read_vobject_path
-    | Tunix_fd -> read_unix_fd
+    | T.Byte -> read_vbyte
+    | T.Boolean -> read_vboolean
+    | T.Int16 -> read_vint16
+    | T.Int32 -> read_vint32
+    | T.Int64 -> read_vint64
+    | T.Uint16 -> read_vuint16
+    | T.Uint32 -> read_vuint32
+    | T.Uint64 -> read_vuint64
+    | T.Double -> read_vdouble
+    | T.String -> read_vstring
+    | T.Signature -> read_vsignature
+    | T.Object_path -> read_vobject_path
+    | T.Unix_fd -> read_unix_fd
 
   let read_array padded_on_8 read_element ptr =
     let len = read_uint ptr in
@@ -1028,13 +1028,18 @@ struct
     aux ()
 
   let rec single_reader = function
-    | Tbasic t ->
+    | T.Basic t ->
         let reader = basic_reader t in
-        (fun ptr -> basic(reader ptr))
-    | Tarray t ->
+        (fun ptr -> V.basic(reader ptr))
+    | T.Array(T.Basic T.Byte)->
+        (fun ptr ->
+           let len = read_uint ptr in
+           if len < 0 || len > max_array_size then raise (Protocol_error(array_too_big len));
+           V.byte_array (read_bytes ptr len))
+    | T.Array t ->
         let reader = single_reader t and padded_on_8 = pad8_p t in
-        (fun ptr -> array t (read_array padded_on_8 reader ptr))
-    | Tdict(tk, tv) ->
+        (fun ptr -> V.unsafe_array t (read_array padded_on_8 reader ptr))
+    | T.Dict(tk, tv) ->
         let kreader = basic_reader tk and vreader = single_reader tv in
         let reader ptr =
           read_padding8 ptr;
@@ -1042,19 +1047,19 @@ struct
           let v = vreader ptr in
           (k, v)
         in
-        (fun ptr -> dict tk tv (read_array true reader ptr))
-    | Tstructure tl ->
+        (fun ptr -> V.unsafe_dict tk tv (read_array true reader ptr))
+    | T.Structure tl ->
         let reader = sequence_reader tl in
         (fun ptr ->
            read_padding8 ptr;
-           structure (reader ptr))
-    | Tvariant ->
+           V.structure (reader ptr))
+    | T.Variant ->
         read_variant
 
   and read_variant ptr =
     match read_signature ptr with
       | [t] ->
-          variant (single_reader t ptr)
+          V.variant (single_reader t ptr)
       | s ->
           raise (Protocol_error(Printf.sprintf "variant signature does not contain one single type: %S" (OBus_value.string_of_signature s)))
 
@@ -1070,14 +1075,14 @@ struct
 
   let read_field code typ reader ptr =
     match read_signature ptr with
-      | [Tbasic t] when t = typ ->
+      | [T.Basic t] when t = typ ->
           reader ptr
       | s ->
           raise (Protocol_error(sprintf "invalid header field signature for code %d: %S, should be %S"
-                                  code (string_of_signature s) (string_of_signature [Tbasic typ])))
+                                  code (string_of_signature s) (string_of_signature [T.Basic typ])))
 
   let read_name_field code test ptr =
-    let str = read_field code Tstring read_string_no_check ptr in
+    let str = read_field code T.String read_string_no_check ptr in
     match test str with
       | None ->
           str
@@ -1134,15 +1139,15 @@ struct
       while ptr.ofs < limit do
         read_padding8 ptr;
         match read_uint8 ptr with
-          | 1 -> fields.rf_path <- Some(read_field 1 Tobject_path read_object_path ptr)
+          | 1 -> fields.rf_path <- Some(read_field 1 T.Object_path read_object_path ptr)
           | 2 -> fields.rf_interface <- Some(read_name_field 2 OBus_name.validate_interface ptr)
           | 3 -> fields.rf_member <- Some(read_name_field 3 OBus_name.validate_member ptr)
           | 4 -> fields.rf_error_name <- Some(read_name_field 4 OBus_name.validate_error ptr)
-          | 5 -> fields.rf_reply_serial <- Some(read_field 5 Tuint32 (read4 get_uint32) ptr)
+          | 5 -> fields.rf_reply_serial <- Some(read_field 5 T.Uint32 (read4 get_uint32) ptr)
           | 6 -> fields.rf_destination <- Some(read_name_field 6 OBus_name.validate_bus ptr)
           | 7 -> fields.rf_sender <- Some(read_name_field 7 OBus_name.validate_bus ptr)
-          | 8 -> fields.rf_signature <- read_field 8 Tsignature read_signature ptr
-          | 9 -> fields.rf_unix_fds <- read_field 9 Tuint32 (read4 get_uint) ptr
+          | 8 -> fields.rf_signature <- read_field 8 T.Signature read_signature ptr
+          | 9 -> fields.rf_unix_fds <- read_field 9 T.Uint32 (read4 get_uint) ptr
           | _ -> ignore (read_variant ptr) (* Unsupported header field *)
       done;
 

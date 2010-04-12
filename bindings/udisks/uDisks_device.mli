@@ -101,8 +101,6 @@ type job = {
       negative if unknown) *)
 }
 
-val obus_job : job OBus_type.sequence
-
 val job_changed : t -> job OBus_signal.t
 val changed : t -> unit OBus_signal.t
 
@@ -147,7 +145,7 @@ val linux_md_component_uuid : t -> string OBus_property.r
 val linux_md_component_num_raid_devices : t -> int OBus_property.r
 val linux_md_component_position : t -> int OBus_property.r
 val linux_md_component_level : t -> string OBus_property.r
-val drive_ata_smart_blob : t -> char list OBus_property.r
+val drive_ata_smart_blob : t -> string OBus_property.r
 val drive_ata_smart_status : t -> string OBus_property.r
 val drive_ata_smart_time_collected : t -> int64 OBus_property.r
 val drive_ata_smart_is_available : t -> bool OBus_property.r

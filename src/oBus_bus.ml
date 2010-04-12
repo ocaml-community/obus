@@ -11,22 +11,17 @@ let section = Lwt_log.Section.make "obus(bus)"
 
 open Lwt
 open OBus_private_connection
-open OBus_pervasives
+
+(* +-----------------------------------------------------------------+
+   | Message bus creation                                            |
+   +-----------------------------------------------------------------+ *)
 
 type t = OBus_connection.t
 
-module Proxy = OBus_proxy.Make
-  (struct
-     type proxy = OBus_connection.t
-     let cast bus = { OBus_proxy.peer = { OBus_peer.connection = bus;
-                                          OBus_peer.name = Some "org.freedesktop.DBus" };
-                      OBus_proxy.path = ["org"; "freedesktop"; "DBus"] }
-     let make = OBus_proxy.connection
-   end)
+open OBus_interfaces.Org_freedesktop_DBus
 
-let op_interface = Proxy.make_interface "org.freedesktop.DBus"
-
-OP_method Hello : string
+let proxy bus =
+  OBus_proxy.make (OBus_peer.make bus  "org.freedesktop.DBus") ["org"; "freedesktop"; "DBus"]
 
 let error_handler = function
   | OBus_wire.Protocol_error msg ->
@@ -51,7 +46,7 @@ let register_connection ?(set_on_disconnect=true) connection =
 
     | None ->
         if set_on_disconnect then running.running_on_disconnect := error_handler;
-        lwt name = hello connection in
+        lwt name = OBus_method.call m_Hello (proxy connection) () in
         running.running_name <- Some name;
         return ()
 
@@ -88,31 +83,30 @@ let system () =
                lwt () = Lwt_log.warning ~exn ~section "Failed to open a connection to the system bus" in
                fail exn)
 
-let prefix = OBus_proxy.Interface.name op_interface ^ ".Error."
+(* +-----------------------------------------------------------------+
+   | Bindings to functions of the message bus                        |
+   +-----------------------------------------------------------------+ *)
 
-exception Access_denied of string
- with obus(prefix ^ "AccessDenied")
+exception Access_denied
+exception Service_unknown
+exception Match_rule_not_found
+exception Match_rule_invalid
+exception Service_unknown
+exception Name_has_no_owner
+exception Adt_audit_data_unknown
+exception Selinux_security_context_unknown
 
-exception Service_unknown of string
- with obus(prefix ^ "ServiceUnknown")
-
-exception OBus_match_not_found of string
- with obus(prefix ^ "MatchRuleNotFound")
-
-exception Match_rule_invalid of string
- with obus(prefix ^ "MatchRuleInvalid")
-
-exception Service_unknown of string
- with obus(prefix ^ "ServiceUnknown")
-
-exception Name_has_no_owner of string
- with obus(prefix ^ "NameHasNoOwner")
-
-exception Adt_audit_data_unknown of string
- with obus(prefix ^ "AdtAuditDataUnknown")
-
-exception Selinux_security_context_unknown of string
- with obus(prefix ^ "SELinuxSecurityContextUnknown")
+let () =
+  List.iter (fun (name, exn) -> OBus_error.register name exn) [
+    ("org.freedesktop.DBus.Error.AccessDenied", Access_denied);
+    ("org.freedesktop.DBus.Error.ServiceUnknown", Service_unknown);
+    ("org.freedesktop.DBus.Error.MatchRuleNotFound", Match_rule_not_found);
+    ("org.freedesktop.DBus.Error.MatchRuleInvalid", Match_rule_invalid);
+    ("org.freedesktop.DBus.Error.ServiceUnknown", Service_unknown);
+    ("org.freedesktop.DBus.Error.NameHasNoOwner", Name_has_no_owner);
+    ("org.freedesktop.DBus.Error.AdtAuditDataUnknown", Adt_audit_data_unknown);
+    ("org.freedesktop.DBus.Error.SELinuxSecurityContextUnknown", Selinux_security_context_unknown);
+  ]
 
 let acquired_names bus = match bus#get with
   | Crashed exn -> raise exn
@@ -124,90 +118,98 @@ type request_name_result =
     | `Exists
     | `Already_owner ]
 
-let obus_request_name_result = OBus_type.map obus_uint
-  (function
-     | 1 -> `Primary_owner
-     | 2 -> `In_queue
-     | 3 -> `Exists
-     | 4 -> `Already_owner
-     | n ->
-         Printf.ksprintf
-           (OBus_type.cast_failure "OBus_bus.obus_request_name_result")
-           "invalid result for RequestName: %d" n)
-  (function
-     | `Primary_owner -> 1
-     | `In_queue -> 2
-     | `Exists -> 3
-     | `Already_owner -> 4)
-
-OP_method RequestName : string -> uint -> request_name_result
 let request_name bus ?(allow_replacement=false) ?(replace_existing=false) ?(do_not_queue=false) name =
-  request_name bus name ((if allow_replacement then 1 else 0) lor
-                           (if replace_existing then 2 else 0) lor
-                           (if do_not_queue then 4 else 0))
+  let flags =
+    (if allow_replacement then 1 else 0) lor
+      (if replace_existing then 2 else 0) lor
+      (if do_not_queue then 4 else 0)
+  in
+  OBus_method.call m_RequestName (proxy bus) (name, Int32.of_int flags) >|= function
+    | 1l -> `Primary_owner
+    | 2l -> `In_queue
+    | 3l -> `Exists
+    | 4l -> `Already_owner
+    | n -> Printf.ksprintf failwith "invalid result for RequestName: %ld" n
 
-type release_name_result = [ `Released | `Non_existent | `Not_owner ]
+type release_name_result =
+    [ `Released
+    | `Non_existent
+    | `Not_owner ]
 
-let obus_release_name_result = OBus_type.map obus_uint
-  (function
-     | 1 -> `Released
-     | 2 -> `Non_existent
-     | 3 -> `Not_owner
-     | n ->
-         Printf.ksprintf
-           (OBus_type.cast_failure "OBUs_bus.obus_release_name_result")
-           "invalid result for ReleaseName: %d" n)
-  (function
-     | `Released -> 1
-     | `Non_existent -> 2
-     | `Not_owner -> 3)
+let release_name bus name =
+  OBus_method.call m_ReleaseName (proxy bus) name >|= function
+    | 1l -> `Released
+    | 2l -> `Non_existent
+    | 3l -> `Not_owner
+    | n -> Printf.ksprintf failwith "invalid result for ReleaseName: %ld" n
 
-OP_method ReleaseName : string -> release_name_result
+type start_service_by_name_result =
+    [ `Success
+    | `Already_running ]
 
-type start_service_by_name_result = [ `Success | `Already_running ]
+let start_service_by_name bus name =
+  OBus_method.call m_StartServiceByName (proxy bus) (name, 0l) >|= function
+    | 1l -> `Success
+    | 2l -> `Already_running
+    | n ->  Printf.ksprintf failwith  "invalid result for StartServiceByName: %ld" n
 
-let obus_start_service_by_name_result = OBus_type.map obus_uint
-  (function
-     | 1 -> `Success
-     | 2 -> `Already_running
-     | n ->
-         Printf.ksprintf
-           (OBus_type.cast_failure "OBus_bus.obus_start_service_by_name_result")
-           "invalid result for StartServiceByName: %d" n)
-  (function
-     | `Success -> 1
-     | `Already_running -> 2)
+let name_has_owner bus name =
+  OBus_method.call m_NameHasOwner (proxy bus) name
 
-OP_method StartServiceByName : string -> uint -> start_service_by_name_result
-let start_service_by_name bus name = start_service_by_name bus name 0
-OP_method NameHasOwner : string -> bool
-OP_method ListNames : string list
-OP_method ListActivatableNames : string list
-OP_method GetNameOwner : string -> string
-OP_method ListQueuedOwners : string -> string list
+let list_names bus =
+  OBus_method.call m_ListNames (proxy bus) ()
 
-OP_method AddMatch : OBus_match.rule -> unit
-OP_method RemoveMatch : OBus_match.rule -> unit
+let list_activatable_names bus =
+  OBus_method.call m_ListActivatableNames (proxy bus) ()
 
-OP_method UpdateActivationEnvironment : (string, string) dict -> unit
-OP_method GetConnectionUnixUser : string -> uint
-OP_method GetConnectionUnixProcessID : string -> uint
-OP_method GetAdtAuditSessionData : string -> byte_array
-OP_method GetConnectionSELinuxSecurityContext : string -> byte_array
-OP_method ReloadConfig : unit
-OP_method GetId : uuid
+let get_name_owner bus name =
+  OBus_method.call m_GetNameOwner (proxy bus) name
 
-let obus_name_opt = OBus_type.map obus_string
-  (function
-     | "" -> None
-     | str -> Some str)
-  (function
-     | None -> ""
-     | Some str -> str)
+let list_queued_owners bus name =
+  OBus_method.call m_ListQueuedOwners (proxy bus) name
 
-OP_signal NameOwnerChanged : string * name_opt * name_opt
-OP_signal NameLost : string
-OP_signal NameAcquired : string
+let add_match bus rule =
+  OBus_method.call m_AddMatch (proxy bus) (OBus_match.string_of_rule rule)
+
+let remove_match bus rule =
+  OBus_method.call m_RemoveMatch (proxy bus) (OBus_match.string_of_rule rule)
+
+let update_activation_environment bus data =
+  OBus_method.call m_UpdateActivationEnvironment (proxy bus) data
+
+let get_connection_unix_user bus name =
+  OBus_method.call m_GetConnectionUnixUser (proxy bus) name >|= Int32.to_int
+
+let get_connection_unix_process_id bus name =
+  OBus_method.call m_GetConnectionUnixProcessID (proxy bus) name >|= Int32.to_int
+
+let get_adt_audit_session_data bus name =
+  OBus_method.call m_GetAdtAuditSessionData (proxy bus) name
+
+let get_connection_selinux_security_context bus name =
+  OBus_method.call m_GetConnectionSELinuxSecurityContext (proxy bus) name
+
+let reload_config bus =
+  OBus_method.call m_ReloadConfig (proxy bus) ()
+
+let get_id bus =
+  OBus_method.call m_GetId (proxy bus) () >|= OBus_uuid.of_string
+
+let opt_string = function
+  | "" -> None
+  | s -> Some s
+
+let name_owner_changed bus =
+  OBus_signal.map
+    (fun (name, old_owner, new_owner) ->
+       (name, opt_string old_owner, opt_string new_owner))
+    (OBus_signal.connect s_NameOwnerChanged (proxy bus))
+
+let name_lost bus =
+  OBus_signal.connect s_NameLost (proxy bus)
+
+let name_acquired bus =
+  OBus_signal.connect s_NameAcquired (proxy bus)
 
 let get_peer bus name =
   try_lwt

@@ -8,7 +8,6 @@
  *)
 
 let recursive = ref false
-let mli = ref false
 let anons = ref []
 let session = ref false
 let system = ref false
@@ -17,7 +16,6 @@ let obj_mode = ref false
 
 let args = [
   "-rec", Arg.Set recursive, "introspect recursively all sub-nodes";
-  "-caml", Arg.Set mli, "print in caml style instead of xml";
   "-session", Arg.Set session, "the service is on the session bus (the default)";
   "-system", Arg.Set system, "the service is on the system bus";
   "-address", Arg.String (fun addr -> address := Some addr), "the service is on the given message bus";
@@ -30,20 +28,20 @@ options are:" (Filename.basename (Sys.argv.(0)))
 
 open Lwt
 
-module Interf_map = Map.Make(struct type t = string let compare = compare end)
+module Interface_map = Map.Make(struct type t = string let compare = compare end)
 
 let rec get proxy =
   lwt interfaces, children = OBus_proxy.introspect proxy in
   let map = List.fold_left (fun map (name, content, annots) ->
-                              Interf_map.add name (content, annots) map)
-    Interf_map.empty interfaces in
+                              Interface_map.add name (content, annots) map)
+    Interface_map.empty interfaces in
   let nodes = [(proxy, List.map (fun (name, _, _) -> name) interfaces)] in
   match !recursive with
     | true ->
         List.fold_left
           (fun t1 t2 ->
              lwt nodes1, map1 = t1 and nodes2, map2 = t2 in
-             return (nodes1 @ nodes2, Interf_map.fold Interf_map.add map1 map2))
+             return (nodes1 @ nodes2, Interface_map.fold Interface_map.add map1 map2))
           (return (nodes, map))
           (List.map
              (fun child ->
@@ -69,15 +67,8 @@ let main service path =
   begin
     match !obj_mode with
       | false ->
-          begin match !mli with
-            | false ->
-                OBus_introspect.output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel Pervasives.stdout))
-                  (Interf_map.fold (fun name (content, annots) acc -> (name, content, annots) :: acc) map [], [])
-            | true ->
-                Interf_map.iter (fun name (content, annots) ->
-                                   Print.print_proxy_interf Format.std_formatter (name, content, annots))
-                  map
-          end
+          OBus_introspect.output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel Pervasives.stdout))
+            (Interface_map.fold (fun name (content, annots) acc -> (name, content, annots) :: acc) map [], [])
       | true ->
           List.iter begin fun (proxy, interfaces) ->
             print_endline (OBus_path.to_string (OBus_proxy.path proxy));

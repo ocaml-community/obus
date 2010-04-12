@@ -16,16 +16,16 @@ val daemon : unit -> t Lwt.t
 
 (** {6 Exceptions} *)
 
-exception Busy of string
-exception Cancelled of string
-exception Failed of string
-exception Filesystem_driver_missing of string
-exception Filesystem_tools_missing of string
-exception Inhibited of string
-exception Invalid_option of string
-exception Not_found of string
-exception Not_supported of string
-exception Permission_denied of string
+exception Busy
+exception Cancelled
+exception Failed
+exception Filesystem_driver_missing
+exception Filesystem_tools_missing
+exception Inhibited
+exception Invalid_option
+exception Not_found
+exception Not_supported
+exception Permission_denied
 
 (** {6 Methods} *)
 
@@ -103,7 +103,25 @@ val device_changed : t -> UDisks_device.t OBus_signal.t
 val device_removed : t -> UDisks_device.t OBus_signal.t
 val device_added : t -> UDisks_device.t OBus_signal.t
 
-val device_job_changed : t -> (UDisks_device.t * UDisks_device.job) OBus_signal.t
+type job = {
+  job_device : UDisks_device.t;
+  job_in_progress : bool;
+  (** Whether a job is currently in progress.</doc:summary *)
+  job_is_cancellable : bool;
+  (** Whether the job is cancellable *)
+  job_id : string;
+  (** The identifier of the job *)
+  job_num_tasks : int;
+  (** Number of tasks in the job *)
+  job_cur_task : int;
+  (** Current task number (zero-based offset) *)
+  job_cur_task_id : string;
+  (** Task identifier for current task *)
+  job_cur_task_percentage : float;
+  (** Percentage completed of current task (between 0 and 100, negative if unknown) *)
+}
+
+val device_job_changed : t -> job OBus_signal.t
 
 (** {6 Properties} *)
 

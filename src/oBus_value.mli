@@ -7,86 +7,87 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** DBus types and values *)
+(** D-Bus types, values and converter *)
 
-(** {6 DBus types} *)
+(** {6 Types} *)
 
-type tbasic =
-  | Tbyte
-  | Tboolean
-  | Tint16
-  | Tint32
-  | Tint64
-  | Tuint16
-  | Tuint32
-  | Tuint64
-  | Tdouble
-  | Tstring
-  | Tsignature
-  | Tobject_path
-  | Tunix_fd
+(** D-Bus types *)
+module T : sig
 
-type tsingle =
-  | Tbasic of tbasic
-  | Tstructure of tsingle list
-  | Tarray of tsingle
-  | Tdict of tbasic * tsingle
-  | Tvariant
+  type basic =
+    | Byte
+    | Boolean
+    | Int16
+    | Int32
+    | Int64
+    | Uint16
+    | Uint32
+    | Uint64
+    | Double
+    | String
+    | Signature
+    | Object_path
+    | Unix_fd
 
-type tsequence = tsingle list
+  type single =
+    | Basic of basic
+    | Structure of single list
+    | Array of single
+    | Dict of basic * single
+    | Variant
 
-(** {8 Constructors} *)
+  type sequence = single list
 
-val tbyte : tbasic
-val tboolean : tbasic
-val tint16 : tbasic
-val tint32 : tbasic
-val tint64 : tbasic
-val tuint16 : tbasic
-val tuint32 : tbasic
-val tuint64 : tbasic
-val tdouble : tbasic
-val tstring : tbasic
-val tsignature : tbasic
-val tobject_path : tbasic
-val tunix_fd : tbasic
+  (** {6 Constructors} *)
 
-val tbasic : tbasic -> tsingle
-val tstructure : tsingle list -> tsingle
-val tarray : tsingle -> tsingle
-val tdict : tbasic -> tsingle -> tsingle
-val tvariant : tsingle
+  val byte : basic
+  val boolean : basic
+  val int16 : basic
+  val int32 : basic
+  val int64 : basic
+  val uint16 : basic
+  val uint32 : basic
+  val uint64 : basic
+  val double : basic
+  val string : basic
+  val signature : basic
+  val object_path : basic
+  val unix_fd : basic
 
-val tsbyte : tsingle
-  (** [tsbyte = tbasic tbyte] *)
-val tsboolean : tsingle
-  (** [tsboolean = tbasic tboolean] *)
-val tsint16 : tsingle
-  (** [tsint16 = tbasic tint16] *)
-val tsint32 : tsingle
-  (** [tsint32 = tbasic tint32] *)
-val tsint64 : tsingle
-  (** [tsint64 = tbasic tint64] *)
-val tsuint16 : tsingle
-  (** [tsuint16 = tbasic tuint16] *)
-val tsuint32 : tsingle
-  (** [tsuint32 = tbasic tuint32] *)
-val tsuint64 : tsingle
-  (** [tsuint64 = tbasic tuint64] *)
-val tsdouble : tsingle
-  (** [tsdouble = tbasic tdouble] *)
-val tsstring : tsingle
-  (** [tsstring = tbasic tstring] *)
-val tssignature : tsingle
-  (** [tssignature = tbasic tsignature] *)
-val tsobject_path : tsingle
-  (** [tsobject_path = tbasic tobject_path] *)
-val tsunix_fd : tsingle
-  (** [tsunix_fd = tbasic tunix_fd] *)
+  val basic : basic -> single
+  val structure : single list -> single
+  val array : single -> single
+  val dict : basic -> single -> single
+  val variant : single
 
-(** {6 Singatures} *)
+  val basic_byte : single
+  val basic_boolean : single
+  val basic_int16 : single
+  val basic_int32 : single
+  val basic_int64 : single
+  val basic_uint16 : single
+  val basic_uint32 : single
+  val basic_uint64 : single
+  val basic_double : single
+  val basic_string : single
+  val basic_signature : single
+  val basic_object_path : single
+  val basic_unix_fd : single
 
-type signature = tsequence
+  (** {6 Pretty printing} *)
+
+  val print_basic : Format.formatter -> basic -> unit
+  val print_single : Format.formatter -> single -> unit
+  val print_sequence : Format.formatter -> sequence -> unit
+
+  val string_of_basic : basic -> string
+  val string_of_single : single -> string
+  val string_of_sequence : sequence -> string
+end
+
+(** {6 Signatures} *)
+
+type signature = T.sequence
 
 exception Invalid_signature of string * string
   (** [Invalid_signature(signature, message)] is raised when a
@@ -95,7 +96,7 @@ exception Invalid_signature of string * string
       message. *)
 
 val string_of_signature : signature -> string
-  (** Returns a string representation of a signature using DBus type
+  (** Returns a string representation of a signature using D-Bus type
       codes. If the signature is not valid (for example it is too
       long), it raises {!Invalid_signature}. *)
 
@@ -108,120 +109,251 @@ val validate_signature : signature -> string option
       given signature is a valid one, or [Some reason] if it is
       not. *)
 
-(** {6 DBus values} *)
+(** {6 Values} *)
 
-type basic =
-  | Byte of char
-  | Boolean of bool
-  | Int16 of int
-  | Int32 of int32
-  | Int64 of int64
-  | Uint16 of int
-  | Uint32 of int32
-  | Uint64 of int64
-  | Double of float
-  | String of string
-  | Signature of signature
-  | Object_path of OBus_path.t
-  | Unix_fd of Unix.file_descr
+(** D-Bus values *)
+module V : sig
 
-type single =
-    private
-  | Basic of basic
-  | Array of tsingle * single list
-  | Byte_array of string
-      (** Array of bytes are always represented by a string in order
-          to use less memory *)
-  | Dict of tbasic * tsingle * (basic * single) list
-      (** [array] and [dict] raise [Invalid_argument] if one of the
-          value does not have the expected type *)
-  | Structure of single list
-  | Variant of single
+  type basic =
+    | Byte of char
+    | Boolean of bool
+    | Int16 of int
+    | Int32 of int32
+    | Int64 of int64
+    | Uint16 of int
+    | Uint32 of int32
+    | Uint64 of int64
+    | Double of float
+    | String of string
+    | Signature of signature
+    | Object_path of OBus_path.t
+    | Unix_fd of Unix.file_descr
 
-type sequence = single list
+  type single =
+      private
+    | Basic of basic
+    | Array of T.single * single list
+    | Byte_array of string
+    | Dict of T.basic * T.single * (basic * single) list
+    | Structure of single list
+    | Variant of single
+
+  type sequence = single list
+
+  (** {6 Constructors} *)
+
+  val byte : char -> basic
+  val boolean : bool -> basic
+  val int16 : int -> basic
+  val int32 : int32 -> basic
+  val int64 : int64 -> basic
+  val uint16 : int -> basic
+  val uint32 : int32 -> basic
+  val uint64 : int64 -> basic
+  val double : float -> basic
+  val string : string -> basic
+  val signature : signature -> basic
+  val object_path : OBus_path.t -> basic
+  val unix_fd : Unix.file_descr -> basic
+
+  val basic : basic -> single
+  val array : T.single -> single list -> single
+  val byte_array : string -> single
+  val dict : T.basic -> T.single -> (basic * single) list -> single
+  val structure : single list -> single
+  val variant : single -> single
+
+  (**/**)
+
+  val unsafe_array : T.single -> single list -> single
+  val unsafe_dict : T.basic -> T.single -> (basic * single) list -> single
+
+  (**/**)
+
+  val basic_byte : char -> single
+  val basic_boolean : bool -> single
+  val basic_int16 : int -> single
+  val basic_int32 : int32 -> single
+  val basic_int64 : int64 -> single
+  val basic_uint16 : int -> single
+  val basic_uint32 : int32 -> single
+  val basic_uint64 : int64 -> single
+  val basic_double : float -> single
+  val basic_string : string -> single
+  val basic_signature : signature -> single
+  val basic_object_path : OBus_path.t -> single
+  val basic_unix_fd : Unix.file_descr -> single
+
+  (** {6 Typing} *)
+
+  val type_of_basic : basic -> T.basic
+  val type_of_single : single -> T.single
+  val type_of_sequence : sequence -> T.sequence
+
+  (** {6 Pretty printing} *)
+
+  val print_basic : Format.formatter -> basic -> unit
+  val print_single : Format.formatter -> single -> unit
+  val print_sequence : Format.formatter -> sequence -> unit
+
+  val string_of_basic : basic -> string
+  val string_of_single : single -> string
+  val string_of_sequence : sequence -> string
+
+  (** {6 File descriptors utils} *)
+
+  val basic_dup : basic -> basic
+  val single_dup : single -> single
+  val sequence_dup : sequence -> sequence
+    (** Duplicates all file descriptors of the given value *)
+
+  val basic_close : basic -> unit
+  val single_close : single -> unit
+  val sequence_close : sequence -> unit
+    (** Closes all file descriptors of the given value *)
+end
+
+(** {6 Type converters} *)
+
+(** Type converters *)
+module C : sig
+
+  (** This module offer a convenient way of constructing a boxed D-Bus
+      value from a OCaml value, and of casting a boxed D-Bus value
+      into a OCaml value. *)
+
+  type 'a basic
+    (** Type of converters dealing with basic D-Bus types *)
+
+  type 'a single
+    (** Type of converters dealing with single D-Bus types *)
+
+  type 'a sequence
+    (** Type of converters dealing with sequence D-Bus types *)
+
+  (** {6 Constructors} *)
+
+  val byte : char basic
+  val boolean : bool basic
+  val int16 : int basic
+  val int32 : int32 basic
+  val int64 : int64 basic
+  val uint16 : int basic
+  val uint32 : int32 basic
+  val uint64 : int64 basic
+  val double : float basic
+  val string : string basic
+  val signature : signature basic
+  val object_path : OBus_path.t basic
+  val unix_fd : Unix.file_descr basic
+
+  val basic : 'a basic -> 'a single
+  val structure : 'a sequence -> 'a single
+  val byte_array : string single
+  val array : 'a single -> 'a list single
+  val dict : 'a basic -> 'b single -> ('a * 'b) list single
+  val variant : V.single single
+
+  val basic_byte : char single
+  val basic_boolean : bool single
+  val basic_int16 : int single
+  val basic_int32 : int32 single
+  val basic_int64 : int64 single
+  val basic_uint16 : int single
+  val basic_uint32 : int32 single
+  val basic_uint64 : int64 single
+  val basic_double : float single
+  val basic_string : string single
+  val basic_signature : signature single
+  val basic_object_path : OBus_path.t single
+  val basic_unix_fd : Unix.file_descr single
+  (** {6 Types extraction} *)
+
+  val type_basic : 'a basic -> T.basic
+  val type_single : 'a single -> T.single
+  val type_sequence : 'a sequence -> T.sequence
+
+  (** {6 Boxing} *)
+
+  val make_basic : 'a basic -> 'a -> V.basic
+  val make_single : 'a single -> 'a -> V.single
+  val make_sequence : 'a sequence -> 'a -> V.sequence
+
+  (**  {6 Unboxing} *)
+
+  exception Signature_mismatch
+    (** Exception raised when a boxed value do not have the same
+        signature as the combinator *)
+
+  val cast_basic : 'a basic -> V.basic -> 'a
+  val cast_single : 'a single -> V.single -> 'a
+  val cast_sequence : 'a sequence -> V.sequence -> 'a
+
+  (** {6 Sequence constructors} *)
+
+  val seq0 : unit sequence
+  val seq1 : 'a1 single -> 'a1 sequence
+  val seq2 : 'a1 single -> 'a2 single -> ('a1 * 'a2) sequence
+  val seq3 : 'a1 single -> 'a2 single -> 'a3 single -> ('a1 * 'a2 * 'a3) sequence
+  val seq4 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> ('a1 * 'a2 * 'a3 * 'a4) sequence
+  val seq5 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5) sequence
+  val seq6 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) sequence
+  val seq7 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7) sequence
+  val seq8 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8) sequence
+  val seq9 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> 'a9 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9) sequence
+  val seq10 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> 'a9 single -> 'a10 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10) sequence
+  val seq11 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> 'a9 single -> 'a10 single -> 'a11 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11) sequence
+  val seq12 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> 'a9 single -> 'a10 single -> 'a11 single -> 'a12 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12) sequence
+  val seq13 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> 'a9 single -> 'a10 single -> 'a11 single -> 'a12 single -> 'a13 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12 * 'a13) sequence
+  val seq14 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> 'a9 single -> 'a10 single -> 'a11 single -> 'a12 single -> 'a13 single -> 'a14 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12 * 'a13 * 'a14) sequence
+  val seq15 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> 'a9 single -> 'a10 single -> 'a11 single -> 'a12 single -> 'a13 single -> 'a14 single -> 'a15 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12 * 'a13 * 'a14 * 'a15) sequence
+  val seq16 : 'a1 single -> 'a2 single -> 'a3 single -> 'a4 single -> 'a5 single -> 'a6 single -> 'a7 single -> 'a8 single -> 'a9 single -> 'a10 single -> 'a11 single -> 'a12 single -> 'a13 single -> 'a14 single -> 'a15 single -> 'a16 single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12 * 'a13 * 'a14 * 'a15 * 'a16) sequence
+end
+
+(** {6 Methods/signals arguments} *)
+
+(** Type of a list of arguments used by methods and signals. It is
+    ensured that the number of single types contained in [arg_types]
+    is equal to the number of names. *)
+type 'a arguments = private {
+  arg_types : 'a C.sequence;
+  (** Types of the arguments *)
+  arg_names : string option list;
+  (** Names of the arguments *)
+}
+
+val arguments : arg_types : 'a C.sequence -> arg_names : string option list -> 'a arguments
+  (** [arguments ~arg_types ~arg_names] creates a list of
+      arguments. It raises [Invalid_arg] if the number of single types
+      contained in [arg_types] is not equal to the number of names. *)
+
+val arg_types : 'a arguments -> 'a C.sequence
+  (** Returns the underlying sequence converter of a list of
+      arguments. *)
+
+val arg_names : 'a arguments -> string option list
+  (** Returns the names of a list of arguments *)
 
 (** {8 Constructors} *)
 
-val byte : char -> basic
-val boolean : bool -> basic
-val int16 : int -> basic
-val int32 : int32 -> basic
-val int64 : int64 -> basic
-val uint16 : int -> basic
-val uint32 : int32 -> basic
-val uint64 : int64 -> basic
-val double : float -> basic
-val string : string -> basic
-val signature : signature -> basic
-val object_path : OBus_path.t -> basic
-val unix_fd : Unix.file_descr -> basic
+val arg_cons : string option * 'a C.single -> 'b arguments -> ('a * 'b) arguments
+  (** [arg_cons (name, typ) arguments] adds the argument [(name,
+      type)] to the beginning of [arguments] *)
 
-val basic : basic -> single
-val array : tsingle -> single list -> single
-val byte_array : string -> single
-val dict : tbasic -> tsingle -> (basic * single) list -> single
-val structure : single list -> single
-val variant : single -> single
-
-val sbyte : char -> single
-  (** [sbyte x = basic (byte x)] *)
-val sboolean : bool -> single
-  (** [sboolean x = basic (boolean x)] *)
-val sint16 : int -> single
-  (** [sint16 x = basic (int16 x)] *)
-val sint32 : int32 -> single
-  (** [sint32 x = basic (int32 x)] *)
-val sint64 : int64 -> single
-  (** [sint64 x = basic (int64 x)] *)
-val suint16 : int -> single
-  (** [suint16 x = basic (uint16 x)] *)
-val suint32 : int32 -> single
-  (** [suint32 x = basic (uint32 x)] *)
-val suint64 : int64 -> single
-  (** [suint64 x = basic (uint64 x)] *)
-val sdouble : float -> single
-  (** [sdouble x = basic (double x)] *)
-val sstring : string -> single
-  (** [sstring x = basic (string x)] *)
-val ssignature : signature -> single
-  (** [ssignature x = basic (signature x)] *)
-val sobject_path : OBus_path.t -> single
-  (** [sobject_path x = basic (object_path x)] *)
-val sunix_fd : Unix.file_descr -> single
-  (** [sunix_fd x = basic (unix_fd x)] *)
-
-(** {6 Typing} *)
-
-val type_of_basic : basic -> tbasic
-val type_of_single : single -> tsingle
-val type_of_sequence : sequence -> tsequence
-  (** Return the type of a value *)
-
-(** {6 Printing} *)
-
-val print_tbasic : Format.formatter -> tbasic -> unit
-val print_tsingle : Format.formatter -> tsingle -> unit
-val print_tsequence : Format.formatter -> tsequence -> unit
-val print_basic : Format.formatter -> basic -> unit
-val print_single : Format.formatter -> single -> unit
-val print_sequence : Format.formatter -> sequence -> unit
-  (** Pretty-printing *)
-
-val string_of_tbasic : tbasic -> string
-val string_of_tsingle : tsingle -> string
-val string_of_tsequence : tsequence -> string
-val string_of_basic : basic -> string
-val string_of_single : single -> string
-val string_of_sequence : sequence -> string
-
-(** {6 File descriptors utils} *)
-
-val basic_dup : basic -> basic
-val single_dup : single -> single
-val sequence_dup : sequence -> sequence
-  (** Duplicates all file descriptors of the given value *)
-
-val basic_close : basic -> unit
-val single_close : single -> unit
-val sequence_close : sequence -> unit
-  (** Closes all file descriptors of the given value *)
+val arg0 : unit arguments
+val arg1 : string option * 'a1 C.single -> 'a1 arguments
+val arg2 : string option * 'a1 C.single -> string option * 'a2 C.single -> ('a1 * 'a2) arguments
+val arg3 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> ('a1 * 'a2 * 'a3) arguments
+val arg4 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> ('a1 * 'a2 * 'a3 * 'a4) arguments
+val arg5 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5) arguments
+val arg6 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) arguments
+val arg7 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7) arguments
+val arg8 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8) arguments
+val arg9 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> string option * 'a9 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9) arguments
+val arg10 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> string option * 'a9 C.single -> string option * 'a10 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10) arguments
+val arg11 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> string option * 'a9 C.single -> string option * 'a10 C.single -> string option * 'a11 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11) arguments
+val arg12 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> string option * 'a9 C.single -> string option * 'a10 C.single -> string option * 'a11 C.single -> string option * 'a12 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12) arguments
+val arg13 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> string option * 'a9 C.single -> string option * 'a10 C.single -> string option * 'a11 C.single -> string option * 'a12 C.single -> string option * 'a13 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12 * 'a13) arguments
+val arg14 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> string option * 'a9 C.single -> string option * 'a10 C.single -> string option * 'a11 C.single -> string option * 'a12 C.single -> string option * 'a13 C.single -> string option * 'a14 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12 * 'a13 * 'a14) arguments
+val arg15 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> string option * 'a9 C.single -> string option * 'a10 C.single -> string option * 'a11 C.single -> string option * 'a12 C.single -> string option * 'a13 C.single -> string option * 'a14 C.single -> string option * 'a15 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12 * 'a13 * 'a14 * 'a15) arguments
+val arg16 : string option * 'a1 C.single -> string option * 'a2 C.single -> string option * 'a3 C.single -> string option * 'a4 C.single -> string option * 'a5 C.single -> string option * 'a6 C.single -> string option * 'a7 C.single -> string option * 'a8 C.single -> string option * 'a9 C.single -> string option * 'a10 C.single -> string option * 'a11 C.single -> string option * 'a12 C.single -> string option * 'a13 C.single -> string option * 'a14 C.single -> string option * 'a15 C.single -> string option * 'a16 C.single -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6 * 'a7 * 'a8 * 'a9 * 'a10 * 'a11 * 'a12 * 'a13 * 'a14 * 'a15 * 'a16) arguments

@@ -23,22 +23,15 @@ type t = {
       connection to a message bus. *)
 }
 
+val compare : t -> t -> int
+  (** Same as [Pervasives.compare]. It allows this module to be used
+      as argument to the functors [Set.Make] and [Map.Make]. *)
+
 val connection : t -> OBus_connection.t
   (** [connection] projection *)
 
 val name : t -> OBus_name.bus option
   (** [name] projection *)
-
-val obus_t : t OBus_type.sequence
-  (** This return the peer sending a message.
-
-      This may be used in method type to get the sender of a call, for
-      example:
-
-      {[
-        OL_method Foo : OBus_peer.t -> int -> string
-      ]}
-  *)
 
 (** Note that it is possible to use either a unique connection name or
     a bus name as peer name.
@@ -68,10 +61,6 @@ val obus_t : t OBus_type.sequence
     "/org/freedesktop/Hal/Manager" on "org.freedesktop.Hal.Manager"
     and use unique name for objects for which the path is retreived
     from a method call.
-
-    By the way, the type combinator {!OBus_proxy.obus_t} will awlays
-    return a proxy using a peer using a unique name, so you do not
-    have to care about this if you use it.
 *)
 
 val make : connection : OBus_connection.t -> name : OBus_name.bus -> t
@@ -104,7 +93,6 @@ type peer = t
 (** Minimal interface of private peers *)
 module type Private = sig
   type t = private peer
-  val obus_t : t OBus_type.sequence
 
   external of_peer : peer -> t = "%identity"
   external to_peer : t -> peer = "%identity"
@@ -113,7 +101,6 @@ end
 (** Minimal implementation of private peers *)
 module Private : sig
   type t = peer
-  val obus_t : t OBus_type.sequence
 
   external of_peer : peer -> t = "%identity"
   external to_peer : t -> peer = "%identity"

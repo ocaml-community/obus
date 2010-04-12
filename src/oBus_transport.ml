@@ -72,7 +72,7 @@ let socket ?(capabilities=[]) fd =
 let loopback () =
   let mvar = Lwt_mvar.create_empty () in
   { recv = (fun _ -> Lwt_mvar.take mvar);
-    send = (fun m -> Lwt_mvar.put mvar { m with OBus_message.body = OBus_value.sequence_dup (OBus_message.body m) });
+    send = (fun m -> Lwt_mvar.put mvar { m with OBus_message.body = OBus_value.V.sequence_dup (OBus_message.body m) });
     capabilities = [`Unix_fd];
     shutdown = return }
 

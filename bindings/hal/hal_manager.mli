@@ -16,11 +16,11 @@ val manager : unit -> t Lwt.t
 
 val get_all_devices : t -> Hal_device.t list Lwt.t
 val get_all_devices_with_properties : t -> (Hal_device.t * (string * Hal_device.property) list) list Lwt.t
-val device_exists : t -> Hal_device.t -> bool Lwt.t
+val device_exists : t -> Hal_device.udi -> bool Lwt.t
 val find_device_string_match : t -> string -> string -> Hal_device.t list Lwt.t
 val find_device_by_capability : t -> string -> Hal_device.t list Lwt.t
-val new_device : t -> string Lwt.t
-val remove : t -> string -> unit Lwt.t
+val new_device : t -> Hal_device.t Lwt.t
+val remove : t -> Hal_device.t -> unit Lwt.t
 val commit_to_gdl : t -> string -> string -> unit Lwt.t
 val acquire_global_interface_lock : t -> string -> bool -> unit Lwt.t
 val release_global_interface_lock : t -> string -> unit Lwt.t

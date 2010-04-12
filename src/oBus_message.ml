@@ -8,7 +8,7 @@
  *)
 
 type serial = int32
-type body = OBus_value.sequence
+type body = OBus_value.V.sequence
 
 type flags = {
   no_reply_expected : bool;
@@ -41,7 +41,14 @@ type t = {
   destination : OBus_name.bus option;
   sender : OBus_name.bus option;
   body : body;
-} with projection
+}
+
+let flags m = m.flags
+let serial m = m.serial
+let typ m = m.typ
+let destination m = m.destination
+let sender m = m.sender
+let body m = m.body
 
 let make ?(flags=default_flags) ?(serial=0l) ?sender ?destination ~typ body =
   { flags = flags;
@@ -102,6 +109,6 @@ interface = %S@
 member = %S" (OBus_path.to_string path) interface member) message.typ
     opt message.sender
     opt message.destination
-    (string_of_signature (type_of_sequence message.body))
-    print_tsequence (type_of_sequence message.body)
-    print_sequence message.body
+    (string_of_signature (V.type_of_sequence message.body))
+    T.print_sequence (V.type_of_sequence message.body)
+    V.print_sequence message.body

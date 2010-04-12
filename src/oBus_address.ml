@@ -18,7 +18,10 @@ type guid = OBus_uuid.t
 type t = {
   name : string;
   args : (string * string) list;
-} with projection
+}
+
+let name a = a.name
+let args a = a.args
 
 let make ~name ~args = { name = name; args = args }
 

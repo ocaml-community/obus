@@ -19,7 +19,7 @@ let _ = Lwt_main.run begin
               ("plop", `Plop)] ()
   in
 
-  lwt result = notif#result in
+  lwt result = Notification.result notif in
 
   begin match result with
     | `Coucou -> print_endline "You pressed coucou!"

@@ -4,11 +4,11 @@ src/private/OBus_match_rule_lexer
 src/private/OBus_cache
 src/private/OBus_private_connection
 src/private/OBus_private_bus
-src/private/OBus_private_type
 src/private/OBus_util
 src/private/OBus_xml_parser
 src/private/OBus_version
-src/private/OBus_pack
+src/private/OBus_private_method
+src/private/OBus_interfaces
 src/OBus_address
 src/OBus_auth
 src/OBus_bus
@@ -28,11 +28,11 @@ src/OBus_signal
 src/OBus_property
 src/OBus_resolver
 src/OBus_string
-src/OBus_type
 src/OBus_uuid
 src/OBus_value
 src/OBus_match
 src/OBus_server
 src/OBus_object
-src/OBus_pervasives
+src/OBus_context
+src/OBus_member
 OBus_config

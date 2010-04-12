@@ -13,7 +13,7 @@ type serial = int32
 
 (** {6 Message structure} *)
 
-type body = OBus_value.sequence
+type body = OBus_value.V.sequence
     (** The body is a sequence of dynamically typed values *)
 
 type typ =

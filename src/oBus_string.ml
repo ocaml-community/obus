@@ -14,7 +14,12 @@ type error = {
   str : string;
   ofs : int;
   msg : string;
-} with projection
+}
+
+let typ e = e.typ
+let str e = e.str
+let ofs e = e.ofs
+let msg e = e.msg
 
 type validator = string -> error option
 

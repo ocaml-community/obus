@@ -12,14 +12,14 @@ open OBus_xml_parser
 type name = string
 
 type annotation = name * string
-type argument = name option * OBus_value.tsingle
+type argument = name option * OBus_value.T.single
 
 type access = Read | Write | Read_write
 
 type member =
   | Method of name * argument list * argument list * annotation list
   | Signal of name * argument list * annotation list
-  | Property of name * OBus_value.tsingle * access * annotation list
+  | Property of name * OBus_value.T.single * access * annotation list
 
 type interface = name * member list * annotation list
 type node = OBus_path.element
@@ -173,17 +173,3 @@ let output xo doc =
   Xmlm.output xo (`Dtd(Some "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n\
                              \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">"));
   aux (to_xml doc)
-
-let obus_document = OBus_type.map OBus_pervasives.obus_string
-  (fun str ->
-     try
-       input (Xmlm.make_input ~strip:true (`String(0, str)))
-     with Xmlm.Error((line, column), err) ->
-       raise (OBus_type.Cast_failure("OBus_introspect.obus_document",
-                                     Printf.sprintf
-                                       "invalid document, at line %d: %s"
-                                       line (Xmlm.error_message err))))
-  (fun doc ->
-     let buf = Buffer.create 42 in
-     output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Buffer buf)) doc;
-     Buffer.contents buf)

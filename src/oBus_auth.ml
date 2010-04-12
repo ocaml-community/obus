@@ -69,7 +69,11 @@ struct
     id : int32;
     time : int64;
     cookie : string;
-  } with projection
+  }
+
+  let id c = c.id
+  let time c = c.time
+  let cookie c = c.cookie
 end
 
 module Keyring : sig
@@ -415,7 +419,10 @@ struct
   type mechanism = {
     mech_name : string;
     mech_exec : unit -> mechanism_handler;
-  } with projection
+  }
+
+  let mech_name m = m.mech_name
+  let mech_exec m = m.mech_exec
 
   (* +---------------------------------------------------------------+
      | Predefined client mechanisms                                  |
@@ -625,7 +632,10 @@ struct
   type mechanism = {
     mech_name : string;
     mech_exec : int option -> mechanism_handler;
-  } with projection
+  }
+
+  let mech_name m = m.mech_name
+  let mech_exec m = m.mech_exec
 
   (* +---------------------------------------------------------------+
      | Predefined server mechanisms                                  |

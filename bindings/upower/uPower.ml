@@ -8,43 +8,90 @@
  *)
 
 open Lwt
-open OBus_pervasives
 
 include OBus_peer.Private
 
-exception General_error of string
- with obus("org.freedesktop.UPower.GeneralError")
+exception General_error
+let () = OBus_error.register ~name:"org.freedesktop.UPower.GeneralError" ~exn:General_error
 
 let daemon () =
   lwt bus = OBus_bus.system () in
   return (OBus_peer.make bus "org.freedesktop.UPower")
 
-module Proxy = OBus_proxy.Make(struct
-                                 type proxy = t
-                                 let cast peer = OBus_proxy.make peer ["org"; "freedesktop"; "UPower"]
-                                 let make = OBus_proxy.peer
-                               end)
+open UPower_interfaces.Org_freedesktop_UPower
 
-let op_interface = Proxy.make_interface ~notify:(OBus_property.notify_global "Changed") "org.freedesktop.UPower"
+let notify_mode = OBus_property.notify_global "Changed"
 
-OP_method HibernateAllowed : bool
-OP_method Hibernate : unit
-OP_method SuspendAllowed : bool
-OP_method Suspend : unit
-OP_method AboutToSleep : unit
-OP_method EnumerateDevices : UPower_device.t list
+let proxy daemon = OBus_proxy.make daemon ["org"; "freedesktop"; "UPower"]
 
-OP_signal Resuming : unit
-OP_signal Sleeping : unit
-OP_signal Changed : unit
-OP_signal DeviceChanged : UPower_device.broken
-OP_signal DeviceRemoved : UPower_device.broken
-OP_signal DeviceAdded : UPower_device.broken
+let enumerate_devices daemon =
+  lwt (context, devices) = OBus_method.call_with_context m_EnumerateDevices (proxy daemon) () in
+  return
+    (List.map
+       (fun path ->
+          UPower_device.of_proxy
+            (OBus_proxy.make (OBus_context.sender context) path))
+       devices)
 
-OP_property_rw LidIsPresent : bool
-OP_property_rw LidIsClosed : bool
-OP_property_rw OnLowBattery : bool
-OP_property_rw OnBattery : bool
-OP_property_r CanHibernate : bool
-OP_property_r CanSuspend : bool
-OP_property_r DaemonVersion : string
+let device_added daemon =
+  OBus_signal.map_with_context
+    (fun context device ->
+       UPower_device.of_proxy (OBus_proxy.make (OBus_context.sender context) (OBus_path.of_string device)))
+    (OBus_signal.connect s_DeviceAdded (proxy daemon))
+
+let device_removed daemon =
+  OBus_signal.map_with_context
+    (fun context device ->
+       UPower_device.of_proxy (OBus_proxy.make (OBus_context.sender context) (OBus_path.of_string device)))
+    (OBus_signal.connect s_DeviceRemoved (proxy daemon))
+
+let device_changed daemon =
+  OBus_signal.map_with_context
+    (fun context device ->
+       UPower_device.of_proxy (OBus_proxy.make (OBus_context.sender context) (OBus_path.of_string device)))
+    (OBus_signal.connect s_DeviceChanged (proxy daemon))
+
+let changed daemon =
+  OBus_signal.connect s_Changed (proxy daemon)
+
+let sleeping daemon =
+  OBus_signal.connect s_Sleeping (proxy daemon)
+
+let resuming daemon =
+  OBus_signal.connect s_Resuming (proxy daemon)
+
+let about_to_sleep daemon =
+  OBus_method.call m_AboutToSleep (proxy daemon) ()
+
+let suspend daemon =
+  OBus_method.call m_Suspend (proxy daemon) ()
+
+let suspend_allowed daemon =
+  OBus_method.call m_SuspendAllowed (proxy daemon) ()
+
+let hibernate daemon =
+  OBus_method.call m_Hibernate (proxy daemon) ()
+
+let hibernate_allowed daemon =
+  OBus_method.call m_HibernateAllowed (proxy daemon) ()
+
+let daemon_version daemon =
+  OBus_property.make p_DaemonVersion ~notify_mode (proxy daemon)
+
+let can_suspend daemon =
+  OBus_property.make p_CanSuspend ~notify_mode (proxy daemon)
+
+let can_hibernate daemon =
+  OBus_property.make p_CanHibernate ~notify_mode (proxy daemon)
+
+let on_battery daemon =
+  OBus_property.make p_OnBattery ~notify_mode (proxy daemon)
+
+let on_low_battery daemon =
+  OBus_property.make p_OnLowBattery ~notify_mode (proxy daemon)
+
+let lid_is_closed daemon =
+  OBus_property.make p_LidIsClosed ~notify_mode (proxy daemon)
+
+let lid_is_present daemon =
+  OBus_property.make p_LidIsPresent ~notify_mode (proxy daemon)

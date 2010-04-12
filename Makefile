@@ -141,8 +141,10 @@ prefix:
 .PHONY: install
 install: prefix install-libs
 	install -vm 755 _build/tools/obus_introspect.best $(PREFIX)/bin/obus-introspect
-	install -vm 755 _build/tools/obus_binder.best $(PREFIX)/bin/obus-binder
 	install -vm 755 _build/tools/obus_dump.best $(PREFIX)/bin/obus-dump
+	install -vm 755 _build/tools/obus_gen_interface.best $(PREFIX)/bin/obus-gen-interface
+	install -vm 755 _build/tools/obus_gen_client.best $(PREFIX)/bin/obus-gen-client
+	install -vm 755 _build/tools/obus_gen_server.best $(PREFIX)/bin/obus-gen-server
 	mkdir -p $(PREFIX)/share/doc/obus/examples
 	mkdir -p $(PREFIX)/share/doc/obus/html
 	mkdir -p $(PREFIX)/share/doc/obus/scripts
@@ -158,8 +160,10 @@ install: prefix install-libs
 .PHONY: uninstall
 uninstall: prefix uninstall-libs
 	rm -vf $(PREFIX)/bin/obus-introspect
-	rm -vf $(PREFIX)/bin/obus-binder
 	rm -vf $(PREFIX)/bin/obus-dump
+	rm -vf $(PREFIX)/bin/obus-gen-interface
+	rm -vf $(PREFIX)/bin/obus-gen-client
+	rm -vf $(PREFIX)/bin/obus-gen-server
 	rm -rvf $(PREFIX)/share/doc/obus
 	rm -vf $(PREFIX)/share/man/man1/obus-introspect.1.gz
 	rm -vf $(PREFIX)/share/man/man1/obus-binder.1.gz

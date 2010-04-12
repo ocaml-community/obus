@@ -8,39 +8,46 @@
  *)
 
 open Lwt
-open OBus_pervasives
 
 type t = {
   connection : OBus_connection.t;
   name : OBus_name.bus option;
-} with projection
+}
 
-let obus_t = OBus_type.map_with_context <:obus_type< unit >>
-  (fun (connection, message) () ->
-     { connection = connection;
-       name = OBus_message.sender message })
-  ignore
+let compare = Pervasives.compare
+
+let connection p = p.connection
+let name p = p.name
 
 let make ~connection ~name = { connection = connection; name = Some name }
 let anonymous c = { connection = c; name = None }
 
 let ping peer =
-  OBus_method.call
-    ~connection:peer.connection
-    ?destination:peer.name
-    ~path:[]
-    ~interface:"org.freedesktop.DBus.Peer"
-    ~member:"Ping"
-    <:obus_func< t >>
+  lwt context, () =
+    OBus_private_method.call_with_context
+      ~connection:peer.connection
+      ?destination:peer.name
+      ~path:[]
+      ~interface:"org.freedesktop.DBus.Peer"
+      ~member:"Ping"
+      ~i_args:OBus_value.C.seq0
+      ~o_args:OBus_value.C.seq0
+      ()
+  in
+  return { connection = peer.connection;
+           name = OBus_message.sender context.OBus_private_connection.context_message }
 
 let get_machine_id peer =
-  OBus_method.call
+  OBus_private_method.call
     ~connection:peer.connection
     ?destination:peer.name
     ~path:[]
     ~interface:"org.freedesktop.DBus.Peer"
     ~member:"GetMachineId"
-    <:obus_func< uuid >>
+    ~i_args:OBus_value.C.seq0
+    ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+    ()
+  >|= OBus_uuid.of_string
 
 let wait_for_exit peer =
   match peer.name with
@@ -64,18 +71,17 @@ let wait_for_exit peer =
    | Private peers                                                   |
    +-----------------------------------------------------------------+ *)
 
-type peer = t with obus
+type peer = t
 
 module type Private = sig
   type t = private peer
-  val obus_t : t OBus_type.sequence
   external of_peer : peer -> t = "%identity"
   external to_peer : t -> peer = "%identity"
 end
 
 module Private =
 struct
-  type t = peer with obus
+  type t = peer
   external of_peer : peer -> t = "%identity"
   external to_peer : t -> peer = "%identity"
 end

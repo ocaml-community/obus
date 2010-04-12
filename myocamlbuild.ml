@@ -53,15 +53,14 @@ let bindings = [
 
 let tools = [
   "obus_introspect";
-  "obus_binder";
   "obus_dump";
+  "obus_gen_interface";
+  "obus_gen_client";
+  "obus_gen_server";
 ]
 
 (* Syntax extensions used internally, (tag and the byte-code file). *)
 let intern_syntaxes = [
-  "pa_obus", "pa_obus.cma";
-  "pa_projection", "syntax/pa_projection.cmo";
-  "pa_constructor", "syntax/pa_constructor.cmo";
   "pa_monad", "syntax/pa_monad.cmo";
 ]
 
@@ -70,8 +69,6 @@ let intern_syntaxes = [
    +-----------------------------------------------------------------+ *)
 
 let packages = [
-  "type-conv";
-  "type-conv.syntax";
   "camlp4";
   "camlp4.extend";
   "camlp4.lib";
@@ -187,7 +184,7 @@ let _ =
           List.map (sprintf "tools/%s.best") tools;
         ]
         and common = List.concat [
-          ["pa_obus.cma"; "META"; "doc"];
+          ["META"; "doc"];
           (* Man pages for tools: *)
           List.map (fun t -> sprintf "man/%s.1.gz" (String.subst "_" "-" t)) tools
         ] in
@@ -214,7 +211,7 @@ let _ =
           bins_debug;
         ];
         virtual_rule "libs" & List.concat [
-          ["pa_obus.cma"; "META"];
+          ["META"];
           libs_byte;
           if have_native then libs_native else [];
         ];
@@ -271,6 +268,17 @@ let _ =
              flag_all_stages_except_link [tag] & S[A"-ppopt"; A file];
              dep ["ocaml"; "ocamldep"; tag] [file])
           intern_syntaxes;
+
+        (* +---------------------------------------------------------+
+           | Introspection --> OCaml                                 |
+           +---------------------------------------------------------+ *)
+
+        rule "introspection to ocaml"
+          ~prods:["examples/%.ml"; "examples/%.mli"]
+          ~deps:["tools/obus_gen_interface.best"; "examples/%.xml"]
+          (fun env _ -> Cmd(S[P"tools/obus_gen_interface.best";
+                              A"-o"; A(env "examples/%");
+                              A(env "examples/%.xml")]));
 
         (* +---------------------------------------------------------+
            | Other                                                   |

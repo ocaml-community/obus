@@ -7,100 +7,86 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+let section = Lwt_log.Section.make "obus(method)"
+
 open Lwt
 open OBus_message
-open OBus_connection
-
-let section = Lwt_log.Section.make "obus(method)"
 
 (* +-----------------------------------------------------------------+
    | Calling methods                                                 |
    +-----------------------------------------------------------------+ *)
 
-let call ~connection ?flags ?sender ?destination ~path ?interface ~member ty =
-  OBus_type.make_func ty begin fun body ->
-    let ty_reply = OBus_type.func_reply ty in
-    lwt msg =
-      send_message_with_reply
-        connection
-        (method_call ?flags ?sender ?destination ~path ?interface ~member body)
-    in
-    match msg with
-      | { typ = Method_return _ } -> begin
-          try
-            return (OBus_type.cast_sequence ty_reply ~context:(connection, msg) msg.body)
-          with OBus_type.Cast_failure _ as exn ->
-            (* If not, check why the cast fail *)
-            let expected_sig = OBus_type.type_sequence ty_reply
-            and got_sig = OBus_value.type_of_sequence msg.body in
-            if expected_sig = got_sig then
-              (* If the signature match, this means that the user
-                 defined a combinator raising a Cast_failure *)
-              fail exn
-            else
-              (* In other case this means that the expected
-                 signature is wrong *)
-              fail
-                (Failure (Printf.sprintf
-                            "unexpected signature for reply of method %S on interface %S, expected: %S, got: %S"
-                            member (match interface with Some i -> i | None -> "")
-                            (OBus_value.string_of_signature expected_sig)
-                            (OBus_value.string_of_signature got_sig)))
-        end
+exception Invalid_reply of string
 
-      | { typ = Error(_, error_name) } ->
-          fail
-            (OBus_error.make
-               error_name
-               (match msg.body with
-                  | OBus_value.Basic(OBus_value.String x) :: _ -> x
-                  | _ -> ""))
+let () = OBus_private_method.invalid_reply := (fun msg -> Invalid_reply msg)
 
-      | _ ->
-          assert false
-  end
+let call info proxy args =
+  OBus_private_method.call
+    ~connection:(OBus_proxy.connection proxy)
+    ?destination:(OBus_proxy.name proxy)
+    ~path:(OBus_proxy.path proxy)
+    ~interface:(OBus_member.Method.interface info)
+    ~member:(OBus_member.Method.member info)
+    ~i_args:(OBus_value.arg_types (OBus_member.Method.i_args info))
+    ~o_args:(OBus_value.arg_types (OBus_member.Method.o_args info))
+    args
 
-let call_no_reply ~connection ?flags ?sender ?destination ~path ?interface ~member ty =
-  OBus_type.make_func ty begin fun body ->
-    send_message connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
-  end
+let call_with_context info proxy args =
+  OBus_private_method.call_with_context
+    ~connection:(OBus_proxy.connection proxy)
+    ?destination:(OBus_proxy.name proxy)
+    ~path:(OBus_proxy.path proxy)
+    ~interface:(OBus_member.Method.interface info)
+    ~member:(OBus_member.Method.member info)
+    ~i_args:(OBus_value.arg_types (OBus_member.Method.i_args info))
+    ~o_args:(OBus_value.arg_types (OBus_member.Method.o_args info))
+    args
 
-let dyn_call ~connection ?flags ?sender ?destination ~path ?interface ~member body =
-  lwt { body = x } =
-    send_message_with_reply connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
-  in
-  return x
-
-let dyn_call_no_reply ~connection ?flags ?sender ?destination ~path ?interface ~member body =
-  send_message connection (method_call ?flags ?sender ?destination ~path ?interface ~member body)
+let call_no_reply info proxy args =
+  OBus_private_method.call_no_reply
+    ~connection:(OBus_proxy.connection proxy)
+    ?destination:(OBus_proxy.name proxy)
+    ~path:(OBus_proxy.path proxy)
+    ~interface:(OBus_member.Method.interface info)
+    ~member:(OBus_member.Method.member info)
+    ~i_args:(OBus_value.arg_types (OBus_member.Method.i_args info))
+    args
 
 (* +-----------------------------------------------------------------+
    | Sending replies                                                 |
    +-----------------------------------------------------------------+ *)
 
-let dyn_return ~context:(connection, { sender = sender; serial = serial }) body =
-  send_message connection { destination = sender;
-                            sender = None;
-                            flags = { no_reply_expected = true; no_auto_start = true };
-                            serial = 0l;
-                            typ = Method_return serial;
-                            body = body }
+let return ~context x =
+  if OBus_context.replied context then
+    return ()
+  else begin
+    OBus_context.set_replied context;
+    let msg = OBus_context.message context in
+    OBus_connection.send_message (OBus_context.connection context) {
+      destination = msg.sender;
+      sender = None;
+      flags = { no_reply_expected = true; no_auto_start = true };
+      serial = 0l;
+      typ = Method_return msg.serial;
+      body = OBus_value.C.make_sequence (OBus_value.arg_types (OBus_context.arguments context)) x;
+    }
+  end
 
-let return ~context typ v =
-  dyn_return ~context (OBus_type.make_sequence typ v)
+let fail_by_name ~context name error_message =
+  if OBus_context.replied context then
+    Lwt.return ()
+  else begin
+    OBus_context.set_replied context;
+    let msg = OBus_context.message context in
+    OBus_connection.send_message (OBus_context.connection context) {
+      destination = msg.sender;
+      sender = None;
+      flags = { no_reply_expected = true; no_auto_start = true };
+      serial = 0l;
+      typ = Error(msg.serial, name);
+      body = [OBus_value.V.basic_string error_message];
+    }
+  end
 
-let error ~context:(connection, { sender = sender; serial = serial }) ~name ~message =
-  send_message connection { destination = sender;
-                            sender = None;
-                            flags = { no_reply_expected = true; no_auto_start = true };
-                            serial = 0l;
-                            typ = Error(serial, name);
-                            body = [OBus_value.sstring message] }
-
-let fail ~context exn =
-  match OBus_error.cast exn with
-    | Some(name, message) ->
-        error ~context ~name ~message
-    | None ->
-        lwt () = Lwt_log.error ~section ~exn "sending an unregistred ocaml exception as a D-Bus error" in
-        error ~context ~name:"ocaml.Exception" ~message:(Printexc.to_string exn)
+let fail ~context exn error_message =
+  fail_by_name ~context (OBus_error.name_of_exn exn) error_message

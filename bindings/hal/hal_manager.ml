@@ -9,9 +9,9 @@
 
 open Lwt
 open OBus_value
-open OBus_pervasives
 
 include OBus_proxy.Private
+
 
 let manager () =
   lwt bus = OBus_bus.system () in
@@ -19,22 +19,80 @@ let manager () =
             (OBus_peer.make bus "org.freedesktop.Hal")
             [ "org"; "freedesktop"; "Hal"; "Manager" ])
 
-let op_interface = OBus_proxy.make_interface "org.freedesktop.Hal.Manager"
+open Hal_interfaces.Org_freedesktop_Hal_Manager
 
-OP_method GetAllDevices : Hal_device.broken list
-OP_method GetAllDevicesWithProperties : (Hal_device.broken * (string, Hal_device.property) dict) structure list
-OP_method DeviceExists : Hal_device.broken -> bool
-OP_method FindDeviceStringMatch : string -> string -> Hal_device.broken list
-OP_method FindDeviceByCapability : string -> Hal_device.broken list
-OP_method NewDevice : string
-OP_method Remove : string -> unit
-OP_method CommitToGdl : string -> string -> unit
-OP_method AcquireGlobalInterfaceLock : string -> bool -> unit
-OP_method ReleaseGlobalInterfaceLock : string -> unit
-OP_method SingletonAddonIsReady : string -> unit
+let make_device context udi =
+  Hal_device.of_proxy
+    (OBus_proxy.make (OBus_context.sender context)
+       (OBus_path.of_string udi))
 
-OP_signal DeviceAdded : Hal_device.broken
-OP_signal DeviceRemoved : Hal_device.broken
-OP_signal NewCapability : Hal_device.broken * string
-OP_signal GlobalInterfaceLockAcquired : string * string * int
-OP_signal GlobalInterfaceLockReleased : string * string * int
+let get_all_devices proxy =
+  lwt context, l = OBus_method.call_with_context m_GetAllDevices proxy () in
+  return (List.map (make_device context) l)
+
+let get_all_devices_with_properties proxy =
+  lwt context, l = OBus_method.call_with_context m_GetAllDevicesWithProperties proxy () in
+  return (List.map
+            (fun (udi, properties) ->
+               (make_device context udi,
+                List.map (fun (name, value) -> (name, Hal_device.property_of_variant value)) properties))
+            l)
+
+let device_exists proxy udi =
+  OBus_method.call m_DeviceExists proxy (OBus_path.to_string udi)
+
+let find_device_string_match proxy key value =
+  lwt context, l = OBus_method.call_with_context m_FindDeviceStringMatch proxy (key, value) in
+  return (List.map (make_device context) l)
+
+let find_device_by_capability proxy capability =
+  lwt context, l = OBus_method.call_with_context m_FindDeviceByCapability proxy capability in
+  return (List.map (make_device context) l)
+
+let new_device proxy =
+  lwt context, udi = OBus_method.call_with_context m_NewDevice proxy () in
+  return (make_device context udi)
+
+let remove proxy dev =
+  OBus_method.call m_Remove proxy (OBus_path.to_string (Hal_device.udi dev))
+
+let commit_to_gdl proxy temporary_udi global_udi =
+  OBus_method.call m_CommitToGdl proxy (temporary_udi, global_udi)
+
+let acquire_global_interface_lock proxy interface_name exclusive =
+  OBus_method.call m_AcquireGlobalInterfaceLock proxy (interface_name, exclusive)
+
+let release_global_interface_lock proxy interface_name =
+  OBus_method.call m_ReleaseGlobalInterfaceLock proxy interface_name
+
+let singleton_addon_is_ready proxy command_line =
+  OBus_method.call m_SingletonAddonIsReady proxy command_line
+
+let device_added proxy =
+  OBus_signal.map_with_context
+    make_device
+    (OBus_signal.connect s_DeviceAdded proxy)
+
+let device_removed proxy =
+  OBus_signal.map_with_context
+    make_device
+    (OBus_signal.connect s_DeviceRemoved proxy)
+
+let new_capability proxy =
+  OBus_signal.map_with_context
+    (fun context (udi, cap) -> (make_device context udi, cap))
+    (OBus_signal.connect s_NewCapability proxy)
+
+let global_interface_lock_acquired proxy =
+  OBus_signal.map
+    (fun (interface_name, lock_holder, num_locks) ->
+       let num_locks = Int32.to_int num_locks in
+       (interface_name, lock_holder, num_locks))
+    (OBus_signal.connect s_GlobalInterfaceLockAcquired proxy)
+
+let global_interface_lock_released proxy =
+  OBus_signal.map
+    (fun (interface_name, lock_holder, num_locks) ->
+       let num_locks = Int32.to_int num_locks in
+       (interface_name, lock_holder, num_locks))
+    (OBus_signal.connect s_GlobalInterfaceLockReleased proxy)

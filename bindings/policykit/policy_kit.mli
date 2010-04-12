@@ -9,9 +9,9 @@
 
 (** PolicyKit interface *)
 
-exception Not_authorized of string
+exception Not_authorized
   (** Exception raised by services when trying to perform an action
-      for which they do not have authorization from PolicyKit *)
+      for which we do not have authorization from PolicyKit *)
 
 val obtain_authorization : action_id : string -> ?xid : int -> pid : int -> unit -> bool Lwt.t
   (** [obtain_authorization ~action_id ~xid ~pid] tries to obtain

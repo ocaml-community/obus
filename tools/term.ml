@@ -14,96 +14,162 @@ module T : sig
       private
     | Term of string * t list
     | Tuple of t list
-    | Var of string
   val term : string -> t list -> t
   val tuple : t list -> t
-  val var : string -> t
 end = struct
   type t =
     | Term of string * t list
     | Tuple of t list
-    | Var of string
   let term id args = Term(id, args)
   let tuple = function
     | [t] -> t
     | l -> Tuple l
-  let var v = Var v
 end
 
 include T
 
+open Printf
 open OBus_value
 
-let implem_term_of_basic = function
-  | Tbyte -> term "char" []
-  | Tboolean -> term "bool" []
-  | Tint16 -> term "int16" []
-  | Tint32 -> term "int" []
-  | Tint64 -> term "int64" []
-  | Tuint16 -> term "uint16" []
-  | Tuint32 -> term "uint" []
-  | Tuint64 -> term "uint64" []
-  | Tdouble -> term "float" []
-  | Tstring -> term "string" []
-  | Tsignature -> term "signature" []
-  | Tobject_path -> term "OBus_proxy.t" []
-  | Tunix_fd -> term "file_descr" []
+(* +-----------------------------------------------------------------+
+   | D-Bus types --> term (implementation)                           |
+   +-----------------------------------------------------------------+ *)
 
-let rec implem_term_of_single = function
-  | Tbasic t -> implem_term_of_basic t
-  | Tstructure tl -> term "structure" [implem_term_of_sequence tl]
-  | Tarray t -> term "list" [implem_term_of_single t]
-  | Tdict(tk, tv) -> term "dict" [implem_term_of_basic tk; implem_term_of_single tv]
-  | Tvariant -> term "variant" []
+let impl_of_basic = function
+  | T.Byte -> term "byte" []
+  | T.Boolean -> term "boolean" []
+  | T.Int16 -> term "int16" []
+  | T.Int32 -> term "int32" []
+  | T.Int64 -> term "int64" []
+  | T.Uint16 -> term "uint16" []
+  | T.Uint32 -> term "uint32" []
+  | T.Uint64 -> term "uint64" []
+  | T.Double -> term "double" []
+  | T.String -> term "string" []
+  | T.Signature -> term "signature" []
+  | T.Object_path -> term "object_path" []
+  | T.Unix_fd -> term "unix_fd" []
 
-and implem_term_of_sequence tl = tuple (List.map implem_term_of_single tl)
+let rec impl_of_single = function
+  | T.Basic T.Byte -> term "basic_byte" []
+  | T.Basic T.Boolean -> term "basic_boolean" []
+  | T.Basic T.Int16 -> term "basic_int16" []
+  | T.Basic T.Int32 -> term "basic_int32" []
+  | T.Basic T.Int64 -> term "basic_int64" []
+  | T.Basic T.Uint16 -> term "basic_uint16" []
+  | T.Basic T.Uint32 -> term "basic_uint32" []
+  | T.Basic T.Uint64 -> term "basic_uint64" []
+  | T.Basic T.Double -> term "basic_double" []
+  | T.Basic T.String -> term "basic_string" []
+  | T.Basic T.Signature -> term "basic_signature" []
+  | T.Basic T.Object_path -> term "basic_object_path" []
+  | T.Basic T.Unix_fd -> term "basic_unix_fd" []
+  | T.Structure tl -> term "structure" [impl_of_sequence tl]
+  | T.Array(T.Basic T.Byte) -> term "byte_array" []
+  | T.Array t -> term "array" [impl_of_single t]
+  | T.Dict(tk, tv) -> term "dict" [impl_of_basic tk; impl_of_single tv]
+  | T.Variant -> term "variant" []
 
-let interf_term_of_basic = function
-  | Tbyte -> term "char" []
-  | Tboolean -> term "bool" []
-  | Tint16 -> term "int" []
-  | Tint32 -> term "int" []
-  | Tint64 -> term "int64" []
-  | Tuint16 -> term "int" []
-  | Tuint32 -> term "int" []
-  | Tuint64 -> term "int64" []
-  | Tdouble -> term "float" []
-  | Tstring -> term "string" []
-  | Tsignature -> term "OBus_value.signature" []
-  | Tobject_path -> term "OBus_proxy.t" []
-  | Tunix_fd -> term "Lwt_unix.file_descr" []
+and impl_of_sequence tl = tuple (List.map impl_of_single tl)
 
-let rec interf_term_of_single = function
-  | Tbasic t -> interf_term_of_basic t
-  | Tstructure tl -> interf_term_of_sequence tl
-  | Tarray t -> term "list" [interf_term_of_single t]
-  | Tdict(tk, tv) -> term "list" [tuple [interf_term_of_basic tk; interf_term_of_single tv]]
-  | Tvariant -> term "OBus_value.single" []
+(* +-----------------------------------------------------------------+
+   | D-Bus types --> term (interface)                                |
+   +-----------------------------------------------------------------+ *)
 
-and interf_term_of_sequence tl = tuple (List.map interf_term_of_single tl)
+let intf_of_basic = function
+  | T.Byte -> term "char" []
+  | T.Boolean -> term "bool" []
+  | T.Int16 -> term "int" []
+  | T.Int32 -> term "int32" []
+  | T.Int64 -> term "int64" []
+  | T.Uint16 -> term "int" []
+  | T.Uint32 -> term "int32" []
+  | T.Uint64 -> term "int64" []
+  | T.Double -> term "float" []
+  | T.String -> term "string" []
+  | T.Signature -> term "OBus_value.signature" []
+  | T.Object_path -> term "OBus_path.t" []
+  | T.Unix_fd -> term "Unix.file_descr" []
 
-open Format
+let rec intf_of_single = function
+  | T.Basic t -> intf_of_basic t
+  | T.Structure tl -> intf_of_sequence tl
+  | T.Array(T.Basic T.Byte) -> term "string" []
+  | T.Array t -> term "list" [intf_of_single t]
+  | T.Dict(tk, tv) -> term "list" [tuple [intf_of_basic tk; intf_of_single tv]]
+  | T.Variant -> term "OBus_value.V.single" []
 
-let rec print_term top pp = function
-  | Term(id, []) -> pp_print_string pp id
-  | Term(id, [t]) -> fprintf pp "%a %s" (print_term false) t id
-  | Term(id, tl) -> fprintf pp "(%a) %s" (print_seq true ", ") tl id
-  | Var v -> fprintf pp "'%s" v
-  | Tuple [] -> pp_print_string pp "unit"
-  | Tuple tl -> match top with
-      | true -> print_seq false " * " pp tl
-      | false -> fprintf pp "(%a)" (print_seq false " * ") tl
+and intf_of_sequence tl = tuple (List.map intf_of_single tl)
 
-and print_seq top sep pp = function
+(* +-----------------------------------------------------------------+
+   | D-Bus types --> term (client)                                   |
+   +-----------------------------------------------------------------+ *)
+
+let client_of_basic = function
+  | T.Byte -> term "char" []
+  | T.Boolean -> term "bool" []
+  | T.Int16 -> term "int" []
+  | T.Int32 -> term "int" []
+  | T.Int64 -> term "int64" []
+  | T.Uint16 -> term "int" []
+  | T.Uint32 -> term "int" []
+  | T.Uint64 -> term "int64" []
+  | T.Double -> term "float" []
+  | T.String -> term "string" []
+  | T.Signature -> term "OBus_value.signature" []
+  | T.Object_path -> term "OBus_proxy.t" []
+  | T.Unix_fd -> term "Unix.file_descr" []
+
+let rec client_of_single = function
+  | T.Basic t -> client_of_basic t
+  | T.Structure tl -> client_of_sequence tl
+  | T.Array(T.Basic T.Byte) -> term "string" []
+  | T.Array t -> term "list" [client_of_single t]
+  | T.Dict(tk, tv) -> term "list" [tuple [client_of_basic tk; client_of_single tv]]
+  | T.Variant -> term "OBus_value.V.single" []
+
+and client_of_sequence tl = tuple (List.map client_of_single tl)
+
+(* +-----------------------------------------------------------------+
+   | Term printing (implementation)                                  |
+   +-----------------------------------------------------------------+ *)
+
+let rec print_impl top oc = function
+  | Term(id, []) ->
+      output_string oc id
+  | Term(id, tl) ->
+      if not top then output_char oc '(';
+      output_string oc id;
+      List.iter
+        (fun t ->
+           output_char oc ' ';
+           print_impl false oc t)
+        tl;
+      if not top then output_char oc ')'
+  | Tuple [] ->
+      output_string oc "seq0"
+  | Tuple tl ->
+      if not top then output_char oc '(';
+      fprintf oc "seq%d" (List.length tl);
+      List.iter
+        (fun t ->
+           output_char oc ' ';
+           print_impl false oc t)
+        tl;
+      if not top then output_char oc ')'
+
+(* +-----------------------------------------------------------------+
+   | Term printing (interface)                                       |
+   +-----------------------------------------------------------------+ *)
+
+let rec print_intf top oc = function
+  | Term(id, []) -> output_string oc id
+  | Term(id, [t]) -> fprintf oc "%a %s" (print_intf false) t id
+  | Term(id, tl) -> fprintf oc "(%a) %s" (print_seq true ", ") tl id
+  | Tuple [] -> output_string oc "unit"
+  | Tuple tl -> if top then print_seq false " * " oc tl else fprintf oc "(%a)" (print_seq false " * ") tl
+
+and print_seq top sep oc = function
   | [] -> ()
-  | [t] -> print_term top pp t
-  | t :: tl -> fprintf pp "%a%s%a" (print_term top) t sep (print_seq top sep) tl
-
-let rec print_func ret pp = function
-  | [] -> print_term true pp ret
-  | (None, arg) :: args -> fprintf pp "%a -> %a" (print_term true) arg (print_func ret) args
-  | (Some name, arg) :: args -> fprintf pp "%s : %a -> %a" name (print_term true) arg (print_func ret) args
-
-let paren top pp f = match top with
-  | true -> f pp ()
-  | false -> fprintf pp "(%a)" f ()
+  | [t] -> print_intf top oc t
+  | t :: tl -> fprintf oc "%a%s%a" (print_intf top) t sep (print_seq top sep) tl

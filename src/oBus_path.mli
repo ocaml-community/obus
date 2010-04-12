@@ -37,10 +37,16 @@ val of_string : string -> t
 val to_string : t -> string
   (** Return a string representation of an object path *)
 
+(** {6 Helpers} *)
+
 val escape : string -> element
   (** Escape an arbitrary string into a valid element *)
 
 val unescape : element -> string
+  (** Interpret escape sequence to get back the original string *)
+
+val generate : unit -> t
+  (** [generate ()] generate a new unique path *)
 
 (** {6 Validation} *)
 

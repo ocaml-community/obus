@@ -14,7 +14,7 @@ include OBus_peer.Private
 val daemon : unit -> t Lwt.t
   (** [daemon ()] returns the peer object for the upower daemon *)
 
-exception General_error of string
+exception General_error
 
 (** {6 Methods} *)
 
@@ -36,10 +36,10 @@ val device_added : t -> UPower_device.t OBus_signal.t
 
 (** {6 Properties} *)
 
-val lid_is_present : t -> bool OBus_property.rw
-val lid_is_closed : t -> bool OBus_property.rw
-val on_low_battery : t -> bool OBus_property.rw
-val on_battery : t -> bool OBus_property.rw
+val lid_is_present : t -> bool OBus_property.r
+val lid_is_closed : t -> bool OBus_property.r
+val on_low_battery : t -> bool OBus_property.r
+val on_battery : t -> bool OBus_property.r
 val can_hibernate : t -> bool OBus_property.r
 val can_suspend : t -> bool OBus_property.r
 val daemon_version : t -> string OBus_property.r

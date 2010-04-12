@@ -9,11 +9,10 @@
 
 let section = Lwt_log.Section.make "obus(connection)"
 
-open Printf
+open Lwt
 open OBus_message
 open OBus_private_connection
 open OBus_value
-open Lwt
 
 exception Connection_closed
 exception Connection_lost
@@ -74,15 +73,9 @@ let send_message_backend connection reply_waiter_opt message =
           (false, true)
     in
     if send_it then begin
-      let message = { message with
-                        (* Duplicate file descriptors. If we do not do
-                           it now, the user may closes them before the
-                           connection's transport is flushed. *)
-                        body = OBus_value.sequence_dup message.body;
-                        serial = running.running_next_serial } in
+      let message = { message with serial = running.running_next_serial } in
       match apply_filters "outgoing" message running.running_outgoing_filters with
         | None ->
-            OBus_value.sequence_close message.body;
             lwt () = Lwt_log.debug ~section "outgoing message dropped by filters" in
             fail (Failure "message dropped by filters")
 
@@ -126,9 +119,6 @@ let send_message_backend connection reply_waiter_opt message =
                      message stream is broken *)
                   lwt exn = connection#set_crash (Transport_error exn) in
                   fail exn
-            finally
-              OBus_value.sequence_close message.body;
-              return ()
     end else
       match connection#get with
         | Crashed exn ->
@@ -157,21 +147,13 @@ let send_reply connection { sender = sender; serial = serial } body =
                             typ = Method_return(serial);
                             body = body }
 
-let send_error connection { sender = sender; serial = serial } name msg =
+let send_error connection { sender = sender; serial = serial } key msg =
   send_message connection { destination = sender;
                             sender = None;
                             flags = { no_reply_expected = true; no_auto_start = true };
                             serial = 0l;
-                            typ = Error(serial, name);
-                            body = [basic(String msg)] }
-
-let send_exn connection method_call exn =
-  match OBus_error.cast exn with
-    | Some(name, msg) ->
-        send_error connection method_call name msg
-    | None ->
-        lwt () = Lwt_log.error ~section ~exn "sending an unregistred ocaml exception as a D-Bus error" in
-        send_error connection method_call "ocaml.Exception" (Printexc.to_string exn)
+                            typ = Error(serial, OBus_error.name_of_exn key);
+                            body = [V.basic_string msg] }
 
 (* +-----------------------------------------------------------------+
    | Signal matching                                                 |
@@ -230,10 +212,10 @@ let dispatch_message connection running message = match message with
               Lwt_log.debug_f ~section "reply to message with serial %ld dropped%s"
                 reply_serial (match message with
                                 | { typ = Error(_, error_name) } ->
-                                    sprintf ", the reply is the error: %S: %S"
+                                    Printf.sprintf ", the reply is the error: %S: %S"
                                       error_name
                                       (match message.body with
-                                         | Basic (String x) :: _ -> x
+                                         | V.Basic (V.String x) :: _ -> x
                                          | _ -> "")
                                 | _ ->
                                     "")
@@ -245,192 +227,190 @@ let dispatch_message connection running message = match message with
         | None, _ ->
             (* If this is a peer-to-peer connection, we do not match
                on the sender *)
-              begin match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
+            begin match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
+              | Some receiver_group ->
+                  Lwt_sequence.iter_l
+                    (fun receiver ->
+                       if receiver.receiver_active && receiver.receiver_filter message then
+                         try
+                           receiver.receiver_push (make_context connection message)
+                         with exn ->
+                           ignore (Lwt_log.error ~section ~exn "signal event failed with"))
+                    receiver_group.receiver_group_receivers
+              | None ->
+                  ()
+            end
+
+        | Some _, None ->
+            ignore (Lwt_log.error_f ~section "signal without sender received from message bus")
+
+        | Some _, Some sender ->
+            begin match sender, message with
+
+              (* Internal handling of "NameOwnerChange" messages for
+                 name resolving. *)
+              | "org.freedesktop.DBus",
+                { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
+                  body = [V.Basic(V.String name); V.Basic(V.String old_owner); V.Basic(V.String new_owner)] } ->
+
+                  let owner = if new_owner = "" then None else Some new_owner in
+
+                  if OBus_name.is_unique name && owner = None then
+                    (* If the resovler was monitoring a unique name
+                       and it is not owned anymore, this means that
+                       the peer with this name has exited. We
+                       remember this information here. *)
+                    OBus_cache.add running.running_exited_peers name;
+
+                  begin match try Some(Name_map.find name running.running_resolvers) with Not_found -> None with
+                    | Some resolver ->
+                        ignore (
+                          Lwt_log.debug_f ~section "updating internal name resolver: %S -> %S"
+                            name
+                            (match owner with
+                               | Some n -> n
+                               | None -> "")
+                        );
+
+                        resolver.resolver_set owner;
+
+                        begin
+                          match resolver.resolver_state with
+                            | Resolver_init(waiter, wakener) ->
+                                (* The resolver has not yet been
+                                   initialized; this means that the
+                                   reply to GetNameOwner (done by
+                                   [OBus_resolver.make]) has not yet
+                                   been received. We consider that
+                                   this first signal has precedence
+                                   and terminate initialization. *)
+                                resolver.resolver_state <- Resolver_running;
+                                Lwt.wakeup wakener resolver
+                            | Resolver_running ->
+                                ()
+                        end
+
+                    | None ->
+                        ()
+                  end
+
+              (* Internal handling of "NameAcquired" signals *)
+              | ("org.freedesktop.DBus",
+                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
+                   body = [V.Basic(V.String name)] })
+
+                  (* Only handle signals destined to us *)
+                  when message.destination = running.running_name ->
+
+                  running.running_set_acquired_names (Name_set.add name (React.S.value running.running_acquired_names))
+
+              (* Internal handling of "NameLost" signals *)
+              | ("org.freedesktop.DBus",
+                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameLost");
+                   body = [V.Basic(V.String name)] })
+
+                  (* Only handle signals destined to us *)
+                  when message.destination = running.running_name ->
+
+                  running.running_set_acquired_names (Name_set.remove name (React.S.value running.running_acquired_names))
+
+              | _ ->
+                  ()
+            end;
+
+            (* Only handle signals broadcasted or destined to us *)
+            if message.destination = None || message.destination = running.running_name then
+              match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
                 | Some receiver_group ->
                     Lwt_sequence.iter_l
                       (fun receiver ->
-                         if receiver.receiver_active && receiver.receiver_filter message then
+                         if receiver.receiver_active && match_sender receiver message && receiver.receiver_filter message then
                            try
-                             receiver.receiver_push (running.running_wrapper, message)
+                             receiver.receiver_push (make_context connection message)
                            with exn ->
                              ignore (Lwt_log.error ~section ~exn "signal event failed with"))
                       receiver_group.receiver_group_receivers
                 | None ->
                     ()
-              end
-
-          | Some _, None ->
-              ignore (Lwt_log.error_f ~section "signal without sender received from message bus")
-
-          | Some _, Some sender ->
-              begin match sender, message with
-
-                (* Internal handling of "NameOwnerChange" messages for
-                   name resolving. *)
-                | "org.freedesktop.DBus",
-                  { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
-                    body = [Basic(String name); Basic(String old_owner); Basic(String new_owner)] } ->
-
-                    let owner = if new_owner = "" then None else Some new_owner in
-
-                    if OBus_name.is_unique name && owner = None then
-                      (* If the resovler was monitoring a unique name
-                         and it is not owned anymore, this means that
-                         the peer with this name has exited. We
-                         remember this information here. *)
-                      OBus_cache.add running.running_exited_peers name;
-
-                    begin match try Some(Name_map.find name running.running_resolvers) with Not_found -> None with
-                      | Some resolver ->
-                          ignore (
-                            Lwt_log.debug_f ~section "updating internal name resolver: %S -> %S"
-                              name
-                              (match owner with
-                                 | Some n -> n
-                                 | None -> "")
-                          );
-
-                          resolver.resolver_set owner;
-
-                          begin
-                            match resolver.resolver_state with
-                              | Resolver_init(waiter, wakener) ->
-                                  (* The resolver has not yet been
-                                     initialized; this means that the
-                                     reply to GetNameOwner (done by
-                                     [OBus_resolver.make]) has not yet
-                                     been received. We consider that
-                                     this first signal has precedence
-                                     and terminate initialization. *)
-                                  resolver.resolver_state <- Resolver_running;
-                                  Lwt.wakeup wakener resolver
-                              | Resolver_running ->
-                                  ()
-                          end
-
-                      | None ->
-                          ()
-                    end
-
-                (* Internal handling of "NameAcquired" signals *)
-                | ("org.freedesktop.DBus",
-                   { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
-                     body = [Basic(String name)] })
-
-                    (* Only handle signals destined to us *)
-                    when message.destination = running.running_name ->
-
-                    running.running_set_acquired_names (Name_set.add name (React.S.value running.running_acquired_names))
-
-                (* Internal handling of "NameLost" signals *)
-                | ("org.freedesktop.DBus",
-                   { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameLost");
-                     body = [Basic(String name)] })
-
-                    (* Only handle signals destined to us *)
-                    when message.destination = running.running_name ->
-
-                    running.running_set_acquired_names (Name_set.remove name (React.S.value running.running_acquired_names))
-
-                | _ ->
-                    ()
-              end;
-
-              (* Only handle signals broadcasted or destined to us *)
-              if message.destination = None || message.destination = running.running_name then
-                match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
-                  | Some receiver_group ->
-                      Lwt_sequence.iter_l
-                        (fun receiver ->
-                           if receiver.receiver_active && match_sender receiver message && receiver.receiver_filter message then
-                             try
-                               receiver.receiver_push (connection, message)
-                             with exn ->
-                               ignore (Lwt_log.error ~section ~exn "signal event failed with"))
-                        receiver_group.receiver_group_receivers
-                  | None ->
-                      ()
-        end
-
-    (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
-    | { typ = Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } -> begin
-        match member, body with
-          | "Ping", [] ->
-              (* Just pong *)
-              ignore (send_reply connection message [])
-          | "GetMachineId", [] ->
-              ignore
-                (try_bind (fun _ -> Lazy.force OBus_info.machine_uuid)
-                   (fun machine_uuid -> send_reply connection message [basic(string (OBus_uuid.to_string machine_uuid))])
-                   (fun exn ->
-                      lwt () = send_exn connection message (Failure "cannot get machine uuuid") in
-                      fail exn))
-          | _ ->
-              ignore (send_exn connection message (unknown_method_exn message))
       end
 
-    | { typ = Method_call(path, interface_opt, member) } ->
-        ignore begin
-          (* Look in static objects *)
-          begin
-            try
-              return (Some(Object_map.find path running.running_static_objects))
-            with Not_found ->
-              (* Look in dynamic objects *)
-              match
-                Object_map.fold
-                  (fun prefix dynamic_object acc ->
-                     match acc with
-                       | Some _ ->
-                           acc
-                       | None ->
-                           match OBus_path.after prefix path with
-                             | Some path ->
-                                 Some(path, dynamic_object)
-                             | None ->
-                                 None)
-                  running.running_dynamic_objects None
-              with
-                | None ->
-                    return None
-                | Some(path, dynamic_object) ->
-                    try_lwt
-                      lwt static_object = dynamic_object path in
-                      return (Some static_object)
-                    with exn ->
-                      lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
-                      return None
-          end >>= function
-            | Some static_object ->
-                ignore (try_lwt
-                          static_object.static_object_handle static_object.static_object_object connection message
-                        with exn ->
-                          Lwt_log.error ~section ~exn "method call handler failed with");
-                return ()
-            | None ->
-                (* Handle introspection for missing intermediate object:
+  (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
+  | { typ = Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } -> begin
+      match member, body with
+        | "Ping", [] ->
+            ignore (send_reply connection message [])
+        | "GetMachineId", [] ->
+            ignore
+              (try_bind (fun _ -> Lazy.force OBus_info.machine_uuid)
+                 (fun machine_uuid -> send_reply connection message [V.basic_string (OBus_uuid.to_string machine_uuid)])
+                 (fun exn ->
+                    lwt () = send_error connection message OBus_error.Failed "cannot get machine uuuid" in
+                    fail exn))
+        | _ ->
+            ignore (send_error connection message OBus_error.Unknown_method (unknown_method_message message))
+    end
 
-                   for example if we have only one exported object with
-                   path "/a/b/c", we need to add introspection support
-                   for virtual objects with path "/", "/a", "/a/b",
-                   "/a/b/c". *)
-                if match interface_opt, member with
-                  | None, "Introspect"
-                  | Some "org.freedesktop.DBus.Introspectable", "Introspect" ->
-                      begin match children running path with
-                        | [] ->
-                            true
-                        | children ->
-                            ignore (send_reply connection message [OBus_value.sstring (introspection children)]);
-                            false
-                      end
-                  | _ ->
-                      true
-                then
-                  ignore (send_exn connection message
-                            (Failure (sprintf "No such object: %S" (OBus_path.to_string path))));
-                return ()
-        end
+  | { typ = Method_call(path, interface_opt, member); body = body } ->
+      ignore begin
+        (* Look in static objects *)
+        begin
+          try
+            return (Some(Object_map.find path running.running_static_objects))
+          with Not_found ->
+            (* Look in dynamic objects *)
+            match
+              Object_map.fold
+                (fun prefix dynamic_object acc ->
+                   match acc with
+                     | Some _ ->
+                         acc
+                     | None ->
+                         match OBus_path.after prefix path with
+                           | Some path ->
+                               Some(path, dynamic_object)
+                           | None ->
+                               None)
+                running.running_dynamic_objects None
+            with
+              | None ->
+                  return None
+              | Some(path, dynamic_object) ->
+                  try_lwt
+                    lwt static_object = dynamic_object path in
+                    return (Some static_object)
+                  with exn ->
+                    lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
+                    return None
+        end >>= function
+          | Some static_object ->
+              ignore (try_lwt
+                        static_object.static_object_handle connection message
+                      with exn ->
+                        Lwt_log.error ~section ~exn "method call handler failed with");
+              return ()
+          | None ->
+              (* Handle introspection for missing intermediate object:
+
+                 for example if we have only one exported object with
+                 path "/a/b/c", we need to add introspection support
+                 for virtual objects with path "/", "/a", "/a/b",
+                 "/a/b/c". *)
+              if match interface_opt, member, body with
+                | None, "Introspect", []
+                | Some "org.freedesktop.DBus.Introspectable", "Introspect", [] -> begin
+                    match children running path with
+                      | [] ->
+                          true
+                      | children ->
+                          ignore (send_reply connection message [V.basic_string (introspection children)]);
+                          false
+                  end
+                | _ ->
+                    true
+              then
+                ignore (Printf.ksprintf (send_error connection message OBus_error.Failed) "No such object: %S" (OBus_path.to_string path));
+              return ()
+      end
 
 let read_dispatch connection running =
   lwt message =
@@ -450,7 +430,7 @@ let read_dispatch connection running =
         return ()
     | Some message ->
         let result = try dispatch_message connection running message; None with exn -> Some exn in
-        OBus_value.sequence_close message.body;
+        OBus_value.V.sequence_close message.body;
         match result with
           | None ->
               return ()

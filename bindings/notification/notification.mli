@@ -12,16 +12,6 @@
 (** For complete details about notifications,
     @see <http://www.galago-project.org/specs/notification/> the official specifications *)
 
-(** Server informations *)
-type server_info = {
-  server_name : string;
-  server_vendor : string;
-  server_version : string;
-  server_spec_version : string;
-}
-
-val obus_server_info : server_info OBus_type.sequence
-
 val app_name : string ref
   (** Application name used for notification. The default value is
       taken from [Sys.argv.(0)] *)
@@ -29,6 +19,28 @@ val app_name : string ref
 val desktop_entry : string option ref
   (** If the application has a desktop entry, it can be specified
       here *)
+
+(** {6 Operations on notifications} *)
+
+(** Type of an opened notifications *)
+type 'a t
+
+val result : 'a t -> 'a Lwt.t
+  (** Waits for a notification to be closed then returns:
+
+      - [`Closed] if the user clicked on the cross, timeout was
+      reached or the notification daemon exited
+
+      - [`Default] if the default action was invoked, i.e. the user
+      clicked on the notification, but not on a buttons
+
+      - the corresponding action if the user clicked on a button other
+      than the cross *)
+
+val close : 'a t -> unit Lwt.t
+  (** Close the notification now *)
+
+(** {6 Opening notifications} *)
 
 type urgency = [ `Low | `Normal | `Critical ]
     (** Urgency level of popups *)
@@ -44,48 +56,22 @@ type image = {
   img_data : string;
 }
 
-val obus_image : image OBus_type.container
-
-(** Type of notification id *)
-type id
-
-(** Type of opened notifications *)
-class type ['a] t = object
-  method result : 'a Lwt.t
-    (** Wait for a notification to be closed then return:
-
-        - [`Closed] if the user clicked on the cross, timeout was
-        reached or the notification daemon exited
-
-        - [`Default] if the default action was invoked, i.e. the user
-        clicked on the notification, but not on a buttons
-
-        - the corresponding action if the user clicked on a button
-        other than the cross *)
-
-  method close : unit Lwt.t
-    (** Close the notification now *)
-
-  method id : id
-    (** Identifier for the notification *)
-end
-
 val notify :
-  ?app_name:string ->
-  ?desktop_entry:string ->
-  ?replace:_ t ->
-  ?icon:string ->
-  ?image:image ->
-  summary:string ->
-  ?body:string ->
-  ?actions:(string * ([> `Default | `Closed ] as 'a)) list ->
-  ?urgency:urgency ->
-  ?category:string ->
-  ?sound_file:string ->
-  ?suppress_sound:bool ->
-  ?pos:int * int ->
-  ?hints:(string * OBus_value.single) list ->
-  ?timeout:int ->
+  ?app_name : string ->
+  ?desktop_entry : string ->
+  ?replace : _ t ->
+  ?icon : string ->
+  ?image : image ->
+  summary : string ->
+  ?body : string ->
+  ?actions : (string * ([> `Default | `Closed ] as 'a)) list ->
+  ?urgency : urgency ->
+  ?category : string ->
+  ?sound_file : string ->
+  ?suppress_sound : bool ->
+  ?pos : int * int ->
+  ?hints : (string * OBus_value.V.single) list ->
+  ?timeout : int ->
   unit -> 'a t Lwt.t
   (** Open a notification.
 
@@ -112,6 +98,16 @@ val notify :
       - [hints] is a list of additionnal hints
       - [timeout] is a timeout in millisecond
   *)
+
+(** {6 Informations} *)
+
+(** Server informations *)
+type server_info = {
+  server_name : string;
+  server_vendor : string;
+  server_version : string;
+  server_spec_version : string;
+}
 
 val get_server_information : unit -> server_info Lwt.t
   (** Retreive server informations *)

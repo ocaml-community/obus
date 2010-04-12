@@ -48,15 +48,11 @@ module Name_set = String_set
 
 (* Type of static object *)
 type static_object = {
-  static_object_object : OBus_pack.t;
-  (* The object itself. It is packed because we cannot put the real
-     type here (this requires existential types). *)
-
-  static_object_handle : OBus_pack.t -> t -> OBus_message.t -> unit Lwt.t;
+  static_object_handle : t -> OBus_message.t -> unit Lwt.t;
   (* The method call handler *)
 
   static_object_connection_closed : t -> unit;
-  (* Hook for when a connection is closed *)
+  (* Hook for when the connection is closed *)
 }
 
 (* Type of a dynamic node, which creates object on the fly when
@@ -141,7 +137,7 @@ and receiver = {
   (* Message filtering. It is used to filter on message body if the
      user defined argument filters. *)
 
-  receiver_push : t * OBus_message.t -> unit;
+  receiver_push : unit context -> unit;
   (* Function used to send new events *)
 }
 
@@ -157,6 +153,12 @@ and receiver_group = {
 
   receiver_group_receivers : receiver Lwt_sequence.t;
   (* The set of signal receivers on this grouup *)
+
+  receiver_group_connection : t;
+  receiver_group_path : OBus_path.t;
+  receiver_group_interface : OBus_name.interface;
+  receiver_group_member : OBus_name.member;
+  (* Informations shared by all receivers of the group *)
 }
 
 (* +-----------------------------------------------------------------+
@@ -164,32 +166,33 @@ and receiver_group = {
    +-----------------------------------------------------------------+ *)
 
 (* We keep properties on the message bus to allow caching when asked
-   or needed. Caching is set up when a property is being monitored. *)
+   or needed. *)
 
-(* State of a property *)
-and property_state =
-  | Property_simple
+(* State of a property group *)
+and property_group_state =
+  | Property_group_simple
       (* The property is not monitored *)
-  | Property_monitor of notifier Lwt.t
-      (* The property is monitored. The argument is the thread which
-         will returns the notifier when it becomes ready. *)
-  | Property_cached of notify_data Lwt.t
+  | Property_group_monitor of notifier Lwt.t
+      (* Properties of the interface are being monitored. The argument
+         is the thread which will returns the notifier when it becomes
+         ready. *)
+  | Property_group_cached of notify_data Lwt.t
       (* The properties are cached until the next iteration of the
          main loop *)
 
 (* Type of all properties of an interface *)
-and property = {
-  mutable property_ref_count : int;
+and property_group = {
+  mutable property_group_ref_count : int;
   (* How many user properties (of type OBus_property.t) are using this
-     property ? *)
+     property group ? *)
 
-  mutable property_state : property_state;
+  mutable property_group_state : property_group_state;
 
+  property_group_connection : t;
+  property_group_owner : OBus_name.bus option;
+  property_group_path : OBus_path.t;
+  property_group_interface : OBus_name.interface;
   (* Property parameters *)
-  property_connection : t;
-  property_owner : OBus_name.bus option;
-  property_path : OBus_path.t;
-  property_interface : OBus_name.interface;
 }
 
 (* Type of a property notifier. It should contains the state of all
@@ -203,9 +206,20 @@ and notifier = {
   (* Stop the notifier *)
 }
 
-and notify_data = ((t * OBus_message.t) * OBus_value.single) String_map.t
+and notify_data = (unit context * OBus_value.V.single) String_map.t
     (* Mapping from member names to the context in which the property
        was received and the proeprty current value *)
+
+(* +-----------------------------------------------------------------+
+   | Contexts                                                        |
+   +-----------------------------------------------------------------+ *)
+
+and 'a context = {
+  context_connection : t;
+  context_message : OBus_message.t;
+  context_arguments : 'a OBus_value.arguments;
+  mutable context_replied : bool;
+}
 
 (* +-----------------------------------------------------------------+
    | Connection                                                      |
@@ -287,7 +301,7 @@ and running = {
   mutable running_receiver_groups : receiver_group Signal_map.t;
   (* Mapping (inteface, member, path) -> set of signal receivers *)
 
-  mutable running_properties : property Property_map.t;
+  mutable running_properties : property_group Property_map.t;
   (* Mapping holding all properties currently in use *)
 
   running_wrapper : t;
@@ -319,20 +333,16 @@ and t = <
    +-----------------------------------------------------------------+ *)
 
 (* The exception that must be raised when a method is unknown *)
-let unknown_method_exn message = match message with
-  | { OBus_message.typ = OBus_message.Method_call(path, interface_opt, member) } ->
-      let signature = OBus_value.string_of_signature
-        (OBus_value.type_of_sequence (OBus_message.body message)) in
-      begin match interface_opt with
-        | Some interface ->
-            OBus_error.Unknown_method
-              (Printf.sprintf "Method %S with signature %S on interface %S doesn't exist"
-                 member signature interface)
-        | None ->
-            OBus_error.Unknown_method
-              (Printf.sprintf "Method %S with signature %S doesn't exist"
-                 member signature)
-      end
+let unknown_method_message message = match message with
+  | { OBus_message.typ = OBus_message.Method_call(path, Some interface, member); OBus_message.body = body } ->
+      Printf.sprintf "Method %S with siganture %S on interface %S doesn't exist"
+        member
+        (OBus_value.string_of_signature (OBus_value.V.type_of_sequence body))
+        interface
+  | { OBus_message.typ = OBus_message.Method_call(path, None, member); OBus_message.body = body } ->
+      Printf.sprintf "Method %S with signature %S doesn't exist"
+        member
+        (OBus_value.string_of_signature (OBus_value.V.type_of_sequence body))
   | _ ->
       invalid_arg "OBus_private_connection.unknown_mehtod_exn"
 
@@ -359,3 +369,10 @@ let check_connection connection =
         raise exn
     | Running running ->
         ()
+
+let make_context connection message = {
+  context_connection = connection;
+  context_message = message;
+  context_arguments = OBus_value.arg0;
+  context_replied = false;
+}

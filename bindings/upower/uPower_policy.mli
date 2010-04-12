@@ -58,4 +58,4 @@ val set_minimum_latency : UPower.t -> latency : latency -> value : int -> unit L
 (** {6 Signals} *)
 
 val requests_changed : UPower.t -> unit OBus_signal.t
-val latency_changed : UPower.t -> (latency * bool) OBus_signal.t
+val latency_changed : UPower.t -> (latency * int) OBus_signal.t

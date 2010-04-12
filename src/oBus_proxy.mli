@@ -21,255 +21,54 @@ type t = {
   (** Path of the object on the peer *)
 }
 
-val obus_t : t OBus_type.basic
-  (** The type combinator for proxies *)
+val compare : t -> t -> int
+  (** Same as [Pervasives.compare]. It allows this module to be used
+      as argument to the functors [Set.Make] and [Map.Make]. *)
 
 val make : peer : OBus_peer.t -> path : OBus_path.t -> t
   (** Creates a proxy from the given peer and path *)
 
-(** Note: if you are just interested in the event, it is safe to
-    write:
-
-    {[
-      (OBus_proxy.connect ...)#event
-    ]}
-
-    The signal is automatically disconnected when the event is garbage
-    collected *)
-
-(** Interface definition *)
-module Interface : sig
-
-  (** This module allow you to easily define members of a D-Bus
-      interface. It is aimed to be used in conjunction with the
-      [obus.syntax] syntax extension.
-
-      Here is a typical example:
-
-      {[
-        let op_interface = OBus_proxy.make_interface "org.foo.bar"
-
-        OP_method Foo : int -> int
-        OP_method Bar : strign -> unit
-        ...
-      ]}
-
-      where [OP_xxx] stands for "OBus Proxy xxx".
-
-      Note that interface contained in XML introspection files can be
-      automatically converted with [obus-binder] *)
-
-  type 'proxy t
-    (** Type of an interface. ['proxy] is the type of proxies used. *)
-
-  val name : 'proxy t -> OBus_name.interface
-    (** Name of the interface *)
-
-  val method_call : 'proxy t -> OBus_name.member -> ('a, 'b Lwt.t, 'b) OBus_type.func -> 'proxy -> 'a
-    (** [method_call iface member typ] defines a method call.
-
-        A method call definition looks like:
-
-        {[
-          let caml_name = OBus_proxy.Interface.method_call obus_proxy_interface "DBusName" method_call_type
-        ]}
-
-        Or even simpler, with the syntax extension:
-
-        {[
-          OP_method DBusName : method_call_type
-        ]}
-      *)
-
-  val signal : 'proxy t -> OBus_name.member -> ('a, _) OBus_type.cl_sequence -> 'proxy -> 'a OBus_signal.t
-    (** [signal iface member typ] defines a signal.
-
-        A signal defintion looks like:
-
-        {[
-          let caml_name = OBus_proxy.Interface.signal obus_proxy_interface "DBusName" signal_type
-        ]}
-
-        Or, with the syntax extension:
-
-        {[
-          OP_signal DBusName : signal_type
-        ]}
-    *)
-
-  val  property : 'proxy t -> OBus_name.member -> 'access OBus_property.access -> ('a, _) OBus_type.cl_single -> 'proxy -> ('a, 'access) OBus_property.t
-    (** [property member typ] defines a property.
-
-        A property definition looks like:
-
-        {[
-          let set_caml_name = OBus_proxy.Interface.property obus_proxy_interface access "DBusName" property_type
-        ]}
-
-        With the syntax extension, read-only properties
-        (resp. write-only properties, resp. read and write properties)
-        can be defined like this:
-
-        {[
-          OP_property_r DBusName : property_type
-          OP_property_w DBusName : property_type
-          OP_property_rw DBusName : property_type
-        ]}
-    *)
-end
-
-(** Proxy signature *)
-module type S = sig
-
-  type proxy
-    (** Type of proxy objects *)
-
-  val obus_proxy : proxy OBus_type.basic
-    (** Type combinator for this proxy type *)
-
-  type broken = proxy
-    (** Type of broken proxies. See {!obus_broken}. *)
-
-  val obus_broken : broken OBus_type.basic
-    (** Same as {!OBus_pervasives.obus_broken_path} but for proxies *)
-
-  val make_interface : ?notify : OBus_property.notify_mode -> OBus_name.interface -> proxy Interface.t
-    (** [make_interface ?notify name] create an interface using
-        proxies of type {!proxy}.
-
-        @param notify indicates how property changes are announced.
-    *)
-
-  (** {6 Informations} *)
-
-  val peer : proxy -> OBus_peer.t
-    (** Returns the peer pointed by a proxy *)
-
-  val path : proxy -> OBus_path.t
-    (** Returns the path of a proxy *)
-
-  val connection : proxy -> OBus_connection.t
-    (** [connection proxy = OBus_peer.connection (peer proxy)] *)
-
-  val name : proxy -> OBus_name.bus option
-    (** [connection proxy = OBus_peer.name (peer proxy)] *)
-
-  (** {6 Introspection} *)
-
-  val introspect : proxy -> OBus_introspect.document Lwt.t
-    (** Introspect the given proxy *)
-
-  (** {6 Method calls} *)
-
-  val call : proxy ->
-    ?interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    ('a, 'b Lwt.t, 'b) OBus_type.func -> 'a
-    (** Call a method of the given proxy *)
-
-  val call_no_reply : proxy ->
-    ?interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    ('a, unit Lwt.t, unit) OBus_type.func -> 'a
-    (** Same as call but do not wait for a reply *)
-
-  val dyn_call : proxy ->
-    ?interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    OBus_message.body ->
-    OBus_message.body Lwt.t
-    (** Use only dynamically typed values *)
-
-  val dyn_call_no_reply : proxy ->
-    ?interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    OBus_message.body -> unit Lwt.t
-
-  (** {6 Signals} *)
-
-  val connect : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    ('a, _) OBus_type.cl_sequence -> 'a OBus_signal.t
-    (** [connect proxy ~interface ~member typ] connect to given signals
-        emitted by [proxy]. *)
-
-  val dyn_connect : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member -> OBus_value.sequence OBus_signal.t
-    (** Same thing but return signals as a dynamically typed values *)
-
-  val raw_connect : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member -> OBus_message.t OBus_signal.t
-    (** Same thing but return raw D-Bus messages *)
-
-  (** {6 Properties} *)
-
-  (** {8 Property creation} *)
-
-  val property : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    access : 'access OBus_property.access ->
-    ?notify : OBus_property.notify_mode ->
-    ('a, _) OBus_type.cl_single -> ('a, 'access) OBus_property.t
-
-  val dyn_property : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    access : 'access OBus_property.access ->
-    ?notify : OBus_property.notify_mode -> unit -> (OBus_value.single, 'access) OBus_property.t
-
-  (** {8 Direct access to properties} *)
-
-  val get : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    ('a, _) OBus_type.cl_single -> 'a Lwt.t
-    (** [get proxy ~interface ~member typ] reads the value of the
-        property of [proxy] described by [interface] and [member] *)
-
-  val set : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    ('a, _) OBus_type.cl_single -> 'a -> unit Lwt.t
-    (** [get proxy ~interface ~member typ value] writes the value of
-        the property of [proxy] described by [interface] and
-        [member] *)
-
-  val get_all : proxy -> interface : OBus_name.interface -> OBus_value.single Map.Make(String).t Lwt.t
-    (** [get_all proxy ~interface] returns the value of all properties
-        of [proxy] for [interface] *)
-
-  val dyn_get : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member -> OBus_value.single Lwt.t
-
-  val dyn_set : proxy ->
-    interface : OBus_name.interface ->
-    member : OBus_name.member ->
-    OBus_value.single -> unit Lwt.t
-end
-
-(** The default proxy implementation *)
-include S with type proxy = t
-
-(** Custom proxy type: *)
-module type Custom = sig
-  type proxy
-    (** Type of custom proxy objects *)
-
-  val cast : proxy -> t
-    (** Returns the underlying obus proxy *)
-
-  val make : t -> proxy
-    (** Create a custom proxy from the given proxy. This function is
-        only used in the type combinator. *)
-end
-
-module Make(Proxy : Custom) : S with type proxy = Proxy.proxy
-  (** [Make(Proxy)] creates a custom proxy module *)
+(** {6 Informations} *)
+
+val peer : t -> OBus_peer.t
+  (** Returns the peer pointed by a proxy *)
+
+val path : t -> OBus_path.t
+  (** Returns the path of a proxy *)
+
+val connection : t -> OBus_connection.t
+  (** [connection proxy = OBus_peer.connection (peer proxy)] *)
+
+val name : t -> OBus_name.bus option
+  (** [connection proxy = OBus_peer.name (peer proxy)] *)
+
+val introspect : t -> OBus_introspect.document Lwt.t
+  (** [introspect proxy] introspects the given proxy *)
+
+(** {6 Method calls} *)
+
+val call : t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  i_args : 'a OBus_value.C.sequence ->
+  o_args : 'b OBus_value.C.sequence -> 'a -> 'b Lwt.t
+  (** [call proxy ~interface ~member ~i_args ~o_args args] calls the
+      given method on the given proxy and wait for the reply. *)
+
+val call_with_context : t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  i_args : 'a OBus_value.C.sequence ->
+  o_args : 'b OBus_value.C.sequence -> 'a -> (unit OBus_context.t * 'b) Lwt.t
+  (** [call_with_context] is like {!call} except that is also returns
+      the context of the method return *)
+
+val call_no_reply : t ->
+  interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  i_args : 'a OBus_value.C.sequence -> 'a -> unit Lwt.t
+  (** [call_no_reply] is the same as {!call} except that it does not
+      wait for a reply *)
 
 (** {6 Private proxies} *)
 
@@ -277,14 +76,11 @@ module Make(Proxy : Custom) : S with type proxy = Proxy.proxy
     for using private proxies. A private proxy is just a bormal proxy
     but defined as a private type, to avoid incorrect use. *)
 
+type proxy = t
+
 (** Minimal interface of private proxies *)
 module type Private = sig
   type t = private proxy
-  val obus_t : t OBus_type.basic
-
-  type broken = t
-  val obus_broken : broken OBus_type.basic
-
   external of_proxy : proxy -> t = "%identity"
   external to_proxy : t -> proxy = "%identity"
 end
@@ -292,11 +88,6 @@ end
 (** Minimal implementation of private proxies *)
 module Private : sig
   type t = proxy
-  val obus_t : t OBus_type.basic
-
-  type broken = t
-  val obus_broken : broken OBus_type.basic
-
   external of_proxy : proxy -> t = "%identity"
   external to_proxy : t -> proxy = "%identity"
 end
