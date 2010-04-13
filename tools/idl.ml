@@ -24,23 +24,27 @@ let interfaces = Gram.Entry.mk "interfaces"
 EXTEND Gram
   GLOBAL: interfaces;
 
+  ident:
+    [ [ n = LIDENT -> n
+      | n = UIDENT -> n ] ];
+
   interfaces:
     [ [ l = LIST0 interface -> l ] ];
 
   interface:
-    [ [ LIDENT "interface"; name = a_STRING; "{"; members = LIST0 member; "}" ->
+    [ [ LIDENT "interface"; name = STRING; "{"; members = LIST0 member; "}" ->
           (name, members, []) ] ];
 
   member:
-    [ [ "method"; name = a_ident; ":"; i_args = arguments; "->"; o_args = arguments ->
+    [ [ "method"; name = ident; ":"; i_args = arguments; "->"; o_args = arguments ->
           Method(name, i_args, o_args, [])
-      | LIDENT "signal"; name = a_ident; ":"; args = arguments ->
+      | LIDENT "signal"; name = ident; ":"; args = arguments ->
           Signal(name, args, [])
-      | LIDENT "property"; "."; LIDENT "r"; name = a_ident; ":"; typ = single_type ->
+      | LIDENT "property"; "."; LIDENT "r"; name = ident; ":"; typ = single_type ->
           Property(name, typ, Read, [])
-      | LIDENT "property"; "."; LIDENT "w"; name = a_ident; ":"; typ = single_type ->
+      | LIDENT "property"; "."; LIDENT "w"; name = ident; ":"; typ = single_type ->
           Property(name, typ, Write, [])
-      | LIDENT "property"; "."; LIDENT "rw"; name = a_ident; ":"; typ = single_type ->
+      | LIDENT "property"; "."; LIDENT "rw"; name = ident; ":"; typ = single_type ->
           Property(name, typ, Read_write, [])
       ] ];
 
@@ -48,7 +52,7 @@ EXTEND Gram
     [ [ "("; l = LIST0 argument SEP ","; ")" -> l ] ];
 
   argument:
-    [ [ name = a_ident; ":"; typ = single_type -> (Some name, typ) ] ];
+    [ [ name = ident; ":"; typ = single_type -> (Some name, typ) ] ];
 
   single_type:
     [ [ t = basic_type -> T.Basic t

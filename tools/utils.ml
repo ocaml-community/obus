@@ -27,7 +27,11 @@ let parse_xml fname =
         exit 1
 
 let parse_idl fname =
-  List.fold_left (fun acc iface -> IFSet.add iface acc) IFSet.empty (Idl.parse fname)
+  try
+    List.fold_left (fun acc iface -> IFSet.add iface acc) IFSet.empty (Idl.parse fname)
+  with exn ->
+    Format.eprintf "@[<v0>%a@]@." Camlp4.ErrorHandler.print exn;
+    exit 1
 
 let parse_file fname =
   if Filename.check_suffix fname ".obus" then

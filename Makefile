@@ -145,8 +145,8 @@ install: prefix install-libs
 	install -vm 755 _build/tools/obus_gen_interface.best $(PREFIX)/bin/obus-gen-interface
 	install -vm 755 _build/tools/obus_gen_client.best $(PREFIX)/bin/obus-gen-client
 	install -vm 755 _build/tools/obus_gen_server.best $(PREFIX)/bin/obus-gen-server
-	install -vm 755 _build/tools/obus_gen_server.best $(PREFIX)/bin/obus-xml2idl
-	install -vm 755 _build/tools/obus_gen_server.best $(PREFIX)/bin/obus-idl2xml
+	install -vm 755 _build/tools/obus_xml2idl.best $(PREFIX)/bin/obus-xml2idl
+	install -vm 755 _build/tools/obus_idl2xml.best $(PREFIX)/bin/obus-idl2xml
 	mkdir -p $(PREFIX)/share/doc/obus/examples
 	mkdir -p $(PREFIX)/share/doc/obus/html
 	mkdir -p $(PREFIX)/share/doc/obus/scripts
@@ -160,8 +160,8 @@ install: prefix install-libs
 	install -vm 755 _build/man/obus-gen-interface.1.gz $(PREFIX)/share/man/man1
 	install -vm 755 _build/man/obus-gen-client.1.gz $(PREFIX)/share/man/man1
 	install -vm 755 _build/man/obus-gen-server.1.gz $(PREFIX)/share/man/man1
-	install -vm 755 _build/man/obus-gen-server.1.gz $(PREFIX)/share/man/man1
-	install -vm 755 _build/man/obus-gen-server.1.gz $(PREFIX)/share/man/man1
+	install -vm 755 _build/man/obus-xml2idl.1.gz $(PREFIX)/share/man/man1
+	install -vm 755 _build/man/obus-idl2xml.1.gz $(PREFIX)/share/man/man1
 
 .PHONY: uninstall
 uninstall: prefix uninstall-libs
@@ -178,8 +178,8 @@ uninstall: prefix uninstall-libs
 	rm -vf $(PREFIX)/share/man/man1/obus-gen-interface.1.gz
 	rm -vf $(PREFIX)/share/man/man1/obus-gen-client.1.gz
 	rm -vf $(PREFIX)/share/man/man1/obus-gen-server.1.gz
-	rm -vf $(PREFIX)/share/man/man1/obus-gen-server.1.gz
-	rm -vf $(PREFIX)/share/man/man1/obus-gen-server.1.gz
+	rm -vf $(PREFIX)/share/man/man1/obus-xml2idl.1.gz
+	rm -vf $(PREFIX)/share/man/man1/obus-idl2xml.1.gz
 
 .PHONY: reinstall
 reinstall: uninstall install

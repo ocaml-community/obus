@@ -37,10 +37,8 @@
 # Packages used by syntax extensons:
 <syntax/*>: pkg_camlp4.lib
 
-# The IDL parser uses camlp4:
-<tools/idl.*>: pkg_camlp4.lib
-<tools/obus_xml2idl.*>: pkg_dynlink, use_camlp4_full
-<tools/obus_idl2xml.*>: pkg_dynlink, use_camlp4_full
+# Tools use the IDL parser which requires camlp4:
+<tools/*>: pkg_camlp4.lib
 
 # Common dependencies:
 <**/*>: pkg_lwt.unix, pkg_lwt.react, pkg_xmlm

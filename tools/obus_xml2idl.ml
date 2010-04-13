@@ -7,8 +7,6 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-let module M = Camlp4OCamlParser.Make(Camlp4OCamlRevisedParser.Make(Camlp4.PreCast.Syntax)) in ()
-
 let usage_message =
   Printf.sprintf "Usage: %s <options> <file>\n\
                   Generate an obus IDL file from a D-Bus introspection file.\n\
