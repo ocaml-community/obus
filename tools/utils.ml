@@ -15,16 +15,25 @@ module IFSet = Set.Make(struct
                           let compare (n1, _, _) (n2, _, _) = String.compare n1 n2
                         end)
 
-let parse_file fname =
+let parse_xml fname =
   let ic = open_in fname in
   try
-    let interfaces, _ = OBus_introspect.input (Xmlm.make_input ~strip:true (`Channel ic)) in
+    let interfaces, _ = OBus_introspect.input (Xmlm.make_input ~entity:(fun _ -> Some "") ~strip:true (`Channel ic)) in
     close_in ic;
     List.fold_left (fun acc iface -> IFSet.add iface acc) IFSet.empty interfaces
   with
     | OBus_introspect.Parse_failure((line, column), msg) ->
         Printf.eprintf "%s:%d:%d: %s.\n%!" fname line column msg;
         exit 1
+
+let parse_idl fname =
+  List.fold_left (fun acc iface -> IFSet.add iface acc) IFSet.empty (Idl.parse fname)
+
+let parse_file fname =
+  if Filename.check_suffix fname ".obus" then
+    parse_idl fname
+  else
+    parse_xml fname
 
 let file_name_of_interface_name name =
   let result = String.create (String.length name) in

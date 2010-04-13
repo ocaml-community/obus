@@ -1,0 +1,37 @@
+\" obus-idl2xml.1
+\" --------------
+\" Copyright : (c) 2010, Jeremie Dimino <jeremie@dimino.org>
+\" Licence   : BSD3
+\"
+
+.TH OBUS-IDL2XML 1 "April 2010"
+
+.SH NAME
+obus-idl2xml \- convert an obus IDL file into a  D-Bus introspection one
+
+.SH SYNOPSIS
+.B obus-idl2xml
+[
+.I options
+]
+.I input-file
+
+.SH DESCRIPTION
+
+.B obus-xml2idl
+generates a D-Bus xml introspection file from an obus IDL one
+
+.SH OPTIONS
+
+.IP "-o file-name"
+Use this name as output. It defaults to the input file name with the
+extension replaced by "xml".
+
+.IP "-help or --help"
+Display a short usage summary and exit.
+
+.SH AUTHOR
+Jérémie Dimino <jeremie@dimino.org>
+
+.SH "SEE ALSO"
+.BR obus-xml2idl.

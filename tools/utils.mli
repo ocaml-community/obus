@@ -12,6 +12,13 @@
 module IFSet : Set.S with type elt = OBus_introspect.interface
   (** Set of interfaces *)
 
+val parse_xml : string -> IFSet.t
+  (** [parse_xml file_name] parses [file_name] as an XML introspection
+      file *)
+
+val parse_idl : string -> IFSet.t
+  (** [parse_xml file_name] parses [file_name] as an obus IDL file *)
+
 val parse_file : string -> IFSet.t
   (** [parse_file file_name] parses [file_name] as an XML
       introspection file or as an IDL file (according to the file name

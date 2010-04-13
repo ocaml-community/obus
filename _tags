@@ -20,6 +20,9 @@
 <syntax/*.ml>: -pkg_lwt.syntax
 <syntax/*.ml>: -pkg_lwt.syntax.log
 
+# The IDL parser uses camlp4:
+<tools/idl.ml>: pkg_camlp4.extend
+
 # Pa_monad for the monadic xml parser:
 <src/oBus_introspect.ml>: pa_monad
 
@@ -33,6 +36,11 @@
 
 # Packages used by syntax extensons:
 <syntax/*>: pkg_camlp4.lib
+
+# The IDL parser uses camlp4:
+<tools/idl.*>: pkg_camlp4.lib
+<tools/obus_xml2idl.*>: pkg_dynlink, use_camlp4_full
+<tools/obus_idl2xml.*>: pkg_dynlink, use_camlp4_full
 
 # Common dependencies:
 <**/*>: pkg_lwt.unix, pkg_lwt.react, pkg_xmlm

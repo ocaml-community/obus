@@ -57,6 +57,8 @@ let tools = [
   "obus_gen_interface";
   "obus_gen_client";
   "obus_gen_server";
+  "obus_xml2idl";
+  "obus_idl2xml";
 ]
 
 (* Syntax extensions used internally, (tag and the byte-code file). *)
@@ -84,6 +86,7 @@ let packages = [
   "str";
   "xmlm";
   "react";
+  "dynlink";
 ]
 
 let syntaxes = [

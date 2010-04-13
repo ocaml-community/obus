@@ -145,6 +145,8 @@ install: prefix install-libs
 	install -vm 755 _build/tools/obus_gen_interface.best $(PREFIX)/bin/obus-gen-interface
 	install -vm 755 _build/tools/obus_gen_client.best $(PREFIX)/bin/obus-gen-client
 	install -vm 755 _build/tools/obus_gen_server.best $(PREFIX)/bin/obus-gen-server
+	install -vm 755 _build/tools/obus_gen_server.best $(PREFIX)/bin/obus-xml2idl
+	install -vm 755 _build/tools/obus_gen_server.best $(PREFIX)/bin/obus-idl2xml
 	mkdir -p $(PREFIX)/share/doc/obus/examples
 	mkdir -p $(PREFIX)/share/doc/obus/html
 	mkdir -p $(PREFIX)/share/doc/obus/scripts
@@ -164,6 +166,8 @@ uninstall: prefix uninstall-libs
 	rm -vf $(PREFIX)/bin/obus-gen-interface
 	rm -vf $(PREFIX)/bin/obus-gen-client
 	rm -vf $(PREFIX)/bin/obus-gen-server
+	rm -vf $(PREFIX)/bin/obus-xml2idl
+	rm -vf $(PREFIX)/bin/obus-idl2xml
 	rm -rvf $(PREFIX)/share/doc/obus
 	rm -vf $(PREFIX)/share/man/man1/obus-introspect.1.gz
 	rm -vf $(PREFIX)/share/man/man1/obus-binder.1.gz
