@@ -57,9 +57,25 @@ EXTEND Gram
   single_type:
     [ [ t = basic_type -> T.Basic t
       | t = SELF; LIDENT "array" -> T.Array t
-      | "("; tk = basic_type; ","; tv = SELF; ")"; LIDENT "dict" -> T.Dict(tk, tv)
-      | "("; tl = LIST0 single_type SEP "*"; ")"; LIDENT "structure" -> T.Structure tl
+      | "("; t = SELF; rest = dict_or_tuple -> begin
+          match rest with
+            | `Structure tl ->
+                T.Structure(t :: tl)
+            | `Dict tv ->
+                match t with
+                  | T.Basic tk ->
+                      T.Dict(tk, tv)
+                  | _ ->
+                      Loc.raise _loc (Failure "key of dictionaries must be basic types")
+        end
       | LIDENT "variant" -> T.Variant
+      ] ];
+
+  dict_or_tuple:
+    [ [ "*"; tl = LIST0 single_type SEP "*"; ")"; LIDENT "structure" ->
+          `Structure tl
+      | ","; tv = single_type; ")"; "dict" ->
+          `Dict tv
       ] ];
 
   basic_type:
