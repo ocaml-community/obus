@@ -155,6 +155,7 @@ let print_impl oc name members annotations =
        | _ ->
            ())
     members;
+  output_string oc "      ()\n";
   output_string oc "end\n"
 
 (* +-----------------------------------------------------------------+
