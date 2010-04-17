@@ -11,7 +11,7 @@
 
 (** {6 Emitting signals} *)
 
-val emit : 'a OBus_member.Signal.t -> 'a OBus_object.t -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t
+val emit : 'a OBus_member.Signal.t -> 'b OBus_object.t -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t
   (** [emit signal obj args] emit [signal] from [obj]. The
       destinations of the signal are selected as follow:
 
