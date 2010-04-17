@@ -168,7 +168,7 @@ val property_w_info : ('a, [ `writable ]) OBus_member.Property.t -> (unit OBus_c
   (** [property_w_info desc set] defines a write-only property. [set]
       is used to set the propertry contents. *)
 
-val property_rw_info : ('a, [ `readable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b member
+val property_rw_info : ('a, [ `readable | `writable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b member
   (** [property_rw_info desc get set] defines a readable and writable
       property. [get] and [set] have the same semantic as for
       {!property_r_info} and {!property_w_info}. *)

@@ -180,19 +180,15 @@ let print_intf oc name members annotations =
              (Term.print_intf true)
              (Term.T.term "React.signal" [Term.intf_of_single typ])
        | Property(name, typ, Write, annotations) ->
-           fprintf oc "    p_%s : (%a -> 'a -> %a -> unit Lwt.t) ->\n"
+           fprintf oc "    p_%s : (unit OBus_context.t -> 'a -> %a -> unit Lwt.t) ->\n"
              name
-             (Term.print_intf true)
-             (Term.T.term "OBus_context.t" [Term.intf_of_single typ])
              (Term.print_intf true)
              (Term.intf_of_single typ)
        | Property(name, typ, Read_write, annotations) ->
-           fprintf oc "    p_%s : ('a -> %a) * (%a -> 'a -> %a -> unit Lwt.t) ->\n"
+           fprintf oc "    p_%s : ('a -> %a) * (unit OBus_context.t -> 'a -> %a -> unit Lwt.t) ->\n"
              name
              (Term.print_intf true)
              (Term.T.term "React.signal" [Term.intf_of_single typ])
-             (Term.print_intf true)
-             (Term.T.term "OBus_context.t" [Term.intf_of_single typ])
              (Term.print_intf true)
              (Term.intf_of_single typ))
     members;
