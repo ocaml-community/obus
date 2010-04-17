@@ -150,7 +150,7 @@ let print_intf oc name members annotations =
                    (match access with
                       | Read -> "[ `readable ]"
                       | Write -> "[ `writable ]"
-                      | Read_write -> "[ `readable | writable ]")
+                      | Read_write -> "[ `readable | `writable ]")
                    []]))
     members;
 
