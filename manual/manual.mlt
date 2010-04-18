@@ -1,0 +1,80 @@
+(*
+ * manual.mlt
+ * ----------
+ * Copyright : (c) 2010, Jeremie Dimino <jeremie@dimino.org>
+ * Licence   : BSD3
+ *
+ * This file is a part of obus, an ocaml implementation of D-Bus.
+ *)
+
+let obus = texttt "OBus"
+let dbus = texttt "D-Bus"
+let abstract body = command \"abstract\" [(T, body)] T
+
+let doc = "
+{abstract "
+  {dbus} is an inter-processes communication protocol, or IPC for
+  short, which is becomming a standard on desktop oriented
+  computers. It is now possible to talk to a lot application using
+  {dbus} Moreover, it has many bindings/implementations for differents
+  languages, which make it easily accessible. {obus} is a pure OCaml
+  implementation of it. What makes it different from other
+  bindings/implementations is that it is the only one using
+  cooperative threads, which make it very simple to fully exploit the
+  asynchronous nature of the protocol.
+
+  {textbf "Note:"} it is advised to have some knowledge about the
+  {texttt "Lwt"} library before reading this manual.
+"}
+
+{tableofcontents}
+
+{section "Introduction"}
+
+{subsection "Overview of {obus}"}
+
+{subsubsection "Packages"}
+
+{obus} provides the folliwing packages (via {texttt "findlib"}):
+
+{itemize
+   ["{texttt "obus"}, which is the core library";
+    "{texttt "obus.hal"}, which is a binding to the Freedesktop Hal service";
+    "{texttt "obus.notification"}, which is a binding to the
+     Freedesktop pop-up notifications service"]}
+
+{subsubsection "Modules"}
+
+OBus contains 26 public modules. But do not be scared, most of the
+time you will use a very small subset of them. The modules can be
+divided in two categories:
+
+{itemize
+  ["the high-level API";
+   "the low-level API"]}
+
+{section "Basis"}
+
+{subsection "Connections and message buses"}
+
+There is two way to talk to another application speaking the D-Bus
+protocol: via a direct connection to the application or via a special
+application called a message bus. A message bus act as a router
+between several applications. On a desktop computer, there are two
+well-known instances: the system message bus, and the user session
+message bus.
+
+The first one is unique given a computer, and use security
+policies. The second is unique given a user session. Its goal is to
+allow programs running in the session to talk to each other.
+
+OBus offers have predefined connections for connecting to these
+message buses:
+
+"
+
+let () = emit (document
+                 ~title:"OBus user manual"
+                 ~author:"Jérémie Dimino"
+                 ~packages:["inputenc", "utf8"]
+                 doc)
