@@ -654,6 +654,54 @@ struct
   let cast_single t x = t.single_cast x
   let cast_sequence t x = t.sequence_cast x
 
+  let dyn_basic t = {
+    basic_type = t;
+    basic_make =
+      (fun x ->
+         if V.type_of_basic x <> t then
+           failwith "OBus_value.dyn_basic: types mismatach"
+         else
+           x);
+    basic_cast =
+      (fun x ->
+         if V.type_of_basic x <> t then
+           raise Signature_mismatch
+         else
+           x);
+  }
+
+  let dyn_single t = {
+    single_type = t;
+    single_make =
+      (fun x ->
+         if V.type_of_single x <> t then
+           failwith "OBus_value.dyn_single: types mismatach"
+         else
+           x);
+    single_cast =
+      (fun x ->
+         if V.type_of_single x <> t then
+           raise Signature_mismatch
+         else
+           x);
+  }
+
+  let dyn_sequence t = {
+    sequence_type = t;
+    sequence_make =
+      (fun x ->
+         if V.type_of_sequence x <> t then
+           failwith "OBus_value.dyn_sequence: types mismatach"
+         else
+           x);
+    sequence_cast =
+      (fun x ->
+         if V.type_of_sequence x <> t then
+           raise Signature_mismatch
+         else
+           x);
+  }
+
   let byte = {
     basic_type = T.Byte;
     basic_make = V.byte;

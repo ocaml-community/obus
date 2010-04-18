@@ -289,6 +289,15 @@ module C : sig
   val cast_single : 'a single -> V.single -> 'a
   val cast_sequence : 'a sequence -> V.sequence -> 'a
 
+  (** {6 Dynamic values} *)
+
+  (** The follwing functions allows you to create converters that do
+      not convert values. *)
+
+  val dyn_basic : T.basic -> V.basic basic
+  val dyn_single : T.single -> V.single single
+  val dyn_sequence : T.sequence -> V.sequence sequence
+
   (** {6 Sequence constructors} *)
 
   val seq0 : unit sequence
