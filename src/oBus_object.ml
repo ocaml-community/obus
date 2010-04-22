@@ -493,7 +493,7 @@ let make_interface_unsafe ?(notify_mode=notify_none) name methods signals proper
            }
          | _ ->
              assert false)
-      methods;
+      properties;
   interface_notify_mode = notify_mode;
 }
 
