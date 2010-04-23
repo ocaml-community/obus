@@ -98,7 +98,7 @@ let print_impl oc name members annotations =
                 | (false, name) -> fprintf oc " %s" name
                 | (true, name) -> fprintf oc " ~%s" name)
              (make_names i_args);
-           output_string oc " =\n    failwith \"not implemented\"\n"
+           output_string oc " =\n    fail (Failure \"not implemented\")\n"
        | _ ->
            ())
     members;
@@ -110,8 +110,7 @@ let print_impl oc name members annotations =
            let i_names = make_names i_args and o_names = make_names o_args in
            let i_convertors = make_convertors Utils.convertor_recv i_names i_args
            and o_convertors = make_convertors Utils.convertor_send o_names o_args in
-           fprintf oc "      ~m_%s:(fun ctx obj" name;
-           List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
+           fprintf oc "      ~m_%s:(fun ctx obj %a" name print_names i_names;
            if List.for_all (fun x -> x = None) i_convertors && List.for_all (fun x -> x = None) i_convertors then begin
              fprintf oc " -> %s obj" (OBus_name.ocaml_lid name);
              List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
@@ -129,7 +128,9 @@ let print_impl oc name members annotations =
                List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
                output_string oc ")\n"
              end else begin
-               fprintf oc "%slwt %a = %s obj in\n" padding print_names o_names (OBus_name.ocaml_lid name);
+               fprintf oc "%slwt %a = %s obj" padding print_names o_names (OBus_name.ocaml_lid name);
+               List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
+               output_string oc " in\n";
                List.iter
                  (function
                     | Some line -> fprintf oc "%s%s" padding line
