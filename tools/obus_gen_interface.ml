@@ -12,6 +12,44 @@ open OBus_introspect
 
 let prog_name = Filename.basename Sys.argv.(0)
 
+let print_record oc members =
+  output_string oc "  type 'a members= {\n";
+  List.iter
+    (function
+       | Method(name, i_args, o_args, annotations) ->
+           fprintf oc "    m_%s : %a -> 'a -> %a -> %a;\n"
+             name
+             (Term.print_intf true)
+             (Term.T.term "OBus_context.t"
+                [Term.intf_of_sequence (List.map snd o_args)])
+             (Term.print_intf true)
+             (Term.intf_of_sequence (List.map snd i_args))
+             (Term.print_intf true)
+             (Term.T.term
+                "Lwt.t"
+                [Term.intf_of_sequence (List.map snd o_args)])
+       | Signal(name, args, annotations) ->
+           ()
+       | Property(name, typ, Read, annotations) ->
+           fprintf oc "    p_%s : 'a -> %a;\n"
+             name
+             (Term.print_intf true)
+             (Term.T.term "React.signal" [Term.intf_of_single typ])
+       | Property(name, typ, Write, annotations) ->
+           fprintf oc "    p_%s : unit OBus_context.t -> 'a -> %a -> unit Lwt.t;\n"
+             name
+             (Term.print_intf true)
+             (Term.intf_of_single typ)
+       | Property(name, typ, Read_write, annotations) ->
+           fprintf oc "    p_%s : ('a -> %a) * (unit OBus_context.t -> 'a -> %a -> unit Lwt.t);\n"
+             name
+             (Term.print_intf true)
+             (Term.T.term "React.signal" [Term.intf_of_single typ])
+             (Term.print_intf true)
+             (Term.intf_of_single typ))
+    members;
+  output_string oc "  }\n"
+
 (* +-----------------------------------------------------------------+
    | Implementation generation                                       |
    +-----------------------------------------------------------------+ *)
@@ -71,25 +109,14 @@ let print_impl oc name members annotations =
 
   (***** Interface description *****)
 
-  output_string oc "  let make\n\
-                   \      ?notify_mode\n";
-  List.iter
-    (function
-       | Method(name, i_args, o_args, annotations) ->
-           fprintf oc "      ~m_%s:m__%s\n" name name
-       | Signal(name, args, annotations) ->
-           ()
-       | Property(name, typ, access, annotations) ->
-           fprintf oc "      ~p_%s:p__%s\n" name name)
-    members;
-  output_string oc "      ()\n\
-                   \      =\n\
-                   \    OBus_object.make_interface_unsafe ?notify_mode interface\n\
+  print_record oc members;
+  output_string oc "  let make ?notify_mode members =\n";
+  output_string oc "    OBus_object.make_interface_unsafe ?notify_mode interface\n\
                    \      [|\n";
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->
-           fprintf oc "        method_info m_%s m__%s;\n" name name
+           fprintf oc "        method_info m_%s members.m_%s;\n" name name
        | _ ->
            ())
     members;
@@ -105,11 +132,11 @@ let print_impl oc name members annotations =
   List.iter
     (function
        | Property(name, typ, Read, annotations) ->
-           fprintf oc "        property_r_info p_%s p__%s;\n" name name
+           fprintf oc "        property_r_info p_%s members.p_%s;\n" name name
        | Property(name, typ, Write, annotations) ->
-           fprintf oc "        property_w_info p_%s p__%s;\n" name name
+           fprintf oc "        property_w_info p_%s members.p_%s;\n" name name
        | Property(name, typ, Read_write, annotations) ->
-           fprintf oc "        property_rw_info p_%s (fst p__%s) (snd p__%s);\n" name name name
+           fprintf oc "        property_rw_info p_%s (fst members.p_%s) (snd members.p_%s);\n" name name name
        | _ ->
            ())
     members;
@@ -156,43 +183,8 @@ let print_intf oc name members annotations =
 
   (***** Interface description *****)
 
-  output_string oc "  val make :\n\
-                   \    ?notify_mode : 'a OBus_object.notify_mode ->\n";
-  List.iter
-    (function
-       | Method(name, i_args, o_args, annotations) ->
-           fprintf oc "    m_%s : (%a -> 'a -> %a -> %a) ->\n"
-             name
-             (Term.print_intf true)
-             (Term.T.term "OBus_context.t"
-                [Term.intf_of_sequence (List.map snd o_args)])
-             (Term.print_intf true)
-             (Term.intf_of_sequence (List.map snd i_args))
-             (Term.print_intf true)
-             (Term.T.term
-                "Lwt.t"
-                [Term.intf_of_sequence (List.map snd o_args)])
-       | Signal(name, args, annotations) ->
-           ()
-       | Property(name, typ, Read, annotations) ->
-           fprintf oc "    p_%s : ('a -> %a) ->\n"
-             name
-             (Term.print_intf true)
-             (Term.T.term "React.signal" [Term.intf_of_single typ])
-       | Property(name, typ, Write, annotations) ->
-           fprintf oc "    p_%s : (unit OBus_context.t -> 'a -> %a -> unit Lwt.t) ->\n"
-             name
-             (Term.print_intf true)
-             (Term.intf_of_single typ)
-       | Property(name, typ, Read_write, annotations) ->
-           fprintf oc "    p_%s : ('a -> %a) * (unit OBus_context.t -> 'a -> %a -> unit Lwt.t) ->\n"
-             name
-             (Term.print_intf true)
-             (Term.T.term "React.signal" [Term.intf_of_single typ])
-             (Term.print_intf true)
-             (Term.intf_of_single typ))
-    members;
-  output_string oc "    unit -> 'a OBus_object.interface\n";
+  print_record oc members;
+  output_string oc "  val make : ?notify_mode : 'a OBus_object.notify_mode -> 'a members -> 'a OBus_object.interface\n";
   output_string oc "end\n"
 
 (* +-----------------------------------------------------------------+

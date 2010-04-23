@@ -103,18 +103,18 @@ let print_impl oc name members annotations =
            ())
     members;
   fprintf oc "\n  let interface =\n\
-               \    %s.make\n" module_name;
+               \    %s.make {\n" module_name;
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->
            let i_names = make_names i_args and o_names = make_names o_args in
            let i_convertors = make_convertors Utils.convertor_recv i_names i_args
            and o_convertors = make_convertors Utils.convertor_send o_names o_args in
-           fprintf oc "      ~m_%s:(fun ctx obj %a" name print_names i_names;
+           fprintf oc "      m_%s = (fun ctx obj %a" name print_names i_names;
            if List.for_all (fun x -> x = None) i_convertors && List.for_all (fun x -> x = None) i_convertors then begin
              fprintf oc " -> %s obj" (OBus_name.ocaml_lid name);
              List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
-             output_string oc ")\n"
+             output_string oc ");\n"
            end else begin
              let padding = String.make (13 + String.length name) ' ' in
              output_string oc " ->\n";
@@ -126,7 +126,7 @@ let print_impl oc name members annotations =
              if List.for_all (fun x -> x = None) o_convertors then begin
                fprintf oc "%s%s obj" padding (OBus_name.ocaml_lid name);
                List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
-               output_string oc ")\n"
+               output_string oc ");\n"
              end else begin
                fprintf oc "%slwt %a = %s obj" padding print_names o_names (OBus_name.ocaml_lid name);
                List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
@@ -136,11 +136,11 @@ let print_impl oc name members annotations =
                     | Some line -> fprintf oc "%s%s" padding line
                     | None -> ())
                  o_convertors;
-               fprintf oc "%sreturn %a)\n" padding print_names o_names
+               fprintf oc "%sreturn %a);\n" padding print_names o_names
              end
            end
        | Property(name, typ, access, annotations) ->
-           fprintf oc "      ~p_%s:" name;
+           fprintf oc "      p_%s = " name;
            if access = Read_write then output_char oc '(';
            if access = Read || access = Read_write then
              output_string oc "(fun obj -> failwith \"not implemented\")";
@@ -152,11 +152,11 @@ let print_impl oc name members annotations =
              output_string oc "(fun ctx obj x -> failwith \"not implemented\")";
            if access = Read_write then
              output_char oc ')';
-           output_char oc '\n'
+           output_string oc ";\n"
        | _ ->
            ())
     members;
-  output_string oc "      ()\n";
+  output_string oc "    }\n";
   output_string oc "end\n"
 
 (* +-----------------------------------------------------------------+

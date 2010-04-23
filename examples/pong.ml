@@ -17,9 +17,9 @@ let ping obj msg =
   return msg
 
 let interface =
-  Ping_pong.Org_foo_bar.make
-    ~m_Ping:(fun context -> ping)
-    ()
+  Ping_pong.Org_foo_bar.make {
+    Ping_pong.Org_foo_bar.m_Ping = (fun context -> ping)
+  }
 
 lwt () =
   lwt bus = OBus_bus.session () in
