@@ -172,13 +172,14 @@ and receiver_group = {
 and property_group_state =
   | Property_group_simple
       (* The property is not monitored *)
-  | Property_group_monitor of notifier Lwt.t
-      (* Properties of the interface are being monitored. The argument
-         is the thread which will returns the notifier when it becomes
-         ready. *)
   | Property_group_cached of notify_data Lwt.t
-      (* The properties are cached until the next iteration of the
-         main loop *)
+      (* Properties are cached until the next iteration of the main
+         loop *)
+  | Property_group_updates of notifier
+      (* Property updates are being monitored, but the initial
+         [get_all] call as not been performed *)
+  | Property_group_monitor of notify_data React.signal Lwt.t * notifier
+      (* Properties are being monitored *)
 
 (* Type of all properties of an interface *)
 and property_group = {
@@ -198,9 +199,8 @@ and property_group = {
 (* Type of a property notifier. It should contains the state of all
    properties of an interface: *)
 and notifier = {
-  notifier_signal : notify_data React.signal;
-  (* Signal holding the current state of all properties of the
-     corresponding interface *)
+  notifier_event : notify_data React.event;
+  (* Event which occurs each time one or more proeprties change *)
 
   notifier_stop : unit -> unit;
   (* Stop the notifier *)

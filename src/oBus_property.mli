@@ -92,6 +92,10 @@ val monitor : ('a, [> `readable ]) t -> 'a React.signal Lwt.t
       contents of [property]. Raises [Failure] if the property is not
       monitorable.  *)
 
+val updates : ('a, [> `readable ]) t -> 'a React.event
+  (** [updates property] returns the event which occurs each the
+      property value changes *)
+
 val unmonitor : ('a, [> `readable ]) t -> unit
   (** Stop monitoring the property. If it was not monitored, it does
       nothing. *)
@@ -132,16 +136,16 @@ type notify_data = (unit OBus_context.t * OBus_value.V.single) name_map
 
 (** Type of a notifier *)
 type notifier = {
-  notifier_signal : notify_data React.signal;
-  (** Signal holding the current value of all properties and the
-      context in which they were received *)
+  notifier_event : notify_data React.event;
+  (** Event which occurs each time at least one property change. It
+      contains the list of properties that changed with their values *)
 
   notifier_stop : unit -> unit;
   (** [stop ()] cleans up allocated resources when no properties are
       monitored *)
 }
 
-val notify_custom : (OBus_proxy.t -> OBus_name.interface -> notifier Lwt.t) -> notify_mode
+val notify_custom : (OBus_proxy.t -> OBus_name.interface -> notifier) -> notify_mode
   (** [notify_custom f] represents a cusom mode for being notified of
       property changes. [f] is the function used to create the
       notifier. *)

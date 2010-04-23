@@ -20,11 +20,11 @@ type 'a name_map = 'a Map.Make(String).t
 type notify_data = (unit context * OBus_value.V.single) name_map
 
 type notifier = OBus_private_connection.notifier = {
-  notifier_signal : notify_data React.signal;
+  notifier_event : notify_data React.event;
   notifier_stop : unit -> unit;
 }
 
-type notify_mode = OBus_proxy.t -> OBus_name.interface -> notifier Lwt.t
+type notify_mode = OBus_proxy.t -> OBus_name.interface -> notifier
 
 type ('a, 'access) t = {
   cast : unit context -> OBus_value.V.single -> 'a;
@@ -115,25 +115,19 @@ let get_all_no_cache proxy interface =
    | Notifications                                                   |
    +-----------------------------------------------------------------+ *)
 
-let equal_context_value (context1, value1) (context2, value2) =
-  context1 == context2 && value1 = value2
-
 let notify_none proxy interface =
-  return {
-    notifier_signal = React.S.const String_map.empty;
+  {
+    notifier_event = React.E.never;
     notifier_stop = ignore;
   }
 
 let notify_global member proxy interface =
   let signal = OBus_signal.connect (OBus_member.Signal.make ~interface ~member ~args:OBus_value.arg0) proxy in
-  lwt initial = get_all_no_cache proxy interface in
-  return {
-    notifier_signal =
-      React.S.hold ~eq:(String_map.equal equal_context_value)
-        initial
-        (Lwt_event.map_s
-           (fun () -> get_all_no_cache proxy interface)
-           (OBus_signal.event signal));
+  {
+    notifier_event =
+      Lwt_event.map_s
+        (fun () -> get_all_no_cache proxy interface)
+        (OBus_signal.event signal);
     notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
   }
@@ -147,17 +141,14 @@ let notify_update member proxy interface =
          ~args:(OBus_value.arg1 (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)))
       proxy
   in
-  lwt initial = get_all_no_cache proxy interface in
-  return {
-    notifier_signal =
-      React.S.fold ~eq:(String_map.equal equal_context_value)
-        (fun properties (context, updates) ->
+  {
+    notifier_event =
+      React.E.map
+        (fun (context, updates) ->
            List.fold_left
-             (fun acc (member, value) ->
-                String_map.add member (context, value) acc)
-             properties
-             updates)
-        initial
+             (fun map (member, value) ->
+                String_map.add member (context, value) map)
+             String_map.empty updates)
         (OBus_signal.event_with_context signal);
     notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
@@ -176,17 +167,14 @@ let notify_egg_dbus proxy interface =
   in
   (* Only monitor the properties with the same interface: *)
   OBus_signal.set_filters signal [(0, OBus_match.AF_string interface)];
-  lwt initial = get_all_no_cache proxy interface in
-  return {
-    notifier_signal =
-      React.S.fold ~eq:(String_map.equal equal_context_value)
-        (fun properties (context, (iface, updates)) ->
+  {
+    notifier_event =
+      React.E.map
+        (fun (context, (iface, updates)) ->
            List.fold_left
-             (fun acc (member, value) ->
-                String_map.add member (context, value) acc)
-             properties
-             updates)
-        initial
+             (fun map (member, value) ->
+                String_map.add member (context, value) map)
+             String_map.empty updates)
         (OBus_signal.event_with_context signal);
     notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
@@ -200,36 +188,96 @@ let notify_custom f = f
 
 let monitorable property = property.notify_mode != notify_none
 
-let rec monitor property =
+let equal_context_value (context1, value1) (context2, value2) =
+  context1 == context2 && value1 = value2
+
+let hold_properties initial event =
+  React.S.fold ~eq:(String_map.equal equal_context_value)
+    (fun acc updates ->
+       String_map.fold
+         String_map.add
+         updates acc)
+    initial
+    event
+
+let rec updates property =
   let property_group = property.property_group in
   match property_group.property_group_state with
-    | Property_group_monitor thread ->
-        lwt notifier = thread in
-        return (React.S.map
-                  (fun properties ->
-                     let context, value = String_map.find property.member properties in
-                     property.cast context value)
-                  notifier.OBus_private_connection.notifier_signal)
-    | Property_group_cached _  | Property_group_simple ->
+    | Property_group_simple ->
+        let notifier =
+          property.notify_mode
+            property.proxy
+            property_group.property_group_interface
+        in
         property_group.property_group_state <- (
-          Property_group_monitor(property.notify_mode
-                                   property.proxy
-                                   property_group.property_group_interface)
+          Property_group_updates notifier
+        );
+        updates property
+    | Property_group_cached thread ->
+        let notifier =
+          property.notify_mode
+            property.proxy
+            property_group.property_group_interface
+        in
+        property_group.property_group_state <- (
+          Property_group_monitor((lwt initial = thread in
+                                  return (hold_properties initial notifier.notifier_event)),
+                                 notifier)
+        );
+        updates property
+    | Property_group_updates notifier
+    | Property_group_monitor(_, notifier) ->
+        React.E.map
+          (fun properties ->
+             let context, value = String_map.find property.member properties in
+             property.cast context value)
+          notifier.notifier_event
+
+let rec monitor property =
+  let _ = updates property in
+  let property_group = property.property_group in
+  match property_group.property_group_state with
+    | Property_group_simple
+    | Property_group_cached _ ->
+        (* We cannot be in theses states after a call to [updates] *)
+        assert false
+    | Property_group_updates notifier ->
+        let thread =
+          lwt initial =
+            get_all_no_cache
+              property.proxy
+              property_group.property_group_interface
+          in
+          return (hold_properties initial notifier.notifier_event)
+        in
+        property_group.property_group_state <- (
+          Property_group_monitor(thread, notifier)
         );
         monitor property
+    | Property_group_monitor(thread, notifier) ->
+        lwt signal = thread in
+        return
+          (React.S.map
+             (fun properties ->
+                let context, value = String_map.find property.member properties in
+                property.cast context value)
+             signal)
 
 let unmonitor_property_group property_group =
   match property_group.property_group_state with
     | Property_group_simple | Property_group_cached _ ->
         ()
-    | Property_group_monitor thread ->
+    | Property_group_updates notifier ->
         property_group.property_group_state <- Property_group_simple;
+        notifier.notifier_stop ()
+    | Property_group_monitor(thread, notifier) ->
+        property_group.property_group_state <- Property_group_simple;
+        notifier.notifier_stop ();
         match Lwt.state thread with
           | Sleep ->
               cancel thread
-          | Return notifier ->
-              React.S.stop notifier.notifier_signal;
-              notifier.notifier_stop ()
+          | Return signal ->
+              React.S.stop signal
           | Fail exn ->
               ()
 
@@ -277,7 +325,19 @@ let load_cache proxy interface =
           property_group
   in
   let thread = get_all_no_cache proxy interface in
-  property_group.property_group_state <- Property_group_cached thread;
+  let () =
+    match property_group.property_group_state with
+      | Property_group_simple ->
+          property_group.property_group_state <- Property_group_cached thread
+      | Property_group_updates notifier ->
+          property_group.property_group_state <- (
+            Property_group_monitor((lwt initial = thread in
+                                    return (hold_properties initial notifier.notifier_event)),
+                                   notifier)
+          )
+      | _ ->
+          ()
+  in
   ignore begin
     lwt _ = thread in
     (* Expire the cache before the next iteration of the main loop: *)
@@ -299,7 +359,7 @@ let load_cache proxy interface =
 let get_with_context ?(cache=true) property =
   let property_group = property.property_group in
   match property_group.property_group_state with
-    | Property_group_simple ->
+    | Property_group_simple | Property_group_updates _ ->
         if cache then begin
           lwt properties = load_cache property.proxy property_group.property_group_interface in
           let context, value  = String_map.find property.member properties in
@@ -316,9 +376,9 @@ let get_with_context ?(cache=true) property =
         lwt properties = thread in
         let context, value  = String_map.find property.member properties in
         return (context, property.cast context value)
-    | Property_group_monitor thread ->
-        lwt notifier = thread in
-        let context, value = String_map.find property.member (React.S.value notifier.notifier_signal) in
+    | Property_group_monitor(thread, notifier) ->
+        lwt signal = thread in
+        let context, value = String_map.find property.member (React.S.value signal) in
         return (context, property.cast context value)
 
 let get ?cache property =
@@ -390,13 +450,13 @@ let get_all_with_context proxy ~interface =
     with Not_found ->
       None
   with
-    | None | Some{ property_group_state = Property_group_simple } ->
+    | None | Some{ property_group_state = (Property_group_simple | Property_group_updates _) } ->
         load_cache proxy interface
     | Some{ property_group_state = Property_group_cached thread } ->
         thread
-    | Some{ property_group_state = Property_group_monitor thread } ->
-        lwt notifier = thread in
-        return (React.S.value notifier.notifier_signal)
+    | Some{ property_group_state = Property_group_monitor(thread, notifier) } ->
+        lwt signal = thread in
+        return (React.S.value signal)
 
 let get_all proxy ~interface =
   get_all_with_context proxy interface >|= String_map.map snd
