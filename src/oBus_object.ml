@@ -696,7 +696,6 @@ let make ?owner ?(common=true) ?(interfaces=[]) path =
         interfaces;
     changed = Interface_map.empty;
   } in
-  generate obj;
   obj
 
 let attach obj data =
@@ -705,6 +704,7 @@ let attach obj data =
         failwith "OBus_object.attach: object already contains attached"
     | None ->
         obj.data <- Some data;
+        generate obj;
         match obj.owner with
           | None ->
               ()
