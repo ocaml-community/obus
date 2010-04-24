@@ -267,6 +267,7 @@ let () =
          (match OBus_name.split name with
             | "org" :: "freedesktop" :: "DBus" :: _ -> false
             | _ -> true) then begin
+           let members = sort_members members in
            print_impl oc_impl name members annotations;
            print_intf oc_intf name members annotations
          end)
