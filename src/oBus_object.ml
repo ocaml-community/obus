@@ -631,6 +631,26 @@ let properties () =
     _method_info
       (OBus_member.Method.make
          interface_name
+         "GetAll"
+         (OBus_value.arg1
+            (Some "interface", OBus_value.C.basic_string))
+         (OBus_value.arg1
+            (Some "values", OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)))
+      (fun context obj interface ->
+         match binary_search compare_interface interface obj.properties with
+           | Some(interface, properties) ->
+               return (Array.fold_left
+                         (fun acc property ->
+                            match property.property_instance_signal with
+                              | Some s -> (property.property_instance_name, React.S.value s) :: acc
+                              | None -> acc)
+                         []
+                         properties)
+           | None ->
+               return []);
+    _method_info
+      (OBus_member.Method.make
+         interface_name
          "Set"
          (OBus_value.arg3
             (Some "interface", OBus_value.C.basic_string)
@@ -652,27 +672,6 @@ let properties () =
                      Printf.ksprintf (OBus_error.fail OBus_error.Failed) "property %S on interface %S is not writable" member interface
                  | None ->
                      Printf.ksprintf (OBus_error.fail OBus_error.Failed) "no such property: %S on interface %S" member interface);
-
-    _method_info
-      (OBus_member.Method.make
-         interface_name
-         "GetAll"
-         (OBus_value.arg1
-            (Some "interface", OBus_value.C.basic_string))
-         (OBus_value.arg1
-            (Some "values", OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)))
-      (fun context obj interface ->
-         match binary_search compare_interface interface obj.properties with
-           | Some(interface, properties) ->
-               return (Array.fold_left
-                         (fun acc property ->
-                            match property.property_instance_signal with
-                              | Some s -> (property.property_instance_name, React.S.value s) :: acc
-                              | None -> acc)
-                         []
-                         properties)
-           | None ->
-               return []);
   |] [||] [||]
 
 
