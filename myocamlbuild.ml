@@ -283,6 +283,13 @@ let _ =
                               A"-o"; A(env "examples/%");
                               A(env "examples/%.xml")]));
 
+        rule "IDL to ocaml"
+          ~prods:["%.ml"; "%.mli"]
+          ~deps:["%.obus"; "tools/obus_gen_interface.best"]
+          (fun env _ -> Cmd(S[P"tools/obus_gen_interface.best";
+                              A"-o"; A(env "%");
+                              A(env "%.obus")]));
+
         (* +---------------------------------------------------------+
            | Other                                                   |
            +---------------------------------------------------------+ *)

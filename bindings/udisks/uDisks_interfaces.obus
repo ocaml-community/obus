@@ -1,0 +1,249 @@
+(*
+ * uDisks_interfaces.obus
+ * ----------------------
+ * Copyright : (c) 2010, Jeremie Dimino <jeremie@dimino.org>
+ * Licence   : BSD3
+ *
+ * This file is a part of obus, an ocaml implementation of D-Bus.
+ *)
+
+interface "org.freedesktop.UDisks" {
+  method EnumerateAdapters : () -> (devices : object_path array)
+  method EnumerateExpanders : () -> (devices : object_path array)
+  method EnumeratePorts : () -> (devices : object_path array)
+  method EnumerateDevices : () -> (devices : object_path array)
+  method EnumerateDeviceFiles : () -> (device_files : string array)
+  method FindDeviceByDeviceFile : (device_file : string) -> (device : object_path)
+  method FindDeviceByMajorMinor : (device_major : int64, device_minor : int64) -> (device : object_path)
+  method DriveInhibitAllPolling : (options : string array) -> (cookie : string)
+  method DriveUninhibitAllPolling : (cookie : string) -> ()
+  method DriveSetAllSpindownTimeouts : (timeout_seconds : int32, options : string array) -> (cookie : string)
+  method DriveUnsetAllSpindownTimeouts : (cookie : string) -> ()
+  method LinuxLvm2VGStart : (uuid : string, options : string array) -> ()
+  method LinuxLvm2VGStop : (uuid : string, options : string array) -> ()
+  method LinuxLvm2VGSetName : (uuid : string, name : string) -> ()
+  method LinuxLvm2VGAddPV : (uuid : string, physical_volume : object_path, options : string array) -> ()
+  method LinuxLvm2VGRemovePV : (vg_uuid : string, pv_uuid : string, options : string array) -> ()
+  method LinuxLvm2LVSetName : (group_uuid : string, uuid : string, name : string) -> ()
+  method LinuxLvm2LVStart : (group_uuid : string, uuid : string, options : string array) -> ()
+  method LinuxLvm2LVRemove : (group_uuid : string, uuid : string, options : string array) -> ()
+  method LinuxLvm2LVCreate : (group_uuid : string, name : string, size : uint64, num_stripes : uint32, stripe_size : uint64, num_mirrors : uint32, options : string array, fstype : string, fsoptions : string array) -> (created_device : object_path)
+  method LinuxMdStart : (components : object_path array, options : string array) -> (device : object_path)
+  method LinuxMdCreate : (components : object_path array, level : string, stripe_size : uint64, name : string, options : string array) -> (device : object_path)
+  method Inhibit : () -> (cookie : string)
+  method Uninhibit : (cookie : string) -> ()
+  signal DeviceAdded : (device : object_path)
+  signal DeviceRemoved : (device : object_path)
+  signal DeviceChanged : (device : object_path)
+  signal DeviceJobChanged : (device : object_path, job_in_progress : boolean, job_is_cancellable : boolean, job_id : string, job_num_tasks : int32, job_cur_task : int32, job_cur_task_id : string, job_cur_task_percentage : double)
+  signal AdapterAdded : (adapter : object_path)
+  signal AdapterRemoved : (adapter : object_path)
+  signal AdapterChanged : (adapter : object_path)
+  signal ExpanderAdded : (expander : object_path)
+  signal ExpanderRemoved : (expander : object_path)
+  signal ExpanderChanged : (expander : object_path)
+  signal PortAdded : (port : object_path)
+  signal PortRemoved : (port : object_path)
+  signal PortChanged : (port : object_path)
+  property.r DaemonVersion : string
+  property.r DaemonIsInhibited : boolean
+  property.r SupportsLuksDevices : boolean
+  property.r KnownFilesystems : ((string * string * boolean * boolean * boolean * uint32 * boolean * boolean * boolean * boolean * boolean * boolean * boolean * boolean) structure) array
+}
+
+interface "org.freedesktop.UDisks.Adapter" {
+  signal Changed : ()
+  property.r NativePath : string
+  property.r Vendor : string
+  property.r Model : string
+  property.r Driver : string
+  property.r NumPorts : uint32
+  property.r Fabric : string
+}
+
+interface "org.freedesktop.UDisks.Device" {
+  method JobCancel : () -> ()
+  method PartitionTableCreate : (scheme : string, options : string array) -> ()
+  method PartitionDelete : (options : string array) -> ()
+  method PartitionCreate : (offset : uint64, size : uint64, type : string, label : string, flags : string array, options : string array, fstype : string, fsoptions : string array) -> (created_device : object_path)
+  method PartitionModify : (type : string, label : string, flags : string array) -> ()
+  method FilesystemCreate : (fstype : string, options : string array) -> ()
+  method FilesystemSetLabel : (new_label : string) -> ()
+  method FilesystemMount : (filesystem_type : string, options : string array) -> (mount_path : string)
+  method FilesystemUnmount : (options : string array) -> ()
+  method FilesystemCheck : (options : string array) -> (is_clean : boolean)
+  method FilesystemListOpenFiles : () -> (processes : ((uint32 * uint32 * string) structure) array)
+  method LuksUnlock : (passphrase : string, options : string array) -> (cleartext_device : object_path)
+  method LuksLock : (options : string array) -> ()
+  method LuksChangePassphrase : (current_passphrase : string, new_passphrase : string) -> ()
+  method LinuxMdAddSpare : (component : object_path, options : string array) -> ()
+  method LinuxMdExpand : (components : object_path array, options : string array) -> ()
+  method LinuxMdRemoveComponent : (component : object_path, options : string array) -> ()
+  method LinuxMdStop : (options : string array) -> ()
+  method LinuxLvm2LVStop : (options : string array) -> ()
+  method LinuxMdCheck : (options : string array) -> (number_of_errors : uint64)
+  method DriveInhibitPolling : (options : string array) -> (cookie : string)
+  method DriveUninhibitPolling : (cookie : string) -> ()
+  method DrivePollMedia : () -> ()
+  method DriveEject : (options : string array) -> ()
+  method DriveDetach : (options : string array) -> ()
+  method DriveSetSpindownTimeout : (timeout_seconds : int32, options : string array) -> (cookie : string)
+  method DriveUnsetSpindownTimeout : (cookie : string) -> ()
+  method DriveAtaSmartRefreshData : (options : string array) -> ()
+  method DriveAtaSmartInitiateSelftest : (test : string, options : string array) -> ()
+  method DriveBenchmark : (do_write_benchmark : boolean, options : string array) -> (read_transfer_rate_results : ((uint64 * double) structure) array, write_transfer_rate_results : ((uint64 * double) structure) array, access_time_results : ((uint64 * double) structure) array)
+  signal Changed : ()
+  signal JobChanged : (job_in_progress : boolean, job_is_cancellable : boolean, job_id : string, job_initiated_by_uid : uint32, job_percentage : double)
+  property.r NativePath : string
+  property.r DeviceDetectionTime : uint64
+  property.r DeviceMediaDetectionTime : uint64
+  property.r DeviceMajor : int64
+  property.r DeviceMinor : int64
+  property.r DeviceFile : string
+  property.r DeviceFilePresentation : string
+  property.r DeviceFileById : string array
+  property.r DeviceFileByPath : string array
+  property.r DeviceIsSystemInternal : boolean
+  property.r DeviceIsPartition : boolean
+  property.r DeviceIsPartitionTable : boolean
+  property.r DeviceIsRemovable : boolean
+  property.r DeviceIsMediaAvailable : boolean
+  property.r DeviceIsMediaChangeDetected : boolean
+  property.r DeviceIsMediaChangeDetectionPolling : boolean
+  property.r DeviceIsMediaChangeDetectionInhibitable : boolean
+  property.r DeviceIsMediaChangeDetectionInhibited : boolean
+  property.r DeviceIsReadOnly : boolean
+  property.r DeviceIsDrive : boolean
+  property.r DeviceIsOpticalDisc : boolean
+  property.r DeviceIsMounted : boolean
+  property.r DeviceMountPaths : string array
+  property.r DeviceMountedByUid : uint32
+  property.r DeviceIsLuks : boolean
+  property.r DeviceIsLuksCleartext : boolean
+  property.r DeviceIsLinuxMdComponent : boolean
+  property.r DeviceIsLinuxMd : boolean
+  property.r DeviceIsLinuxLvm2LV : boolean
+  property.r DeviceIsLinuxLvm2PV : boolean
+  property.r DeviceIsLinuxDmmpComponent : boolean
+  property.r DeviceIsLinuxDmmp : boolean
+  property.r DeviceIsLinuxLoop : boolean
+  property.r DeviceSize : uint64
+  property.r DeviceBlockSize : uint64
+  property.r DevicePresentationHide : boolean
+  property.r DevicePresentationNopolicy : boolean
+  property.r DevicePresentationName : string
+  property.r DevicePresentationIconName : string
+  property.r JobInProgress : boolean
+  property.r JobId : string
+  property.r JobInitiatedByUid : uint32
+  property.r JobIsCancellable : boolean
+  property.r JobPercentage : double
+  property.r IdUsage : string
+  property.r IdType : string
+  property.r IdVersion : string
+  property.r IdUuid : string
+  property.r IdLabel : string
+  property.r LuksHolder : object_path
+  property.r LuksCleartextSlave : object_path
+  property.r LuksCleartextUnlockedByUid : uint32
+  property.r PartitionSlave : object_path
+  property.r PartitionScheme : string
+  property.r PartitionType : string
+  property.r PartitionLabel : string
+  property.r PartitionUuid : string
+  property.r PartitionFlags : string array
+  property.r PartitionNumber : int32
+  property.r PartitionOffset : uint64
+  property.r PartitionSize : uint64
+  property.r PartitionAlignmentOffset : uint64
+  property.r PartitionTableScheme : string
+  property.r PartitionTableCount : int32
+  property.r DriveVendor : string
+  property.r DriveModel : string
+  property.r DriveRevision : string
+  property.r DriveSerial : string
+  property.r DriveWwn : string
+  property.r DriveRotationRate : uint32
+  property.r DriveWriteCache : string
+  property.r DriveConnectionInterface : string
+  property.r DriveConnectionSpeed : uint64
+  property.r DriveMediaCompatibility : string array
+  property.r DriveMedia : string
+  property.r DriveIsMediaEjectable : boolean
+  property.r DriveCanDetach : boolean
+  property.r DriveCanSpindown : boolean
+  property.r DriveIsRotational : boolean
+  property.r DriveAdapter : object_path
+  property.r DrivePorts : object_path array
+  property.r DriveSimilarDevices : object_path array
+  property.r OpticalDiscIsBlank : boolean
+  property.r OpticalDiscIsAppendable : boolean
+  property.r OpticalDiscIsClosed : boolean
+  property.r OpticalDiscNumTracks : uint32
+  property.r OpticalDiscNumAudioTracks : uint32
+  property.r OpticalDiscNumSessions : uint32
+  property.r DriveAtaSmartIsAvailable : boolean
+  property.r DriveAtaSmartTimeCollected : uint64
+  property.r DriveAtaSmartStatus : string
+  property.r DriveAtaSmartBlob : byte array
+  property.r LinuxMdComponentLevel : string
+  property.r LinuxMdComponentPosition : int32
+  property.r LinuxMdComponentNumRaidDevices : int32
+  property.r LinuxMdComponentUuid : string
+  property.r LinuxMdComponentName : string
+  property.r LinuxMdComponentHomeHost : string
+  property.r LinuxMdComponentVersion : string
+  property.r LinuxMdComponentHolder : object_path
+  property.r LinuxMdComponentState : string array
+  property.r LinuxMdState : string
+  property.r LinuxMdLevel : string
+  property.r LinuxMdUuid : string
+  property.r LinuxMdHomeHost : string
+  property.r LinuxMdName : string
+  property.r LinuxMdNumRaidDevices : int32
+  property.r LinuxMdVersion : string
+  property.r LinuxMdSlaves : object_path array
+  property.r LinuxMdIsDegraded : boolean
+  property.r LinuxMdSyncAction : string
+  property.r LinuxMdSyncPercentage : double
+  property.r LinuxMdSyncSpeed : uint64
+  property.r LinuxLvm2PVUuid : string
+  property.r LinuxLvm2PVNumMetadataAreas : uint32
+  property.r LinuxLvm2PVGroupName : string
+  property.r LinuxLvm2PVGroupUuid : string
+  property.r LinuxLvm2PVGroupSize : uint64
+  property.r LinuxLvm2PVGroupUnallocatedSize : uint64
+  property.r LinuxLvm2PVGroupSequenceNumber : uint64
+  property.r LinuxLvm2PVGroupExtentSize : uint64
+  property.r LinuxLvm2PVGroupPhysicalVolumes : string array
+  property.r LinuxLvm2PVGroupLogicalVolumes : string array
+  property.r LinuxLvm2LVName : string
+  property.r LinuxLvm2LVUuid : string
+  property.r LinuxLvm2LVGroupName : string
+  property.r LinuxLvm2LVGroupUuid : string
+  property.r LinuxDmmpComponentHolder : object_path
+  property.r LinuxDmmpName : string
+  property.r LinuxDmmpSlaves : object_path array
+  property.r LinuxDmmpParameters : string
+  property.r LinuxLoopFilename : string
+}
+
+interface "org.freedesktop.UDisks.Expander" {
+  signal Changed : ()
+  property.r NativePath : string
+  property.r Vendor : string
+  property.r Model : string
+  property.r Revision : string
+  property.r NumPorts : uint32
+  property.r UpstreamPorts : object_path array
+  property.r Adapter : object_path
+}
+
+interface "org.freedesktop.UDisks.Port" {
+  signal Changed : ()
+  property.r NativePath : string
+  property.r Adapter : object_path
+  property.r Parent : object_path
+  property.r Number : int32
+  property.r ConnectorType : string
+}

@@ -57,6 +57,7 @@ EXTEND Gram
   single_type:
     [ [ t = basic_type -> T.Basic t
       | t = SELF; LIDENT "array" -> T.Array t
+      | "("; t = SELF; ")"; LIDENT "array" -> T.Array t
       | "("; t = SELF; rest = dict_or_tuple -> begin
           match rest with
             | `Structure tl ->
@@ -76,6 +77,8 @@ EXTEND Gram
           `Structure tl
       | ","; tv = single_type; ")"; "dict" ->
           `Dict tv
+      | ")"; LIDENT "structure" ->
+          `Structure []
       ] ];
 
   basic_type:

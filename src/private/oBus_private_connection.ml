@@ -175,10 +175,7 @@ and property_group_state =
   | Property_group_cached of notify_data Lwt.t
       (* Properties are cached until the next iteration of the main
          loop *)
-  | Property_group_updates of notifier
-      (* Property updates are being monitored, but the initial
-         [get_all] call as not been performed *)
-  | Property_group_monitor of notify_data React.signal Lwt.t * notifier
+  | Property_group_monitor of notifier Lwt.t
       (* Properties are being monitored *)
 
 (* Type of all properties of an interface *)
@@ -199,16 +196,15 @@ and property_group = {
 (* Type of a property notifier. It should contains the state of all
    properties of an interface: *)
 and notifier = {
-  notifier_event : notify_data React.event;
+  notifier_signal : notify_data React.signal;
   (* Event which occurs each time one or more proeprties change *)
 
   notifier_stop : unit -> unit;
   (* Stop the notifier *)
 }
 
-and notify_data = (unit context * OBus_value.V.single) String_map.t
-    (* Mapping from member names to the context in which the property
-       was received and the proeprty current value *)
+and notify_data = unit context * OBus_value.V.single String_map.t
+    (* Mapping from member names to their current value *)
 
 (* +-----------------------------------------------------------------+
    | Contexts                                                        |

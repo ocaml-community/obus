@@ -86,3 +86,37 @@ val serial : t -> string OBus_property.r
 val model : t -> string OBus_property.r
 val vendor : t -> string OBus_property.r
 val native_path : t -> string OBus_property.r
+
+(** Type of all properties *)
+type properties = {
+  recall_url : string;
+  recall_vendor : string;
+  recall_notice : bool;
+  technology : technology;
+  capacity : float;
+  is_rechargeable : bool;
+  state : state;
+  is_present : bool;
+  percentage : float;
+  time_to_full : int64;
+  time_to_empty : int64;
+  voltage : float;
+  energy_rate : float;
+  energy_full_design : float;
+  energy_full : float;
+  energy_empty : float;
+  energy : float;
+  online : bool;
+  has_statistics : bool;
+  has_history : bool;
+  power_supply : bool;
+  typ : typ;
+  update_time : int64;
+  serial : string;
+  model : string;
+  vendor : string;
+  native_path : string;
+}
+
+val properties : t -> properties OBus_property.r
+  (** Group holding the state of all properties *)

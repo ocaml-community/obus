@@ -149,6 +149,7 @@ let print_impl oc name members annotations =
 
 let print_intf oc name members annotations =
   fprintf oc "module %s : sig\n" (String.capitalize (Utils.file_name_of_interface_name name));
+  fprintf oc "  val interface : OBus_name.interface\n";
 
   (***** Member description *****)
 

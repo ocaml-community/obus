@@ -28,11 +28,19 @@ type notify_mode
   (** Type of properties changes notification. It describes how
       properties changes are announced. *)
 
-(** {6 Proxy properties creation} *)
+type properties = OBus_value.V.single 
+Map.Make(String).t
+    (** Mapping from property names to their value *)
+
+(** {6 Properties creation} *)
 
 val make : ('a, 'access) OBus_member.Property.t -> ?notify_mode : notify_mode -> OBus_proxy.t -> ('a, 'access) t
   (** [make property ?notify_mode proxy] returns the property object
       for this proxy. [notify_mode] defaults to {!notify_none} *)
+
+val make_group : OBus_proxy.t -> ?notify_mode : notify_mode -> OBus_name.interface -> properties r
+  (** [make_group proxy ?notify_mode interface] creates a group of all
+      properties of the given interface. *)
 
 (** {6 Properties transformation} *)
 
@@ -69,6 +77,11 @@ val get : ?cache : bool -> ('a, [> `readable ]) t -> 'a Lwt.t
 val get_with_context : ?cache : bool -> ('a, [> `readable ]) t -> (unit OBus_context.t * 'a) Lwt.t
   (** Same as {!get} but also returns the context *)
 
+val find : ('a, [> `readable ]) t -> unit OBus_context.t -> properties -> 'a
+  (** [find property context properties] looks up for the given
+      property in [properties]. It raises [Not_found] if the
+      [property] does not belong to [properties] *)
+
 val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
   (** Write the contents of a property *)
 
@@ -80,27 +93,34 @@ val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
 
     Note that when at least one property of an interface is monitored,
     obus will keep a local state of all the properties of the
-    interface, until all signals (see {!monitor}) are garbage
-    collected, or stopped with {!unmonitor}.
+    interface.
 *)
-
-val monitorable : ('a, [> `readable ]) t -> bool
-  (** Returns whether the given proeprty can be monitored *)
 
 val monitor : ('a, [> `readable ]) t -> 'a React.signal Lwt.t
   (** [monitor property] returns the signal holding the current
       contents of [property]. Raises [Failure] if the property is not
-      monitorable.  *)
+      monitorable.
 
-val updates : ('a, [> `readable ]) t -> 'a React.event
-  (** [updates property] returns the event which occurs each the
-      property value changes *)
+      Resources allocated to monitor the property are automatically
+      freed when the signal is garbage collected *)
 
-val unmonitor : ('a, [> `readable ]) t -> unit
-  (** Stop monitoring the property. If it was not monitored, it does
-      nothing. *)
+val monitor_with_stopper : ('a, [> `readable ]) t -> ('a React.signal * (unit -> unit)) Lwt.t
+  (** Same as {!monitor} but also returns a function that can be used
+      to explicitly free resources *)
 
-(** {6 Properties changes notifications} *)
+(** {6 Receving all properties} *)
+
+val get_all : OBus_proxy.t -> interface : OBus_name.interface -> properties Lwt.t
+  (** [get_all proxy ~interface ()] returns all
+      properties of the givne object with their values.
+
+      Note that {!get_all} always uses the cache if it is not empty,
+      or fills it if it is. *)
+
+val get_all_with_context : OBus_proxy.t -> interface : OBus_name.interface -> (unit OBus_context.t * properties) Lwt.t
+  (** Same as {!get_all} but also returns the context *)
+
+(** {6 Property changes notifications} *)
 
 val notify_none : notify_mode
   (** Property change are not announced *)
@@ -127,30 +147,22 @@ val notify_egg_dbus : notify_mode
   (** EggDBus notification mode. It is used by services using the
       EggDBus library. *)
 
-type 'a name_map = 'a Map.Make(String).t
-
-type notify_data = (unit OBus_context.t * OBus_value.V.single) name_map
-    (** Data that must be returned by notifiers. It is a mapping from
-        property names to their value and the context in which they
-        were received. *)
-
 (** Type of a notifier *)
 type notifier = {
-  notifier_event : notify_data React.event;
-  (** Event which occurs each time at least one property change. It
-      contains the list of properties that changed with their values *)
+  notifier_signal : (unit OBus_context.t * properties) React.signal;
+  (** Signals holding the contents of all property of an interface *)
 
   notifier_stop : unit -> unit;
   (** [stop ()] cleans up allocated resources when no properties are
       monitored *)
 }
 
-val notify_custom : (OBus_proxy.t -> OBus_name.interface -> notifier) -> notify_mode
+val notify_custom : (OBus_proxy.t -> OBus_name.interface -> notifier Lwt.t) -> notify_mode
   (** [notify_custom f] represents a cusom mode for being notified of
       property changes. [f] is the function used to create the
       notifier. *)
 
-val get_all_no_cache : OBus_proxy.t -> OBus_name.interface -> notify_data Lwt.t
+val get_all_no_cache : OBus_proxy.t -> OBus_name.interface -> (unit OBus_context.t * properties) Lwt.t
   (** [get_all_no_cache connection owner path interface] returns the
       values of all properties of the given object for the given
       interface.
@@ -158,15 +170,3 @@ val get_all_no_cache : OBus_proxy.t -> OBus_name.interface -> notify_data Lwt.t
       Contrary to {!get_all}, {!get_all_no_cache} does not use cached
       values, it always send a new request. {!get_all_no_cache} is
       meant to be used with {!notify_custom}. *)
-
-(** {6 Receving all properties} *)
-
-val get_all : OBus_proxy.t -> interface : OBus_name.interface -> OBus_value.V.single name_map Lwt.t
-  (** [get_all proxy ~interface ()] returns all
-      properties of the givne object with their values.
-
-      Note that {!get_all} always uses the cache if it is not empty,
-      or fills it if it is. *)
-
-val get_all_with_context : OBus_proxy.t -> interface : OBus_name.interface -> (unit OBus_context.t * OBus_value.V.single) name_map Lwt.t
-  (** Same as {!get_all} but also returns the context *)

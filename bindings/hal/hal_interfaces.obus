@@ -1,0 +1,132 @@
+(*
+ * hal_interfaces.obus
+ * -------------------
+ * Copyright : (c) 2010, Jeremie Dimino <jeremie@dimino.org>
+ * Licence   : BSD3
+ *
+ * This file is a part of obus, an ocaml implementation of D-Bus.
+ *)
+
+interface "org.freedesktop.DBus.Introspectable" {
+  method Introspect : () -> (data : string)
+}
+
+interface "org.freedesktop.Hal.Device" {
+  method GetAllProperties : () -> (properties : (string, variant) dict)
+  method SetMultipleProperties : (properties : (string, variant) dict) -> ()
+  method GetProperty : (key : string) -> (value : variant)
+  method GetPropertyString : (key : string) -> (value : string)
+  method GetPropertyStringList : (key : string) -> (value : string array)
+  method GetPropertyInteger : (key : string) -> (value : int32)
+  method GetPropertyBoolean : (key : string) -> (value : boolean)
+  method GetPropertyDouble : (key : string) -> (value : double)
+  method SetProperty : (key : string, value : variant) -> ()
+  method SetPropertyString : (key : string, value : string) -> ()
+  method SetPropertyStringList : (key : string, value : string array) -> ()
+  method SetPropertyInteger : (key : string, value : int32) -> ()
+  method SetPropertyBoolean : (key : string, value : boolean) -> ()
+  method SetPropertyDouble : (key : string, value : double) -> ()
+  method RemoveProperty : (key : string) -> ()
+  method GetPropertyType : (key : string) -> (type : int32)
+  method PropertyExists : (key : string) -> (does_it_exist : boolean)
+  method AddCapability : (capability : string) -> ()
+  method QueryCapability : (capability : string) -> (does_it_have_capability : boolean)
+  method Lock : (reason : string) -> (acquired_lock : boolean)
+  method Unlock : () -> (released_lock : boolean)
+  method AcquireInterfaceLock : (interface_name : string, exclusive : boolean) -> ()
+  method ReleaseInterfaceLock : (interface_name : string) -> ()
+  method IsCallerLockedOut : (interface_name : string, caller_sysbus_name : string) -> (whether_caller_is_locked_out : boolean)
+  method IsCallerPrivileged : (action : string, caller_sysbus_name : string) -> (result : string)
+  method IsLockedByOthers : (interface_name : string) -> (whether_it_is_locked_by_others : boolean)
+  method StringListAppend : (key : string, value : string) -> ()
+  method StringListPrepend : (key : string, value : string) -> ()
+  method StringListRemove : (key : string, value : string) -> ()
+  method EmitCondition : (condition_name : string, condition_details : string) -> (rc : boolean)
+  method Rescan : () -> (call_had_sideeffect : boolean)
+  method Reprobe : () -> (call_had_sideeffect : boolean)
+  method ClaimInterface : (interface_name : string, introspection_xml : string) -> (rc : boolean)
+  method AddonIsReady : () -> (rc : boolean)
+  signal PropertyModified : (num_updates : int32, updates : ((string * boolean * boolean) structure) array)
+  signal Condition : (cond_name : string, cond_details : string)
+  signal InterfaceLockAcquired : (interface_name : string, lock_holder : string, num_locks : int32)
+  signal InterfaceLockReleased : (interface_name : string, lock_holder : string, num_locks : int32)
+}
+
+interface "org.freedesktop.Hal.Device.CPUFreq" {
+  method SetCPUFreqGovernor : (governor_string : string) -> ()
+  method SetCPUFreqPerformance : (value : int32) -> ()
+  method SetCPUFreqConsiderNice : (value : boolean) -> ()
+  method GetCPUFreqGovernor : () -> (return_code : string)
+  method GetCPUFreqPerformance : () -> (return_code : int32)
+  method GetCPUFreqConsiderNice : () -> (return_code : boolean)
+  method GetCPUFreqAvailableGovernors : () -> (return_code : string array)
+}
+
+interface "org.freedesktop.Hal.Device.KillSwitch" {
+  method SetPower : (value : boolean) -> (return_code : int32)
+  method GetPower : () -> (value : int32)
+}
+
+interface "org.freedesktop.Hal.Device.LaptopPanel" {
+  method SetBrightness : (brightness_value : int32) -> (return_code : int32)
+  method GetBrightness : () -> (brightness_value : int32)
+}
+
+interface "org.freedesktop.Hal.Device.Leds" {
+  method SetBrightness : (brightness_value : int32) -> (return_code : int32)
+  method GetBrightness : () -> (brightness_value : int32)
+}
+
+interface "org.freedesktop.Hal.Device.Storage" {
+  method Eject : (options : string array) -> (result : int32)
+  method CloseTray : (options : string array) -> (result : int32)
+}
+
+interface "org.freedesktop.Hal.Device.Storage.Removable" {
+  method CheckForMedia : () -> (call_had_sideeffect : boolean)
+}
+
+interface "org.freedesktop.Hal.Device.SystemPowerManagement" {
+  method Suspend : (num_seconds_to_sleep : int32) -> (return_code : int32)
+  method SuspendHybrid : (num_seconds_to_sleep : int32) -> (return_code : int32)
+  method Hibernate : () -> (return_code : int32)
+  method Shutdown : () -> (return_code : int32)
+  method Reboot : () -> (return_code : int32)
+  method SetPowerSave : (enable_power_save : boolean) -> (return_code : int32)
+}
+
+interface "org.freedesktop.Hal.Device.Volume" {
+  method Mount : (mount_point : string, fstype : string, options : string array) -> (result : int32)
+  method Unmount : (options : string array) -> (result : int32)
+  method Eject : (options : string array) -> (result : int32)
+}
+
+interface "org.freedesktop.Hal.Device.Volume.Crypto" {
+  method Setup : (passphrase : string) -> (result : int32)
+  method Teardown : () -> (result : int32)
+}
+
+interface "org.freedesktop.Hal.Device.WakeOnLan" {
+  method GetSupported : () -> (return_code : int32)
+  method GetEnabled : () -> (return_code : int32)
+  method SetEnabled : (enable : boolean) -> (return_code : int32)
+}
+
+interface "org.freedesktop.Hal.Manager" {
+  method GetAllDevices : () -> (devices : string array)
+  method GetAllDevicesWithProperties : () -> (devices_with_props : ((string * (string, variant) dict) structure) array)
+  method DeviceExists : (udi : string) -> (does_it_exist : boolean)
+  method FindDeviceStringMatch : (key : string, value : string) -> (devices : string array)
+  method FindDeviceByCapability : (capability : string) -> (devices : string array)
+  method NewDevice : () -> (temporary_udi : string)
+  method Remove : (udi : string) -> ()
+  method CommitToGdl : (temporary_udi : string, global_udi : string) -> ()
+  method AcquireGlobalInterfaceLock : (interface_name : string, exclusive : boolean) -> ()
+  method ReleaseGlobalInterfaceLock : (interface_name : string) -> ()
+  method SingletonAddonIsReady : (command_line : string) -> ()
+  signal DeviceAdded : (udi : string)
+  signal DeviceRemoved : (udi : string)
+  signal NewCapability : (udi : string, cap_name : string)
+  signal GlobalInterfaceLockAcquired : (interface_name : string, lock_holder : string, num_locks : int32)
+  signal GlobalInterfaceLockReleased : (interface_name : string, lock_holder : string, num_locks : int32)
+}

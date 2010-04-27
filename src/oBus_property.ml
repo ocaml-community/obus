@@ -16,23 +16,24 @@ open OBus_private_connection
    | Types                                                           |
    +-----------------------------------------------------------------+ *)
 
-type 'a name_map = 'a Map.Make(String).t
-type notify_data = (unit context * OBus_value.V.single) name_map
+type properties = OBus_value.V.single String_map.t
 
 type notifier = OBus_private_connection.notifier = {
-  notifier_event : notify_data React.event;
+  notifier_signal : (unit OBus_context.t * properties) React.signal;
   notifier_stop : unit -> unit;
 }
 
-type notify_mode = OBus_proxy.t -> OBus_name.interface -> notifier
+type notify_mode = OBus_proxy.t -> OBus_name.interface -> notifier Lwt.t
 
 type ('a, 'access) t = {
-  cast : unit context -> OBus_value.V.single -> 'a;
+  cast : unit context -> properties -> 'a;
   make : 'a -> OBus_value.V.single;
   member : OBus_name.member;
+  (* If [member = ""] then this a property group, otherwisse it is a
+     single property *)
   proxy : OBus_proxy.t;
   notify_mode : notify_mode;
-  property_group : OBus_private_connection.property_group;
+  property_group : OBus_private_connection.property_group Lazy.t;
 }
 
 type 'a r = ('a, [ `readable ]) t
@@ -106,8 +107,9 @@ let m_GetAll =
 
 let get_all_no_cache proxy interface =
   lwt context, dict = OBus_method.call_with_context m_GetAll proxy interface in
-  return (List.fold_left
-            (fun acc (name, variant) -> String_map.add name (context, variant) acc)
+  return (context,
+          List.fold_left
+            (fun acc (name, variant) -> String_map.add name variant acc)
             String_map.empty
             dict)
 
@@ -115,19 +117,34 @@ let get_all_no_cache proxy interface =
    | Notifications                                                   |
    +-----------------------------------------------------------------+ *)
 
+let properties_equal (context1, values1) (context2, values2) =
+  context1 == context2 && String_map.equal (=) values1 values2
+
 let notify_none proxy interface =
-  {
-    notifier_event = React.E.never;
+  lwt initial = get_all_no_cache proxy interface in
+  return {
+    notifier_signal = React.S.const initial;
     notifier_stop = ignore;
   }
 
 let notify_global member proxy interface =
-  let signal = OBus_signal.connect (OBus_member.Signal.make ~interface ~member ~args:OBus_value.arg0) proxy in
-  {
-    notifier_event =
-      Lwt_event.map_s
-        (fun () -> get_all_no_cache proxy interface)
-        (OBus_signal.event signal);
+  let signal =
+    OBus_signal.connect
+      (OBus_member.Signal.make
+         ~interface
+         ~member
+         ~args:OBus_value.arg0)
+      proxy
+  in
+  lwt initial = get_all_no_cache proxy interface in
+  return {
+    notifier_signal =
+      React.S.hold
+        ~eq:properties_equal
+        initial
+        (Lwt_event.map_s
+           (fun () -> get_all_no_cache proxy interface)
+           (OBus_signal.event signal));
     notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
   }
@@ -141,14 +158,19 @@ let notify_update member proxy interface =
          ~args:(OBus_value.arg1 (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)))
       proxy
   in
-  {
-    notifier_event =
-      React.E.map
-        (fun (context, updates) ->
-           List.fold_left
-             (fun map (member, value) ->
-                String_map.add member (context, value) map)
-             String_map.empty updates)
+  lwt initial = get_all_no_cache proxy interface in
+  return {
+    notifier_signal =
+      React.S.fold
+        ~eq:properties_equal
+        (fun (old_context, properties) (context, updates) ->
+           (context,
+            List.fold_left
+              (fun map (member, value) ->
+                 String_map.add member value map)
+              properties
+              updates))
+        initial
         (OBus_signal.event_with_context signal);
     notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
@@ -167,14 +189,19 @@ let notify_egg_dbus proxy interface =
   in
   (* Only monitor the properties with the same interface: *)
   OBus_signal.set_filters signal [(0, OBus_match.AF_string interface)];
-  {
-    notifier_event =
-      React.E.map
-        (fun (context, (iface, updates)) ->
-           List.fold_left
-             (fun map (member, value) ->
-                String_map.add member (context, value) map)
-             String_map.empty updates)
+  lwt initial = get_all_no_cache proxy interface in
+  return {
+    notifier_signal =
+      React.S.fold
+        ~eq:properties_equal
+        (fun (old_context, properties) (context, (iface_name, updates)) ->
+           (context,
+            List.fold_left
+              (fun map (member, value) ->
+                 String_map.add member value map)
+              properties
+              updates))
+        initial
         (OBus_signal.event_with_context signal);
     notifier_stop =
       (fun () -> OBus_signal.disconnect signal);
@@ -186,118 +213,65 @@ let notify_custom f = f
    | Monitoring                                                      |
    +-----------------------------------------------------------------+ *)
 
-let monitorable property = property.notify_mode != notify_none
-
-let equal_context_value (context1, value1) (context2, value2) =
-  context1 == context2 && value1 = value2
-
-let hold_properties initial event =
-  React.S.fold ~eq:(String_map.equal equal_context_value)
-    (fun acc updates ->
-       String_map.fold
-         String_map.add
-         updates acc)
-    initial
-    event
-
-let rec updates property =
-  let property_group = property.property_group in
-  match property_group.property_group_state with
-    | Property_group_simple ->
-        let notifier =
-          property.notify_mode
-            property.proxy
-            property_group.property_group_interface
-        in
-        property_group.property_group_state <- (
-          Property_group_updates notifier
-        );
-        updates property
-    | Property_group_cached thread ->
-        let notifier =
-          property.notify_mode
-            property.proxy
-            property_group.property_group_interface
-        in
-        property_group.property_group_state <- (
-          Property_group_monitor((lwt initial = thread in
-                                  return (hold_properties initial notifier.notifier_event)),
-                                 notifier)
-        );
-        updates property
-    | Property_group_updates notifier
-    | Property_group_monitor(_, notifier) ->
-        React.E.map
-          (fun properties ->
-             let context, value = String_map.find property.member properties in
-             property.cast context value)
-          notifier.notifier_event
-
 let rec monitor property =
-  let _ = updates property in
-  let property_group = property.property_group in
+  let lazy property_group = property.property_group in
   match property_group.property_group_state with
     | Property_group_simple
     | Property_group_cached _ ->
-        (* We cannot be in theses states after a call to [updates] *)
-        assert false
-    | Property_group_updates notifier ->
         let thread =
-          lwt initial =
-            get_all_no_cache
-              property.proxy
-              property_group.property_group_interface
-          in
-          return (hold_properties initial notifier.notifier_event)
+          property.notify_mode
+            property.proxy
+            property_group.property_group_interface
         in
-        property_group.property_group_state <- (
-          Property_group_monitor(thread, notifier)
-        );
+        property_group.property_group_state <- Property_group_monitor thread;
         monitor property
-    | Property_group_monitor(thread, notifier) ->
-        lwt signal = thread in
+    | Property_group_monitor thread ->
+        lwt notifier = thread in
         return
           (React.S.map
-             (fun properties ->
-                let context, value = String_map.find property.member properties in
-                property.cast context value)
-             signal)
+             (fun (context, properties) -> property.cast context properties)
+             notifier.notifier_signal)
 
-let unmonitor_property_group property_group =
-  match property_group.property_group_state with
-    | Property_group_simple | Property_group_cached _ ->
-        ()
-    | Property_group_updates notifier ->
-        property_group.property_group_state <- Property_group_simple;
-        notifier.notifier_stop ()
-    | Property_group_monitor(thread, notifier) ->
-        property_group.property_group_state <- Property_group_simple;
-        notifier.notifier_stop ();
-        match Lwt.state thread with
-          | Sleep ->
-              cancel thread
-          | Return signal ->
-              React.S.stop signal
-          | Fail exn ->
-              ()
-
-let unmonitor property =
-  unmonitor_property_group property.property_group
+let monitor_with_stopper property =
+  lwt signal = monitor property in
+  (* TODO: implement the stop function *)
+  return (signal, ignore)
 
 (* +-----------------------------------------------------------------+
    | Clean up                                                        |
    +-----------------------------------------------------------------+ *)
 
+let unmonitor_property_group property_group =
+  match property_group.property_group_state with
+    | Property_group_simple ->
+        ()
+    | Property_group_cached thread ->
+        property_group.property_group_state <- Property_group_simple;
+        cancel thread
+    | Property_group_monitor thread ->
+        property_group.property_group_state <- Property_group_simple;
+        match Lwt.state thread with
+          | Sleep ->
+              cancel thread
+          | Return notifier ->
+              React.S.stop notifier.notifier_signal;
+              notifier.notifier_stop ()
+          | Fail exn ->
+              ()
+
 let cleanup_property_group property_group =
   property_group.property_group_ref_count <- property_group.property_group_ref_count - 1;
   if property_group.property_group_ref_count = 0 then begin
     let running = running_of_connection property_group.property_group_connection in
-    running.running_properties <- Property_map.remove (property_group.property_group_owner, property_group.property_group_path, property_group.property_group_interface) running.running_properties;
+    running.running_properties <- (
+      Property_map.remove
+        (property_group.property_group_owner,
+         property_group.property_group_path,
+         property_group.property_group_interface)
+        running.running_properties
+    );
     unmonitor_property_group property_group
   end
-
-let cleanup_property property =
-  cleanup_property_group property.property_group
 
 (* +-----------------------------------------------------------------+
    | Caching                                                         |
@@ -325,19 +299,7 @@ let load_cache proxy interface =
           property_group
   in
   let thread = get_all_no_cache proxy interface in
-  let () =
-    match property_group.property_group_state with
-      | Property_group_simple ->
-          property_group.property_group_state <- Property_group_cached thread
-      | Property_group_updates notifier ->
-          property_group.property_group_state <- (
-            Property_group_monitor((lwt initial = thread in
-                                    return (hold_properties initial notifier.notifier_event)),
-                                   notifier)
-          )
-      | _ ->
-          ()
-  in
+  property_group.property_group_state <- Property_group_cached thread;
   ignore begin
     lwt _ = thread in
     (* Expire the cache before the next iteration of the main loop: *)
@@ -357,35 +319,33 @@ let load_cache proxy interface =
    +-----------------------------------------------------------------+ *)
 
 let get_with_context ?(cache=true) property =
-  let property_group = property.property_group in
+  let lazy property_group = property.property_group in
   match property_group.property_group_state with
-    | Property_group_simple | Property_group_updates _ ->
-        if cache then begin
-          lwt properties = load_cache property.proxy property_group.property_group_interface in
-          let context, value  = String_map.find property.member properties in
-          return (context, property.cast context value)
-        end else begin
+    | Property_group_simple ->
+        if property.member = "" && not cache then begin
           lwt context, value =
             OBus_method.call_with_context m_Get
               property.proxy
               (property_group.property_group_interface, property.member)
           in
-          return (context, property.cast context value)
+          return (context, property.cast context (String_map.add property.member value String_map.empty))
+        end else begin
+          lwt context, properties = load_cache property.proxy property_group.property_group_interface in
+          return (context, property.cast context properties)
         end
     | Property_group_cached thread->
-        lwt properties = thread in
-        let context, value  = String_map.find property.member properties in
-        return (context, property.cast context value)
-    | Property_group_monitor(thread, notifier) ->
-        lwt signal = thread in
-        let context, value = String_map.find property.member (React.S.value signal) in
-        return (context, property.cast context value)
+        lwt context, properties = thread in
+        return (context, property.cast context properties)
+    | Property_group_monitor thread ->
+        lwt notifier = thread in
+        let context, properties = React.S.value notifier.notifier_signal in
+        return (context, property.cast context properties)
 
 let get ?cache property =
   get_with_context ?cache property >|= snd
 
 let set property value =
-  let property_group = property.property_group in
+  let lazy property_group = property.property_group in
   OBus_method.call m_Set
     property.proxy
     (property_group.property_group_interface, property.member, property.make value)
@@ -394,44 +354,51 @@ let set property value =
    | Property creation                                               |
    +-----------------------------------------------------------------+ *)
 
-let make_backend proxy info ?(notify_mode=notify_none) ~cast ~make () =
+let make_property_group proxy interface =
   let connection = OBus_proxy.connection proxy in
   let running = running_of_connection connection in
-  let key = (OBus_proxy.name proxy, OBus_proxy.path proxy, OBus_member.Property.interface info) in
+  let key = (OBus_proxy.name proxy, OBus_proxy.path proxy, interface) in
   let property_group =
-    match try Some(Property_map.find key running.running_properties) with Not_found -> None with
-      | Some property_group ->
-          property_group.property_group_ref_count <- property_group.property_group_ref_count + 1;
-          property_group
-      | None ->
-          let property_group = {
-            property_group_ref_count = 1;
-            property_group_state = Property_group_simple;
-            property_group_connection = connection;
-            property_group_owner = OBus_proxy.name proxy;
-            property_group_path = OBus_proxy.path proxy;
-            property_group_interface = OBus_member.Property.interface info;
-          } in
-          running.running_properties <- Property_map.add key property_group running.running_properties;
-          property_group
+  match try Some(Property_map.find key running.running_properties) with Not_found -> None with
+    | Some property_group ->
+        property_group.property_group_ref_count <- property_group.property_group_ref_count + 1;
+        property_group
+    | None ->
+        let property_group = {
+          property_group_ref_count = 1;
+          property_group_state = Property_group_simple;
+          property_group_connection = connection;
+          property_group_owner = OBus_proxy.name proxy;
+          property_group_path = OBus_proxy.path proxy;
+          property_group_interface = interface;
+        } in
+        running.running_properties <- Property_map.add key property_group running.running_properties;
+        property_group
   in
-  let property = {
-    cast = cast;
-    make = make;
-    member = OBus_member.Property.member info;
+  Gc.finalise cleanup_property_group property_group;
+  property_group
+
+let make info ?(notify_mode=notify_none) proxy =
+  let typ = OBus_member.Property.typ info and member = OBus_member.Property.member info in
+  {
+    cast = (fun context properties -> OBus_value.C.cast_single typ (String_map.find member properties));
+    make = (fun value -> OBus_value.C.make_single typ value);
+    member = member;
     proxy = proxy;
     notify_mode = notify_mode;
-    property_group = property_group;
-  } in
-  Gc.finalise cleanup_property property;
-  property
+    property_group = (let interface = OBus_member.Property.interface info in
+                      lazy(make_property_group proxy interface));
+  }
 
-let make info ?notify_mode proxy =
-  let typ = OBus_member.Property.typ info in
-  make_backend proxy info ?notify_mode
-    ~cast:(fun context value -> OBus_value.C.cast_single typ value)
-    ~make:(fun value -> OBus_value.C.make_single typ value)
-    ()
+let make_group proxy ?(notify_mode=notify_none) interface =
+  {
+    cast = (fun context properties -> properties);
+    make = (fun value -> assert false);
+    member = "";
+    proxy = proxy;
+    notify_mode = notify_mode;
+    property_group = lazy(make_property_group proxy interface);
+  }
 
 (* +-----------------------------------------------------------------+
    | Reading all properties                                          |
@@ -450,13 +417,20 @@ let get_all_with_context proxy ~interface =
     with Not_found ->
       None
   with
-    | None | Some{ property_group_state = (Property_group_simple | Property_group_updates _) } ->
+    | None | Some{ property_group_state = Property_group_simple } ->
         load_cache proxy interface
     | Some{ property_group_state = Property_group_cached thread } ->
         thread
-    | Some{ property_group_state = Property_group_monitor(thread, notifier) } ->
-        lwt signal = thread in
-        return (React.S.value signal)
+    | Some{ property_group_state = Property_group_monitor thread } ->
+        lwt notifier = thread in
+        return (React.S.value notifier.notifier_signal)
 
 let get_all proxy ~interface =
-  get_all_with_context proxy interface >|= String_map.map snd
+  get_all_with_context proxy interface >|= snd
+
+(* +-----------------------------------------------------------------+
+   | Reading properties from a set of properties                     |
+   +-----------------------------------------------------------------+ *)
+
+let find property context properties =
+  property.cast context properties
