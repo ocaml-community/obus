@@ -166,3 +166,12 @@ val known_filesystems : t -> fs list OBus_property.r
 val supports_luks_devices : t -> bool OBus_property.r
 val daemon_is_inhibited : t -> bool OBus_property.r
 val daemon_version : t -> string OBus_property.r
+
+type properties = {
+  known_filesystems : fs list;
+  supports_luks_devices : bool;
+  daemon_is_inhibited : bool;
+  daemon_version : string;
+}
+
+val properties : t -> properties OBus_property.r

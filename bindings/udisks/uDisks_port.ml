@@ -36,3 +36,24 @@ let number proxy =
 
 let connector_type proxy =
   OBus_property.make p_ConnectorType ~notify_mode proxy
+
+type properties = {
+  connector_type : string;
+  number : int;
+  parent : UDisks_adapter.t;
+  adapter : UDisks_adapter.t;
+  native_path : string;
+}
+
+let properties proxy =
+  OBus_property.map_r_with_context
+    (fun context properties ->
+       let find f = OBus_property.find (f proxy) context properties in
+       {
+         connector_type = find connector_type;
+         number = find number;
+         parent = find parent;
+         adapter = find adapter;
+         native_path = find native_path;
+       })
+    (OBus_property.make_group proxy ~notify_mode interface)

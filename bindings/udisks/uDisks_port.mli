@@ -22,3 +22,13 @@ val number : t -> int OBus_property.r
 val parent : t -> UDisks_adapter.t OBus_property.r
 val adapter : t -> UDisks_adapter.t OBus_property.r
 val native_path : t -> string OBus_property.r
+
+type properties = {
+  connector_type : string;
+  number : int;
+  parent : UDisks_adapter.t;
+  adapter : UDisks_adapter.t;
+  native_path : string;
+}
+
+val properties : t -> properties OBus_property.r

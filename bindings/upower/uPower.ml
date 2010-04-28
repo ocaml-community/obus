@@ -95,3 +95,28 @@ let lid_is_closed daemon =
 
 let lid_is_present daemon =
   OBus_property.make p_LidIsPresent ~notify_mode (proxy daemon)
+
+type properties = {
+  lid_is_present : bool;
+  lid_is_closed : bool;
+  on_low_battery : bool;
+  on_battery : bool;
+  can_hibernate : bool;
+  can_suspend : bool;
+  daemon_version : string;
+}
+
+let properties daemon =
+  OBus_property.map_r_with_context
+    (fun context properties ->
+       let find f = OBus_property.find (f daemon) context properties in
+       {
+         lid_is_present = find lid_is_present;
+         lid_is_closed = find lid_is_closed;
+         on_low_battery = find on_low_battery;
+         on_battery = find on_battery;
+         can_hibernate = find can_hibernate;
+         can_suspend = find can_suspend;
+         daemon_version = find daemon_version;
+       })
+    (OBus_property.make_group (proxy daemon) ~notify_mode interface)

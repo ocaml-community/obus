@@ -25,3 +25,14 @@ val num_ports : t -> int OBus_property.r
 val upstream_ports : t -> UDisks_port.t list OBus_property.r
 val adapter : t -> UDisks_adapter.t OBus_property.r
 
+type properties = {
+  native_path : string;
+  vendor : string;
+  model : string;
+  revision : string;
+  num_ports : int;
+  upstream_ports : UDisks_port.t list;
+  adapter : UDisks_adapter.t;
+}
+
+val properties : t -> properties OBus_property.r

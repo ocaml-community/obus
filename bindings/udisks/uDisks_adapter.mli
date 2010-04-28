@@ -23,3 +23,14 @@ val driver : t -> string OBus_property.r
 val model : t -> string OBus_property.r
 val vendor : t -> string OBus_property.r
 val native_path : t -> string OBus_property.r
+
+type properties = {
+  fabric : string;
+  num_ports : int;
+  driver : string;
+  model : string;
+  vendor : string;
+  native_path : string;
+}
+
+val properties : t -> properties OBus_property.r

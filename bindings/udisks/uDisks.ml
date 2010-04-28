@@ -289,3 +289,22 @@ let known_filesystems daemon =
           })
          l)
     (OBus_property.make p_KnownFilesystems (proxy daemon))
+
+type properties = {
+  known_filesystems : fs list;
+  supports_luks_devices : bool;
+  daemon_is_inhibited : bool;
+  daemon_version : string;
+}
+
+let properties daemon =
+  OBus_property.map_r_with_context
+    (fun context properties ->
+       let find f = OBus_property.find (f daemon) context properties in
+       {
+         known_filesystems = find known_filesystems;
+         supports_luks_devices = find supports_luks_devices;
+         daemon_is_inhibited = find daemon_is_inhibited;
+         daemon_version = find daemon_version;
+       })
+    (OBus_property.make_group (proxy daemon) interface)

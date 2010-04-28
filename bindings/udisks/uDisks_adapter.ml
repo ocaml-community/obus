@@ -35,3 +35,26 @@ let num_ports proxy =
 
 let fabric proxy =
   OBus_property.make p_Fabric ~notify_mode proxy
+
+type properties = {
+  fabric : string;
+  num_ports : int;
+  driver : string;
+  model : string;
+  vendor : string;
+  native_path : string;
+}
+
+let properties proxy =
+  OBus_property.map_r_with_context
+    (fun context properties ->
+       let find f = OBus_property.find (f proxy) context properties in
+       {
+         fabric = find fabric;
+         num_ports = find num_ports;
+         driver = find driver;
+         model = find model;
+         vendor = find vendor;
+         native_path = find native_path;
+       })
+    (OBus_property.make_group proxy ~notify_mode interface)
