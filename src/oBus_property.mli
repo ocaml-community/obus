@@ -28,8 +28,7 @@ type notify_mode
   (** Type of properties changes notification. It describes how
       properties changes are announced. *)
 
-type properties = OBus_value.V.single 
-Map.Make(String).t
+type properties = OBus_value.V.single Map.Make(String).t
     (** Mapping from property names to their value *)
 
 (** {6 Properties creation} *)

@@ -322,7 +322,7 @@ let get_with_context ?(cache=true) property =
   let lazy property_group = property.property_group in
   match property_group.property_group_state with
     | Property_group_simple ->
-        if property.member = "" && not cache then begin
+        if property.member <> "" && not cache then begin
           lwt context, value =
             OBus_method.call_with_context m_Get
               property.proxy
