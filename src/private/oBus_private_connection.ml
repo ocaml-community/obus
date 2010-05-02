@@ -10,7 +10,12 @@
 (* This file contains type definitions for D-Bus connections.
 
    These definitions cannot go into [OBus_connection] because several
-   modules of obus need access them directly. *)
+   modules of obus need to access them directly. *)
+
+let section = Lwt_log.Section.make "obus(connection)"
+
+type void
+  (* Empty type *)
 
 (* +-----------------------------------------------------------------+
    | Maps and sets used in connections                               |
@@ -48,7 +53,7 @@ module Name_set = String_set
 
 (* Type of static object *)
 type static_object = {
-  static_object_handle : t -> OBus_message.t -> unit Lwt.t;
+  static_object_handle : OBus_value.V.sequence context -> unit Lwt.t;
   (* The method call handler *)
 
   static_object_connection_closed : t -> unit;
@@ -57,7 +62,7 @@ type static_object = {
 
 (* Type of a dynamic node, which creates object on the fly when
    accessed *)
-and dynamic_object = OBus_path.t -> static_object Lwt.t
+and dynamic_object = OBus_value.V.sequence context -> OBus_path.t -> static_object option Lwt.t
 
 (* +-----------------------------------------------------------------+
    | Name resolvers                                                  |
@@ -137,7 +142,7 @@ and receiver = {
   (* Message filtering. It is used to filter on message body if the
      user defined argument filters. *)
 
-  receiver_push : unit context -> unit;
+  receiver_push : void context -> unit;
   (* Function used to send new events *)
 }
 
@@ -203,7 +208,7 @@ and notifier = {
   (* Stop the notifier *)
 }
 
-and notify_data = unit context * OBus_value.V.single String_map.t
+and notify_data = void context * OBus_value.V.single String_map.t
     (* Mapping from member names to their current value *)
 
 (* +-----------------------------------------------------------------+
@@ -213,8 +218,8 @@ and notify_data = unit context * OBus_value.V.single String_map.t
 and 'a context = {
   context_connection : t;
   context_message : OBus_message.t;
-  context_arguments : 'a OBus_value.arguments;
-  mutable context_replied : bool;
+  context_body : 'a -> OBus_value.V.sequence;
+  context_replied : bool ref;
 }
 
 (* +-----------------------------------------------------------------+
@@ -366,9 +371,158 @@ let check_connection connection =
     | Running running ->
         ()
 
-let make_context connection message = {
+(* Apply a list of filter on a message, logging failure *)
+let apply_filters typ message filters =
+  try
+    Lwt_sequence.fold_l
+      (fun filter message -> match message with
+         | Some message -> filter message
+         | None -> None)
+      filters (Some message)
+  with exn ->
+    ignore (Lwt_log.error_f ~section ~exn "an %s filter failed with" typ);
+    None
+
+(* +-----------------------------------------------------------------+
+   | Errors                                                          |
+   +-----------------------------------------------------------------+ *)
+
+exception Connection_closed
+exception Connection_lost
+exception Transport_error of exn
+
+(* +-----------------------------------------------------------------+
+   | Sending messages                                                |
+   +-----------------------------------------------------------------+ *)
+
+open Lwt
+open OBus_message
+
+(* Send a message, maybe adding a reply waiter and return
+   [return_thread] *)
+let send_message_backend connection reply_waiter_opt message =
+  let running = running_of_connection connection in
+  Lwt_mutex.with_lock running.running_outgoing_m begin fun () ->
+    let send_it, closed = match connection#get with
+      | Running _ ->
+          (true, false)
+      | Crashed Connection_closed ->
+          (true, true)
+      | Crashed _ ->
+          (false, true)
+    in
+    if send_it then begin
+      let message = { message with serial = running.running_next_serial } in
+      match apply_filters "outgoing" message running.running_outgoing_filters with
+        | None ->
+            lwt () = Lwt_log.debug ~section "outgoing message dropped by filters" in
+            fail (Failure "message dropped by filters")
+
+        | Some message ->
+            if not closed then begin
+              match reply_waiter_opt with
+                | Some(waiter, wakener) ->
+                    running.running_reply_waiters <- Serial_map.add message.serial wakener running.running_reply_waiters;
+                    on_cancel waiter (fun () ->
+                                        match connection#get with
+                                          | Crashed _ ->
+                                              ()
+                                          | Running running ->
+                                              running.running_reply_waiters <- Serial_map.remove message.serial running.running_reply_waiters)
+                | None ->
+                    ()
+            end;
+
+            try_lwt
+              lwt () = choose [running.running_abort_send;
+                               (* Do not cancel a thread while it is marshaling message: *)
+                               protected (OBus_transport.send running.running_transport message)] in
+              (* Everything went OK, continue with a new serial *)
+              running.running_next_serial <- Int32.succ running.running_next_serial;
+              return ()
+            with
+              | OBus_wire.Data_error _ as exn ->
+                  (* The message can not be marshaled for some
+                     reason. This is not a fatal error. *)
+                  fail exn
+
+              | Canceled ->
+                  (* Message sending have been canceled by the
+                     user. This is not a fatal error either. *)
+                  fail Canceled
+
+              | exn ->
+                  (* All other errors are considered as fatal. They
+                     are fatal because it is possible that a message
+                     has been partially sent on the connection, so the
+                     message stream is broken *)
+                  lwt exn = connection#set_crash (Transport_error exn) in
+                  fail exn
+    end else
+      match connection#get with
+        | Crashed exn ->
+            fail exn
+        | Running _ ->
+            return ()
+  end
+
+let send_message packed message =
+  send_message_backend packed None message
+
+let send_message_with_reply packed message =
+  let (waiter, wakener) as v = task () in
+  lwt () = send_message_backend packed (Some v) message in
+  waiter
+
+(* +-----------------------------------------------------------------+
+   | Contexts and replies                                            |
+   +-----------------------------------------------------------------+ *)
+
+let make_context ~connection ~message = {
   context_connection = connection;
   context_message = message;
-  context_arguments = OBus_value.arg0;
-  context_replied = false;
+  context_body = (fun void -> assert false);
+  context_replied = ref false;
 }
+
+let make_context_with_reply ~connection ~message = {
+  context_connection = connection;
+  context_message = message;
+  context_body = (fun body -> body);
+  context_replied = ref false;
+}
+
+let send_reply ~context x =
+  if !(context.context_replied) then
+    return ()
+  else begin
+    context.context_replied := true;
+    let msg = context.context_message in
+    send_message context.context_connection {
+      destination = msg.sender;
+      sender = None;
+      flags = { no_reply_expected = true; no_auto_start = true };
+      serial = 0l;
+      typ = Method_return msg.serial;
+      body = context.context_body x
+    }
+  end
+
+let send_error_by_name ~context name error_message =
+  if !(context.context_replied) then
+    return ()
+  else begin
+    context.context_replied := true;
+    let msg = context.context_message in
+    send_message context.context_connection {
+      destination = msg.sender;
+      sender = None;
+      flags = { no_reply_expected = true; no_auto_start = true };
+      serial = 0l;
+      typ = Error(msg.serial, name);
+      body = [OBus_value.V.basic_string error_message];
+    }
+  end
+
+let send_error ~context exn error_message =
+  send_error_by_name ~context (OBus_error.name_of_exn exn) error_message

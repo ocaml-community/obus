@@ -19,14 +19,14 @@ open OBus_private_connection
 type properties = OBus_value.V.single String_map.t
 
 type notifier = OBus_private_connection.notifier = {
-  notifier_signal : (unit OBus_context.t * properties) React.signal;
+  notifier_signal : (OBus_context.void OBus_context.t * properties) React.signal;
   notifier_stop : unit -> unit;
 }
 
 type notify_mode = OBus_proxy.t -> OBus_name.interface -> notifier Lwt.t
 
 type ('a, 'access) t = {
-  cast : unit context -> properties -> 'a;
+  cast : void context -> properties -> 'a;
   make : 'a -> OBus_value.V.single;
   member : OBus_name.member;
   (* If [member = ""] then this a property group, otherwisse it is a

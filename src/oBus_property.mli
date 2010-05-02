@@ -46,15 +46,15 @@ val make_group : OBus_proxy.t -> ?notify_mode : notify_mode -> OBus_name.interfa
 val map_rw : ('a -> 'b) -> ('b -> 'a) -> 'a rw -> 'b rw
   (** [map property f g] maps [property] with [f] and [g] *)
 
-val map_rw_with_context : (unit OBus_context.t -> 'a -> 'b) -> ('b -> 'a) -> 'a rw -> 'b rw
+val map_rw_with_context : (OBus_context.void OBus_context.t -> 'a -> 'b) -> ('b -> 'a) -> 'a rw -> 'b rw
   (** Same as {!map} except that the context is also passed to mapping
       functions. *)
 
 val map_r : ('a -> 'b) -> ('a, [> `readable ]) t -> 'b r
   (** Maps a read-only properties *)
 
-val map_r_with_context :  (unit OBus_context.t -> 'a -> 'b) -> ('a, [> `readable ]) t -> 'b r
-  (** Maps a read-only properties, passing the context to the mapping
+val map_r_with_context :  (OBus_context.void OBus_context.t -> 'a -> 'b) -> ('a, [> `readable ]) t -> 'b r
+  (** Maps a read-only properties, passing the contexxot to the mapping
       function *)
 
 val map_w : ('b -> 'a) -> ('a, [> `writable ]) t -> 'b w
@@ -73,10 +73,10 @@ val get : ?cache : bool -> ('a, [> `readable ]) t -> 'a Lwt.t
       Note that the cache will expire at the next iteration of the Lwt main
       loop. *)
 
-val get_with_context : ?cache : bool -> ('a, [> `readable ]) t -> (unit OBus_context.t * 'a) Lwt.t
+val get_with_context : ?cache : bool -> ('a, [> `readable ]) t -> (OBus_context.void OBus_context.t * 'a) Lwt.t
   (** Same as {!get} but also returns the context *)
 
-val find : ('a, [> `readable ]) t -> unit OBus_context.t -> properties -> 'a
+val find : ('a, [> `readable ]) t -> OBus_context.void OBus_context.t -> properties -> 'a
   (** [find property context properties] looks up for the given
       property in [properties]. It raises [Not_found] if the
       [property] does not belong to [properties] *)
@@ -116,7 +116,7 @@ val get_all : OBus_proxy.t -> interface : OBus_name.interface -> properties Lwt.
       Note that {!get_all} always uses the cache if it is not empty,
       or fills it if it is. *)
 
-val get_all_with_context : OBus_proxy.t -> interface : OBus_name.interface -> (unit OBus_context.t * properties) Lwt.t
+val get_all_with_context : OBus_proxy.t -> interface : OBus_name.interface -> (OBus_context.void OBus_context.t * properties) Lwt.t
   (** Same as {!get_all} but also returns the context *)
 
 (** {6 Property changes notifications} *)
@@ -148,7 +148,7 @@ val notify_egg_dbus : notify_mode
 
 (** Type of a notifier *)
 type notifier = {
-  notifier_signal : (unit OBus_context.t * properties) React.signal;
+  notifier_signal : (OBus_context.void OBus_context.t * properties) React.signal;
   (** Signals holding the contents of all property of an interface *)
 
   notifier_stop : unit -> unit;
@@ -161,7 +161,7 @@ val notify_custom : (OBus_proxy.t -> OBus_name.interface -> notifier Lwt.t) -> n
       property changes. [f] is the function used to create the
       notifier. *)
 
-val get_all_no_cache : OBus_proxy.t -> OBus_name.interface -> (unit OBus_context.t * properties) Lwt.t
+val get_all_no_cache : OBus_proxy.t -> OBus_name.interface -> (OBus_context.void OBus_context.t * properties) Lwt.t
   (** [get_all_no_cache connection owner path interface] returns the
       values of all properties of the given object for the given
       interface.

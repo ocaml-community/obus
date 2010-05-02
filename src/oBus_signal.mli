@@ -30,14 +30,14 @@ type 'a t
 val map : ('a -> 'b) -> 'a t -> 'b t
   (** [map f signal] maps the values returned by [signal] with [f] *)
 
-val map_with_context : (unit OBus_context.t -> 'a -> 'b) -> 'a t -> 'b t
+val map_with_context : (OBus_context.void OBus_context.t -> 'a -> 'b) -> 'a t -> 'b t
   (** [map_with_context f signal] maps the values returned by [signal]
       with [f], and also pass to [f] the context. *)
 
 val event : 'a t -> 'a React.event
   (** The event which occurs each time the signal is received. *)
 
-val event_with_context : 'a t -> (unit OBus_context.t * 'a) React.event
+val event_with_context : 'a t -> (OBus_context.void OBus_context.t * 'a) React.event
   (** Same as {!event} but adds the context to events *)
 
 val connect : 'a OBus_member.Signal.t -> OBus_proxy.t -> 'a t

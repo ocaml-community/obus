@@ -14,9 +14,9 @@ open OBus_message
 open OBus_private_connection
 open OBus_value
 
-exception Connection_closed
-exception Connection_lost
-exception Transport_error of exn
+exception Connection_closed = OBus_private_connection.Connection_closed
+exception Connection_lost = OBus_private_connection.Connection_lost
+exception Transport_error = OBus_private_connection.Transport_error
 
 let () =
   Printexc.register_printer
@@ -43,117 +43,8 @@ module Guid_map = Map.Make(struct
                           end)
 let guid_connection_map = ref Guid_map.empty
 
-(* Apply a list of filter on a message, logging failure *)
-let apply_filters typ message filters =
-  try
-    Lwt_sequence.fold_l
-      (fun filter message -> match message with
-         | Some message -> filter message
-         | None -> None)
-      filters (Some message)
-  with exn ->
-    ignore (Lwt_log.error_f ~section ~exn "an %s filter failed with" typ);
-    None
-
-(* +-----------------------------------------------------------------+
-   | Sending messages                                                |
-   +-----------------------------------------------------------------+ *)
-
-(* Send a message, maybe adding a reply waiter and return
-   [return_thread] *)
-let send_message_backend connection reply_waiter_opt message =
-  let running = running_of_connection connection in
-  Lwt_mutex.with_lock running.running_outgoing_m begin fun () ->
-    let send_it, closed = match connection#get with
-      | Running _ ->
-          (true, false)
-      | Crashed Connection_closed ->
-          (true, true)
-      | Crashed _ ->
-          (false, true)
-    in
-    if send_it then begin
-      let message = { message with serial = running.running_next_serial } in
-      match apply_filters "outgoing" message running.running_outgoing_filters with
-        | None ->
-            lwt () = Lwt_log.debug ~section "outgoing message dropped by filters" in
-            fail (Failure "message dropped by filters")
-
-        | Some message ->
-            if not closed then begin
-              match reply_waiter_opt with
-                | Some(waiter, wakener) ->
-                    running.running_reply_waiters <- Serial_map.add message.serial wakener running.running_reply_waiters;
-                    on_cancel waiter (fun () ->
-                                        match connection#get with
-                                          | Crashed _ ->
-                                              ()
-                                          | Running running ->
-                                              running.running_reply_waiters <- Serial_map.remove message.serial running.running_reply_waiters)
-                | None ->
-                    ()
-            end;
-
-            try_lwt
-              lwt () = choose [running.running_abort_send;
-                               (* Do not cancel a thread while it is marshaling message: *)
-                               protected (OBus_transport.send running.running_transport message)] in
-              (* Everything went OK, continue with a new serial *)
-              running.running_next_serial <- Int32.succ running.running_next_serial;
-              return ()
-            with
-              | OBus_wire.Data_error _ as exn ->
-                  (* The message can not be marshaled for some
-                     reason. This is not a fatal error. *)
-                  fail exn
-
-              | Canceled ->
-                  (* Message sending have been canceled by the
-                     user. This is not a fatal error either. *)
-                  fail Canceled
-
-              | exn ->
-                  (* All other errors are considered as fatal. They
-                     are fatal because it is possible that a message
-                     has been partially sent on the connection, so the
-                     message stream is broken *)
-                  lwt exn = connection#set_crash (Transport_error exn) in
-                  fail exn
-    end else
-      match connection#get with
-        | Crashed exn ->
-            fail exn
-        | Running _ ->
-            return ()
-  end
-
-let send_message packed message =
-  send_message_backend packed None message
-
-let send_message_with_reply packed message =
-  let (waiter, wakener) as v = task () in
-  lwt () = send_message_backend packed (Some v) message in
-  waiter
-
-(* +-----------------------------------------------------------------+
-   | Helpers for the message dispatcher                              |
-   +-----------------------------------------------------------------+ *)
-
-let send_reply connection { sender = sender; serial = serial } body =
-  send_message connection { destination = sender;
-                            sender = None;
-                            flags = { no_reply_expected = true; no_auto_start = true };
-                            serial = 0l;
-                            typ = Method_return(serial);
-                            body = body }
-
-let send_error connection { sender = sender; serial = serial } key msg =
-  send_message connection { destination = sender;
-                            sender = None;
-                            flags = { no_reply_expected = true; no_auto_start = true };
-                            serial = 0l;
-                            typ = Error(serial, OBus_error.name_of_exn key);
-                            body = [V.basic_string msg] }
+let send_message = OBus_private_connection.send_message
+let send_message_with_reply = OBus_private_connection.send_message_with_reply
 
 (* +-----------------------------------------------------------------+
    | Signal matching                                                 |
@@ -223,32 +114,33 @@ let dispatch_message connection running message = match message with
       end
 
   | { typ = Signal(path, interface, member) } ->
+      let context = make_context connection message in
       begin match running.running_name, message.sender with
         | None, _ ->
             (* If this is a peer-to-peer connection, we do not match
                on the sender *)
-            begin match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
-              | Some receiver_group ->
-                  Lwt_sequence.iter_l
-                    (fun receiver ->
-                       if receiver.receiver_active && receiver.receiver_filter message then
-                         try
-                           receiver.receiver_push (make_context connection message)
-                         with exn ->
-                           ignore (Lwt_log.error ~section ~exn "signal event failed with"))
-                    receiver_group.receiver_group_receivers
-              | None ->
-                  ()
-            end
+              begin match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
+                | Some receiver_group ->
+                    Lwt_sequence.iter_l
+                      (fun receiver ->
+                         if receiver.receiver_active && receiver.receiver_filter message then
+                           try
+                             receiver.receiver_push context
+                           with exn ->
+                             ignore (Lwt_log.error ~section ~exn "signal event failed with"))
+                      receiver_group.receiver_group_receivers
+                | None ->
+                    ()
+              end
 
-        | Some _, None ->
-            ignore (Lwt_log.error_f ~section "signal without sender received from message bus")
+          | Some _, None ->
+              ignore (Lwt_log.error_f ~section "signal without sender received from message bus")
 
-        | Some _, Some sender ->
-            begin match sender, message with
+          | Some _, Some sender ->
+              begin match sender, message with
 
-              (* Internal handling of "NameOwnerChange" messages for
-                 name resolving. *)
+                (* Internal handling of "NameOwnerChange" messages for
+                   name resolving. *)
               | "org.freedesktop.DBus",
                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
                   body = [V.Basic(V.String name); V.Basic(V.String old_owner); V.Basic(V.String new_owner)] } ->
@@ -326,7 +218,7 @@ let dispatch_message connection running message = match message with
                       (fun receiver ->
                          if receiver.receiver_active && match_sender receiver message && receiver.receiver_filter message then
                            try
-                             receiver.receiver_push (make_context connection message)
+                             receiver.receiver_push context
                            with exn ->
                              ignore (Lwt_log.error ~section ~exn "signal event failed with"))
                       receiver_group.receiver_group_receivers
@@ -336,21 +228,23 @@ let dispatch_message connection running message = match message with
 
   (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
   | { typ = Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } -> begin
-      match member, body with
+      let context = make_context_with_reply connection message in
+        match member, body with
         | "Ping", [] ->
-            ignore (send_reply connection message [])
+            ignore (send_reply context [])
         | "GetMachineId", [] ->
             ignore
               (try_bind (fun _ -> Lazy.force OBus_info.machine_uuid)
-                 (fun machine_uuid -> send_reply connection message [V.basic_string (OBus_uuid.to_string machine_uuid)])
+                 (fun machine_uuid -> send_reply context [V.basic_string (OBus_uuid.to_string machine_uuid)])
                  (fun exn ->
-                    lwt () = send_error connection message OBus_error.Failed "cannot get machine uuuid" in
+                    lwt () = send_error context OBus_error.Failed "cannot get machine uuuid" in
                     fail exn))
         | _ ->
-            ignore (send_error connection message OBus_error.Unknown_method (unknown_method_message message))
+            ignore (send_error context OBus_error.Unknown_method (unknown_method_message message))
     end
 
   | { typ = Method_call(path, interface_opt, member); body = body } ->
+      let context = make_context_with_reply connection message in
       ignore begin
         (* Look in static objects *)
         begin
@@ -376,15 +270,14 @@ let dispatch_message connection running message = match message with
                   return None
               | Some(path, dynamic_object) ->
                   try_lwt
-                    lwt static_object = dynamic_object path in
-                    return (Some static_object)
+                    dynamic_object context path
                   with exn ->
                     lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
                     return None
         end >>= function
           | Some static_object ->
               ignore (try_lwt
-                        static_object.static_object_handle connection message
+                        static_object.static_object_handle context
                       with exn ->
                         Lwt_log.error ~section ~exn "method call handler failed with");
               return ()
@@ -395,20 +288,21 @@ let dispatch_message connection running message = match message with
                  path "/a/b/c", we need to add introspection support
                  for virtual objects with path "/", "/a", "/a/b",
                  "/a/b/c". *)
-              if match interface_opt, member, body with
-                | None, "Introspect", []
-                | Some "org.freedesktop.DBus.Introspectable", "Introspect", [] -> begin
-                    match children running path with
-                      | [] ->
-                          true
-                      | children ->
-                          ignore (send_reply connection message [V.basic_string (introspection children)]);
-                          false
-                  end
-                | _ ->
-                    true
-              then
-                ignore (Printf.ksprintf (send_error connection message OBus_error.Failed) "No such object: %S" (OBus_path.to_string path));
+              if not !(context.context_replied) then begin
+                match interface_opt, member, body with
+                  | None, "Introspect", []
+                  | Some "org.freedesktop.DBus.Introspectable", "Introspect", [] -> begin
+                      match children running path with
+                        | [] ->
+                            ()
+                        | children ->
+                            ignore (send_reply context [V.basic_string (introspection children)])
+                    end
+                  | _ ->
+                      ()
+              end;
+              if not !(context.context_replied) then
+                ignore (Printf.ksprintf (send_error ~context OBus_error.Failed) "No such object: %S" (OBus_path.to_string path));
               return ()
       end
 

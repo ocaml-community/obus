@@ -10,29 +10,34 @@
 open OBus_private_connection
 
 type 'a t = 'a OBus_private_connection.context
+type void = OBus_private_connection.void
 
-let make ~connection ~message = {
-  context_connection = connection;
-  context_message = message;
-  context_arguments = OBus_value.arg0;
-  context_replied = false;
-}
-
-let make_with_arguments ~connection ~message ~arguments = {
-  context_connection = connection;
-  context_message = message;
-  context_arguments = arguments;
-  context_replied = false;
-}
+let make = OBus_private_connection.make_context
+let make_with_reply = OBus_private_connection.make_context_with_reply
 
 let connection ctx = ctx.context_connection
 let message ctx = ctx.context_message
-let arguments ctx = ctx.context_arguments
-
-let replied ctx = ctx.context_replied
-let set_replied ctx = ctx.context_replied <- true
 
 let sender ctx = {
   OBus_peer.connection = ctx.context_connection;
   OBus_peer.name = OBus_message.sender ctx.context_message;
 }
+
+let destination ctx = {
+  OBus_peer.connection = ctx.context_connection;
+  OBus_peer.name = OBus_message.destination ctx.context_message;
+}
+
+let map f ctx = {
+  ctx with
+    context_body = (fun x -> ctx.context_body (f x));
+}
+
+let replied ctx =
+  !(ctx.context_replied)
+
+let set_replied ctx =
+  ctx.context_replied := true
+
+let make_body ctx x =
+  ctx.context_body x

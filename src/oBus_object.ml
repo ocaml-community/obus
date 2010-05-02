@@ -20,7 +20,7 @@ module Interface_map = String_map
 module Member_map = String_map
 
 type 'a member_type =
-  | Method of OBus_value.signature * (OBus_connection.t -> OBus_message.t -> 'a t -> unit Lwt.t)
+  | Method of OBus_value.signature * (OBus_value.V.sequence OBus_context.t -> 'a t -> unit Lwt.t)
   | Signal
   | Property of ('a -> OBus_value.V.single React.signal) option *
       (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option
@@ -34,7 +34,7 @@ and 'a member = {
 and 'a method_info = {
   method_name : OBus_name.member;
   method_type : OBus_value.signature;
-  method_handler : OBus_connection.t -> OBus_message.t -> 'a t -> unit Lwt.t;
+  method_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> unit Lwt.t;
 }
 
 and 'a property_info = {
@@ -156,18 +156,19 @@ let compare_method (name, typ) meth =
    | Exportation                                                     |
    +-----------------------------------------------------------------+ *)
 
-let unknown_method connection message =
+let unknown_method context =
   OBus_method.fail
-    (make_context connection message)
+    context
     OBus_error.Unknown_method
-    (unknown_method_message message)
+    (unknown_method_message (OBus_context.message context))
 
-let handle_call obj connection message =
+let handle_call obj context =
+  let message = OBus_context.message context in
   match message with
     | { typ = Method_call(path, Some interface, member) } -> begin
         match binary_search compare_interface interface obj.methods with
           | None ->
-              unknown_method connection message
+              unknown_method context
           | Some(interface, methods) ->
               match
                 binary_search
@@ -176,9 +177,9 @@ let handle_call obj connection message =
                   methods
               with
                 | None ->
-                    unknown_method connection message
+                    unknown_method context
                 | Some meth ->
-                    meth.method_handler connection message obj
+                    meth.method_handler context obj
       end
     | { typ = Method_call(path, None, member) } -> begin
         match
@@ -195,9 +196,9 @@ let handle_call obj connection message =
             obj.interfaces None
         with
           | Some meth ->
-              meth.method_handler connection message obj
+              meth.method_handler context obj
           | None ->
-              unknown_method connection message
+              unknown_method context
       end
     | _ ->
         invalid_arg "OBus_object.Make.handle_call"
@@ -252,12 +253,15 @@ let destroy obj =
 let dynamic ~connection ~prefix ~handler =
   let running = running_of_connection connection in
   (* Remove any dynamic node declared with the same prefix: *)
-  let create path =
-    lwt obj = handler path in
-    return {
-      static_object_handle = handle_call obj;
-      static_object_connection_closed = ignore;
-    }
+  let create context path =
+    handler context path >>= function
+      | Some obj ->
+          return (Some {
+                    static_object_handle = handle_call obj;
+                    static_object_connection_closed = ignore;
+                  })
+      | None ->
+          return None
   in
   running.running_dynamic_objects <- Object_map.add prefix create running.running_dynamic_objects
 
@@ -358,12 +362,15 @@ let make_args arguments =
     (OBus_value.C.type_sequence (OBus_value.arg_types arguments))
 
 let _method_info info f =
-  let handler connection message obj =
+  let handler context obj =
     let context =
-      OBus_context.make_with_arguments
-        ~connection
-        ~message
-        ~arguments:(OBus_member.Method.o_args info)
+      OBus_context.map
+        (fun x ->
+           OBus_value.C.make_sequence
+             (OBus_value.arg_types
+                (OBus_member.Method.o_args info))
+             x)
+        context
     in
     try_lwt
       let args =
@@ -371,7 +378,7 @@ let _method_info info f =
            binary search for the method *)
         OBus_value.C.cast_sequence
           (OBus_value.arg_types (OBus_member.Method.i_args info))
-          (OBus_message.body message)
+          (OBus_message.body (OBus_context.message context))
       in
       lwt result = f context obj args in
       OBus_method.return context result

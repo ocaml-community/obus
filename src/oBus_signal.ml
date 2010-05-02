@@ -44,7 +44,7 @@ type descr = {
 }
 
 type 'a t = {
-  event : (unit OBus_context.t * 'a) React.event;
+  event : (OBus_context.void OBus_context.t * 'a) React.event;
   (* The event that is passed to the user *)
 
   descr : descr;

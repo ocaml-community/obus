@@ -9,9 +9,7 @@
 
 (** Helpers for calling methods *)
 
-val invalid_reply : (string -> exn) ref
-  (** This variable is set in {!OBus_method}. We use a reference to
-      avoid circular dependencies. *)
+exception Invalid_reply of string
 
 val call :
   connection : OBus_connection.t ->
@@ -29,7 +27,7 @@ val call_with_context :
   interface : OBus_name.interface ->
   member : OBus_name.member ->
   i_args : 'a OBus_value.C.sequence ->
-  o_args : 'b OBus_value.C.sequence -> 'a -> (unit OBus_private_connection.context * 'b) Lwt.t
+  o_args : 'b OBus_value.C.sequence -> 'a -> (OBus_private_connection.void OBus_private_connection.context * 'b) Lwt.t
 
 val call_no_reply :
   connection : OBus_connection.t ->

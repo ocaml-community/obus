@@ -16,9 +16,7 @@ open OBus_message
    | Calling methods                                                 |
    +-----------------------------------------------------------------+ *)
 
-exception Invalid_reply of string
-
-let () = OBus_private_method.invalid_reply := (fun msg -> Invalid_reply msg)
+exception Invalid_reply = OBus_private_method.Invalid_reply
 
 let call info proxy args =
   OBus_private_method.call
@@ -56,37 +54,6 @@ let call_no_reply info proxy args =
    | Sending replies                                                 |
    +-----------------------------------------------------------------+ *)
 
-let return ~context x =
-  if OBus_context.replied context then
-    return ()
-  else begin
-    OBus_context.set_replied context;
-    let msg = OBus_context.message context in
-    OBus_connection.send_message (OBus_context.connection context) {
-      destination = msg.sender;
-      sender = None;
-      flags = { no_reply_expected = true; no_auto_start = true };
-      serial = 0l;
-      typ = Method_return msg.serial;
-      body = OBus_value.C.make_sequence (OBus_value.arg_types (OBus_context.arguments context)) x;
-    }
-  end
-
-let fail_by_name ~context name error_message =
-  if OBus_context.replied context then
-    Lwt.return ()
-  else begin
-    OBus_context.set_replied context;
-    let msg = OBus_context.message context in
-    OBus_connection.send_message (OBus_context.connection context) {
-      destination = msg.sender;
-      sender = None;
-      flags = { no_reply_expected = true; no_auto_start = true };
-      serial = 0l;
-      typ = Error(msg.serial, name);
-      body = [OBus_value.V.basic_string error_message];
-    }
-  end
-
-let fail ~context exn error_message =
-  fail_by_name ~context (OBus_error.name_of_exn exn) error_message
+let return = OBus_private_connection.send_reply
+let fail_by_name = OBus_private_connection.send_error_by_name
+let fail = OBus_private_connection.send_error

@@ -59,7 +59,7 @@ val call_with_context : t ->
   interface : OBus_name.interface ->
   member : OBus_name.member ->
   i_args : 'a OBus_value.C.sequence ->
-  o_args : 'b OBus_value.C.sequence -> 'a -> (unit OBus_context.t * 'b) Lwt.t
+  o_args : 'b OBus_value.C.sequence -> 'a -> (OBus_context.void OBus_context.t * 'b) Lwt.t
   (** [call_with_context] is like {!call} except that is also returns
       the context of the method return *)
 

@@ -20,7 +20,7 @@ val call : ('a, 'b) OBus_member.Method.t -> OBus_proxy.t -> 'a -> 'b Lwt.t
   (** [call meth proxy args] calls the method [meth] on the object
       pointed by [proxy], and wait for the reply. *)
 
-val call_with_context : ('a, 'b) OBus_member.Method.t -> OBus_proxy.t -> 'a -> (unit OBus_context.t * 'b) Lwt.t
+val call_with_context : ('a, 'b) OBus_member.Method.t -> OBus_proxy.t -> 'a -> (OBus_context.void OBus_context.t * 'b) Lwt.t
   (** [call_with_context meth proxy args] is like {!call} except that
       is also returns the context of the method return *)
 

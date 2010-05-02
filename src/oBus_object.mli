@@ -93,13 +93,17 @@ val destroy : 'a t -> unit
   (** [destroy obj] removes [obj] from all connection it is exported
       on *)
 
-val dynamic : connection : OBus_connection.t -> prefix : OBus_path.t -> handler : (OBus_path.t -> 'a t Lwt.t) -> unit
+val dynamic :
+  connection : OBus_connection.t ->
+  prefix : OBus_path.t ->
+  handler : (OBus_value.V.sequence OBus_context.t -> OBus_path.t -> 'a t option Lwt.t) -> unit
   (** [dynamic ~connection ~prefix ~handler] defines a dynamic node in
       the tree of object. This means that objects with a path prefixed
       by [prefix], will be created on the fly by [handler] when a
       process try to access them.
 
-      [handler] receive the rest of path after the prefix.
+      [handler] receive the context and rest of path after the
+      prefix.
 
       Note: if you manually export an object with a path prefixed by
       [prefix], it will have precedence over the one created by

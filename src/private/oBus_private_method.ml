@@ -10,7 +10,7 @@
 open Lwt
 open OBus_message
 
-let invalid_reply = ref (fun msg -> assert false)
+exception Invalid_reply of string
 
 let call_with_context ~connection ~path ?destination ~interface ~member ~i_args ~o_args args =
   lwt msg =
@@ -30,7 +30,7 @@ let call_with_context ~connection ~path ?destination ~interface ~member ~i_args 
           return (context, OBus_value.C.cast_sequence o_args (body msg))
         with OBus_value.C.Signature_mismatch ->
           fail
-            (!invalid_reply
+            (Invalid_reply
                (Printf.sprintf
                   OBus_constant.invalid_reply
                   interface
