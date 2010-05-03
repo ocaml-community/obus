@@ -110,35 +110,30 @@ let print_impl oc name members annotations =
            let i_names = make_names i_args and o_names = make_names o_args in
            let i_convertors = make_convertors Utils.convertor_recv i_names i_args
            and o_convertors = make_convertors Utils.convertor_send o_names o_args in
-           fprintf oc "      m_%s = (fun ctx obj %a" name print_names i_names;
-           if List.for_all (fun x -> x = None) i_convertors && List.for_all (fun x -> x = None) i_convertors then begin
-             fprintf oc " -> %s obj" (OBus_name.ocaml_lid name);
-             List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
-             output_string oc ");\n"
-           end else begin
-             let padding = String.make (13 + String.length name) ' ' in
-             output_string oc " ->\n";
+           fprintf oc "      m_%s = (\n\
+                      \        fun ctx obj %a ->\n" name print_names i_names;
+           if List.exists ((<>) None) o_convertors then begin
+             fprintf oc "          let ctx =\n\
+                        \            OBus_context.map\n\
+                        \              (fun %a ->\n" print_names o_names;
              List.iter
                (function
-                  | Some line -> fprintf oc "%s%s" padding line
+                  | Some line -> fprintf oc "                 %s" line
                   | None -> ())
-               i_convertors;
-             if List.for_all (fun x -> x = None) o_convertors then begin
-               fprintf oc "%s%s obj" padding (OBus_name.ocaml_lid name);
-               List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
-               output_string oc ");\n"
-             end else begin
-               fprintf oc "%slwt %a = %s obj" padding print_names o_names (OBus_name.ocaml_lid name);
-               List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
-               output_string oc " in\n";
-               List.iter
-                 (function
-                    | Some line -> fprintf oc "%s%s" padding line
-                    | None -> ())
-                 o_convertors;
-               fprintf oc "%sreturn %a);\n" padding print_names o_names
-             end
-           end
+               o_convertors;
+             fprintf oc "                 %a)\n\
+                        \          in\n" print_names o_names;
+           end;
+           List.iter
+             (function
+                | Some line -> fprintf oc "          %s" line
+                | None -> ())
+             i_convertors;
+           fprintf oc "          lwt result = %s obj"  (OBus_name.ocaml_lid name);
+           List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
+           output_string oc " in\n";
+           fprintf oc "          OBus_method.return ctx result\n\
+                      \      );\n";
        | Property(name, typ, access, annotations) ->
            fprintf oc "      p_%s = " name;
            if access = Read_write then output_char oc '(';

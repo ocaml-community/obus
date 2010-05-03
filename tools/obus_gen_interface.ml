@@ -25,9 +25,7 @@ let print_record oc members =
              (Term.print_intf true)
              (Term.intf_of_sequence (List.map snd i_args))
              (Term.print_intf true)
-             (Term.T.term
-                "Lwt.t"
-                [Term.intf_of_sequence (List.map snd o_args)])
+             (Term.T.term "Lwt.t" [Term.T.term "unit" []])
        | Signal(name, args, annotations) ->
            ()
        | Property(name, typ, Read, annotations) ->

@@ -492,7 +492,7 @@ let make_context_with_reply ~connection ~message = {
   context_replied = ref false;
 }
 
-let send_reply ~context x =
+let send_reply context x =
   if !(context.context_replied) then
     return ()
   else begin
@@ -508,7 +508,7 @@ let send_reply ~context x =
     }
   end
 
-let send_error_by_name ~context name error_message =
+let send_error_by_name context name error_message =
   if !(context.context_replied) then
     return ()
   else begin
@@ -524,5 +524,5 @@ let send_error_by_name ~context name error_message =
     }
   end
 
-let send_error ~context exn error_message =
-  send_error_by_name ~context (OBus_error.name_of_exn exn) error_message
+let send_error context exn error_message =
+  send_error_by_name context (OBus_error.name_of_exn exn) error_message

@@ -352,8 +352,6 @@ let generate obj =
    | Member informations                                             |
    +-----------------------------------------------------------------+ *)
 
-exception Done
-
 let make_args arguments =
   List.map2
     (fun name typ ->
@@ -380,11 +378,8 @@ let _method_info info f =
           (OBus_value.arg_types (OBus_member.Method.i_args info))
           (OBus_message.body (OBus_context.message context))
       in
-      lwt result = f context obj args in
-      OBus_method.return context result
+      f context obj args
     with
-      | Done ->
-          return ()
       | OBus_error.DBus(key, name, error_message) ->
           OBus_method.fail_by_name context name error_message
       | exn ->
@@ -607,7 +602,7 @@ let introspectable () =
          in
          let buf = Buffer.create 42 in
          OBus_introspect.output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Buffer buf)) document;
-         return (Buffer.contents buf))
+         OBus_method.return context (Buffer.contents buf))
   |] [||] [||]
 
 let properties () =
@@ -625,15 +620,15 @@ let properties () =
       (fun context obj (interface, member) ->
          match binary_search compare_interface interface obj.properties with
            | None ->
-               Printf.ksprintf (OBus_error.fail OBus_error.Failed) "no such interface: %S" interface
+               Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such interface: %S" interface
            | Some(interface, properties) ->
                match binary_search compare_property member properties with
                  | Some{ property_instance_signal = Some s } ->
-                     return (React.S.value s)
+                     OBus_method.return context (React.S.value s)
                  | Some{ property_instance_signal = None } ->
-                     Printf.ksprintf (OBus_error.fail OBus_error.Failed) "property %S on interface %S is not readable" member interface
+                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not readable" member interface
                  | None ->
-                     Printf.ksprintf (OBus_error.fail OBus_error.Failed) "no such property: %S on interface %S" member interface);
+                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such property: %S on interface %S" member interface);
 
     _method_info
       (OBus_member.Method.make
@@ -646,15 +641,16 @@ let properties () =
       (fun context obj interface ->
          match binary_search compare_interface interface obj.properties with
            | Some(interface, properties) ->
-               return (Array.fold_left
-                         (fun acc property ->
-                            match property.property_instance_signal with
-                              | Some s -> (property.property_instance_name, React.S.value s) :: acc
-                              | None -> acc)
-                         []
-                         properties)
+               OBus_method.return context
+                 (Array.fold_left
+                    (fun acc property ->
+                       match property.property_instance_signal with
+                         | Some s -> (property.property_instance_name, React.S.value s) :: acc
+                         | None -> acc)
+                    []
+                    properties)
            | None ->
-               return []);
+               OBus_method.return context []);
     _method_info
       (OBus_member.Method.make
          interface_name
@@ -667,7 +663,7 @@ let properties () =
       (fun context obj (interface, member, value) ->
          match binary_search compare_interface interface obj.properties with
            | None ->
-               Printf.ksprintf (OBus_error.fail OBus_error.Failed) "no such interface: %S" interface
+               Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such interface: %S" interface
            | Some(interface, properties) ->
                match binary_search compare_property member properties with
                  | Some{ property_instance_setter = Some f } -> begin
@@ -676,11 +672,10 @@ let properties () =
                        | None -> assert false
                    end
                  | Some{ property_instance_setter = None } ->
-                     Printf.ksprintf (OBus_error.fail OBus_error.Failed) "property %S on interface %S is not writable" member interface
+                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not writable" member interface
                  | None ->
-                     Printf.ksprintf (OBus_error.fail OBus_error.Failed) "no such property: %S on interface %S" member interface);
+                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such property: %S on interface %S" member interface);
   |] [||] [||]
-
 
 (* +-----------------------------------------------------------------+
    | Constructors                                                    |

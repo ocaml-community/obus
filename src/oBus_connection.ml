@@ -302,7 +302,7 @@ let dispatch_message connection running message = match message with
                       ()
               end;
               if not !(context.context_replied) then
-                ignore (Printf.ksprintf (send_error ~context OBus_error.Failed) "No such object: %S" (OBus_path.to_string path));
+                ignore (Printf.ksprintf (send_error context OBus_error.Failed) "No such object: %S" (OBus_path.to_string path));
               return ()
       end
 

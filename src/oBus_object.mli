@@ -150,14 +150,9 @@ val properties : unit -> 'a interface
 
 (** {6 Members} *)
 
-exception Done
-  (** Indicates that a method call has been handled *)
-
-val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> 'a -> 'b Lwt.t) -> 'c member
-  (** [method_info desc handler] creates a method-call
-      member. [handler] may raise {!Done} to indicates that the reply
-      have been sent. Otherwise obus will send the result of [f] as
-      reply. *)
+val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> 'a -> unit Lwt.t) -> 'c member
+  (** [method_info desc handler] creates a method-call member. The
+      reply must be sent by [handler] by using the given context. *)
 
 val signal_info : 'a OBus_member.Signal.t -> 'b member
   (** Defines a signal. It is only used for introspection *)

@@ -18,7 +18,11 @@ let ping obj msg =
 
 let interface =
   Ping_pong.Org_foo_bar.make {
-    Ping_pong.Org_foo_bar.m_Ping = (fun context -> ping)
+    Ping_pong.Org_foo_bar.m_Ping = (
+      fun context obj msg ->
+        lwt result = ping obj msg in
+        OBus_method.return context result
+    )
   }
 
 lwt () =
