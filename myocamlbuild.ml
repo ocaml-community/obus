@@ -141,9 +141,7 @@ let _ =
         Pathname.define_context "src" [ "src/private" ];
         Pathname.define_context "src/private" [ "src" ];
 
-        (* The syntax extension need to see the library because it use
-           some of its modules *)
-        Pathname.define_context "syntax" [ "src" ];
+        Pathname.define_context "tools" [ "src" ];
 
         (* +---------------------------------------------------------+
            | Virtual targets                                         |
@@ -287,6 +285,7 @@ let _ =
           ~prods:["%.ml"; "%.mli"]
           ~deps:["%.obus"; "tools/obus_gen_interface.best"]
           (fun env _ -> Cmd(S[P"tools/obus_gen_interface.best";
+                              A"-keep-common";
                               A"-o"; A(env "%");
                               A(env "%.obus")]));
 

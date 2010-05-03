@@ -52,6 +52,7 @@
 <**/*.cm{a,xa,xs}>: -use_obus
 <{syntax,src}/**/*>: -use_obus
 <oBus_config.*>: -use_obus
+<tools/*>: -use_obus
 
 # Examples
 <examples/{eject,signals}.*>: use_hal

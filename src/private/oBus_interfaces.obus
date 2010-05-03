@@ -1,0 +1,32 @@
+(*
+ * oBus_interfaces.obus
+ * --------------------
+ * Copyright : (c) 2010, Jeremie Dimino <jeremie@dimino.org>
+ * Licence   : BSD3
+ *
+ * This file is a part of obus, an ocaml implementation of D-Bus.
+ *)
+
+interface "org.freedesktop.DBus" {
+  method Hello : () -> (x1 : string)
+  method RequestName : (x1 : string, x2 : uint32) -> (x1 : uint32)
+  method ReleaseName : (x1 : string) -> (x1 : uint32)
+  method StartServiceByName : (x1 : string, x2 : uint32) -> (x1 : uint32)
+  method UpdateActivationEnvironment : (x1 : (string, string) dict) -> ()
+  method NameHasOwner : (x1 : string) -> (x1 : boolean)
+  method ListNames : () -> (x1 : string array)
+  method ListActivatableNames : () -> (x1 : string array)
+  method AddMatch : (x1 : string) -> ()
+  method RemoveMatch : (x1 : string) -> ()
+  method GetNameOwner : (x1 : string) -> (x1 : string)
+  method ListQueuedOwners : (x1 : string) -> (x1 : string array)
+  method GetConnectionUnixUser : (x1 : string) -> (x1 : uint32)
+  method GetConnectionUnixProcessID : (x1 : string) -> (x1 : uint32)
+  method GetAdtAuditSessionData : (x1 : string) -> (x1 : byte array)
+  method GetConnectionSELinuxSecurityContext : (x1 : string) -> (x1 : byte array)
+  method ReloadConfig : () -> ()
+  method GetId : () -> (x1 : string)
+  signal NameOwnerChanged : (x1 : string, x2 : string, x3 : string)
+  signal NameLost : (x1 : string)
+  signal NameAcquired : (x1 : string)
+}
