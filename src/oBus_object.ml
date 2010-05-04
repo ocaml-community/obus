@@ -543,16 +543,28 @@ let make_interface ?notify_mode name members =
   Array.sort compare_member properties;
   make_interface_unsafe ?notify_mode name methods signals properties
 
-let add_interface obj interface =
-  obj.interfaces <- Interface_map.add interface.interface_name interface obj.interfaces;
+let add_interfaces obj interfaces =
+  obj.interfaces <- (
+    List.fold_left
+      (fun map interface ->
+         Interface_map.add interface.interface_name interface map)
+      obj.interfaces
+      interfaces
+  );
   generate obj
 
-let remove_interface_by_name obj name =
-  obj.interfaces <- Interface_map.remove name obj.interfaces;
+let remove_interfaces_by_names obj names =
+  obj.interfaces <- (
+    List.fold_left
+      (fun map name ->
+         Interface_map.remove name map)
+      obj.interfaces
+      names
+  );
   generate obj
 
-let remove_interface obj interface =
-  remove_interface_by_name obj interface.interface_name
+let remove_interfaces obj interfaces =
+  remove_interfaces_by_names obj (List.map (fun iface -> iface.interface_name) interfaces)
 
 (* +-----------------------------------------------------------------+
    | Signals                                                         |

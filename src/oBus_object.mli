@@ -57,7 +57,7 @@ val make : ?owner : OBus_peer.t -> ?common : bool -> ?interfaces : 'a interface 
 
       [interfaces] is the list of interfaces implemented by the
       object. New interfaces can be added latter with
-      {!add_interface}. If [common] is [true] (the default) then
+      {!add_interfaces}. If [common] is [true] (the default) then
       {!introspectable} and {!properties} are automatically added. *)
 
 (** {6 Properties} *)
@@ -125,20 +125,20 @@ val make_interface_unsafe : ?notify_mode : 'a notify_mode -> OBus_name.interface
 
 (**/**)
 
-val add_interface : 'a t -> 'a interface -> unit
-  (** [add_interface obj iface] adds suport for the interface
-      described by [iface] to the given object. If an interface with
+val add_interfaces : 'a t -> 'a interface list -> unit
+  (** [add_interfaces obj ifaces] adds suport for the interfaces
+      described by [ifaces] to the given object. If an interface with
       the same name is already attached to the object, then it is
       replaced by the new one. *)
 
-val remove_interface : 'a t -> 'a interface -> unit
-  (** [remove_interace obj iface] removes informations about the given
-      interface from [obj]. If [obj] do not implement the interface,
-      it does nothing. *)
+val remove_interfaces : 'a t -> 'a interface list -> unit
+  (** [remove_interaces obj ifaces] removes informations about the
+      given interfaces from [obj]. If [obj] do not implement some of
+      the interfaces, it does nothing. *)
 
-val remove_interface_by_name : 'a t -> OBus_name.interface -> unit
-  (** Same as {!remove_interface} by takes only the interface name as
-      argument. *)
+val remove_interfaces_by_names : 'a t -> OBus_name.interface list -> unit
+  (** Same as {!remove_interfaces} by takes only the interface names
+      as argument. *)
 
 (** {8 Well-known interfaces} *)
 
