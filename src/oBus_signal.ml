@@ -160,8 +160,7 @@ let init_signal descr =
    | Signal creation                                                 |
    +-----------------------------------------------------------------+ *)
 
-let cast info context =
-  let message = OBus_context.message context in
+let cast info (context, message) =
   try
     Some(context,
          OBus_value.C.cast_sequence

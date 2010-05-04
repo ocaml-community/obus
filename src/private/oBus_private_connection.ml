@@ -53,7 +53,7 @@ module Name_set = String_set
 
 (* Type of static object *)
 type static_object = {
-  static_object_handle : OBus_value.V.sequence context -> unit Lwt.t;
+  static_object_handle : OBus_value.V.sequence context -> OBus_message.t -> unit Lwt.t;
   (* The method call handler *)
 
   static_object_connection_closed : t -> unit;
@@ -142,7 +142,7 @@ and receiver = {
   (* Message filtering. It is used to filter on message body if the
      user defined argument filters. *)
 
-  receiver_push : void context -> unit;
+  receiver_push : void context * OBus_message.t -> unit;
   (* Function used to send new events *)
 }
 
@@ -217,8 +217,11 @@ and notify_data = void context * OBus_value.V.single String_map.t
 
 and 'a context = {
   context_connection : t;
-  context_message : OBus_message.t;
-  context_body : 'a -> OBus_value.V.sequence;
+  context_flags : OBus_message.flags;
+  context_sender : OBus_name.bus option;
+  context_destination : OBus_name.bus option;
+  context_serial : OBus_message.serial;
+  context_make_body : 'a -> OBus_value.V.sequence;
   context_replied : bool ref;
 }
 
@@ -480,15 +483,21 @@ let send_message_with_reply packed message =
 
 let make_context ~connection ~message = {
   context_connection = connection;
-  context_message = message;
-  context_body = (fun void -> assert false);
+  context_flags = message.flags;
+  context_sender = message.sender;
+  context_destination = message.destination;
+  context_serial = message.serial;
+  context_make_body = (fun void -> assert false);
   context_replied = ref false;
 }
 
 let make_context_with_reply ~connection ~message = {
   context_connection = connection;
-  context_message = message;
-  context_body = (fun body -> body);
+  context_flags = message.flags;
+  context_sender = message.sender;
+  context_destination = message.destination;
+  context_serial = message.serial;
+  context_make_body = (fun body -> body);
   context_replied = ref false;
 }
 
@@ -497,14 +506,13 @@ let send_reply context x =
     return ()
   else begin
     context.context_replied := true;
-    let msg = context.context_message in
     send_message context.context_connection {
-      destination = msg.sender;
+      destination = context.context_sender;
       sender = None;
       flags = { no_reply_expected = true; no_auto_start = true };
       serial = 0l;
-      typ = Method_return msg.serial;
-      body = context.context_body x
+      typ = Method_return context.context_serial;
+      body = context.context_make_body x
     }
   end
 
@@ -513,13 +521,12 @@ let send_error_by_name context name error_message =
     return ()
   else begin
     context.context_replied := true;
-    let msg = context.context_message in
     send_message context.context_connection {
-      destination = msg.sender;
+      destination = context.context_sender;
       sender = None;
       flags = { no_reply_expected = true; no_auto_start = true };
       serial = 0l;
-      typ = Error(msg.serial, name);
+      typ = Error(context.context_serial, name);
       body = [OBus_value.V.basic_string error_message];
     }
   end

@@ -16,21 +16,22 @@ let make = OBus_private_connection.make_context
 let make_with_reply = OBus_private_connection.make_context_with_reply
 
 let connection ctx = ctx.context_connection
-let message ctx = ctx.context_message
+let flags ctx = ctx.context_flags
+let serial ctx = ctx.context_serial
 
 let sender ctx = {
   OBus_peer.connection = ctx.context_connection;
-  OBus_peer.name = OBus_message.sender ctx.context_message;
+  OBus_peer.name = ctx.context_sender;
 }
 
 let destination ctx = {
   OBus_peer.connection = ctx.context_connection;
-  OBus_peer.name = OBus_message.destination ctx.context_message;
+  OBus_peer.name = ctx.context_destination;
 }
 
 let map f ctx = {
   ctx with
-    context_body = (fun x -> ctx.context_body (f x));
+    context_make_body = (fun x -> ctx.context_make_body (f x));
 }
 
 let replied ctx =
@@ -40,4 +41,4 @@ let set_replied ctx =
   ctx.context_replied := true
 
 let make_body ctx x =
-  ctx.context_body x
+  ctx.context_make_body x

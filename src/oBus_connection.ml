@@ -125,7 +125,7 @@ let dispatch_message connection running message = match message with
                       (fun receiver ->
                          if receiver.receiver_active && receiver.receiver_filter message then
                            try
-                             receiver.receiver_push context
+                             receiver.receiver_push (context, message)
                            with exn ->
                              ignore (Lwt_log.error ~section ~exn "signal event failed with"))
                       receiver_group.receiver_group_receivers
@@ -218,7 +218,7 @@ let dispatch_message connection running message = match message with
                       (fun receiver ->
                          if receiver.receiver_active && match_sender receiver message && receiver.receiver_filter message then
                            try
-                             receiver.receiver_push context
+                             receiver.receiver_push (context, message)
                            with exn ->
                              ignore (Lwt_log.error ~section ~exn "signal event failed with"))
                       receiver_group.receiver_group_receivers
@@ -277,7 +277,7 @@ let dispatch_message connection running message = match message with
         end >>= function
           | Some static_object ->
               ignore (try_lwt
-                        static_object.static_object_handle context
+                        static_object.static_object_handle context message
                       with exn ->
                         Lwt_log.error ~section ~exn "method call handler failed with");
               return ()

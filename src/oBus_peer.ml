@@ -35,7 +35,7 @@ let ping peer =
       ()
   in
   return { connection = peer.connection;
-           name = OBus_message.sender context.OBus_private_connection.context_message }
+           name = context.OBus_private_connection.context_sender }
 
 let get_machine_id peer =
   OBus_private_method.call

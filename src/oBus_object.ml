@@ -20,7 +20,8 @@ module Interface_map = String_map
 module Member_map = String_map
 
 type 'a member_type =
-  | Method of OBus_value.signature * (OBus_value.V.sequence OBus_context.t -> 'a t -> unit Lwt.t)
+  | Method of OBus_value.signature *
+      (OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> unit Lwt.t)
   | Signal
   | Property of ('a -> OBus_value.V.single React.signal) option *
       (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option
@@ -34,7 +35,7 @@ and 'a member = {
 and 'a method_info = {
   method_name : OBus_name.member;
   method_type : OBus_value.signature;
-  method_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> unit Lwt.t;
+  method_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> unit Lwt.t;
 }
 
 and 'a property_info = {
@@ -156,19 +157,18 @@ let compare_method (name, typ) meth =
    | Exportation                                                     |
    +-----------------------------------------------------------------+ *)
 
-let unknown_method context =
+let unknown_method context message =
   OBus_method.fail
     context
     OBus_error.Unknown_method
-    (unknown_method_message (OBus_context.message context))
+    (unknown_method_message message)
 
-let handle_call obj context =
-  let message = OBus_context.message context in
+let handle_call obj context message =
   match message with
     | { typ = Method_call(path, Some interface, member) } -> begin
         match binary_search compare_interface interface obj.methods with
           | None ->
-              unknown_method context
+              unknown_method context message
           | Some(interface, methods) ->
               match
                 binary_search
@@ -177,9 +177,9 @@ let handle_call obj context =
                   methods
               with
                 | None ->
-                    unknown_method context
+                    unknown_method context message
                 | Some meth ->
-                    meth.method_handler context obj
+                    meth.method_handler context obj message
       end
     | { typ = Method_call(path, None, member) } -> begin
         match
@@ -196,9 +196,9 @@ let handle_call obj context =
             obj.interfaces None
         with
           | Some meth ->
-              meth.method_handler context obj
+              meth.method_handler context obj message
           | None ->
-              unknown_method context
+              unknown_method context message
       end
     | _ ->
         invalid_arg "OBus_object.Make.handle_call"
@@ -360,8 +360,8 @@ let make_args arguments =
     (OBus_value.C.type_sequence (OBus_value.arg_types arguments))
 
 let _method_info info f =
-  let handler context obj =
-    let context =
+  let handler context obj message =
+    let context' =
       OBus_context.map
         (fun x ->
            OBus_value.C.make_sequence
@@ -376,9 +376,16 @@ let _method_info info f =
            binary search for the method *)
         OBus_value.C.cast_sequence
           (OBus_value.arg_types (OBus_member.Method.i_args info))
-          (OBus_message.body (OBus_context.message context))
+          (OBus_message.body message)
       in
-      f context obj args
+      lwt () = f context' obj args in
+      if (not (OBus_context.replied context') &&
+            not (OBus_message.no_reply_expected (OBus_context.flags context))) then
+        Lwt_log.error_f ~section "no reply sent by handler for method %S on interface %S"
+          (OBus_member.Method.member info)
+          (OBus_member.Method.interface info)
+      else
+        return ()
     with
       | OBus_error.DBus(key, name, error_message) ->
           OBus_method.fail_by_name context name error_message
@@ -668,8 +675,11 @@ let properties () =
                match binary_search compare_property member properties with
                  | Some{ property_instance_setter = Some f } -> begin
                      match obj.data with
-                       | Some data -> f context data value
-                       | None -> assert false
+                       | Some data ->
+                           lwt () = f context data value in
+                           OBus_method.return context ()
+                       | None ->
+                           assert false
                    end
                  | Some{ property_instance_setter = None } ->
                      Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not writable" member interface
