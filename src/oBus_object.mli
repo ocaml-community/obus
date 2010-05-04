@@ -111,14 +111,14 @@ val dynamic :
 
 (** {6 Interfaces} *)
 
-val make_interface : ?notify_mode : 'a notify_mode -> OBus_name.interface -> 'a member list -> 'a interface
-  (** [make_interface ?notify_mode ?sorted name members] creates a new
+val make_interface : notify_mode : 'a notify_mode -> OBus_name.interface -> 'a member list -> 'a interface
+  (** [make_interface notify_mode ?sorted name members] creates a new
       interface. [notify_mode] determines how property changes are
-      announced. It defaults to {!notify_none}. *)
+      announced. *)
 
 (**/**)
 
-val make_interface_unsafe : ?notify_mode : 'a notify_mode -> OBus_name.interface ->
+val make_interface_unsafe : notify_mode : 'a notify_mode -> OBus_name.interface ->
   'a member array ->
   'a member array ->
   'a member array -> 'a interface

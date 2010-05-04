@@ -22,7 +22,7 @@ open UPower_interfaces.Org_freedesktop_UPower_Wakeups
 let proxy daemon = OBus_proxy.make (UPower.to_peer daemon) ["org"; "freedesktop"; "UPower"; "Wakeups"]
 
 let has_capability daemon =
-  OBus_property.make p_HasCapability (proxy daemon)
+  OBus_property.make p_HasCapability OBus_property.notify_none (proxy daemon)
 
 let get_total daemon =
   lwt value = OBus_method.call m_GetTotal (proxy daemon) () in

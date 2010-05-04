@@ -103,7 +103,7 @@ let print_impl oc name members annotations =
            ())
     members;
   fprintf oc "\n  let interface =\n\
-               \    %s.make {\n" module_name;
+               \    %s.make ~notify_mode:OBus_object.notify_none {\n" module_name;
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->

@@ -108,8 +108,8 @@ let print_impl oc name members annotations =
   (***** Interface description *****)
 
   print_record oc members;
-  output_string oc "  let make ?notify_mode members =\n";
-  output_string oc "    OBus_object.make_interface_unsafe ?notify_mode interface\n\
+  output_string oc "  let make ~notify_mode members =\n";
+  output_string oc "    OBus_object.make_interface_unsafe ~notify_mode interface\n\
                    \      [|\n";
   List.iter
     (function
@@ -183,7 +183,7 @@ let print_intf oc name members annotations =
   (***** Interface description *****)
 
   print_record oc members;
-  output_string oc "  val make : ?notify_mode : 'a OBus_object.notify_mode -> 'a members -> 'a OBus_object.interface\n";
+  output_string oc "  val make : notify_mode : 'a OBus_object.notify_mode -> 'a members -> 'a OBus_object.interface\n";
   output_string oc "end\n"
 
 (* +-----------------------------------------------------------------+

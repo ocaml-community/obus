@@ -464,7 +464,7 @@ let notify_none = {
   notify_signature = [];
 }
 
-let make_interface_unsafe ?(notify_mode=notify_none) name methods signals properties = {
+let make_interface_unsafe ~notify_mode name methods signals properties = {
   interface_name = name;
   interface_introspect =
     (name,
@@ -515,7 +515,7 @@ let compare_member a b =
     | n ->
         n
 
-let make_interface ?notify_mode name members =
+let make_interface ~notify_mode name members =
   let methods =
     Array.of_list
       (List.filter
@@ -541,7 +541,7 @@ let make_interface ?notify_mode name members =
   Array.sort compare_member methods;
   Array.sort compare_member signals;
   Array.sort compare_member properties;
-  make_interface_unsafe ?notify_mode name methods signals properties
+  make_interface_unsafe ~notify_mode name methods signals properties
 
 let add_interfaces obj interfaces =
   obj.interfaces <- (
@@ -602,7 +602,7 @@ let emit obj ~interface ~member ?peer typ x =
 
 let introspectable () =
   let interface_name = "org.freedesktop.DBus.Introspectable" in
-  make_interface_unsafe interface_name [|
+  make_interface_unsafe notify_none interface_name [|
     _method_info
       (OBus_member.Method.make
          interface_name
@@ -626,7 +626,7 @@ let introspectable () =
 
 let properties () =
   let interface_name = "org.freedesktop.DBus.Properties" in
-  make_interface_unsafe interface_name [|
+  make_interface_unsafe notify_none interface_name [|
     _method_info
       (OBus_member.Method.make
          interface_name

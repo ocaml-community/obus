@@ -378,7 +378,7 @@ let make_property_group proxy interface =
   Gc.finalise cleanup_property_group property_group;
   property_group
 
-let make info ?(notify_mode=notify_none) proxy =
+let make info ~notify_mode proxy =
   let typ = OBus_member.Property.typ info and member = OBus_member.Property.member info in
   {
     cast = (fun context properties -> OBus_value.C.cast_single typ (String_map.find member properties));
@@ -390,7 +390,7 @@ let make info ?(notify_mode=notify_none) proxy =
                       lazy(make_property_group proxy interface));
   }
 
-let make_group proxy ?(notify_mode=notify_none) interface =
+let make_group proxy ~notify_mode interface =
   {
     cast = (fun context properties -> properties);
     make = (fun value -> assert false);

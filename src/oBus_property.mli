@@ -33,12 +33,12 @@ type properties = OBus_value.V.single Map.Make(String).t
 
 (** {6 Properties creation} *)
 
-val make : ('a, 'access) OBus_member.Property.t -> ?notify_mode : notify_mode -> OBus_proxy.t -> ('a, 'access) t
-  (** [make property ?notify_mode proxy] returns the property object
-      for this proxy. [notify_mode] defaults to {!notify_none} *)
+val make : ('a, 'access) OBus_member.Property.t -> notify_mode : notify_mode -> OBus_proxy.t -> ('a, 'access) t
+  (** [make property ~notify_mode proxy] returns the property object
+      for this proxy. *)
 
-val make_group : OBus_proxy.t -> ?notify_mode : notify_mode -> OBus_name.interface -> properties r
-  (** [make_group proxy ?notify_mode interface] creates a group of all
+val make_group : OBus_proxy.t -> notify_mode : notify_mode -> OBus_name.interface -> properties r
+  (** [make_group proxy ~notify_mode interface] creates a group of all
       properties of the given interface. *)
 
 (** {6 Properties transformation} *)
