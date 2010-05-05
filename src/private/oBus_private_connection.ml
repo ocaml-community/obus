@@ -133,10 +133,8 @@ and receiver = {
   mutable receiver_sender : OBus_name.bus option React.signal option;
   (* The sender of signals we are interested in *)
 
-  mutable receiver_rule : string;
-  (* The matching rule used for this receiver. It is not directly a
-     matching rule of type OBus_match.t because this would create a
-     circular dependency. *)
+  mutable receiver_rule : OBus_match.rule option;
+  (* The matching rule used for this receiver. *)
 
   mutable receiver_filter : OBus_message.t -> bool;
   (* Message filtering. It is used to filter on message body if the

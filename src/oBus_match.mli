@@ -75,6 +75,30 @@ val match_values : (int * argument_filter) list -> OBus_value.V.sequence -> bool
       [filters] must be sorted by argument number, and must not
       contains to filters with the same argument number. *)
 
+(** {6 Comparison} *)
+
+(** Result of the comparisong of two rules [r1] and [r2]: *)
+type comparison_result =
+  | More_general
+      (** [r1] is more general than [r2], i.e. any message matched by
+          [r2] is also matched by [r1] *)
+  | Less_general
+      (** [r1] is less general than [r2], i.e. any message matched by
+          [r1] is also matched by [r2] *)
+  | Equal
+      (** [r1] and [r2] are equal *)
+  | Incomparable
+      (** [r1] and [r2] are incomparable, i.e. there exists two
+          message [m1] and [m2] such that:
+
+          - [m1] is matched by [r1] but not by [r2]
+          - [m2] is matched by [r2] but not by [r1]
+      *)
+
+val compare_rules : rule -> rule -> comparison_result
+  (** [compare_rules r1 r2] compares the two matching rules [r1] and
+      [r2] *)
+
 (** {6 Parsing/printing} *)
 
 exception Parse_failure of string * int * string

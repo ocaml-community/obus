@@ -237,3 +237,56 @@ let match_message mr msg =
     (mr.sender = None || mr.sender = OBus_message.sender msg) &&
     (mr.destination = None || mr.destination = OBus_message.destination msg) &&
     (match_arguments 0 mr.arguments (OBus_message.body msg))
+
+type comparison_result =
+  | More_general
+  | Less_general
+  | Equal
+  | Incomparable
+
+let rec compare_arguments acc l1 l2 =
+  match acc, l1, l2 with
+    | acc, [], [] ->
+        acc
+    | (Less_general | Equal), _ :: _, [] ->
+        Less_general
+    | (More_general | Equal), [], _ :: _ ->
+        More_general
+    | acc, (pos1, filter1) :: rest1, (pos2, filter2) :: rest2 ->
+        if pos1 = pos2 && filter1 = filter2 then
+          compare_arguments acc rest1 rest2
+        else if pos1 < pos2 && (acc = Less_general || acc = Equal) then
+          compare_arguments Less_general rest1 l2
+        else if pos1 > pos2 && (acc = More_general || acc = Equal) then
+          compare_arguments More_general l1 rest2
+        else
+          raise Exit
+    | _ ->
+        raise Exit
+
+let compare_opt acc x1 x2 =
+  if x1 = x2 then
+    acc
+  else
+    match acc, x1, x2 with
+      | (Less_general | Equal), Some _, None ->
+          Less_general
+      | (More_general | Equal), None, Some _ ->
+          More_general
+      | _ ->
+          raise Exit
+
+let compare_rules r1 r2 =
+  try
+    if r1.typ = r2.typ then begin
+      let acc = Equal in
+      let acc = compare_opt acc r1.sender r2.sender in
+      let acc = compare_opt acc r1.destination r2.destination in
+      let acc = compare_opt acc r1.path r2.path in
+      let acc = compare_opt acc r1.interface r2.interface in
+      let acc = compare_opt acc r1.member r2.member in
+      compare_arguments acc r1.arguments r2.arguments
+    end else
+      Incomparable
+  with Exit ->
+    Incomparable
