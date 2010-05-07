@@ -39,13 +39,12 @@ let examples = [
   "list_services";
   "ping";
   "pong";
-(*  "network_state";*)
 ]
 
 let bindings = [
   "hal";
   "notification";
-(*  "NetworkManager";*)
+  "network-manager";
   "upower";
   "udisks";
   "policykit";

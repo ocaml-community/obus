@@ -28,14 +28,14 @@ package "notification" (
   archive(plugin,native) = "notification.cmxs"
 )
 
-package "NetworkManager" (
+package "network-manager" (
   version = "[distrubuted with OBus]"
   description = "Freedesktop NetworkManager service binding"
   requires = "obus"
-  archive(byte) = "NetworkManager.cma"
-  archive(native) = "NetworkManager.cmxa"
-  archive(plugin,byte) = "NetworkManager.cma"
-  archive(plugin,native) = "NetworkManager.cmxs"
+  archive(byte) = "network-manager.cma"
+  archive(native) = "network-manager.cmxa"
+  archive(plugin,byte) = "network-manager.cma"
+  archive(plugin,native) = "network-manager.cmxs"
 )
 
 package "upower" (
