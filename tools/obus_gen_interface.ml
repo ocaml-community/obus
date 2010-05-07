@@ -13,7 +13,7 @@ open OBus_introspect
 let prog_name = Filename.basename Sys.argv.(0)
 
 let print_record oc members =
-  output_string oc "  type 'a members= {\n";
+  output_string oc "  type 'a members = {\n";
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->
@@ -107,8 +107,11 @@ let print_impl oc name members annotations =
 
   (***** Interface description *****)
 
-  print_record oc members;
-  output_string oc "  let make ~notify_mode members =\n";
+  if List.exists (function Method _ | Property _ -> true | _ -> false) members then begin
+    print_record oc members;
+    output_string oc "  let make ~notify_mode members =\n"
+  end else
+    output_string oc "  let make ~notify_mode =\n";
   output_string oc "    OBus_object.make_interface_unsafe ~notify_mode interface\n\
                    \      [|\n";
   List.iter
@@ -182,8 +185,11 @@ let print_intf oc name members annotations =
 
   (***** Interface description *****)
 
-  print_record oc members;
-  output_string oc "  val make : notify_mode : 'a OBus_object.notify_mode -> 'a members -> 'a OBus_object.interface\n";
+  if List.exists (function Method _ | Property _ -> true | _ -> false) members then begin
+    print_record oc members;
+    output_string oc "  val make : notify_mode : 'a OBus_object.notify_mode -> 'a members -> 'a OBus_object.interface\n"
+  end else
+    output_string oc "  val make : notify_mode : 'a OBus_object.notify_mode -> 'a OBus_object.interface\n";
   output_string oc "end\n"
 
 (* +-----------------------------------------------------------------+
