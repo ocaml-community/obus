@@ -58,7 +58,7 @@ interface "org.freedesktop.NetworkManager.Device" {
   property.r Interface : string
   property.r Driver : string
   property.r Capabilities : uint32
-  property.r Ip4Address : int32
+  property.r Ip4Address : uint32
   property.r State : uint32
   property.r Ip4Config : object_path
   property.r Dhcp4Config : object_path
