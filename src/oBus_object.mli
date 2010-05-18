@@ -92,14 +92,20 @@ val destroy : 'a t -> unit
 val dynamic :
   connection : OBus_connection.t ->
   prefix : OBus_path.t ->
-  handler : (OBus_value.V.sequence OBus_context.t -> OBus_path.t -> 'a t option Lwt.t) -> unit
+  handler : (OBus_value.V.sequence OBus_context.t -> OBus_path.t -> [ `Replied | `No_reply | `Object of 'a t | `Not_found ] Lwt.t) -> unit
   (** [dynamic ~connection ~prefix ~handler] defines a dynamic node in
       the tree of object. This means that objects with a path prefixed
       by [prefix], will be created on the fly by [handler] when a
       process try to access them.
 
       [handler] receive the context and rest of path after the
-      prefix.
+      prefix, and musts return:
+
+      - [`Replied] if the reply to the call has been sent
+      - [`No_reply] if the call has been handled, the caller does not
+        except a reply and none has been sent
+      - [`Object obj] to let [obj] handle the method call
+      - [`Not_found] if the object does not exists
 
       Note: if you manually export an object with a path prefixed by
       [prefix], it will have precedence over the one created by
@@ -144,9 +150,16 @@ val properties : unit -> 'a interface
 
 (** {6 Members} *)
 
-val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> 'a -> unit Lwt.t) -> 'c member
+val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> 'a -> [ `Replied | `No_reply ] Lwt.t) -> 'c member
   (** [method_info desc handler] creates a method-call member. The
-      reply must be sent by [handler] by using the given context. *)
+      reply must be sent by [handler] by using the given context.
+
+      [handler] should return:
+
+      - [`Replied] if the reply to the call has been sent
+      - [`No_reply] if the caller does not except a reply and none has
+        been sent
+  *)
 
 val signal_info : 'a OBus_member.Signal.t -> 'b member
   (** Defines a signal. It is only used for introspection *)

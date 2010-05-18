@@ -54,6 +54,14 @@ let call_no_reply info proxy args =
    | Sending replies                                                 |
    +-----------------------------------------------------------------+ *)
 
-let return = OBus_private_connection.send_reply
-let fail_by_name = OBus_private_connection.send_error_by_name
-let fail = OBus_private_connection.send_error
+let return context x =
+  lwt () = OBus_private_connection.send_reply context x in
+  Lwt.return `Replied
+
+let fail_by_name context name message =
+  lwt () = OBus_private_connection.send_error_by_name context name message in
+  Lwt.return `Replied
+
+let fail context key message =
+  lwt () = OBus_private_connection.send_error context key message in
+  Lwt.return `Replied

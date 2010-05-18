@@ -53,7 +53,7 @@ module Name_set = String_set
 
 (* Type of static object *)
 type static_object = {
-  static_object_handle : OBus_value.V.sequence context -> OBus_message.t -> unit Lwt.t;
+  static_object_handle : OBus_value.V.sequence context -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t;
   (* The method call handler *)
 
   static_object_connection_closed : t -> unit;
@@ -62,7 +62,7 @@ type static_object = {
 
 (* Type of a dynamic node, which creates object on the fly when
    accessed *)
-and dynamic_object = OBus_value.V.sequence context -> OBus_path.t -> static_object option Lwt.t
+and dynamic_object = OBus_value.V.sequence context -> OBus_path.t -> [ `Replied | `No_reply | `Object of static_object | `Not_found ] Lwt.t
 
 (* +-----------------------------------------------------------------+
    | Name resolvers                                                  |
@@ -197,7 +197,6 @@ and 'a context = {
   context_destination : OBus_name.bus option;
   context_serial : OBus_message.serial;
   context_make_body : 'a -> OBus_value.V.sequence;
-  context_replied : bool ref;
 }
 
 (* +-----------------------------------------------------------------+
@@ -463,7 +462,6 @@ let make_context ~connection ~message = {
   context_destination = message.destination;
   context_serial = message.serial;
   context_make_body = (fun void -> assert false);
-  context_replied = ref false;
 }
 
 let make_context_with_reply ~connection ~message = {
@@ -473,38 +471,27 @@ let make_context_with_reply ~connection ~message = {
   context_destination = message.destination;
   context_serial = message.serial;
   context_make_body = (fun body -> body);
-  context_replied = ref false;
 }
 
 let send_reply context x =
-  if !(context.context_replied) then
-    return ()
-  else begin
-    context.context_replied := true;
-    send_message context.context_connection {
-      destination = context.context_sender;
-      sender = None;
-      flags = { no_reply_expected = true; no_auto_start = true };
-      serial = 0l;
-      typ = Method_return context.context_serial;
-      body = context.context_make_body x
-    }
-  end
+  send_message context.context_connection {
+    destination = context.context_sender;
+    sender = None;
+    flags = { no_reply_expected = true; no_auto_start = true };
+    serial = 0l;
+    typ = Method_return context.context_serial;
+    body = context.context_make_body x
+  }
 
 let send_error_by_name context name error_message =
-  if !(context.context_replied) then
-    return ()
-  else begin
-    context.context_replied := true;
-    send_message context.context_connection {
-      destination = context.context_sender;
-      sender = None;
-      flags = { no_reply_expected = true; no_auto_start = true };
-      serial = 0l;
-      typ = Error(context.context_serial, name);
-      body = [OBus_value.V.basic_string error_message];
-    }
-  end
+  send_message context.context_connection {
+    destination = context.context_sender;
+    sender = None;
+    flags = { no_reply_expected = true; no_auto_start = true };
+    serial = 0l;
+    typ = Error(context.context_serial, name);
+    body = [OBus_value.V.basic_string error_message];
+  }
 
 let send_error context exn error_message =
   send_error_by_name context (OBus_error.name_of_exn exn) error_message

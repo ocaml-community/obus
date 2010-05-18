@@ -86,61 +86,73 @@ let introspection children =
   Buffer.add_string buffer "</node>\n";
   Buffer.contents buffer
 
+let reply_expected message =
+  match message .typ with
+    | Method_call(path, interface_opt, member) ->
+        Lwt_log.error_f ~section "no reply sent by %S on interface %S, but one was expected"
+          member (match interface_opt with None -> "" | Some name -> name)
+    | _ ->
+        return ()
+
 let dispatch_message connection running message = match message with
 
   (* For method return and errors, we lookup at the reply waiters. If
      one is find then it get the reply, if none, then the reply is
      dropped. *)
   | { typ = Method_return(reply_serial) }
-  | { typ = Error(reply_serial, _) } ->
-      begin match try Some(Serial_map.find reply_serial running.running_reply_waiters) with Not_found -> None with
+  | { typ = Error(reply_serial, _) } -> begin
+      match try Some(Serial_map.find reply_serial running.running_reply_waiters) with Not_found -> None with
         | Some w ->
             running.running_reply_waiters <- Serial_map.remove reply_serial running.running_reply_waiters;
-            wakeup w message
-
+            wakeup w message;
+            return ()
         | None ->
-            ignore (
-              Lwt_log.debug_f ~section "reply to message with serial %ld dropped%s"
-                reply_serial (match message with
-                                | { typ = Error(_, error_name) } ->
-                                    Printf.sprintf ", the reply is the error: %S: %S"
-                                      error_name
-                                      (match message.body with
-                                         | V.Basic (V.String x) :: _ -> x
-                                         | _ -> "")
-                                | _ ->
-                                    "")
-            )
-      end
+            Lwt_log.debug_f ~section "reply to message with serial %ld dropped%s"
+              reply_serial (match message with
+                              | { typ = Error(_, error_name) } ->
+                                  Printf.sprintf ", the reply is the error: %S: %S"
+                                    error_name
+                                    (match message.body with
+                                       | V.Basic (V.String x) :: _ -> x
+                                       | _ -> "")
+                              | _ ->
+                                  "")
+    end
 
-  | { typ = Signal(path, interface, member) } ->
+  | { typ = Signal(path, interface, member) } -> begin
       let context = make_context connection message in
-      begin match running.running_name, message.sender with
-        | None, _ ->
+      match running.running_name, message.sender with
+        | None, _ -> begin
             (* If this is a peer-to-peer connection, we do not match
                on the sender *)
-              begin match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
-                | Some receiver_group ->
-                    Lwt_sequence.iter_l
-                      (fun receiver ->
+            match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
+              | Some receiver_group ->
+                  Lwt_sequence.fold_l
+                    (fun receiver thread ->
+                       join [
+                         thread;
                          if receiver.receiver_active && receiver.receiver_filter message then
-                           try
-                             receiver.receiver_push (context, message)
+                           try_lwt
+                             receiver.receiver_push (context, message);
+                             return ()
                            with exn ->
-                             ignore (Lwt_log.error ~section ~exn "signal event failed with"))
-                      receiver_group.receiver_group_receivers
-                | None ->
-                    ()
-              end
+                             Lwt_log.error ~section ~exn "signal event failed with"
+                         else
+                           return ()
+                       ])
+                    receiver_group.receiver_group_receivers (return ())
+              | None ->
+                  return ()
+          end
 
-          | Some _, None ->
-              ignore (Lwt_log.error_f ~section "signal without sender received from message bus")
+        | Some _, None ->
+            Lwt_log.error_f ~section "signal without sender received from message bus"
 
-          | Some _, Some sender ->
-              begin match sender, message with
+        | Some _, Some sender ->
+            lwt () = match sender, message with
 
-                (* Internal handling of "NameOwnerChange" messages for
-                   name resolving. *)
+              (* Internal handling of "NameOwnerChange" messages for
+                 name resolving. *)
               | "org.freedesktop.DBus",
                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
                   body = [V.Basic(V.String name); V.Basic(V.String old_owner); V.Basic(V.String new_owner)] } ->
@@ -150,19 +162,19 @@ let dispatch_message connection running message = match message with
                   if OBus_name.is_unique name && owner = None then
                     (* If the resovler was monitoring a unique name
                        and it is not owned anymore, this means that
-                       the peer with this name has exited. We
-                       remember this information here. *)
+                       the peer with this name has exited. We remember
+                       this information here. *)
                     OBus_cache.add running.running_exited_peers name;
 
                   begin match try Some(Name_map.find name running.running_resolvers) with Not_found -> None with
                     | Some resolver ->
-                        ignore (
+                        lwt () =
                           Lwt_log.debug_f ~section "updating internal name resolver: %S -> %S"
                             name
                             (match owner with
                                | Some n -> n
                                | None -> "")
-                        );
+                        in
 
                         resolver.resolver_set owner;
 
@@ -180,10 +192,11 @@ let dispatch_message connection running message = match message with
                                 Lwt.wakeup wakener resolver
                             | Resolver_running ->
                                 ()
-                        end
+                        end;
+                        return ()
 
                     | None ->
-                        ()
+                        return ()
                   end
 
               (* Internal handling of "NameAcquired" signals *)
@@ -194,7 +207,8 @@ let dispatch_message connection running message = match message with
                   (* Only handle signals destined to us *)
                   when message.destination = running.running_name ->
 
-                  running.running_set_acquired_names (Name_set.add name (React.S.value running.running_acquired_names))
+                  running.running_set_acquired_names (Name_set.add name (React.S.value running.running_acquired_names));
+                    return ()
 
               (* Internal handling of "NameLost" signals *)
               | ("org.freedesktop.DBus",
@@ -204,142 +218,164 @@ let dispatch_message connection running message = match message with
                   (* Only handle signals destined to us *)
                   when message.destination = running.running_name ->
 
-                  running.running_set_acquired_names (Name_set.remove name (React.S.value running.running_acquired_names))
+                  running.running_set_acquired_names (Name_set.remove name (React.S.value running.running_acquired_names));
+                    return ()
 
               | _ ->
-                  ()
-            end;
+                  return ()
+            in
 
             (* Only handle signals broadcasted or destined to us *)
             if message.destination = None || message.destination = running.running_name then
               match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
                 | Some receiver_group ->
-                    Lwt_sequence.iter_l
-                      (fun receiver ->
-                         if receiver.receiver_active && match_sender receiver message && receiver.receiver_filter message then
-                           try
-                             receiver.receiver_push (context, message)
-                           with exn ->
-                             ignore (Lwt_log.error ~section ~exn "signal event failed with"))
-                      receiver_group.receiver_group_receivers
+                    Lwt_sequence.fold_l
+                      (fun receiver thread ->
+                         join [
+                           thread;
+                           if receiver.receiver_active && match_sender receiver message && receiver.receiver_filter message then
+                             try_lwt
+                               receiver.receiver_push (context, message);
+                               return ()
+                             with exn ->
+                               Lwt_log.error ~section ~exn "signal event failed with"
+                           else
+                             return ()
+                         ])
+                      receiver_group.receiver_group_receivers (return ())
                 | None ->
-                    ()
-      end
+                    return ()
+            else
+              return ()
+    end
 
   (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
   | { typ = Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } -> begin
       let context = make_context_with_reply connection message in
-        match member, body with
+      match member, body with
         | "Ping", [] ->
-            ignore (send_reply context [])
+            send_reply context []
         | "GetMachineId", [] ->
-            ignore
-              (try_bind (fun _ -> Lazy.force OBus_info.machine_uuid)
-                 (fun machine_uuid -> send_reply context [V.basic_string (OBus_uuid.to_string machine_uuid)])
-                 (fun exn ->
-                    lwt () = send_error context OBus_error.Failed "cannot get machine uuuid" in
-                    fail exn))
+            try_bind
+              (fun () ->
+                 Lazy.force OBus_info.machine_uuid)
+              (fun machine_uuid ->
+                 send_reply context [V.basic_string (OBus_uuid.to_string machine_uuid)])
+              (fun exn ->
+                 send_error context OBus_error.Failed "cannot get machine uuuid")
         | _ ->
-            ignore (send_error context OBus_error.Unknown_method (unknown_method_message message))
+            send_error context OBus_error.Unknown_method (unknown_method_message message)
     end
 
   | { typ = Method_call(path, interface_opt, member); body = body } ->
       let context = make_context_with_reply connection message in
-      ignore begin
-        (* Look in static objects *)
-        begin
-          try
-            return (Some(Object_map.find path running.running_static_objects))
-          with Not_found ->
-            (* Look in dynamic objects *)
-            match
-              Object_map.fold
-                (fun prefix dynamic_object acc ->
-                   match acc with
-                     | Some _ ->
-                         acc
-                     | None ->
-                         match OBus_path.after prefix path with
-                           | Some path ->
-                               Some(path, dynamic_object)
-                           | None ->
-                               None)
-                running.running_dynamic_objects None
-            with
-              | None ->
-                  return None
-              | Some(path, dynamic_object) ->
-                  try_lwt
-                    dynamic_object context path
-                  with exn ->
-                    lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
-                    return None
-        end >>= function
-          | Some static_object ->
-              ignore (try_lwt
-                        static_object.static_object_handle context message
-                      with exn ->
-                        Lwt_log.error ~section ~exn "method call handler failed with");
+      (* Look in static objects *)
+      begin
+        try
+          return (`Object(Object_map.find path running.running_static_objects))
+        with Not_found ->
+          (* Look in dynamic objects *)
+          match
+            Object_map.fold
+              (fun prefix dynamic_object acc ->
+                 match acc with
+                   | Some _ ->
+                       acc
+                   | None ->
+                       match OBus_path.after prefix path with
+                         | Some path ->
+                             Some(path, dynamic_object)
+                         | None ->
+                             None)
+              running.running_dynamic_objects None
+          with
+            | None ->
+                return `Not_found
+            | Some(path, dynamic_object) ->
+                try_lwt
+                  dynamic_object context path
+                with exn ->
+                  lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
+                  return `Not_found
+      end >>= function
+        | `Object static_object -> begin
+            lwt result =
+              try_lwt
+                (static_object.static_object_handle context message :> [ `Replied | `No_reply | `Failure of exn ] Lwt.t)
+              with exn ->
+                return (`Failure exn)
+            in
+            match result with
+              | `Replied ->
+                  return ()
+              | `No_reply ->
+                  if OBus_message.no_reply_expected context.context_flags then
+                    return ()
+                  else
+                    reply_expected message
+              | `Failure(OBus_error.DBus(key, name, message)) ->
+                  send_error_by_name context name message
+              | `Failure exn ->
+                  lwt () = Lwt_log.error ~section ~exn "method call handler failed with" in
+                  send_error context OBus_error.OCaml (Printexc.to_string exn)
+          end
+        | `Replied ->
+            return ()
+        | `No_reply ->
+            if OBus_message.no_reply_expected context.context_flags then
               return ()
-          | None ->
-              (* Handle introspection for missing intermediate object:
+            else
+              reply_expected message
+        | `Not_found ->
+            (* Handle introspection for missing intermediate object:
 
-                 for example if we have only one exported object with
-                 path "/a/b/c", we need to add introspection support
-                 for virtual objects with path "/", "/a", "/a/b",
-                 "/a/b/c". *)
-              if not !(context.context_replied) then begin
-                match interface_opt, member, body with
-                  | None, "Introspect", []
-                  | Some "org.freedesktop.DBus.Introspectable", "Introspect", [] -> begin
-                      match children running path with
-                        | [] ->
-                            ()
-                        | children ->
-                            ignore (send_reply context [V.basic_string (introspection children)])
-                    end
-                  | _ ->
-                      ()
-              end;
-              if not !(context.context_replied) then
-                ignore (Printf.ksprintf (send_error context OBus_error.Failed) "No such object: %S" (OBus_path.to_string path));
-              return ()
-      end
-
-let read_dispatch connection running =
-  lwt message =
-    try_lwt
-      choose [OBus_transport.recv running.running_transport;
-              running.running_abort_recv]
-    with exn ->
-      fail =<< (connection#set_crash
-                  (match exn with
-                     | End_of_file -> Connection_lost
-                     | OBus_wire.Protocol_error _ as exn -> exn
-                     | exn -> Transport_error exn))
-  in
-  match apply_filters "incoming" message running.running_incoming_filters with
-    | None ->
-        lwt () = Lwt_log.debug ~section "incoming message dropped by filters" in
-        return ()
-    | Some message ->
-        let result = try dispatch_message connection running message; None with exn -> Some exn in
-        OBus_value.V.sequence_close message.body;
-        match result with
-          | None ->
-              return ()
-          | Some exn ->
-              fail exn
+               for example if we have only one exported object with
+               path "/a/b/c", we need to add introspection support for
+               virtual objects with path "/", "/a", "/a/b",
+               "/a/b/c". *)
+            match interface_opt, member, body with
+              | None, "Introspect", []
+              | Some "org.freedesktop.DBus.Introspectable", "Introspect", [] ->
+                  send_reply context [V.basic_string (introspection (children running path))]
+              | _ ->
+                  Printf.ksprintf (send_error context OBus_error.Failed) "No such object: %S" (OBus_path.to_string path)
 
 let rec dispatch_forever connection running =
   try_bind
     (fun () ->
-       match React.S.value running.running_down with
-         | Some(waiter, wakener) ->
-             lwt () = waiter in
-             read_dispatch connection running
+       lwt () =
+         match React.S.value running.running_down with
+           | Some(waiter, wakener) ->
+               waiter
+           | None ->
+               return ()
+       in
+       lwt message =
+         try_lwt
+           choose [OBus_transport.recv running.running_transport;
+                   running.running_abort_recv]
+         with exn ->
+           fail =<< (connection#set_crash
+                       (match exn with
+                          | End_of_file -> Connection_lost
+                          | OBus_wire.Protocol_error _ as exn -> exn
+                          | exn -> Transport_error exn))
+       in
+       match apply_filters "incoming" message running.running_incoming_filters with
          | None ->
-             read_dispatch connection running)
+             lwt () = Lwt_log.debug ~section "incoming message dropped by filters" in
+             return ()
+         | Some message ->
+             ignore (
+               try_lwt
+                 dispatch_message connection running message
+               with exn ->
+                 Lwt_log.error ~section ~exn "message dispatching failed with"
+               finally
+                 OBus_value.V.sequence_close message.body;
+                 return ()
+             );
+             return ())
     (fun () ->
        dispatch_forever connection running)
     (function

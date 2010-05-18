@@ -25,7 +25,7 @@ let print_record oc members =
              (Term.print_intf true)
              (Term.intf_of_sequence (List.map snd i_args))
              (Term.print_intf true)
-             (Term.T.term "Lwt.t" [Term.T.term "unit" []])
+             (Term.T.term "Lwt.t" [Term.T.term "[ `Replied | `No_reply ]" []])
        | Signal(name, args, annotations) ->
            ()
        | Property(name, typ, Read, annotations) ->
@@ -34,7 +34,7 @@ let print_record oc members =
              (Term.print_intf true)
              (Term.T.term "React.signal" [Term.intf_of_single typ])
        | Property(name, typ, Write, annotations) ->
-           fprintf oc "    p_%s : unit OBus_context.t -> 'a -> %a -> unit Lwt.t;\n"
+           fprintf oc "    p_%s : unit OBus_context.t -> 'a -> %a -> [ `Replied | `No_reply ] Lwt.t;\n"
              name
              (Term.print_intf true)
              (Term.intf_of_single typ)

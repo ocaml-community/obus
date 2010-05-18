@@ -54,16 +54,6 @@ val serial : 'a t -> OBus_message.serial
 val map : ('b -> 'a) -> 'a t -> 'b t
   (** Map the type of reply to a method call *)
 
-val replied : 'a t -> bool
-  (** [replied context] returns whether the reply have been sent to
-      the caller. It is initially [false].
-
-      The goal of {!replied} is to prevent from sending multiple
-      replies to the caller. *)
-
-val set_replied : 'a t -> unit
-  (** [set_replied ctx] sets the replied flag to [true]. *)
-
 val make_body : 'a t -> 'a -> OBus_value.V.sequence
   (** [make_body ctx value] creates the body of a reply to a method
       call *)

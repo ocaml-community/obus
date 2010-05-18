@@ -21,7 +21,7 @@ module Member_map = String_map
 
 type 'a member_type =
   | Method of OBus_value.signature *
-      (OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> unit Lwt.t)
+      (OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t)
   | Signal
   | Property of ('a -> OBus_value.V.single React.signal) option *
       (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option
@@ -35,7 +35,7 @@ and 'a member = {
 and 'a method_info = {
   method_name : OBus_name.member;
   method_type : OBus_value.signature;
-  method_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> unit Lwt.t;
+  method_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t;
 }
 
 and 'a property_info = {
@@ -244,13 +244,17 @@ let dynamic ~connection ~prefix ~handler =
   (* Remove any dynamic node declared with the same prefix: *)
   let create context path =
     handler context path >>= function
-      | Some obj ->
-          return (Some {
+      | `Object obj ->
+          return (`Object{
                     static_object_handle = handle_call obj;
                     static_object_connection_closed = ignore;
                   })
-      | None ->
-          return None
+      | `Replied ->
+          return `Replied
+      | `No_reply ->
+          return `No_reply
+      | `Not_found ->
+          return `Not_found
   in
   running.running_dynamic_objects <- Object_map.add prefix create running.running_dynamic_objects
 
@@ -399,7 +403,7 @@ let make_args arguments =
 
 let _method_info info f =
   let handler context obj message =
-    let context' =
+    let context =
       OBus_context.map
         (fun x ->
            OBus_value.C.make_sequence
@@ -408,27 +412,14 @@ let _method_info info f =
              x)
         context
     in
-    try_lwt
-      let args =
-        (* This will not fail since we already tested types in the
-           binary search for the method *)
-        OBus_value.C.cast_sequence
-          (OBus_value.arg_types (OBus_member.Method.i_args info))
-          (OBus_message.body message)
-      in
-      lwt () = f context' obj args in
-      if (not (OBus_context.replied context') &&
-            not (OBus_message.no_reply_expected (OBus_context.flags context))) then
-        Lwt_log.error_f ~section "no reply sent by handler for method %S on interface %S"
-          (OBus_member.Method.member info)
-          (OBus_member.Method.interface info)
-      else
-        return ()
-    with
-      | OBus_error.DBus(key, name, error_message) ->
-          OBus_method.fail_by_name context name error_message
-      | exn ->
-          OBus_method.fail context OBus_error.OCaml (Printexc.to_string exn)
+    let args =
+      (* This will not fail since we already tested types in the
+         binary search for the method *)
+      OBus_value.C.cast_sequence
+        (OBus_value.arg_types (OBus_member.Method.i_args info))
+        (OBus_message.body message)
+    in
+    f context obj args
   in
   {
     member_name = OBus_member.Method.member info;

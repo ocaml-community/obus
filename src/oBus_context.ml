@@ -34,11 +34,5 @@ let map f ctx = {
     context_make_body = (fun x -> ctx.context_make_body (f x));
 }
 
-let replied ctx =
-  !(ctx.context_replied)
-
-let set_replied ctx =
-  ctx.context_replied := true
-
 let make_body ctx x =
   ctx.context_make_body x
