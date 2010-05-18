@@ -69,33 +69,33 @@ let double () = Int64.to_float (int64 ())
    nesting *)
 
 let tbasic count deep = match Random.int 12 with
-  | 0 -> count + 1, Tbyte
-  | 1 -> count + 1, Tboolean
-  | 2 -> count + 1, Tint16
-  | 3 -> count + 1, Tint32
-  | 4 -> count + 1, Tint64
-  | 5 -> count + 1, Tuint16
-  | 6 -> count + 1, Tuint32
-  | 7 -> count + 1, Tuint64
-  | 8 -> count + 1, Tdouble
-  | 9 -> count + 1, Tstring
-  | 10 -> count + 1, Tsignature
-  | _ -> count + 1, Tobject_path
+  | 0 -> count + 1, T.Byte
+  | 1 -> count + 1, T.Boolean
+  | 2 -> count + 1, T.Int16
+  | 3 -> count + 1, T.Int32
+  | 4 -> count + 1, T.Int64
+  | 5 -> count + 1, T.Uint16
+  | 6 -> count + 1, T.Uint32
+  | 7 -> count + 1, T.Uint64
+  | 8 -> count + 1, T.Double
+  | 9 -> count + 1, T.String
+  | 10 -> count + 1, T.Signature
+  | _ -> count + 1, T.Object_path
 
 let rec tsingle count deep =
   if deep > 3 then
     let count, t = tbasic count deep in
-    (count, Tbasic t)
+    (count, T.basic t)
   else
     match Random.int 5 with
-      | 0 -> let count, t = tbasic count deep in (count, Tbasic t)
-      | 1 -> let count, t = tsequence count (deep + 1) in (count, Tstructure t)
-      | 2 -> let count, t = tsingle count (deep + 1) in (count, Tarray t)
+      | 0 -> let count, t = tbasic count deep in (count, T.Basic t)
+      | 1 -> let count, t = tsequence count (deep + 1) in (count, T.Structure t)
+      | 2 -> let count, t = tsingle count (deep + 1) in (count, T.Array t)
       | 3 ->
           let count, tk = tbasic count (deep + 1) in
           let count, tv = tsingle count (deep + 1) in
-          (count, Tdict(tk, tv))
-      | _ -> (count + 1, Tvariant)
+          (count, T.Dict(tk, tv))
+      | _ -> (count + 1, T.Variant)
 
 and tsequence count deep =
   let rec aux count acc = function
@@ -104,51 +104,51 @@ and tsequence count deep =
   in
   if count > 30 then
     let count, t = tbasic count deep in
-    (count, [Tbasic t])
+    (count, [T.Basic t])
   else
     aux count [] (1 + Random.int 10)
 
 let basic count deep = function
-  | Tbyte -> count + 1, Byte(char_of_int (Random.int 256))
-  | Tboolean -> count + 1, Boolean(Random.bool ())
-  | Tint16 -> count + 1, Int16(int16 ())
-  | Tint32 -> count + 1, Int32(int32 ())
-  | Tint64 -> count + 1, Int64(int64 ())
-  | Tuint16 -> count + 1, Uint16(uint16 ())
-  | Tuint32 -> count + 1, Uint32(uint32 ())
-  | Tuint64 -> count + 1, Uint64(uint64 ())
-  | Tdouble -> count + 1, Double(double ())
-  | Tstring -> count + 1, String(string 100)
-  | Tsignature -> count + 1, Signature(snd (tsequence 0 0))
-  | Tobject_path -> count + 1, Object_path(path ())
-  | Tunix_fd -> count + 1, Unix_fd Unix.stdin
+  | T.Byte -> count + 1, V.Byte(char_of_int (Random.int 256))
+  | T.Boolean -> count + 1, V.Boolean(Random.bool ())
+  | T.Int16 -> count + 1, V.Int16(int16 ())
+  | T.Int32 -> count + 1, V.Int32(int32 ())
+  | T.Int64 -> count + 1, V.Int64(int64 ())
+  | T.Uint16 -> count + 1, V.Uint16(uint16 ())
+  | T.Uint32 -> count + 1, V.Uint32(uint32 ())
+  | T.Uint64 -> count + 1, V.Uint64(uint64 ())
+  | T.Double -> count + 1, V.Double(double ())
+  | T.String -> count + 1, V.String(string 100)
+  | T.Signature -> count + 1, V.Signature(snd (tsequence 0 0))
+  | T.Object_path -> count + 1, V.Object_path(path ())
+  | T.Unix_fd -> count + 1, V.Unix_fd Unix.stdin
 
 let rec single count deep = function
-  | Tbasic t ->
+  | T.Basic t ->
       let count, x = basic count deep t in
-      (count, OBus_value.basic x)
-  | Tstructure tl ->
+      (count, V.basic x)
+  | T.Structure tl ->
       let count, x = sequence count (deep + 1) tl in
-      (count, structure x)
-  | Tarray t ->
+      (count, V.structure x)
+  | T.Array t ->
       let rec aux count acc = function
-        | 0 -> (count, array t acc)
+        | 0 -> (count, V.array t acc)
         | n -> let count, x = single count (deep + 1) t in aux count (x :: acc) (n - 1)
       in
       aux count [] (Random.int (max 1 (min 200 (1000 - count))))
-  | Tdict(tk, tv) ->
+  | T.Dict(tk, tv) ->
       let rec aux count acc = function
-        | 0 -> (count, dict tk tv acc)
+        | 0 -> (count, V.dict tk tv acc)
         | n ->
             let count, k = basic count (deep + 1) tk in
             let count, v = single count (deep + 1) tv in
             aux count ((k, v) :: acc) (n - 1)
       in
       aux count [] (Random.int (max 1 (min 200 (1000 - count))))
-  | Tvariant ->
+  | T.Variant ->
       let _, t = tsingle 15 (deep + 1) in
       let count, x = single count (deep + 1) t in
-      (count, variant x)
+      (count, V.variant x)
 
 and sequence count deep tl =
   List.fold_right (fun t (count, l) ->
