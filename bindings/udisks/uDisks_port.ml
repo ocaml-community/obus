@@ -11,31 +11,29 @@ include OBus_proxy.Private
 
 open UDisks_interfaces.Org_freedesktop_UDisks_Port
 
-let notify_mode = OBus_property.notify_global "Changed"
-
 let changed proxy =
   OBus_signal.connect s_Changed proxy
 
 let native_path proxy =
-  OBus_property.make p_NativePath ~notify_mode proxy
+  OBus_property.make p_NativePath proxy
 
 let adapter proxy =
   OBus_property.map_r_with_context
     (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
-    (OBus_property.make p_Adapter ~notify_mode proxy)
+    (OBus_property.make p_Adapter proxy)
 
 let parent proxy =
   OBus_property.map_r_with_context
     (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
-    (OBus_property.make p_Parent ~notify_mode proxy)
+    (OBus_property.make p_Parent proxy)
 
 let number proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_Number ~notify_mode proxy)
+    (OBus_property.make p_Number proxy)
 
 let connector_type proxy =
-  OBus_property.make p_ConnectorType ~notify_mode proxy
+  OBus_property.make p_ConnectorType proxy
 
 type properties = {
   connector_type : string;
@@ -56,4 +54,4 @@ let properties proxy =
          adapter = find adapter;
          native_path = find native_path;
        })
-    (OBus_property.make_group proxy ~notify_mode interface)
+    (OBus_property.make_group proxy interface)

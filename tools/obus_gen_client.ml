@@ -63,8 +63,7 @@ let print_impl oc name members annotations =
               module %s =\n\
               struct\n\
              \  open %s\n\
-              \n\
-             \  let notify_mode = OBus_property.notify_none\n"
+              \n"
     module_name module_name;
   List.iter
     (function
@@ -149,10 +148,10 @@ let print_impl oc name members annotations =
                    fprintf oc "      (fun%s x -> %s x)\n" ctx f_recv;
                  if access = Write || access = Read_write then
                    fprintf oc "      (fun x -> %s x)\n" f_send;
-                 fprintf oc "      (OBus_property.make p_%s ~notify_mode proxy)\n" name
+                 fprintf oc "      (OBus_property.make p_%s proxy)\n" name
                end
              | None, None ->
-                 fprintf oc "    OBus_property.make p_%s ~notify_mode proxy\n" name
+                 fprintf oc "    OBus_property.make p_%s proxy\n" name
              | _ ->
                  assert false)
     members;

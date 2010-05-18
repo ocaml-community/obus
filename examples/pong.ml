@@ -17,7 +17,7 @@ let ping obj msg =
   return msg
 
 let interface =
-  Ping_pong.Org_foo_bar.make OBus_object.notify_none {
+  Ping_pong.Org_foo_bar.make {
     Ping_pong.Org_foo_bar.m_Ping = (
       fun context obj msg ->
         lwt result = ping obj msg in

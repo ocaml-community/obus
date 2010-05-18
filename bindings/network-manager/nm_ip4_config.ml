@@ -9,30 +9,28 @@ include OBus_proxy.Private
 
 open Nm_interfaces.Org_freedesktop_NetworkManager_IP4Config
 
-let notify_mode = OBus_property.notify_update "PropertiesChanged"
-
 let addresses proxy =
   OBus_property.map_r
     (fun x -> List.map (List.map Int32.to_int) x)
-    (OBus_property.make p_Addresses ~notify_mode proxy)
+    (OBus_property.make p_Addresses proxy)
 
 let nameservers proxy =
   OBus_property.map_r
     (fun x -> List.map Int32.to_int x)
-    (OBus_property.make p_Nameservers ~notify_mode proxy)
+    (OBus_property.make p_Nameservers proxy)
 
 let wins_servers proxy =
   OBus_property.map_r
     (fun x -> List.map Int32.to_int x)
-    (OBus_property.make p_WinsServers ~notify_mode proxy)
+    (OBus_property.make p_WinsServers proxy)
 
 let domains proxy =
-  OBus_property.make p_Domains ~notify_mode proxy
+  OBus_property.make p_Domains proxy
 
 let routes proxy =
   OBus_property.map_r
     (fun x -> List.map (List.map Int32.to_int) x)
-    (OBus_property.make p_Routes ~notify_mode proxy)
+    (OBus_property.make p_Routes proxy)
 
 type properties = {
   addresses : int list list;
@@ -53,4 +51,4 @@ let properties proxy =
          domains = find domains;
          routes = find routes;
        })
-    (OBus_property.make_group proxy ~notify_mode interface)
+    (OBus_property.make_group proxy interface)

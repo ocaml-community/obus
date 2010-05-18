@@ -11,8 +11,6 @@ let section = Lwt_log.Section.make "network-manager(device)"
 
 include OBus_proxy.Private
 
-let notify_mode = OBus_property.notify_update "PropertiesChanged"
-
 type state =
     [ `Unknown
     | `Unmanaged
@@ -147,13 +145,13 @@ let state_reason_of_int32 = function
 open Nm_interfaces.Org_freedesktop_NetworkManager_Device
 
 let udi proxy =
-  OBus_property.make p_Udi ~notify_mode proxy
+  OBus_property.make p_Udi proxy
 
 let interface proxy =
-  OBus_property.make p_Interface ~notify_mode proxy
+  OBus_property.make p_Interface proxy
 
 let driver proxy =
-  OBus_property.make p_Driver ~notify_mode proxy
+  OBus_property.make p_Driver proxy
 
 let capabilities proxy =
   OBus_property.map_r
@@ -163,39 +161,39 @@ let capabilities proxy =
        let l = if n land 0x1 <> 0 then `Nm_supported :: l else l in
        let l = if n land 0x2 <> 0 then `Carrier_detect :: l else l in
        l)
-    (OBus_property.make p_Capabilities ~notify_mode proxy)
+    (OBus_property.make p_Capabilities proxy)
 
 let ip4_address proxy =
-  OBus_property.make p_Ip4Address ~notify_mode proxy
+  OBus_property.make p_Ip4Address proxy
 
 let state proxy =
   OBus_property.map_r
     state_of_int32
-    (OBus_property.make p_State ~notify_mode proxy)
+    (OBus_property.make p_State proxy)
 
 let ip4_config proxy =
   OBus_property.map_r_with_context
     (fun context path ->
        Nm_ip4_config.of_proxy
          (OBus_proxy.make (OBus_context.sender context) path))
-    (OBus_property.make p_Ip4Config ~notify_mode proxy)
+    (OBus_property.make p_Ip4Config proxy)
 
 let dhcp4_config proxy =
   OBus_property.map_r_with_context
     (fun context path ->
        Nm_dhcp4_config.of_proxy
          (OBus_proxy.make (OBus_context.sender context) path))
-    (OBus_property.make p_Dhcp4Config ~notify_mode proxy)
+    (OBus_property.make p_Dhcp4Config proxy)
 
 let ip6_config proxy =
   OBus_property.map_r_with_context
     (fun context path ->
        Nm_ip6_config.of_proxy
          (OBus_proxy.make (OBus_context.sender context) path))
-    (OBus_property.make p_Ip6Config ~notify_mode proxy)
+    (OBus_property.make p_Ip6Config proxy)
 
 let managed proxy =
-  OBus_property.make p_Managed ~notify_mode proxy
+  OBus_property.make p_Managed proxy
 
 let device_type proxy =
   OBus_property.map_r
@@ -208,7 +206,7 @@ let device_type proxy =
        | n ->
            ignore (Lwt_log.warning_f ~section "device_type_of_int: unknown type: %ld" n);
            `Unknown)
-    (OBus_property.make p_DeviceType ~notify_mode proxy)
+    (OBus_property.make p_DeviceType proxy)
 
 let disconnect proxy =
   OBus_method.call m_Disconnect proxy ()
@@ -252,7 +250,7 @@ let properties proxy =
          managed = find managed;
          device_type = find device_type;
        })
-    (OBus_property.make_group proxy ~notify_mode
+    (OBus_property.make_group proxy
        Nm_interfaces.Org_freedesktop_NetworkManager_Device.interface)
 
 module Bluetooth =
@@ -260,15 +258,15 @@ struct
   open Nm_interfaces.Org_freedesktop_NetworkManager_Device_Bluetooth
 
   let hw_address proxy =
-    OBus_property.make p_HwAddress ~notify_mode proxy
+    OBus_property.make p_HwAddress proxy
 
   let name proxy =
-    OBus_property.make p_Name ~notify_mode proxy
+    OBus_property.make p_Name proxy
 
   let bt_capabilities proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_BtCapabilities ~notify_mode proxy)
+      (OBus_property.make p_BtCapabilities proxy)
 
   let properties_changed proxy =
     OBus_signal.connect s_PropertiesChanged proxy
@@ -288,7 +286,7 @@ struct
            name = find name;
            bt_capabilities = find bt_capabilities;
          })
-      (OBus_property.make_group proxy ~notify_mode interface)
+      (OBus_property.make_group proxy interface)
 end
 
 module Cdma =
@@ -310,17 +308,17 @@ struct
   open Nm_interfaces.Org_freedesktop_NetworkManager_Device_OlpcMesh
 
   let hw_address proxy =
-    OBus_property.make p_HwAddress ~notify_mode proxy
+    OBus_property.make p_HwAddress proxy
 
   let companion proxy =
     OBus_property.map_r_with_context
       (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-      (OBus_property.make p_Companion ~notify_mode proxy)
+      (OBus_property.make p_Companion proxy)
 
   let active_channel proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_ActiveChannel ~notify_mode proxy)
+      (OBus_property.make p_ActiveChannel proxy)
 
   let properties_changed proxy =
     OBus_signal.connect s_PropertiesChanged proxy
@@ -340,7 +338,7 @@ struct
            companion = find companion;
            active_channel = find active_channel;
          })
-      (OBus_property.make_group proxy ~notify_mode interface)
+      (OBus_property.make_group proxy interface)
 end
 
 module Serial =
@@ -361,15 +359,15 @@ struct
   open Nm_interfaces.Org_freedesktop_NetworkManager_Device_Wired
 
   let hw_address proxy =
-    OBus_property.make p_HwAddress ~notify_mode proxy
+    OBus_property.make p_HwAddress proxy
 
   let speed proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_Speed ~notify_mode proxy)
+      (OBus_property.make p_Speed proxy)
 
   let carrier proxy =
-    OBus_property.make p_Carrier ~notify_mode proxy
+    OBus_property.make p_Carrier proxy
 
   let properties_changed proxy =
     OBus_signal.connect s_PropertiesChanged proxy
@@ -389,7 +387,7 @@ struct
            speed = find speed;
            carrier = find carrier;
          })
-      (OBus_property.make_group proxy ~notify_mode interface)
+      (OBus_property.make_group proxy interface)
 end
 
 module Wireless =
@@ -420,27 +418,27 @@ struct
     )
 
   let hw_address proxy =
-    OBus_property.make p_HwAddress ~notify_mode proxy
+    OBus_property.make p_HwAddress proxy
 
   let mode proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_Mode ~notify_mode proxy)
+      (OBus_property.make p_Mode proxy)
 
   let bitrate proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_Bitrate ~notify_mode proxy)
+      (OBus_property.make p_Bitrate proxy)
 
   let active_access_point proxy =
     OBus_property.map_r_with_context
       (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-      (OBus_property.make p_ActiveAccessPoint ~notify_mode proxy)
+      (OBus_property.make p_ActiveAccessPoint proxy)
 
   let wireless_capabilities proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_WirelessCapabilities ~notify_mode proxy)
+      (OBus_property.make p_WirelessCapabilities proxy)
 
   let properties_changed proxy =
     OBus_signal.connect s_PropertiesChanged proxy
@@ -478,5 +476,5 @@ struct
            active_access_point = find active_access_point;
            wireless_capabilities = find wireless_capabilities;
          })
-      (OBus_property.make_group proxy ~notify_mode interface)
+      (OBus_property.make_group proxy interface)
 end

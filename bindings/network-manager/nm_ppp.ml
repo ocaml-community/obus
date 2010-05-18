@@ -9,8 +9,6 @@ include OBus_proxy.Private
 
 open Nm_interfaces.Org_freedesktop_NetworkManager_PPP
 
-let notify_mode = OBus_property.notify_none
-
 let need_secrets proxy =
   OBus_method.call m_NeedSecrets proxy ()
 

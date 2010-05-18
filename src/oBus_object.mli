@@ -28,10 +28,6 @@ type 'a interface
 type 'a member
   (** Part of an inteface *)
 
-type 'a notify_mode
-  (** Describe how property changes should be announced to other
-      applications *)
-
 (** {6 Objects creation} *)
 
 val attach : 'a t -> 'a -> unit
@@ -111,14 +107,12 @@ val dynamic :
 
 (** {6 Interfaces} *)
 
-val make_interface : notify_mode : 'a notify_mode -> OBus_name.interface -> 'a member list -> 'a interface
-  (** [make_interface notify_mode ?sorted name members] creates a new
-      interface. [notify_mode] determines how property changes are
-      announced. *)
+val make_interface : OBus_name.interface -> 'a member list -> 'a interface
+  (** [make_interface name members] creates a new interface *)
 
 (**/**)
 
-val make_interface_unsafe : notify_mode : 'a notify_mode -> OBus_name.interface ->
+val make_interface_unsafe : OBus_name.interface ->
   'a member array ->
   'a member array ->
   'a member array -> 'a interface
@@ -182,22 +176,3 @@ val emit : 'a t ->
   (** [emit obj ~interface ~member ?peer typ args] emits a signal. it
       uses the same rules as {!OBus_signal.emit} for choosing the
       destinations of the signal.  *)
-
-(** {6 Notification modes} *)
-
-(** For a description of these modes, look at {!OBus_property} *)
-
-val notify_none : 'a notify_mode
-val notify_global : OBus_name.member -> 'a notify_mode
-val notify_update : OBus_name.member -> 'a notify_mode
-
-val notify_custom :
-  emit : ('a t -> OBus_name.interface -> OBus_value.V.single Map.Make(String).t -> unit Lwt.t) ->
-  signature : OBus_introspect.member list -> 'a notify_mode
-  (** [notify_custom ~send ~signature] creates a custom notification
-      mode. [emit] is responsible for sending change notifications.
-      [emit] receives the mapping from property names to their values,
-      for properties that have changed.
-
-      [signature] is the signature to add to the interface when
-      creating it. *)

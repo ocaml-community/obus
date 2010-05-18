@@ -107,12 +107,10 @@ let print_impl oc name members annotations =
 
   (***** Interface description *****)
 
-  if List.exists (function Method _ | Property _ -> true | _ -> false) members then begin
+  if List.exists (function Method _ | Property _ -> true | _ -> false) members then
     print_record oc members;
-    output_string oc "  let make ~notify_mode members =\n"
-  end else
-    output_string oc "  let make ~notify_mode =\n";
-  output_string oc "    OBus_object.make_interface_unsafe ~notify_mode interface\n\
+  output_string oc "  let make members =\n";
+  output_string oc "    OBus_object.make_interface_unsafe interface\n\
                    \      [|\n";
   List.iter
     (function
@@ -187,9 +185,9 @@ let print_intf oc name members annotations =
 
   if List.exists (function Method _ | Property _ -> true | _ -> false) members then begin
     print_record oc members;
-    output_string oc "  val make : notify_mode : 'a OBus_object.notify_mode -> 'a members -> 'a OBus_object.interface\n"
+    output_string oc "  val make : 'a members -> 'a OBus_object.interface\n"
   end else
-    output_string oc "  val make : notify_mode : 'a OBus_object.notify_mode -> 'a OBus_object.interface\n";
+    output_string oc "  val make : unit -> 'a OBus_object.interface\n";
   output_string oc "end\n"
 
 (* +-----------------------------------------------------------------+

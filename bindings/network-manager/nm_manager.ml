@@ -43,8 +43,6 @@ let state_of_int32 = function
 
 let proxy daemon = OBus_proxy.make daemon ["org"; "freedesktop"; "NetworkManager"]
 
-let notify_mode = OBus_property.notify_update "PropertiesChanged"
-
 open Nm_interfaces.Org_freedesktop_NetworkManager
 
 let get_devices daemon =
@@ -80,16 +78,16 @@ let sleep daemon ~sleep =
   OBus_method.call m_Sleep (proxy daemon) sleep
 
 let wireless_enabled daemon =
-  OBus_property.make p_WirelessEnabled ~notify_mode (proxy daemon)
+  OBus_property.make p_WirelessEnabled (proxy daemon)
 
 let wireless_hardware_enabled daemon =
-  OBus_property.make p_WirelessHardwareEnabled ~notify_mode (proxy daemon)
+  OBus_property.make p_WirelessHardwareEnabled (proxy daemon)
 
 let wwan_enabled daemon =
-  OBus_property.make p_WwanEnabled ~notify_mode (proxy daemon)
+  OBus_property.make p_WwanEnabled (proxy daemon)
 
 let wwan_hardware_enabled daemon =
-  OBus_property.make p_WwanHardwareEnabled ~notify_mode (proxy daemon)
+  OBus_property.make p_WwanHardwareEnabled (proxy daemon)
 
 let active_connections daemon =
   OBus_property.map_r_with_context
@@ -99,12 +97,12 @@ let active_connections daemon =
             Nm_connection.of_proxy
               (OBus_proxy.make (OBus_context.sender context) path))
          paths)
-    (OBus_property.make p_ActiveConnections ~notify_mode (proxy daemon))
+    (OBus_property.make p_ActiveConnections (proxy daemon))
 
 let state daemon =
   OBus_property.map_r
     state_of_int32
-    (OBus_property.make p_State ~notify_mode (proxy daemon))
+    (OBus_property.make p_State (proxy daemon))
 
 let state_changed daemon =
   OBus_signal.map
@@ -147,4 +145,4 @@ let properties daemon =
          active_connections = find active_connections;
          state = find state;
        })
-    (OBus_property.make_group (proxy daemon) ~notify_mode interface)
+    (OBus_property.make_group (proxy daemon) interface)

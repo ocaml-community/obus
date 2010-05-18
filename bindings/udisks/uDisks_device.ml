@@ -44,8 +44,6 @@ type job = {
 
 open UDisks_interfaces.Org_freedesktop_UDisks_Device
 
-let notify_mode = OBus_property.notify_global "Changed"
-
 let job_cancel proxy =
   OBus_method.call m_JobCancel proxy ()
 
@@ -172,264 +170,264 @@ let job_changed proxy =
     (OBus_signal.connect s_JobChanged proxy)
 
 let native_path proxy =
-  OBus_property.make p_NativePath ~notify_mode proxy
+  OBus_property.make p_NativePath proxy
 
 let device_detection_time proxy =
-  OBus_property.make p_DeviceDetectionTime ~notify_mode proxy
+  OBus_property.make p_DeviceDetectionTime proxy
 
 let device_media_detection_time proxy =
-  OBus_property.make p_DeviceMediaDetectionTime ~notify_mode proxy
+  OBus_property.make p_DeviceMediaDetectionTime proxy
 
 let device_major proxy =
-  OBus_property.make p_DeviceMajor ~notify_mode proxy
+  OBus_property.make p_DeviceMajor proxy
 
 let device_minor proxy =
-  OBus_property.make p_DeviceMinor ~notify_mode proxy
+  OBus_property.make p_DeviceMinor proxy
 
 let device_file proxy =
-  OBus_property.make p_DeviceFile ~notify_mode proxy
+  OBus_property.make p_DeviceFile proxy
 
 let device_file_presentation proxy =
-  OBus_property.make p_DeviceFilePresentation ~notify_mode proxy
+  OBus_property.make p_DeviceFilePresentation proxy
 
 let device_file_by_id proxy =
-  OBus_property.make p_DeviceFileById ~notify_mode proxy
+  OBus_property.make p_DeviceFileById proxy
 
 let device_file_by_path proxy =
-  OBus_property.make p_DeviceFileByPath ~notify_mode proxy
+  OBus_property.make p_DeviceFileByPath proxy
 
 let device_is_system_internal proxy =
-  OBus_property.make p_DeviceIsSystemInternal ~notify_mode proxy
+  OBus_property.make p_DeviceIsSystemInternal proxy
 
 let device_is_partition proxy =
-  OBus_property.make p_DeviceIsPartition ~notify_mode proxy
+  OBus_property.make p_DeviceIsPartition proxy
 
 let device_is_partition_table proxy =
-  OBus_property.make p_DeviceIsPartitionTable ~notify_mode proxy
+  OBus_property.make p_DeviceIsPartitionTable proxy
 
 let device_is_removable proxy =
-  OBus_property.make p_DeviceIsRemovable ~notify_mode proxy
+  OBus_property.make p_DeviceIsRemovable proxy
 
 let device_is_media_available proxy =
-  OBus_property.make p_DeviceIsMediaAvailable ~notify_mode proxy
+  OBus_property.make p_DeviceIsMediaAvailable proxy
 
 let device_is_media_change_detected proxy =
-  OBus_property.make p_DeviceIsMediaChangeDetected ~notify_mode proxy
+  OBus_property.make p_DeviceIsMediaChangeDetected proxy
 
 let device_is_media_change_detection_polling proxy =
-  OBus_property.make p_DeviceIsMediaChangeDetectionPolling ~notify_mode proxy
+  OBus_property.make p_DeviceIsMediaChangeDetectionPolling proxy
 
 let device_is_media_change_detection_inhibitable proxy =
-  OBus_property.make p_DeviceIsMediaChangeDetectionInhibitable ~notify_mode proxy
+  OBus_property.make p_DeviceIsMediaChangeDetectionInhibitable proxy
 
 let device_is_media_change_detection_inhibited proxy =
-  OBus_property.make p_DeviceIsMediaChangeDetectionInhibited ~notify_mode proxy
+  OBus_property.make p_DeviceIsMediaChangeDetectionInhibited proxy
 
 let device_is_read_only proxy =
-  OBus_property.make p_DeviceIsReadOnly ~notify_mode proxy
+  OBus_property.make p_DeviceIsReadOnly proxy
 
 let device_is_drive proxy =
-  OBus_property.make p_DeviceIsDrive ~notify_mode proxy
+  OBus_property.make p_DeviceIsDrive proxy
 
 let device_is_optical_disc proxy =
-  OBus_property.make p_DeviceIsOpticalDisc ~notify_mode proxy
+  OBus_property.make p_DeviceIsOpticalDisc proxy
 
 let device_is_mounted proxy =
-  OBus_property.make p_DeviceIsMounted ~notify_mode proxy
+  OBus_property.make p_DeviceIsMounted proxy
 
 let device_mount_paths proxy =
-  OBus_property.make p_DeviceMountPaths ~notify_mode proxy
+  OBus_property.make p_DeviceMountPaths proxy
 
 let device_mounted_by_uid proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_DeviceMountedByUid ~notify_mode proxy)
+    (OBus_property.make p_DeviceMountedByUid proxy)
 
 let device_is_luks proxy =
-  OBus_property.make p_DeviceIsLuks ~notify_mode proxy
+  OBus_property.make p_DeviceIsLuks proxy
 
 let device_is_luks_cleartext proxy =
-  OBus_property.make p_DeviceIsLuksCleartext ~notify_mode proxy
+  OBus_property.make p_DeviceIsLuksCleartext proxy
 
 let device_is_linux_md_component proxy =
-  OBus_property.make p_DeviceIsLinuxMdComponent ~notify_mode proxy
+  OBus_property.make p_DeviceIsLinuxMdComponent proxy
 
 let device_is_linux_md proxy =
-  OBus_property.make p_DeviceIsLinuxMd ~notify_mode proxy
+  OBus_property.make p_DeviceIsLinuxMd proxy
 
 let device_is_linux_lvm2_lv proxy =
-  OBus_property.make p_DeviceIsLinuxLvm2LV ~notify_mode proxy
+  OBus_property.make p_DeviceIsLinuxLvm2LV proxy
 
 let device_is_linux_lvm2_pv proxy =
-  OBus_property.make p_DeviceIsLinuxLvm2PV ~notify_mode proxy
+  OBus_property.make p_DeviceIsLinuxLvm2PV proxy
 
 let device_is_linux_dmmp_component proxy =
-  OBus_property.make p_DeviceIsLinuxDmmpComponent ~notify_mode proxy
+  OBus_property.make p_DeviceIsLinuxDmmpComponent proxy
 
 let device_is_linux_dmmp proxy =
-  OBus_property.make p_DeviceIsLinuxDmmp ~notify_mode proxy
+  OBus_property.make p_DeviceIsLinuxDmmp proxy
 
 let device_is_linux_loop proxy =
-  OBus_property.make p_DeviceIsLinuxLoop ~notify_mode proxy
+  OBus_property.make p_DeviceIsLinuxLoop proxy
 
 let device_size proxy =
-  OBus_property.make p_DeviceSize ~notify_mode proxy
+  OBus_property.make p_DeviceSize proxy
 
 let device_block_size proxy =
-  OBus_property.make p_DeviceBlockSize ~notify_mode proxy
+  OBus_property.make p_DeviceBlockSize proxy
 
 let device_presentation_hide proxy =
-  OBus_property.make p_DevicePresentationHide ~notify_mode proxy
+  OBus_property.make p_DevicePresentationHide proxy
 
 let device_presentation_nopolicy proxy =
-  OBus_property.make p_DevicePresentationNopolicy ~notify_mode proxy
+  OBus_property.make p_DevicePresentationNopolicy proxy
 
 let device_presentation_name proxy =
-  OBus_property.make p_DevicePresentationName ~notify_mode proxy
+  OBus_property.make p_DevicePresentationName proxy
 
 let device_presentation_icon_name proxy =
-  OBus_property.make p_DevicePresentationIconName ~notify_mode proxy
+  OBus_property.make p_DevicePresentationIconName proxy
 
 let job_in_progress proxy =
-  OBus_property.make p_JobInProgress ~notify_mode proxy
+  OBus_property.make p_JobInProgress proxy
 
 let job_id proxy =
-  OBus_property.make p_JobId ~notify_mode proxy
+  OBus_property.make p_JobId proxy
 
 let job_initiated_by_uid proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_JobInitiatedByUid ~notify_mode proxy)
+    (OBus_property.make p_JobInitiatedByUid proxy)
 
 let job_is_cancellable proxy =
-  OBus_property.make p_JobIsCancellable ~notify_mode proxy
+  OBus_property.make p_JobIsCancellable proxy
 
 let job_percentage proxy =
-  OBus_property.make p_JobPercentage ~notify_mode proxy
+  OBus_property.make p_JobPercentage proxy
 
 let id_usage proxy =
-  OBus_property.make p_IdUsage ~notify_mode proxy
+  OBus_property.make p_IdUsage proxy
 
 let id_type proxy =
-  OBus_property.make p_IdType ~notify_mode proxy
+  OBus_property.make p_IdType proxy
 
 let id_version proxy =
-  OBus_property.make p_IdVersion ~notify_mode proxy
+  OBus_property.make p_IdVersion proxy
 
 let id_uuid proxy =
-  OBus_property.make p_IdUuid ~notify_mode proxy
+  OBus_property.make p_IdUuid proxy
 
 let id_label proxy =
-  OBus_property.make p_IdLabel ~notify_mode proxy
+  OBus_property.make p_IdLabel proxy
 
 let luks_holder proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_LuksHolder ~notify_mode proxy)
+    (OBus_property.make p_LuksHolder proxy)
 
 let luks_cleartext_slave proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_LuksCleartextSlave ~notify_mode proxy)
+    (OBus_property.make p_LuksCleartextSlave proxy)
 
 let luks_cleartext_unlocked_by_uid proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LuksCleartextUnlockedByUid ~notify_mode proxy)
+    (OBus_property.make p_LuksCleartextUnlockedByUid proxy)
 
 let partition_slave proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_PartitionSlave ~notify_mode proxy)
+    (OBus_property.make p_PartitionSlave proxy)
 
 let partition_scheme proxy =
-  OBus_property.make p_PartitionScheme ~notify_mode proxy
+  OBus_property.make p_PartitionScheme proxy
 
 let partition_type proxy =
-  OBus_property.make p_PartitionType ~notify_mode proxy
+  OBus_property.make p_PartitionType proxy
 
 let partition_label proxy =
-  OBus_property.make p_PartitionLabel ~notify_mode proxy
+  OBus_property.make p_PartitionLabel proxy
 
 let partition_uuid proxy =
-  OBus_property.make p_PartitionUuid ~notify_mode proxy
+  OBus_property.make p_PartitionUuid proxy
 
 let partition_flags proxy =
-  OBus_property.make p_PartitionFlags ~notify_mode proxy
+  OBus_property.make p_PartitionFlags proxy
 
 let partition_number proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_PartitionNumber ~notify_mode proxy)
+    (OBus_property.make p_PartitionNumber proxy)
 
 let partition_offset proxy =
-  OBus_property.make p_PartitionOffset ~notify_mode proxy
+  OBus_property.make p_PartitionOffset proxy
 
 let partition_size proxy =
-  OBus_property.make p_PartitionSize ~notify_mode proxy
+  OBus_property.make p_PartitionSize proxy
 
 let partition_alignment_offset proxy =
-  OBus_property.make p_PartitionAlignmentOffset ~notify_mode proxy
+  OBus_property.make p_PartitionAlignmentOffset proxy
 
 let partition_table_scheme proxy =
-  OBus_property.make p_PartitionTableScheme ~notify_mode proxy
+  OBus_property.make p_PartitionTableScheme proxy
 
 let partition_table_count proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_PartitionTableCount ~notify_mode proxy)
+    (OBus_property.make p_PartitionTableCount proxy)
 
 let drive_vendor proxy =
-  OBus_property.make p_DriveVendor ~notify_mode proxy
+  OBus_property.make p_DriveVendor proxy
 
 let drive_model proxy =
-  OBus_property.make p_DriveModel ~notify_mode proxy
+  OBus_property.make p_DriveModel proxy
 
 let drive_revision proxy =
-  OBus_property.make p_DriveRevision ~notify_mode proxy
+  OBus_property.make p_DriveRevision proxy
 
 let drive_serial proxy =
-  OBus_property.make p_DriveSerial ~notify_mode proxy
+  OBus_property.make p_DriveSerial proxy
 
 let drive_wwn proxy =
-  OBus_property.make p_DriveWwn ~notify_mode proxy
+  OBus_property.make p_DriveWwn proxy
 
 let drive_rotation_rate proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_DriveRotationRate ~notify_mode proxy)
+    (OBus_property.make p_DriveRotationRate proxy)
 
 let drive_write_cache proxy =
-  OBus_property.make p_DriveWriteCache ~notify_mode proxy
+  OBus_property.make p_DriveWriteCache proxy
 
 let drive_connection_interface proxy =
-  OBus_property.make p_DriveConnectionInterface ~notify_mode proxy
+  OBus_property.make p_DriveConnectionInterface proxy
 
 let drive_connection_speed proxy =
-  OBus_property.make p_DriveConnectionSpeed ~notify_mode proxy
+  OBus_property.make p_DriveConnectionSpeed proxy
 
 let drive_media_compatibility proxy =
-  OBus_property.make p_DriveMediaCompatibility ~notify_mode proxy
+  OBus_property.make p_DriveMediaCompatibility proxy
 
 let drive_media proxy =
-  OBus_property.make p_DriveMedia ~notify_mode proxy
+  OBus_property.make p_DriveMedia proxy
 
 let drive_is_media_ejectable proxy =
-  OBus_property.make p_DriveIsMediaEjectable ~notify_mode proxy
+  OBus_property.make p_DriveIsMediaEjectable proxy
 
 let drive_can_detach proxy =
-  OBus_property.make p_DriveCanDetach ~notify_mode proxy
+  OBus_property.make p_DriveCanDetach proxy
 
 let drive_can_spindown proxy =
-  OBus_property.make p_DriveCanSpindown ~notify_mode proxy
+  OBus_property.make p_DriveCanSpindown proxy
 
 let drive_is_rotational proxy =
-  OBus_property.make p_DriveIsRotational ~notify_mode proxy
+  OBus_property.make p_DriveIsRotational proxy
 
 let drive_adapter proxy =
   OBus_property.map_r_with_context
     (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
-    (OBus_property.make p_DriveAdapter ~notify_mode proxy)
+    (OBus_property.make p_DriveAdapter proxy)
 
 let drive_ports proxy =
   OBus_property.map_r_with_context
@@ -438,184 +436,184 @@ let drive_ports proxy =
          (fun path ->
             UDisks_port.of_proxy (OBus_proxy.make (OBus_context.sender context) path))
          x)
-    (OBus_property.make p_DrivePorts ~notify_mode proxy)
+    (OBus_property.make p_DrivePorts proxy)
 
 let drive_similar_devices proxy =
   OBus_property.map_r_with_context
     (fun context x -> List.map (fun path -> OBus_proxy.make (OBus_context.sender context) path) x)
-    (OBus_property.make p_DriveSimilarDevices ~notify_mode proxy)
+    (OBus_property.make p_DriveSimilarDevices proxy)
 
 let optical_disc_is_blank proxy =
-  OBus_property.make p_OpticalDiscIsBlank ~notify_mode proxy
+  OBus_property.make p_OpticalDiscIsBlank proxy
 
 let optical_disc_is_appendable proxy =
-  OBus_property.make p_OpticalDiscIsAppendable ~notify_mode proxy
+  OBus_property.make p_OpticalDiscIsAppendable proxy
 
 let optical_disc_is_closed proxy =
-  OBus_property.make p_OpticalDiscIsClosed ~notify_mode proxy
+  OBus_property.make p_OpticalDiscIsClosed proxy
 
 let optical_disc_num_tracks proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_OpticalDiscNumTracks ~notify_mode proxy)
+    (OBus_property.make p_OpticalDiscNumTracks proxy)
 
 let optical_disc_num_audio_tracks proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_OpticalDiscNumAudioTracks ~notify_mode proxy)
+    (OBus_property.make p_OpticalDiscNumAudioTracks proxy)
 
 let optical_disc_num_sessions proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_OpticalDiscNumSessions ~notify_mode proxy)
+    (OBus_property.make p_OpticalDiscNumSessions proxy)
 
 let drive_ata_smart_is_available proxy =
-  OBus_property.make p_DriveAtaSmartIsAvailable ~notify_mode proxy
+  OBus_property.make p_DriveAtaSmartIsAvailable proxy
 
 let drive_ata_smart_time_collected proxy =
-  OBus_property.make p_DriveAtaSmartTimeCollected ~notify_mode proxy
+  OBus_property.make p_DriveAtaSmartTimeCollected proxy
 
 let drive_ata_smart_status proxy =
-  OBus_property.make p_DriveAtaSmartStatus ~notify_mode proxy
+  OBus_property.make p_DriveAtaSmartStatus proxy
 
 let drive_ata_smart_blob proxy =
-  OBus_property.make p_DriveAtaSmartBlob ~notify_mode proxy
+  OBus_property.make p_DriveAtaSmartBlob proxy
 
 let linux_md_component_level proxy =
-  OBus_property.make p_LinuxMdComponentLevel ~notify_mode proxy
+  OBus_property.make p_LinuxMdComponentLevel proxy
 
 let linux_md_component_position proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LinuxMdComponentPosition ~notify_mode proxy)
+    (OBus_property.make p_LinuxMdComponentPosition proxy)
 
 let linux_md_component_num_raid_devices proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LinuxMdComponentNumRaidDevices ~notify_mode proxy)
+    (OBus_property.make p_LinuxMdComponentNumRaidDevices proxy)
 
 let linux_md_component_uuid proxy =
-  OBus_property.make p_LinuxMdComponentUuid ~notify_mode proxy
+  OBus_property.make p_LinuxMdComponentUuid proxy
 
 let linux_md_component_name proxy =
-  OBus_property.make p_LinuxMdComponentName ~notify_mode proxy
+  OBus_property.make p_LinuxMdComponentName proxy
 
 let linux_md_component_home_host proxy =
-  OBus_property.make p_LinuxMdComponentHomeHost ~notify_mode proxy
+  OBus_property.make p_LinuxMdComponentHomeHost proxy
 
 let linux_md_component_version proxy =
-  OBus_property.make p_LinuxMdComponentVersion ~notify_mode proxy
+  OBus_property.make p_LinuxMdComponentVersion proxy
 
 let linux_md_component_holder proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_LinuxMdComponentHolder ~notify_mode proxy)
+    (OBus_property.make p_LinuxMdComponentHolder proxy)
 
 let linux_md_component_state proxy =
-  OBus_property.make p_LinuxMdComponentState ~notify_mode proxy
+  OBus_property.make p_LinuxMdComponentState proxy
 
 let linux_md_state proxy =
-  OBus_property.make p_LinuxMdState ~notify_mode proxy
+  OBus_property.make p_LinuxMdState proxy
 
 let linux_md_level proxy =
-  OBus_property.make p_LinuxMdLevel ~notify_mode proxy
+  OBus_property.make p_LinuxMdLevel proxy
 
 let linux_md_uuid proxy =
-  OBus_property.make p_LinuxMdUuid ~notify_mode proxy
+  OBus_property.make p_LinuxMdUuid proxy
 
 let linux_md_home_host proxy =
-  OBus_property.make p_LinuxMdHomeHost ~notify_mode proxy
+  OBus_property.make p_LinuxMdHomeHost proxy
 
 let linux_md_name proxy =
-  OBus_property.make p_LinuxMdName ~notify_mode proxy
+  OBus_property.make p_LinuxMdName proxy
 
 let linux_md_num_raid_devices proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LinuxMdNumRaidDevices ~notify_mode proxy)
+    (OBus_property.make p_LinuxMdNumRaidDevices proxy)
 
 let linux_md_version proxy =
-  OBus_property.make p_LinuxMdVersion ~notify_mode proxy
+  OBus_property.make p_LinuxMdVersion proxy
 
 let linux_md_slaves proxy =
   OBus_property.map_r_with_context
     (fun context x -> List.map (fun path -> OBus_proxy.make (OBus_context.sender context) path) x)
-    (OBus_property.make p_LinuxMdSlaves ~notify_mode proxy)
+    (OBus_property.make p_LinuxMdSlaves proxy)
 
 let linux_md_is_degraded proxy =
-  OBus_property.make p_LinuxMdIsDegraded ~notify_mode proxy
+  OBus_property.make p_LinuxMdIsDegraded proxy
 
 let linux_md_sync_action proxy =
-  OBus_property.make p_LinuxMdSyncAction ~notify_mode proxy
+  OBus_property.make p_LinuxMdSyncAction proxy
 
 let linux_md_sync_percentage proxy =
-  OBus_property.make p_LinuxMdSyncPercentage ~notify_mode proxy
+  OBus_property.make p_LinuxMdSyncPercentage proxy
 
 let linux_md_sync_speed proxy =
-  OBus_property.make p_LinuxMdSyncSpeed ~notify_mode proxy
+  OBus_property.make p_LinuxMdSyncSpeed proxy
 
 let linux_lvm2_pvuuid proxy =
-  OBus_property.make p_LinuxLvm2PVUuid ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVUuid proxy
 
 let linux_lvm2_pvnum_metadata_areas proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LinuxLvm2PVNumMetadataAreas ~notify_mode proxy)
+    (OBus_property.make p_LinuxLvm2PVNumMetadataAreas proxy)
 
 let linux_lvm2_pvgroup_name proxy =
-  OBus_property.make p_LinuxLvm2PVGroupName ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVGroupName proxy
 
 let linux_lvm2_pvgroup_uuid proxy =
-  OBus_property.make p_LinuxLvm2PVGroupUuid ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVGroupUuid proxy
 
 let linux_lvm2_pvgroup_size proxy =
-  OBus_property.make p_LinuxLvm2PVGroupSize ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVGroupSize proxy
 
 let linux_lvm2_pvgroup_unallocated_size proxy =
-  OBus_property.make p_LinuxLvm2PVGroupUnallocatedSize ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVGroupUnallocatedSize proxy
 
 let linux_lvm2_pvgroup_sequence_number proxy =
-  OBus_property.make p_LinuxLvm2PVGroupSequenceNumber ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVGroupSequenceNumber proxy
 
 let linux_lvm2_pvgroup_extent_size proxy =
-  OBus_property.make p_LinuxLvm2PVGroupExtentSize ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVGroupExtentSize proxy
 
 let linux_lvm2_pvgroup_physical_volumes proxy =
-  OBus_property.make p_LinuxLvm2PVGroupPhysicalVolumes ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVGroupPhysicalVolumes proxy
 
 let linux_lvm2_pvgroup_logical_volumes proxy =
-  OBus_property.make p_LinuxLvm2PVGroupLogicalVolumes ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2PVGroupLogicalVolumes proxy
 
 let linux_lvm2_lvname proxy =
-  OBus_property.make p_LinuxLvm2LVName ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2LVName proxy
 
 let linux_lvm2_lvuuid proxy =
-  OBus_property.make p_LinuxLvm2LVUuid ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2LVUuid proxy
 
 let linux_lvm2_lvgroup_name proxy =
-  OBus_property.make p_LinuxLvm2LVGroupName ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2LVGroupName proxy
 
 let linux_lvm2_lvgroup_uuid proxy =
-  OBus_property.make p_LinuxLvm2LVGroupUuid ~notify_mode proxy
+  OBus_property.make p_LinuxLvm2LVGroupUuid proxy
 
 let linux_dmmp_component_holder proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_LinuxDmmpComponentHolder ~notify_mode proxy)
+    (OBus_property.make p_LinuxDmmpComponentHolder proxy)
 
 let linux_dmmp_name proxy =
-  OBus_property.make p_LinuxDmmpName ~notify_mode proxy
+  OBus_property.make p_LinuxDmmpName proxy
 
 let linux_dmmp_slaves proxy =
   OBus_property.map_r_with_context
     (fun context x -> List.map (fun path -> OBus_proxy.make (OBus_context.sender context) path) x)
-    (OBus_property.make p_LinuxDmmpSlaves ~notify_mode proxy)
+    (OBus_property.make p_LinuxDmmpSlaves proxy)
 
 let linux_dmmp_parameters proxy =
-  OBus_property.make p_LinuxDmmpParameters ~notify_mode proxy
+  OBus_property.make p_LinuxDmmpParameters proxy
 
 let linux_loop_filename proxy =
-  OBus_property.make p_LinuxLoopFilename ~notify_mode proxy
+  OBus_property.make p_LinuxLoopFilename proxy
 
 type properties = {
   linux_dmmp_parameters : string;
@@ -886,5 +884,5 @@ let properties proxy =
          device_detection_time = find device_detection_time;
          native_path = find native_path;
        })
-    (OBus_property.make_group proxy ~notify_mode interface)
+    (OBus_property.make_group proxy interface)
 

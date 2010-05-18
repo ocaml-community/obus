@@ -24,22 +24,18 @@ type 'a w = ('a, [ `writable ]) t
 type 'a rw = ('a, [ `readable | `writable ]) t
     (** Type of read and write properties *)
 
-type notify_mode
-  (** Type of properties changes notification. It describes how
-      properties changes are announced. *)
-
 type properties = OBus_value.V.single Map.Make(String).t
     (** Mapping from property names to their value *)
 
 (** {6 Properties creation} *)
 
-val make : ('a, 'access) OBus_member.Property.t -> notify_mode : notify_mode -> OBus_proxy.t -> ('a, 'access) t
-  (** [make property ~notify_mode proxy] returns the property object
-      for this proxy. *)
+val make : ('a, 'access) OBus_member.Property.t -> OBus_proxy.t -> ('a, 'access) t
+  (** [make property proxy] returns the property object for this
+      proxy. *)
 
-val make_group : OBus_proxy.t -> notify_mode : notify_mode -> OBus_name.interface -> properties r
-  (** [make_group proxy ~notify_mode interface] creates a group of all
-      properties of the given interface. *)
+val make_group : OBus_proxy.t -> OBus_name.interface -> properties r
+  (** [make_group proxy interface] creates a group of all properties
+      of the given interface. *)
 
 (** {6 Properties transformation} *)
 
@@ -54,7 +50,8 @@ val map_r : ('a -> 'b) -> ('a, [> `readable ]) t -> 'b r
   (** Maps a read-only properties *)
 
 val map_r_with_context :  (OBus_context.void OBus_context.t -> 'a -> 'b) -> ('a, [> `readable ]) t -> 'b r
-  (** Maps a read-only properties, passing the contexxot to the mapping
+  (** Maps a read-only properties, passing the con
+texxot to the mapping
       function *)
 
 val map_w : ('b -> 'a) -> ('a, [> `writable ]) t -> 'b w
@@ -62,18 +59,10 @@ val map_w : ('b -> 'a) -> ('a, [> `writable ]) t -> 'b w
 
 (** {6 Operation on properties} *)
 
-val get : ?cache : bool -> ('a, [> `readable ]) t -> 'a Lwt.t
-  (** Read the contents of a property.
+val get : ('a, [> `readable ]) t -> 'a Lwt.t
+  (** Read the contents of a property. *)
 
-      If [cache] is [true] (the default) and the given property is not
-      cached, then obus automatically fill the cache. The cache is
-      filled using the "org.freedesktop.DBus.Properties.GetAll"
-      methods.
-
-      Note that the cache will expire at the next iteration of the Lwt main
-      loop. *)
-
-val get_with_context : ?cache : bool -> ('a, [> `readable ]) t -> (OBus_context.void OBus_context.t * 'a) Lwt.t
+val get_with_context : ('a, [> `readable ]) t -> (OBus_context.void OBus_context.t * 'a) Lwt.t
   (** Same as {!get} but also returns the context *)
 
 val find : ('a, [> `readable ]) t -> OBus_context.void OBus_context.t -> properties -> 'a
@@ -83,6 +72,10 @@ val find : ('a, [> `readable ]) t -> OBus_context.void OBus_context.t -> propert
 
 val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
   (** Write the contents of a property *)
+
+val invalidate : ('a, [> `readable ]) t -> unit
+  (** Invalidates the cached value of a property. This make obus to
+      refetch the value of the property. *)
 
 (** {6 Monitoring} *)
 
@@ -119,53 +112,6 @@ val get_all : OBus_proxy.t -> interface : OBus_name.interface -> properties Lwt.
 val get_all_with_context : OBus_proxy.t -> interface : OBus_name.interface -> (OBus_context.void OBus_context.t * properties) Lwt.t
   (** Same as {!get_all} but also returns the context *)
 
-(** {6 Property changes notifications} *)
-
-val notify_none : notify_mode
-  (** Property change are not announced *)
-
-val notify_global : OBus_name.member -> notify_mode
-  (** [notify_global name] means that when one or more properties of
-      the interface changes, the signal with name [name] is emited,
-      but it does not contain update informations. In this case the
-      ["GetAll"] method of the object is invoked to get new
-      properties.
-
-      Such a signal is generally called ["Changed"]. It is used for
-      example by [udisks] or [upower].  *)
-
-val notify_update : OBus_name.member -> notify_mode
-  (** [notify_update name] is the same as [notify_global name] except
-      that the signal carries properties updates (with D-Bus type
-      ["a{sv}"]). In this case it is not necessary to call ["GetAll"].
-
-      Such a signal is generally called ["PropertiesChanged"].
-      It is used for example by [network-manager]. *)
-
-val notify_egg_dbus : notify_mode
-  (** EggDBus notification mode. It is used by services using the
-      EggDBus library. *)
-
-(** Type of a notifier *)
-type notifier = {
-  notifier_signal : (OBus_context.void OBus_context.t * properties) React.signal;
-  (** Signals holding the contents of all property of an interface *)
-
-  notifier_stop : unit -> unit;
-  (** [stop ()] cleans up allocated resources when no properties are
-      monitored *)
-}
-
-val notify_custom : (OBus_proxy.t -> OBus_name.interface -> notifier Lwt.t) -> notify_mode
-  (** [notify_custom f] represents a cusom mode for being notified of
-      property changes. [f] is the function used to create the
-      notifier. *)
-
-val get_all_no_cache : OBus_proxy.t -> OBus_name.interface -> (OBus_context.void OBus_context.t * properties) Lwt.t
-  (** [get_all_no_cache connection owner path interface] returns the
-      values of all properties of the given object for the given
-      interface.
-
-      Contrary to {!get_all}, {!get_all_no_cache} does not use cached
-      values, it always send a new request. {!get_all_no_cache} is
-      meant to be used with {!notify_custom}. *)
+val invalidate_all : OBus_proxy.t -> interface : OBus_name.interface -> unit
+  (** Invalidates the cached values of all properties of the given
+      interface *)

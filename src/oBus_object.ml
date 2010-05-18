@@ -66,9 +66,6 @@ and 'a interface = {
 
   interface_properties : 'a property_info array;
   (* List for properties, for reading/writing properties *)
-
-  interface_notify_mode : 'a notify_mode;
-  (* Notification mode for this interface *)
 }
 
 (* D-Bus object informations *)
@@ -96,14 +93,6 @@ and 'a t = {
 
   mutable changed : OBus_value.V.single Member_map.t Interface_map.t;
   (* Properties that changed since the last upadte *)
-}
-
-and 'a notify_mode = {
-  notify_emit : 'a t -> OBus_name.interface -> OBus_value.V.single Member_map.t -> unit Lwt.t;
-  (* The function which send the notification *)
-
-  notify_signature : OBus_introspect.member list;
-  (* Additional members for the interface *)
 }
 
 (* +-----------------------------------------------------------------+
@@ -266,8 +255,54 @@ let dynamic ~connection ~prefix ~handler =
   running.running_dynamic_objects <- Object_map.add prefix create running.running_dynamic_objects
 
 (* +-----------------------------------------------------------------+
+   | Signals                                                         |
+   +-----------------------------------------------------------------+ *)
+
+let emit obj ~interface ~member ?peer typ x =
+  let body = OBus_value.C.make_sequence typ x in
+  match peer, obj.owner with
+    | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
+    | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
+        OBus_connection.send_message connection {
+          flags = { no_reply_expected = true; no_auto_start = true };
+          serial = 0l;
+          typ = OBus_message.Signal(obj.path, interface, member);
+          destination = destination;
+          sender = None;
+          body = body;
+        }
+    | None, None ->
+        let signal = {
+          flags = { no_reply_expected = true; no_auto_start = true };
+          serial = 0l;
+          typ = OBus_message.Signal(obj.path, interface, member);
+          destination = None;
+          sender = None;
+          body = body;
+        } in
+        join (Connection_set.fold
+                (fun connection l -> OBus_connection.send_message connection signal :: l)
+                obj.exports [])
+
+(* +-----------------------------------------------------------------+
    | Property change notifications                                   |
    +-----------------------------------------------------------------+ *)
+
+let s_PropertiesChanged =
+  OBus_member.Signal.make
+    ~interface:"org.freedesktop.DBus.Introspectable"
+    ~member:"PropertiesChanged"
+    ~args:(OBus_value.arg3
+             (None, OBus_value.C.basic_string)
+             (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)
+             (None, OBus_value.C.array OBus_value.C.basic_string))
+
+let properties_changed obj interface updates invalidates =
+  emit obj
+    ~interface:s_PropertiesChanged.OBus_member.Signal.interface
+    ~member:s_PropertiesChanged.OBus_member.Signal.member
+    (OBus_value.arg_types s_PropertiesChanged.OBus_member.Signal.args)
+    (interface, updates, invalidates)
 
 (* The function which send the notifications *)
 let handle_property_change obj interface_name member_name value =
@@ -287,7 +322,10 @@ let handle_property_change obj interface_name member_name value =
       (fun name properties ->
          match try Some(Interface_map.find name obj.interfaces) with Not_found -> None with
            | Some interface ->
-               ignore (interface.interface_notify_mode.notify_emit obj name properties)
+               ignore (properties_changed obj
+                         name
+                         (Member_map.fold (fun name property acc -> (name, property) :: acc) properties [])
+                         [])
            | None ->
                ())
       changed;
@@ -459,12 +497,7 @@ let property_rw_info info signal setter = property_info info (Some signal) (Some
    | Interfaces creation                                             |
    +-----------------------------------------------------------------+ *)
 
-let notify_none = {
-  notify_emit = (fun _ _ _ -> return ());
-  notify_signature = [];
-}
-
-let make_interface_unsafe ~notify_mode name methods signals properties = {
+let make_interface_unsafe name methods signals properties = {
   interface_name = name;
   interface_introspect =
     (name,
@@ -503,7 +536,6 @@ let make_interface_unsafe ~notify_mode name methods signals properties = {
          | _ ->
              assert false)
       properties;
-  interface_notify_mode = notify_mode;
 }
 
 let compare_member a b =
@@ -515,7 +547,7 @@ let compare_member a b =
     | n ->
         n
 
-let make_interface ~notify_mode name members =
+let make_interface name members =
   let methods =
     Array.of_list
       (List.filter
@@ -541,7 +573,7 @@ let make_interface ~notify_mode name members =
   Array.sort compare_member methods;
   Array.sort compare_member signals;
   Array.sort compare_member properties;
-  make_interface_unsafe ~notify_mode name methods signals properties
+  make_interface_unsafe name methods signals properties
 
 let add_interfaces obj interfaces =
   obj.interfaces <- (
@@ -567,42 +599,12 @@ let remove_interfaces obj interfaces =
   remove_interfaces_by_names obj (List.map (fun iface -> iface.interface_name) interfaces)
 
 (* +-----------------------------------------------------------------+
-   | Signals                                                         |
-   +-----------------------------------------------------------------+ *)
-
-let emit obj ~interface ~member ?peer typ x =
-  let body = OBus_value.C.make_sequence typ x in
-  match peer, obj.owner with
-    | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
-    | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
-        OBus_connection.send_message connection {
-          flags = { no_reply_expected = true; no_auto_start = true };
-          serial = 0l;
-          typ = OBus_message.Signal(obj.path, interface, member);
-          destination = destination;
-          sender = None;
-          body = body;
-        }
-    | None, None ->
-        let signal = {
-          flags = { no_reply_expected = true; no_auto_start = true };
-          serial = 0l;
-          typ = OBus_message.Signal(obj.path, interface, member);
-          destination = None;
-          sender = None;
-          body = body;
-        } in
-        join (Connection_set.fold
-                (fun connection l -> OBus_connection.send_message connection signal :: l)
-                obj.exports [])
-
-(* +-----------------------------------------------------------------+
    | Common interfaces                                               |
    +-----------------------------------------------------------------+ *)
 
 let introspectable () =
   let interface_name = "org.freedesktop.DBus.Introspectable" in
-  make_interface_unsafe notify_none interface_name [|
+  make_interface_unsafe interface_name [|
     _method_info
       (OBus_member.Method.make
          interface_name
@@ -626,7 +628,7 @@ let introspectable () =
 
 let properties () =
   let interface_name = "org.freedesktop.DBus.Properties" in
-  make_interface_unsafe notify_none interface_name [|
+  make_interface_unsafe interface_name [|
     _method_info
       (OBus_member.Method.make
          interface_name
@@ -697,7 +699,9 @@ let properties () =
                      Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not writable" member interface
                  | None ->
                      Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such property: %S on interface %S" member interface);
-  |] [||] [||]
+  |]
+    [|signal_info s_PropertiesChanged|]
+    [||]
 
 (* +-----------------------------------------------------------------+
    | Constructors                                                    |
@@ -741,27 +745,3 @@ let get obj =
   match obj.data with
     | Some data -> data
     | None -> failwith "OBus_object.get: no data attached"
-
-(* +-----------------------------------------------------------------+
-   | Notification modes                                              |
-   +-----------------------------------------------------------------+ *)
-
-let notify_custom ~emit ~signature = {
-  notify_emit = emit;
-  notify_signature = signature;
-}
-
-let notify_global name = {
-  notify_emit = (fun obj interface members ->
-                   emit obj ~interface ~member:name OBus_value.C.seq0 ());
-  notify_signature = [OBus_introspect.Signal(name, [], [])];
-}
-
-let notify_update name = {
-  notify_emit = (fun obj interface members ->
-                   emit obj ~interface ~member:name
-                     (OBus_value.C.seq1
-                        (OBus_value.C.dict OBus_value.C.string OBus_value.C.variant))
-                     (Member_map.fold (fun name value acc -> (name, value) :: acc) members []));
-  notify_signature = [OBus_introspect.Signal(name, [(None, OBus_value.T.Dict(OBus_value.T.String, OBus_value.T.Variant))], [])];
-}

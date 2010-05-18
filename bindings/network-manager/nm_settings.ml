@@ -11,8 +11,6 @@ include OBus_proxy.Private
 
 open Nm_interfaces.Org_freedesktop_NetworkManagerSettings
 
-let notify_mode = OBus_property.notify_update "PropertieChangeds"
-
 let user () =
   lwt bus = OBus_bus.session () in
   return (OBus_proxy.make
@@ -63,10 +61,10 @@ struct
     OBus_method.call m_SaveHostname proxy hostname
 
   let hostname proxy =
-    OBus_property.make p_Hostname ~notify_mode proxy
+    OBus_property.make p_Hostname proxy
 
   let can_modify proxy =
-    OBus_property.make p_CanModify ~notify_mode proxy
+    OBus_property.make p_CanModify proxy
 
   let properties_changed proxy =
     OBus_signal.connect s_PropertiesChanged proxy

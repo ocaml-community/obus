@@ -11,15 +11,13 @@ include OBus_proxy.Private
 
 open Nm_interfaces.Org_freedesktop_NetworkManager_AccessPoint
 
-let notify_mode = OBus_property.notify_update "PropertiesChanged"
-
 type ap_flag =
     [ `Privacy ]
 
 let flags proxy =
   OBus_property.map_r
     (fun n -> if (Int32.to_int n) land 0x01 <> 0 then [`Privacy] else [])
-    (OBus_property.make p_Flags ~notify_mode proxy)
+    (OBus_property.make p_Flags proxy)
 
 type ap_security_flag =
     [ `Pair_wep40
@@ -57,38 +55,38 @@ let ap_security_flags_of_int32 n =
 let wpa_flags proxy =
   OBus_property.map_r
     ap_security_flags_of_int32
-    (OBus_property.make p_WpaFlags ~notify_mode proxy)
+    (OBus_property.make p_WpaFlags proxy)
 
 let rsn_flags proxy =
   OBus_property.map_r
     ap_security_flags_of_int32
-    (OBus_property.make p_RsnFlags ~notify_mode proxy)
+    (OBus_property.make p_RsnFlags proxy)
 
 let ssid proxy =
-  OBus_property.make p_Ssid ~notify_mode proxy
+  OBus_property.make p_Ssid proxy
 
 let frequency proxy =
   OBus_property.map_r
     Int32.to_int
-    (OBus_property.make p_Frequency ~notify_mode proxy)
+    (OBus_property.make p_Frequency proxy)
 
 let hw_address proxy =
-  OBus_property.make p_HwAddress ~notify_mode proxy
+  OBus_property.make p_HwAddress proxy
 
 let mode proxy =
   OBus_property.map_r
     Int32.to_int
-    (OBus_property.make p_Mode ~notify_mode proxy)
+    (OBus_property.make p_Mode proxy)
 
 let max_bitrate proxy =
   OBus_property.map_r
     Int32.to_int
-    (OBus_property.make p_MaxBitrate ~notify_mode proxy)
+    (OBus_property.make p_MaxBitrate proxy)
 
 let strength proxy =
   OBus_property.map_r
     int_of_char
-    (OBus_property.make p_Strength ~notify_mode proxy)
+    (OBus_property.make p_Strength proxy)
 
 let properties_changed proxy =
   OBus_signal.connect s_PropertiesChanged proxy
@@ -120,4 +118,4 @@ let properties proxy =
          max_bitrate = find max_bitrate;
          strength = find strength;
        })
-    (OBus_property.make_group proxy ~notify_mode interface)
+    (OBus_property.make_group proxy interface)

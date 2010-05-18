@@ -45,8 +45,6 @@ type technology =
 
 open UPower_interfaces.Org_freedesktop_UPower_Device
 
-let notify_mode = OBus_property.notify_global "Changed"
-
 let refresh proxy =
   OBus_method.call m_Refresh proxy ()
 
@@ -64,19 +62,19 @@ let get_statistics proxy ~typ =
   OBus_method.call m_GetStatistics proxy typ
 
 let native_path proxy =
-  OBus_property.make p_NativePath ~notify_mode proxy
+  OBus_property.make p_NativePath proxy
 
 let vendor proxy =
-  OBus_property.make p_Vendor ~notify_mode proxy
+  OBus_property.make p_Vendor proxy
 
 let model proxy =
-  OBus_property.make p_Model ~notify_mode proxy
+  OBus_property.make p_Model proxy
 
 let serial proxy =
-  OBus_property.make p_Serial ~notify_mode proxy
+  OBus_property.make p_Serial proxy
 
 let update_time proxy =
-  OBus_property.make p_UpdateTime ~notify_mode proxy
+  OBus_property.make p_UpdateTime proxy
 
 let typ proxy =
   OBus_property.map_r
@@ -91,49 +89,49 @@ let typ proxy =
        | 7l -> `Pda
        | 8l -> `Phone
        | n -> Printf.ksprintf failwith "invalid device type: %ld" n)
-    (OBus_property.make p_Type ~notify_mode proxy)
+    (OBus_property.make p_Type proxy)
 
 let power_supply proxy =
-  OBus_property.make p_PowerSupply ~notify_mode proxy
+  OBus_property.make p_PowerSupply proxy
 
 let has_history proxy =
-  OBus_property.make p_HasHistory ~notify_mode proxy
+  OBus_property.make p_HasHistory proxy
 
 let has_statistics proxy =
-  OBus_property.make p_HasStatistics ~notify_mode proxy
+  OBus_property.make p_HasStatistics proxy
 
 let online proxy =
-  OBus_property.make p_Online ~notify_mode proxy
+  OBus_property.make p_Online proxy
 
 let energy proxy =
-  OBus_property.make p_Energy ~notify_mode proxy
+  OBus_property.make p_Energy proxy
 
 let energy_empty proxy =
-  OBus_property.make p_EnergyEmpty ~notify_mode proxy
+  OBus_property.make p_EnergyEmpty proxy
 
 let energy_full proxy =
-  OBus_property.make p_EnergyFull ~notify_mode proxy
+  OBus_property.make p_EnergyFull proxy
 
 let energy_full_design proxy =
-  OBus_property.make p_EnergyFullDesign ~notify_mode proxy
+  OBus_property.make p_EnergyFullDesign proxy
 
 let energy_rate proxy =
-  OBus_property.make p_EnergyRate ~notify_mode proxy
+  OBus_property.make p_EnergyRate proxy
 
 let voltage proxy =
-  OBus_property.make p_Voltage ~notify_mode proxy
+  OBus_property.make p_Voltage proxy
 
 let time_to_empty proxy =
-  OBus_property.make p_TimeToEmpty ~notify_mode proxy
+  OBus_property.make p_TimeToEmpty proxy
 
 let time_to_full proxy =
-  OBus_property.make p_TimeToFull ~notify_mode proxy
+  OBus_property.make p_TimeToFull proxy
 
 let percentage proxy =
-  OBus_property.make p_Percentage ~notify_mode proxy
+  OBus_property.make p_Percentage proxy
 
 let is_present proxy =
-  OBus_property.make p_IsPresent ~notify_mode proxy
+  OBus_property.make p_IsPresent proxy
 
 let state proxy =
   OBus_property.map_r
@@ -146,13 +144,13 @@ let state proxy =
        | 5l -> `Pending_charge
        | 6l -> `Pending_discharge
        | n -> Printf.ksprintf failwith "invalid device state: %ld" n)
-    (OBus_property.make p_State ~notify_mode proxy)
+    (OBus_property.make p_State proxy)
 
 let is_rechargeable proxy =
-  OBus_property.make p_IsRechargeable ~notify_mode proxy
+  OBus_property.make p_IsRechargeable proxy
 
 let capacity proxy =
-  OBus_property.make p_Capacity ~notify_mode proxy
+  OBus_property.make p_Capacity proxy
 
 let technology proxy =
   OBus_property.map_r
@@ -165,16 +163,16 @@ let technology proxy =
        | 5l -> `Nickel_cadmium
        | 6l -> `Nickel_metal_hydride
        | n -> Printf.ksprintf failwith "invalid technolofy number: %ld" n)
-    (OBus_property.make p_Technology ~notify_mode proxy)
+    (OBus_property.make p_Technology proxy)
 
 let recall_notice proxy =
-  OBus_property.make p_RecallNotice ~notify_mode proxy
+  OBus_property.make p_RecallNotice proxy
 
 let recall_vendor proxy =
-  OBus_property.make p_RecallVendor ~notify_mode proxy
+  OBus_property.make p_RecallVendor proxy
 
 let recall_url proxy =
-  OBus_property.make p_RecallUrl ~notify_mode proxy
+  OBus_property.make p_RecallUrl proxy
 
 type properties = {
   recall_url : string;
@@ -239,4 +237,4 @@ let properties proxy =
          vendor = find vendor;
          native_path = find native_path;
        })
-    (OBus_property.make_group proxy ~notify_mode interface)
+    (OBus_property.make_group proxy interface)

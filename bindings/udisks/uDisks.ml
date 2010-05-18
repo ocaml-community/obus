@@ -86,8 +86,6 @@ let daemon () =
 
 open UDisks_interfaces.Org_freedesktop_UDisks
 
-let notify_mode = OBus_property.notify_none
-
 let proxy daemon = OBus_proxy.make daemon ["org"; "freedesktop"; "UDisks"]
 
 let make_device context path =
@@ -261,13 +259,13 @@ let port_changed daemon =
     (OBus_signal.connect s_PortChanged (proxy daemon))
 
 let daemon_version daemon =
-  OBus_property.make p_DaemonVersion notify_mode (proxy daemon)
+  OBus_property.make p_DaemonVersion (proxy daemon)
 
 let daemon_is_inhibited daemon =
-  OBus_property.make p_DaemonIsInhibited notify_mode (proxy daemon)
+  OBus_property.make p_DaemonIsInhibited (proxy daemon)
 
 let supports_luks_devices daemon =
-  OBus_property.make p_SupportsLuksDevices notify_mode (proxy daemon)
+  OBus_property.make p_SupportsLuksDevices (proxy daemon)
 
 let known_filesystems daemon =
   OBus_property.map_r
@@ -290,7 +288,7 @@ let known_filesystems daemon =
             fs_supports_online_resize_shrink = x14;
           })
          l)
-    (OBus_property.make p_KnownFilesystems notify_mode (proxy daemon))
+    (OBus_property.make p_KnownFilesystems (proxy daemon))
 
 type properties = {
   known_filesystems : fs list;
@@ -309,4 +307,4 @@ let properties daemon =
          daemon_is_inhibited = find daemon_is_inhibited;
          daemon_version = find daemon_version;
        })
-    (OBus_property.make_group (proxy daemon) notify_mode interface)
+    (OBus_property.make_group (proxy daemon) interface)

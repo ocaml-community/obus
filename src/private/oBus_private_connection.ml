@@ -168,18 +168,8 @@ and receiver_group = {
    | Properties                                                      |
    +-----------------------------------------------------------------+ *)
 
-(* We keep properties on the message bus to allow caching when asked
-   or needed. *)
-
-(* State of a property group *)
-and property_group_state =
-  | Property_group_simple
-      (* The property is not monitored *)
-  | Property_group_cached of notify_data Lwt.t
-      (* Properties are cached until the next iteration of the main
-         loop *)
-  | Property_group_monitor of notifier Lwt.t
-      (* Properties are being monitored *)
+and properties = OBus_value.V.single String_map.t
+and action = Invalidate | Update of void context * (OBus_name.interface * (string * OBus_value.V.single) list * string list)
 
 (* Type of all properties of an interface *)
 and property_group = {
@@ -187,7 +177,7 @@ and property_group = {
   (* How many user properties (of type OBus_property.t) are using this
      property group ? *)
 
-  mutable property_group_state : property_group_state;
+  mutable property_group_monitor : ((void context * properties) React.signal Lwt.t * (action -> unit) * (unit -> unit)) option;
 
   property_group_connection : t;
   property_group_owner : OBus_name.bus option;
@@ -195,19 +185,6 @@ and property_group = {
   property_group_interface : OBus_name.interface;
   (* Property parameters *)
 }
-
-(* Type of a property notifier. It should contains the state of all
-   properties of an interface: *)
-and notifier = {
-  notifier_signal : notify_data React.signal;
-  (* Event which occurs each time one or more proeprties change *)
-
-  notifier_stop : unit -> unit;
-  (* Stop the notifier *)
-}
-
-and notify_data = void context * OBus_value.V.single String_map.t
-    (* Mapping from member names to their current value *)
 
 (* +-----------------------------------------------------------------+
    | Contexts                                                        |

@@ -20,8 +20,6 @@ let daemon () =
 
 open UPower_interfaces.Org_freedesktop_UPower
 
-let notify_mode = OBus_property.notify_global "Changed"
-
 let proxy daemon = OBus_proxy.make daemon ["org"; "freedesktop"; "UPower"]
 
 let enumerate_devices daemon =
@@ -76,25 +74,25 @@ let hibernate_allowed daemon =
   OBus_method.call m_HibernateAllowed (proxy daemon) ()
 
 let daemon_version daemon =
-  OBus_property.make p_DaemonVersion ~notify_mode (proxy daemon)
+  OBus_property.make p_DaemonVersion (proxy daemon)
 
 let can_suspend daemon =
-  OBus_property.make p_CanSuspend ~notify_mode (proxy daemon)
+  OBus_property.make p_CanSuspend (proxy daemon)
 
 let can_hibernate daemon =
-  OBus_property.make p_CanHibernate ~notify_mode (proxy daemon)
+  OBus_property.make p_CanHibernate (proxy daemon)
 
 let on_battery daemon =
-  OBus_property.make p_OnBattery ~notify_mode (proxy daemon)
+  OBus_property.make p_OnBattery (proxy daemon)
 
 let on_low_battery daemon =
-  OBus_property.make p_OnLowBattery ~notify_mode (proxy daemon)
+  OBus_property.make p_OnLowBattery (proxy daemon)
 
 let lid_is_closed daemon =
-  OBus_property.make p_LidIsClosed ~notify_mode (proxy daemon)
+  OBus_property.make p_LidIsClosed (proxy daemon)
 
 let lid_is_present daemon =
-  OBus_property.make p_LidIsPresent ~notify_mode (proxy daemon)
+  OBus_property.make p_LidIsPresent (proxy daemon)
 
 type properties = {
   lid_is_present : bool;
@@ -119,4 +117,4 @@ let properties daemon =
          can_suspend = find can_suspend;
          daemon_version = find daemon_version;
        })
-    (OBus_property.make_group (proxy daemon) ~notify_mode interface)
+    (OBus_property.make_group (proxy daemon) interface)

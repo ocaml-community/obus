@@ -9,8 +9,6 @@ include OBus_proxy.Private
 
 open Nm_interfaces.Org_freedesktop_NetworkManager_VPN_Plugin
 
-let notify_mode = OBus_property.notify_none
-
 let connect proxy ~connection =
   OBus_method.call m_Connect proxy connection
 
@@ -29,7 +27,7 @@ let set_failure proxy ~reason =
 let state proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_State ~notify_mode proxy)
+    (OBus_property.make p_State proxy)
 
 let state_changed proxy =
   OBus_signal.map

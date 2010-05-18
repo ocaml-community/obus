@@ -9,18 +9,16 @@ include OBus_proxy.Private
 
 open Nm_interfaces.Org_freedesktop_NetworkManager_VPN_Connection
 
-let notify_mode = OBus_property.notify_update "PropertiesChanged"
-
 let properties_changed proxy =
   OBus_signal.connect s_PropertiesChanged proxy
 
 let vpn_state proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_VpnState ~notify_mode proxy)
+    (OBus_property.make p_VpnState proxy)
 
 let banner proxy =
-  OBus_property.make p_Banner ~notify_mode proxy
+  OBus_property.make p_Banner proxy
 
 let vpn_state_changed proxy =
   OBus_signal.map
@@ -43,4 +41,4 @@ let properties proxy =
          vpn_state = find vpn_state;
          banner = find banner;
        })
-    (OBus_property.make_group proxy ~notify_mode interface)
+    (OBus_property.make_group proxy interface)

@@ -11,30 +11,28 @@ include OBus_proxy.Private
 
 open UDisks_interfaces.Org_freedesktop_UDisks_Adapter
 
-let notify_mode = OBus_property.notify_global "Changed"
-
 let changed proxy =
   OBus_signal.connect s_Changed proxy
 
 let native_path proxy =
-  OBus_property.make p_NativePath ~notify_mode proxy
+  OBus_property.make p_NativePath proxy
 
 let vendor proxy =
-  OBus_property.make p_Vendor ~notify_mode proxy
+  OBus_property.make p_Vendor proxy
 
 let model proxy =
-  OBus_property.make p_Model ~notify_mode proxy
+  OBus_property.make p_Model proxy
 
 let driver proxy =
-  OBus_property.make p_Driver ~notify_mode proxy
+  OBus_property.make p_Driver proxy
 
 let num_ports proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_NumPorts ~notify_mode proxy)
+    (OBus_property.make p_NumPorts proxy)
 
 let fabric proxy =
-  OBus_property.make p_Fabric ~notify_mode proxy
+  OBus_property.make p_Fabric proxy
 
 type properties = {
   fabric : string;
@@ -57,4 +55,4 @@ let properties proxy =
          vendor = find vendor;
          native_path = find native_path;
        })
-    (OBus_property.make_group proxy ~notify_mode interface)
+    (OBus_property.make_group proxy interface)
