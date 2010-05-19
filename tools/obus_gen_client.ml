@@ -26,6 +26,19 @@ let make_names args =
   in
   List.rev l
 
+(* Remove deprecated members *)
+let remove_deprecated members =
+  List.filter
+    (function
+       | Method(_, _, _, annotations)
+       | Signal(_, _, annotations)
+       | Property(_, _, _, annotations) ->
+           try
+             List.assoc "org.freedesktop.DBus.Deprecated" annotations <> "true"
+           with Not_found ->
+             true)
+    members
+
 (* +-----------------------------------------------------------------+
    | Implementation generation                                       |
    +-----------------------------------------------------------------+ *)
@@ -85,7 +98,10 @@ let print_impl oc name members annotations =
              i_convertors;
            let need_context = List.exists (fun (_, typ) -> contains_path typ) o_args in
            if List.for_all (fun conv -> conv = None) o_convertors then begin
-             fprintf oc "    OBus_method.call m_%s proxy " name;
+             if try List.assoc "org.freedesktop.DBus.Method.NoReply" annotations = "true" with Not_found -> false then
+               fprintf oc "    OBus_method.call_no_reply m_%s proxy " name
+             else
+               fprintf oc "    OBus_method.call m_%s proxy " name;
              print_names oc i_names;
              output_char oc '\n'
            end else begin
@@ -246,8 +262,8 @@ let () =
          (match OBus_name.split name with
             | "org" :: "freedesktop" :: "DBus" :: _ -> false
             | _ -> true) then begin
-           print_impl oc_impl name members annotations;
-           print_intf oc_intf name members annotations
+           print_impl oc_impl name (remove_deprecated members) annotations;
+           print_intf oc_intf name (remove_deprecated members) annotations
          end)
     interfaces;
 

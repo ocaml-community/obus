@@ -82,27 +82,33 @@ let print_impl oc name members annotations =
                       \    Method.member = %S;\n\
                       \    Method.i_args = %a;\n\
                       \    Method.o_args = %a;\n\
+                      \    Method.annotations = [%s];\n\
                       \  }\n"
              name name print_args i_args print_args o_args
+             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%S, %S)" name value) annotations))
        | Signal(name, args, annotations) ->
            fprintf oc "  let s_%s = {\n\
                       \    Signal.interface = interface;\n\
                       \    Signal.member = %S;\n\
                       \    Signal.args = %a;\n\
+                      \    Signal.annotations = [%s];\n\
                       \  }\n"
              name name print_args args
+             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%S, %S)" name value) annotations))
        | Property(name, typ, access, annotations) ->
            fprintf oc "  let p_%s = {\n\
                       \    Property.interface = interface;\n\
                       \    Property.member = %S;\n\
                       \    Property.typ = %a;\n\
                       \    Property.access = Property.%s;\n\
+                      \    Property.annotations = [%s];\n\
                       \  }\n"
              name name (Term.print_impl true) (Term.impl_of_single typ)
              (match access with
                 | Read -> "readable"
                 | Write -> "writable"
-                | Read_write -> "readable_writable"))
+                | Read_write -> "readable_writable")
+             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%S, %S)" name value) annotations)))
     members;
 
   (***** Interface description *****)

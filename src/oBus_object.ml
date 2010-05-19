@@ -306,6 +306,7 @@ let s_PropertiesChanged =
              (None, OBus_value.C.basic_string)
              (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)
              (None, OBus_value.C.array OBus_value.C.basic_string))
+    ~annotations:[]
 
 (* The function which send the notifications *)
 let handle_property_change obj interface_name member_name value =
@@ -605,7 +606,8 @@ let introspectable () =
          "Introspect"
          OBus_value.arg0
          (OBus_value.arg1
-            (Some "resul", OBus_value.C.basic_string)))
+            (Some "resul", OBus_value.C.basic_string))
+         [])
       (fun context obj () ->
          let document =
            (introspect obj,
@@ -631,7 +633,8 @@ let properties () =
             (Some "interface", OBus_value.C.basic_string)
             (Some "member", OBus_value.C.basic_string))
          (OBus_value.arg1
-            (Some "value", OBus_value.C.variant)))
+            (Some "value", OBus_value.C.variant))
+         [])
       (fun context obj (interface, member) ->
          match binary_search compare_interface interface obj.properties with
            | None ->
@@ -652,7 +655,8 @@ let properties () =
          (OBus_value.arg1
             (Some "interface", OBus_value.C.basic_string))
          (OBus_value.arg1
-            (Some "values", OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)))
+            (Some "values", OBus_value.C.dict OBus_value.C.string OBus_value.C.variant))
+         [])
       (fun context obj interface ->
          match binary_search compare_interface interface obj.properties with
            | Some(interface, properties) ->
@@ -674,7 +678,8 @@ let properties () =
             (Some "interface", OBus_value.C.basic_string)
             (Some "member", OBus_value.C.basic_string)
             (Some "value", OBus_value.C.variant))
-         OBus_value.arg0)
+         OBus_value.arg0
+         [])
       (fun context obj (interface, member, value) ->
          match binary_search compare_interface interface obj.properties with
            | None ->

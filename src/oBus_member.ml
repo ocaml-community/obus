@@ -14,19 +14,22 @@ struct
     member : OBus_name.member;
     i_args : 'a OBus_value.arguments;
     o_args : 'b OBus_value.arguments;
+    annotations : OBus_introspect.annotation list;
   }
 
-  let make ~interface ~member ~i_args ~o_args = {
+  let make ~interface ~member ~i_args ~o_args ~annotations = {
     interface = interface;
     member = member;
     i_args = i_args;
     o_args = o_args;
+    annotations = annotations;
   }
 
   let interface m = m.interface
   let member m = m.member
   let i_args m = m.i_args
   let o_args m = m.o_args
+  let annotations m = m.annotations
 end
 
 module Signal =
@@ -35,17 +38,20 @@ struct
     interface : OBus_name.interface;
     member : OBus_name.member;
     args : 'a OBus_value.arguments;
+    annotations : OBus_introspect.annotation list;
   }
 
-  let make ~interface ~member ~args = {
+  let make ~interface ~member ~args ~annotations = {
     interface = interface;
     member = member;
     args = args;
+    annotations = annotations;
   }
 
   let interface s = s.interface
   let member s = s.member
   let args s = s.args
+  let annotations s = s.annotations
 end
 
 module Property =
@@ -64,17 +70,20 @@ struct
     member : OBus_name.member;
     typ : 'a OBus_value.C.single;
     access : 'access access;
+    annotations : OBus_introspect.annotation list;
   }
 
-  let make ~interface ~member ~typ ~access = {
+  let make ~interface ~member ~typ ~access ~annotations = {
     interface = interface;
     member = member;
     typ = typ;
     access = access;
+    annotations = annotations;
   }
 
   let interface p = p.interface
   let member p = p.member
   let typ p = p.typ
   let access p = p.access
+  let annotations p = p.annotations
 end

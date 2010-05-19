@@ -110,6 +110,7 @@ let s_NotificationClosed =
     ~args:(arg2
              (None, C.basic_uint32)
              (None, C.basic_uint32))
+    ~annotations:[]
 
 let notification_closed proxy =
   OBus_signal.connect s_NotificationClosed proxy
@@ -121,6 +122,7 @@ let s_ActionInvoked =
     ~args:(arg2
              (None, C.basic_uint32)
              (None, C.basic_string))
+    ~annotations:[]
 
 let action_invoked proxy =
   OBus_signal.connect s_ActionInvoked proxy

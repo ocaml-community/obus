@@ -78,6 +78,7 @@ let m_Get =
     ~member:"Get"
     ~i_args:(OBus_value.arg2 (None, OBus_value.C.basic_string) (None, OBus_value.C.basic_string))
     ~o_args:(OBus_value.arg1 (None, OBus_value.C.variant))
+    ~annotations:[]
 
 let m_Set =
   OBus_member.Method.make
@@ -85,6 +86,7 @@ let m_Set =
     ~member:"Set"
     ~i_args:(OBus_value.arg3 (None, OBus_value.C.basic_string) (None, OBus_value.C.basic_string) (None, OBus_value.C.variant))
     ~o_args:OBus_value.arg0
+    ~annotations:[]
 
 let m_GetAll =
   OBus_member.Method.make
@@ -92,6 +94,7 @@ let m_GetAll =
     ~member:"GetAll"
     ~i_args:(OBus_value.arg1 (None, OBus_value.C.basic_string))
     ~o_args:(OBus_value.arg1 (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant))
+    ~annotations:[]
 
 let s_PropertiesChanged =
   OBus_member.Signal.make
@@ -101,6 +104,7 @@ let s_PropertiesChanged =
              (None, OBus_value.C.basic_string)
              (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)
              (None, OBus_value.C.array OBus_value.C.basic_string))
+    ~annotations:[]
 
 (* +-----------------------------------------------------------------+
    | Reading all properties with their contexts                      |
