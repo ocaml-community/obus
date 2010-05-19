@@ -36,3 +36,6 @@ val convertor_recv : OBus_value.T.single -> string option
   (** [convertor_recv typ] returns an expression which convert caml
       values after they are received. It returns [None] if no
       conversion is needed. *)
+
+val make_annotation : OBus_introspect.name -> string
+  (** [make_annotation name] returns the code for the given annotation *)

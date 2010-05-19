@@ -25,8 +25,14 @@ type 'a t
 type 'a interface
   (** An interface description *)
 
-type 'a member
-  (** Part of an inteface *)
+type 'a method_info
+  (** Informations about a method *)
+
+type 'a signal_info
+  (** Informations about a signal *)
+
+type 'a property_info
+  (** Informations about a property *)
 
 (** {6 Objects creation} *)
 
@@ -72,9 +78,13 @@ val introspect : 'a t -> OBus_introspect.interface list
   (** [introspect obj] returns the introspection of all interfaces
       implemented by [obj] *)
 
-val on_properties_changed : 'a t -> (OBus_name.interface -> (OBus_name.member * OBus_value.V.single) list -> unit Lwt.t) ref
+val on_properties_changed : 'a t -> (OBus_name.interface -> (OBus_name.member * OBus_value.V.single option) list -> unit Lwt.t) ref
   (** Function called when one or more properties of the given object
-      change. The default function use the standard
+      change. The new contents of the property is given along with the
+      property name according to the
+      [org.freedesktop.DBus.Property.EmitsChangedSignal].
+
+      The default function uses the standard
       [org.freedesktop.DBus.Properties.PropertiesChanged] signal. *)
 
 (** {6 Exports} *)
@@ -118,15 +128,21 @@ val dynamic :
 
 (** {6 Interfaces} *)
 
-val make_interface : OBus_name.interface -> 'a member list -> 'a interface
-  (** [make_interface name members] creates a new interface *)
+val make_interface : name : OBus_name.interface ->
+  ?annotations : OBus_introspect.annotation list ->
+  ?methods : 'a method_info list ->
+  ?signals : 'a signal_info list ->
+  ?properties : 'a property_info list -> unit -> 'a interface
+  (** [make_interface ~name ?annotations ?methods ?signals ?properties ()]
+      creates a new interface *)
 
 (**/**)
 
 val make_interface_unsafe : OBus_name.interface ->
-  'a member array ->
-  'a member array ->
-  'a member array -> 'a interface
+  OBus_introspect.annotation list ->
+  'a method_info array ->
+  'a signal_info array ->
+  'a property_info array -> 'a interface
 
 (**/**)
 
@@ -155,7 +171,7 @@ val properties : unit -> 'a interface
 
 (** {6 Members} *)
 
-val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> 'a -> [ `Replied | `No_reply ] Lwt.t) -> 'c member
+val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> 'a -> [ `Replied | `No_reply ] Lwt.t) -> 'c method_info
   (** [method_info desc handler] creates a method-call member. The
       reply must be sent by [handler] by using the given context.
 
@@ -166,20 +182,20 @@ val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> '
         been sent
   *)
 
-val signal_info : 'a OBus_member.Signal.t -> 'b member
+val signal_info : 'a OBus_member.Signal.t -> 'b signal_info
   (** Defines a signal. It is only used for introspection *)
 
-val property_r_info : ('a, [ `readable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> 'b member
+val property_r_info : ('a, [ `readable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> 'b property_info
   (** [property_r_info desc get] defines a read-only property. [get]
       is called once when data is attached to an object with
       {!attach}. It must returns a signal holding the current value of
       the property. *)
 
-val property_w_info : ('a, [ `writable ]) OBus_member.Property.t -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b member
+val property_w_info : ('a, [ `writable ]) OBus_member.Property.t -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b property_info
   (** [property_w_info desc set] defines a write-only property. [set]
       is used to set the propertry contents. *)
 
-val property_rw_info : ('a, [ `readable | `writable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b member
+val property_rw_info : ('a, [ `readable | `writable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b property_info
   (** [property_rw_info desc get set] defines a readable and writable
       property. [get] and [set] have the same semantic as for
       {!property_r_info} and {!property_w_info}. *)

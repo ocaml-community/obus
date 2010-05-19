@@ -38,3 +38,17 @@ val input : Xmlm.input -> document
 
 val output : Xmlm.output -> document -> unit
   (** Create an xml from an introspection document *)
+
+(** {6 Well-known annotations} *)
+
+val deprecated : name
+  (** The [org.freedesktop.DBus.Deprecated] annotation *)
+
+val csymbol : name
+  (** The [org.freedesktop.DBus.GLib.CSymbol] annotation *)
+
+val no_reply : name
+  (** The [org.freedesktop.DBus.Method.NoReply] annotation *)
+
+val emits_changed_signal : name
+  (** The [org.freedesktop.DBus.Property.EmitsChangedSignal] annotation *)

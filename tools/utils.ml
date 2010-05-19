@@ -109,3 +109,10 @@ let convertor_recv typ =
        | T.Object_path -> Some(paren top ("OBus_proxy.make (OBus_context.sender context)"))
        | _ -> None)
     true typ
+
+let make_annotation = function
+  | "org.freedesktop.DBus.Deprecated" -> "OBus_introspect.deprecated"
+  | "org.freedesktop.DBus.GLib.CSymbol" -> "OBus_introspect.csymbol"
+  | "org.freedesktop.DBus.Method.NoReply" -> "OBus_introspect.no_reply"
+  | "org.freedesktop.DBus.Property.EmitsChangedSignal" -> "OBus_introspect.emits_changed_signal"
+  | name -> Printf.sprintf "%S" name

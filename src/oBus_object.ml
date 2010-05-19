@@ -16,38 +16,36 @@ open OBus_message
    +-----------------------------------------------------------------+ *)
 
 module Connection_set = Set.Make(OBus_connection)
-module Interface_map = String_map
 module Member_map = String_map
 
-type 'a member_type =
-  | Method of OBus_value.signature *
-      (OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t)
-  | Signal
-  | Property of ('a -> OBus_value.V.single React.signal) option *
-      (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option
+type emits_signal_changed =
+  | Esc_not_specified
+  | Esc_false
+  | Esc_true
+  | Esc_invalidates
 
-and 'a member = {
-  member_name : OBus_name.member;
-  member_type : 'a member_type;
-  member_introspection : OBus_introspect.member;
-}
-
-and 'a method_info = {
+type 'a method_info = {
   method_name : OBus_name.member;
   method_type : OBus_value.signature;
   method_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t;
+  method_introspect : unit -> OBus_introspect.member;
+}
+
+and 'a signal_info = {
+  signal_introspect : unit -> OBus_introspect.member;
 }
 
 and 'a property_info = {
   property_name : OBus_name.member;
+  property_type : OBus_value.T.single;
   property_signal : ('a -> OBus_value.V.single React.signal) option;
   property_setter : (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option;
+  property_emits_changed_signal : emits_signal_changed;
+  property_introspect : unit -> OBus_introspect.member;
 }
 
 and 'a property_instance = {
-  property_instance_name : OBus_name.member;
-  property_instance_signal : OBus_value.V.single React.signal option;
-  property_instance_setter : (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option;
+  property_instance_signal : OBus_value.V.single React.signal;
   property_instance_monitor : unit React.event;
   (* Event which send notifications when the contents of the property
      changes *)
@@ -58,14 +56,17 @@ and 'a interface = {
   interface_name : OBus_name.interface;
   (* The name of the interface *)
 
-  interface_introspect : OBus_introspect.interface;
-  (* For introspection *)
-
   interface_methods : 'a method_info array;
-  (* For dispatching method calls *)
+  (* Array of methods, for dispatching method calls and introspection *)
+
+  interface_signals : 'a signal_info array;
+  (* Array of signals, for introspection *)
 
   interface_properties : 'a property_info array;
-  (* List for properties, for reading/writing properties *)
+  (* Array of for properties, for reading/writing properties and introspection *)
+
+  interface_emits_changed_signal : emits_signal_changed;
+  (* Default mode for sending notification of properties changes *)
 }
 
 (* D-Bus object informations *)
@@ -82,19 +83,17 @@ and 'a t = {
   owner : OBus_peer.t option;
   (* The optionnal owner of the object *)
 
-  mutable interfaces : 'a interface Interface_map.t;
+  mutable interfaces : 'a interface array;
   (* Interfaces implemented by this object *)
 
-  mutable methods : (OBus_name.interface * 'a method_info array) array;
-  (* All methods of the object *)
+  mutable properties : 'a property_instance option array array;
+  (* All property instances of the object *)
 
-  mutable properties : (OBus_name.interface * 'a property_instance array) array;
-  (* All properties of the object *)
+  mutable changed : OBus_value.V.single option Member_map.t array;
+  (* Properties that changed since the last upadte, organised by
+     interface *)
 
-  mutable changed : OBus_value.V.single Member_map.t Interface_map.t;
-  (* Properties that changed since the last upadte *)
-
-  properties_changed : (OBus_name.interface -> (OBus_name.member * OBus_value.V.single) list -> unit Lwt.t) ref;
+  properties_changed : (OBus_name.interface -> (OBus_name.member * OBus_value.V.single option) list -> unit Lwt.t) ref;
   (* Function called when proeprties change. It may emit a
      notification signal. The default one use
      [org.freedesktop.DBus.Properties.PropertiesChanged] *)
@@ -107,10 +106,24 @@ and 'a t = {
 let path obj = obj.path
 let owner obj = obj.owner
 let exports obj = obj.exports
+
 let introspect obj =
-  Interface_map.fold
-    (fun name interface acc -> interface.interface_introspect :: acc)
+  Array.fold_right
+    (fun interface acc ->
+       (interface.interface_name,
+        Array.fold_right
+          (fun method_ acc -> method_.method_introspect () :: acc)
+          interface.interface_methods
+          (Array.fold_right
+             (fun signal acc -> signal.signal_introspect () :: acc)
+             interface.interface_signals
+             (Array.fold_right
+                (fun property acc -> property.property_introspect () :: acc)
+                interface.interface_properties
+                [])),
+        []) :: acc)
     obj.interfaces []
+
 let on_properties_changed obj = obj.properties_changed
 
 (* +-----------------------------------------------------------------+
@@ -120,13 +133,12 @@ let on_properties_changed obj = obj.properties_changed
 let binary_search compare key array =
   let rec loop a b =
     if a = b then
-      None
+      -1
     else begin
       let middle = (a + b) / 2 in
-      let element = Array.unsafe_get array middle in
-      let cmp = compare key element in
+      let cmp = compare key (Array.unsafe_get array middle) in
       if cmp = 0 then
-        Some element
+        middle
       else if cmp < 0 then
         loop a middle
       else
@@ -135,16 +147,16 @@ let binary_search compare key array =
   in
   loop 0 (Array.length array)
 
-let compare_interface interface_name (interface_name', _) =
-  String.compare interface_name interface_name'
+let compare_interface name interface =
+  String.compare name interface.interface_name
 
-let compare_property name prop =
-  String.compare name prop.property_instance_name
+let compare_property name property =
+  String.compare name property.property_name
 
-let compare_method (name, typ) meth =
-  match String.compare name meth.method_name with
+let compare_method (name, typ) method_ =
+  match String.compare name method_.method_name with
     | 0 ->
-        compare typ meth.method_type
+        compare typ method_.method_type
     | n ->
         n
 
@@ -161,40 +173,35 @@ let unknown_method context message =
 let handle_call obj context message =
   match message with
     | { typ = Method_call(path, Some interface, member) } -> begin
-        match binary_search compare_interface interface obj.methods with
-          | None ->
+        match binary_search compare_interface interface obj.interfaces with
+          | -1 ->
               unknown_method context message
-          | Some(interface, methods) ->
+          | index ->
+              let interface = obj.interfaces.(index) in
               match
                 binary_search
                   compare_method
                   (member, OBus_value.V.type_of_sequence message.body)
-                  methods
+                  interface.interface_methods
               with
-                | None ->
+                | -1 ->
                     unknown_method context message
-                | Some meth ->
-                    meth.method_handler context obj message
+                | index ->
+                    interface.interface_methods.(index).method_handler context obj message
       end
-    | { typ = Method_call(path, None, member) } -> begin
-        match
-          Interface_map.fold
-            (fun name interface found ->
-               match found with
-                 | Some _ ->
-                     found
-                 | None ->
-                     binary_search
-                       compare_method
-                       (member, OBus_value.V.type_of_sequence message.body)
-                       interface.interface_methods)
-            obj.interfaces None
-        with
-          | Some meth ->
-              meth.method_handler context obj message
-          | None ->
-              unknown_method context message
-      end
+    | { typ = Method_call(path, None, member) } ->
+        let key = (member, OBus_value.V.type_of_sequence message.body) in
+        let rec loop i =
+          if i = Array.length obj.interfaces then
+            unknown_method context message
+          else
+            match binary_search compare_method key obj.interfaces.(i).interface_methods with
+              | -1 ->
+                  loop (i + 1)
+              | index ->
+                  obj.interfaces.(i).interface_methods.(index).method_handler context obj message
+        in
+        loop 0
     | _ ->
         invalid_arg "OBus_object.Make.handle_call"
 
@@ -300,7 +307,7 @@ let emit obj ~interface ~member ?peer typ x =
 
 let s_PropertiesChanged =
   OBus_member.Signal.make
-    ~interface:"org.freedesktop.DBus.Introspectable"
+    ~interface:"org.freedesktop.DBus.Properties"
     ~member:"PropertiesChanged"
     ~args:(OBus_value.arg3
              (None, OBus_value.C.basic_string)
@@ -308,102 +315,78 @@ let s_PropertiesChanged =
              (None, OBus_value.C.array OBus_value.C.basic_string))
     ~annotations:[]
 
-(* The function which send the notifications *)
-let handle_property_change obj interface_name member_name value =
-  let empty = Interface_map.is_empty obj.changed in
-  obj.changed <- (
-    Interface_map.add interface_name
-      (Member_map.add member_name value
-         (try Interface_map.find interface_name obj.changed with Not_found -> Member_map.empty))
-      obj.changed
-  );
-  if empty then ignore begin
-    (* Sleep a bit, so multiple changes are sent only one time. *)
-    lwt () = pause () in
-    let changed = obj.changed in
-    obj.changed <- Interface_map.empty;
-    Interface_map.iter
-      (fun name properties ->
-         match try Some(Interface_map.find name obj.interfaces) with Not_found -> None with
-           | Some interface ->
-               ignore (
-                 try_lwt
-                   !(obj.properties_changed)
-                     name
-                     (Member_map.fold (fun name property acc -> (name, property) :: acc) properties [])
-                 with exn ->
-                   Lwt_log.error ~exn ~section "properties_changed callback failed with"
-               );
-           | None ->
-               ())
-      changed;
-    return ()
-  end
+let notify_properties_change obj interface_name changed index =
+  (* Sleep a bit, so multiple changes are sent only one time. *)
+  lwt () = pause () in
+  let members = changed.(index) in
+  changed.(index) <- Member_map.empty;
+  try_lwt
+    !(obj.properties_changed)
+      interface_name
+      (Member_map.fold (fun name value_opt acc -> (name, value_opt) :: acc) members [])
+  with exn ->
+    Lwt_log.error ~exn ~section "properties_changed callback failed with"
+
+let handle_property_change obj index member value_opt =
+  let empty = Member_map.is_empty obj.changed.(index) in
+  obj.changed.(index) <- Member_map.add member value_opt obj.changed.(index);
+  if empty then ignore (notify_properties_change obj obj.interfaces.(index).interface_name obj.changed index)
+
+let handle_property_change_true obj interface_index member value =
+  handle_property_change obj interface_index member (Some value)
+
+let handle_property_change_invalidates obj interface_index member value =
+  handle_property_change obj interface_index member None
 
 (* +-----------------------------------------------------------------+
    | Property maps geenration                                        |
    +-----------------------------------------------------------------+ *)
-
-let dummy = ("", [||])
 
 (* Generate the [properties] and the [methods] fields from the
    [interfaces] field: *)
 let generate obj =
   (* Stop monitoring of previous properties *)
   Array.iter
-    (fun (interface, properties) ->
+    (fun instances ->
        Array.iter
-         (fun property -> React.E.stop property.property_instance_monitor)
-         properties)
+         (function
+            | Some instance -> React.E.stop instance.property_instance_monitor
+            | None -> ())
+         instances)
     obj.properties;
-  let count = Interface_map.fold (fun _ _ count -> succ count) obj.interfaces 0 in
-  let properties = Array.make count dummy and methods = Array.make count dummy in
-  ignore (
-    Interface_map.fold
-      (fun name interface i ->
-         Array.unsafe_set methods i (name, interface.interface_methods);
-         Array.unsafe_set properties i
-           (name,
-            Array.map
-              (fun property ->
-                 let signal, monitor =
-                   match property.property_signal with
-                     | Some f ->
-                         let signal =
-                           match obj.data with
-                             | Some data -> f data
-                             | None -> assert false
-                         in
-                         (Some signal,
-                          React.E.map
-                            (handle_property_change obj interface.interface_name property.property_name)
-                            (React.S.changes signal))
-                     | None ->
-                         (None, React.E.never)
-                 in
-                 {
-                   property_instance_name = property.property_name;
-                   property_instance_signal = signal;
-                   property_instance_setter = property.property_setter;
-                   property_instance_monitor = monitor;
-                 })
-              interface.interface_properties);
-         i + 1)
-      obj.interfaces 0
-  );
-  obj.methods <- methods;
-  obj.properties <- properties
+  let count = Array.length obj.interfaces in
+  obj.properties <- Array.make count [||];
+  obj.changed <- Array.make count Member_map.empty;
+  for i = 0 to count - 1 do
+    let properties = obj.interfaces.(i).interface_properties in
+    let count' = Array.length properties in
+    let instances = Array.make count' None in
+    obj.properties.(i) <- instances;
+    for j = 0 to count' - 1 do
+      match properties.(j).property_signal with
+        | Some make ->
+            let signal = make (match obj.data with Some data -> data | None -> assert false) in
+            instances.(j) <- (
+              Some({
+                     property_instance_signal = signal;
+                     property_instance_monitor =
+                       (match properties.(j).property_emits_changed_signal, obj.interfaces.(i).interface_emits_changed_signal with
+                          | Esc_false, _ | Esc_not_specified, (Esc_not_specified | Esc_false) ->
+                              React.E.never
+                          | Esc_true, _ | Esc_not_specified, Esc_true ->
+                              React.E.map (handle_property_change_true obj i properties.(j).property_name) (React.S.changes signal)
+                          | Esc_invalidates, _ | Esc_not_specified, Esc_invalidates ->
+                              React.E.map (handle_property_change_invalidates obj i properties.(j).property_name) (React.S.changes signal))
+                   })
+            )
+        | None ->
+            ()
+    done
+  done
 
 (* +-----------------------------------------------------------------+
    | Member informations                                             |
    +-----------------------------------------------------------------+ *)
-
-let make_args arguments =
-  List.map2
-    (fun name typ ->
-       (name, typ))
-    (OBus_value.arg_names arguments)
-    (OBus_value.C.type_sequence (OBus_value.arg_types arguments))
 
 let _method_info info f =
   let handler context obj message =
@@ -426,15 +409,10 @@ let _method_info info f =
     f context obj args
   in
   {
-    member_name = OBus_member.Method.member info;
-    member_type = Method(OBus_value.C.type_sequence
-                           (OBus_value.arg_types
-                              (OBus_member.Method.i_args info)),
-                         handler);
-    member_introspection = OBus_introspect.Method(OBus_member.Method.member info,
-                                                  make_args (OBus_member.Method.i_args info),
-                                                  make_args (OBus_member.Method.o_args info),
-                                                  []);
+    method_name = OBus_member.Method.member info;
+    method_type = OBus_value.C.type_sequence (OBus_value.arg_types (OBus_member.Method.i_args info));
+    method_handler = handler;
+    method_introspect = (fun () -> OBus_member.Method.introspect info);
   }
 
 let method_info info f =
@@ -445,12 +423,20 @@ let method_info info f =
          | None -> assert false)
 
 let signal_info info = {
-  member_name = OBus_member.Signal.member info;
-  member_type = Signal;
-  member_introspection = OBus_introspect.Signal(OBus_member.Signal.member info,
-                                                make_args (OBus_member.Signal.args info),
-                                                []);
+  signal_introspect = (fun () -> OBus_member.Signal.introspect info);
 }
+
+let get_emits_changed_signal annotations =
+  try
+    match List.assoc OBus_introspect.emits_changed_signal annotations with
+      | "true" -> Esc_true
+      | "false" -> Esc_false
+      | "invalidates" -> Esc_invalidates
+      | value ->
+          ignore (Lwt_log.warning_f "invalid value(%S) for annotation %S, using default(\"true\")" value OBus_introspect.emits_changed_signal);
+          Esc_true
+  with Not_found ->
+    Esc_true
 
 let property_info info signal setter =
   let typ = OBus_member.Property.typ info in
@@ -467,21 +453,12 @@ let property_info info signal setter =
         Some(fun context data value -> f context data (OBus_value.C.cast_single typ value))
   in
   {
-    member_name = OBus_member.Property.member info;
-    member_type = Property(signal, setter);
-    member_introspection = (
-      OBus_introspect.Property
-        (OBus_member.Property.member info,
-         OBus_value.C.type_single typ,
-         (match OBus_member.Property.access info with
-            | OBus_member.Property.Readable ->
-                OBus_introspect.Read
-            | OBus_member.Property.Writable ->
-                OBus_introspect.Write
-            | OBus_member.Property.Readable_writable ->
-                OBus_introspect.Read_write),
-         [])
-    );
+    property_name = OBus_member.Property.member info;
+    property_type = OBus_value.C.type_single (OBus_member.Property.typ info);
+    property_signal = signal;
+    property_setter = setter;
+    property_emits_changed_signal = get_emits_changed_signal (OBus_member.Property.annotations info);
+    property_introspect = (fun () -> OBus_member.Property.introspect info);
   }
 
 let property_r_info info signal = property_info info (Some signal) None
@@ -492,102 +469,49 @@ let property_rw_info info signal setter = property_info info (Some signal) (Some
    | Interfaces creation                                             |
    +-----------------------------------------------------------------+ *)
 
-let make_interface_unsafe name methods signals properties = {
+let make_interface_unsafe name annotations methods signals properties = {
   interface_name = name;
-  interface_introspect =
-    (name,
-     Array.fold_right
-       (fun member acc -> member.member_introspection :: acc)
-       methods
-       (Array.fold_right
-          (fun member acc -> member.member_introspection :: acc)
-          signals
-          (Array.fold_right
-             (fun member acc -> member.member_introspection :: acc)
-             properties
-             [])),
-     []);
-  interface_methods =
-    Array.map
-      (function
-         | { member_name = name;
-             member_type = Method(typ, handler) } -> {
-             method_name = name;
-             method_type = typ;
-             method_handler = handler;
-           }
-         | _ ->
-             assert false)
-      methods;
-  interface_properties =
-    Array.map
-      (function
-         | { member_name = name;
-             member_type = Property(signal, setter) } -> {
-             property_name = name;
-             property_signal = signal;
-             property_setter = setter;
-           }
-         | _ ->
-             assert false)
-      properties;
+  interface_emits_changed_signal = get_emits_changed_signal annotations;
+  interface_methods = methods;
+  interface_signals = signals;
+  interface_properties = properties;
 }
 
-let compare_member a b =
-  match String.compare a.member_name b.member_name with
-    | 0 ->
-        (match a.member_type, b.member_type with
-           | Method(typ_a, _), Method(typ_b, _) -> Pervasives.compare typ_a typ_b
-           | _ -> 0)
-    | n ->
-        n
+let compare_methods m1 m2 =
+  match String.compare m1.method_name m2.method_name with
+    | 0 -> Pervasives.compare m1.method_type m2.method_type
+    | n -> n
 
-let make_interface name members =
-  let methods =
-    Array.of_list
-      (List.filter
-         (function
-            | { member_type = Method _ } -> true
-            | _ -> false)
-         members)
-  and signals =
-    Array.of_list
-      (List.filter
-         (function
-            | { member_type = Signal } -> true
-            | _ -> false)
-         members)
-  and properties =
-    Array.of_list
-      (List.filter
-         (function
-            | { member_type = Property _ } -> true
-            | _ -> false)
-         members)
-  in
-  Array.sort compare_member methods;
-  Array.sort compare_member signals;
-  Array.sort compare_member properties;
-  make_interface_unsafe name methods signals properties
+let compare_properties p1 p2 =
+  match String.compare p1.property_name p2.property_name with
+    | 0 -> Pervasives.compare p1.property_type p2.property_type
+    | n -> n
+
+let make_interface ~name ?(annotations=[]) ?(methods=[]) ?(signals=[]) ?(properties=[]) () =
+  let methods = Array.of_list methods
+  and signals = Array.of_list signals
+  and properties = Array.of_list properties in
+  Array.sort compare_methods  methods;
+  Array.sort compare_properties properties;
+  make_interface_unsafe name annotations methods signals properties
+
+let compare_interfaces i1 i2 =
+  String.compare i1.interface_name i2.interface_name
+
+let rec uniq = function
+  | iface :: iface' :: rest when iface.interface_name = iface'.interface_name ->
+      uniq (iface :: rest)
+  | iface :: rest ->
+      iface :: uniq rest
+  | [] ->
+      []
 
 let add_interfaces obj interfaces =
-  obj.interfaces <- (
-    List.fold_left
-      (fun map interface ->
-         Interface_map.add interface.interface_name interface map)
-      obj.interfaces
-      interfaces
-  );
+  obj.interfaces <- Array.of_list (uniq (List.stable_sort compare_interfaces (interfaces @ Array.to_list obj.interfaces)));
   generate obj
 
 let remove_interfaces_by_names obj names =
-  obj.interfaces <- (
-    List.fold_left
-      (fun map name ->
-         Interface_map.remove name map)
-      obj.interfaces
-      names
-  );
+  obj.interfaces <- Array.of_list (List.filter (fun iface -> not (List.mem iface.interface_name names)) (Array.to_list obj.interfaces));
   generate obj
 
 let remove_interfaces obj interfaces =
@@ -599,14 +523,14 @@ let remove_interfaces obj interfaces =
 
 let introspectable () =
   let interface_name = "org.freedesktop.DBus.Introspectable" in
-  make_interface_unsafe interface_name [|
+  make_interface_unsafe interface_name [] [|
     _method_info
       (OBus_member.Method.make
          interface_name
          "Introspect"
          OBus_value.arg0
          (OBus_value.arg1
-            (Some "resul", OBus_value.C.basic_string))
+            (Some "result", OBus_value.C.basic_string))
          [])
       (fun context obj () ->
          let document =
@@ -624,7 +548,7 @@ let introspectable () =
 
 let properties () =
   let interface_name = "org.freedesktop.DBus.Properties" in
-  make_interface_unsafe interface_name [|
+  make_interface_unsafe interface_name [] [|
     _method_info
       (OBus_member.Method.make
          interface_name
@@ -636,18 +560,19 @@ let properties () =
             (Some "value", OBus_value.C.variant))
          [])
       (fun context obj (interface, member) ->
-         match binary_search compare_interface interface obj.properties with
-           | None ->
+         match binary_search compare_interface interface obj.interfaces with
+           | -1 ->
                Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such interface: %S" interface
-           | Some(interface, properties) ->
-               match binary_search compare_property member properties with
-                 | Some{ property_instance_signal = Some s } ->
-                     OBus_method.return context (React.S.value s)
-                 | Some{ property_instance_signal = None } ->
-                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not readable" member interface
-                 | None ->
-                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such property: %S on interface %S" member interface);
-
+           | i ->
+               match binary_search compare_property member obj.interfaces.(i).interface_properties with
+                 | -1 ->
+                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such property: %S on interface %S" member interface
+                 | j ->
+                     match obj.properties.(i).(j) with
+                       | Some{ property_instance_signal = signal } ->
+                           OBus_method.return context (React.S.value signal)
+                       | None ->
+                           Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not readable" member interface);
     _method_info
       (OBus_member.Method.make
          interface_name
@@ -658,18 +583,23 @@ let properties () =
             (Some "values", OBus_value.C.dict OBus_value.C.string OBus_value.C.variant))
          [])
       (fun context obj interface ->
-         match binary_search compare_interface interface obj.properties with
-           | Some(interface, properties) ->
-               OBus_method.return context
-                 (Array.fold_left
-                    (fun acc property ->
-                       match property.property_instance_signal with
-                         | Some s -> (property.property_instance_name, React.S.value s) :: acc
-                         | None -> acc)
-                    []
-                    properties)
-           | None ->
-               OBus_method.return context []);
+         match binary_search compare_interface interface obj.interfaces with
+           | -1 ->
+               Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such interface: %S" interface
+           | i ->
+               let count = Array.length obj.properties.(i) in
+               let rec loop j acc =
+                 if j = count then
+                   acc
+                 else
+                   match obj.properties.(i).(j) with
+                     | Some{ property_instance_signal = signal } ->
+                         loop (j + 1) ((obj.interfaces.(i).interface_properties.(j).property_name,
+                                        React.S.value signal) :: acc)
+                     | None ->
+                         loop (j + 1) acc
+               in
+               OBus_method.return context (loop 0 []));
     _method_info
       (OBus_member.Method.make
          interface_name
@@ -681,23 +611,25 @@ let properties () =
          OBus_value.arg0
          [])
       (fun context obj (interface, member, value) ->
-         match binary_search compare_interface interface obj.properties with
-           | None ->
+         match binary_search compare_interface interface obj.interfaces with
+           | -1 ->
                Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such interface: %S" interface
-           | Some(interface, properties) ->
-               match binary_search compare_property member properties with
-                 | Some{ property_instance_setter = Some f } -> begin
-                     match obj.data with
-                       | Some data ->
-                           lwt () = f context data value in
-                           OBus_method.return context ()
+           | i ->
+               match binary_search compare_property member obj.interfaces.(i).interface_properties with
+                 | -1 ->
+                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such property: %S on interface %S" member interface
+                 | j ->
+                     match obj.interfaces.(i).interface_properties.(j).property_setter with
+                       | Some f -> begin
+                           match obj.data with
+                             | Some data ->
+                                 lwt () = f context data value in
+                                 OBus_method.return context ()
+                             | None ->
+                                 assert false
+                         end
                        | None ->
-                           assert false
-                   end
-                 | Some{ property_instance_setter = None } ->
-                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not writable" member interface
-                 | None ->
-                     Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "no such property: %S on interface %S" member interface);
+                           Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not writable" member interface);
   |]
     [|signal_info s_PropertiesChanged|]
     [||]
@@ -706,12 +638,22 @@ let properties () =
    | Constructors                                                    |
    +-----------------------------------------------------------------+ *)
 
-let properties_changed obj interface updates invalidates =
+let properties_changed obj interface values =
   emit obj
     ~interface:s_PropertiesChanged.OBus_member.Signal.interface
     ~member:s_PropertiesChanged.OBus_member.Signal.member
     (OBus_value.arg_types s_PropertiesChanged.OBus_member.Signal.args)
-    (interface, updates, invalidates)
+    (interface,
+     OBus_util.filter_map
+       (function
+          | (name, Some value) -> Some(name, value)
+          | (name, None) -> None)
+       values,
+     OBus_util.filter_map
+       (function
+          | (name, Some value) -> None
+          | (name, None) -> Some name)
+       values)
 
 let make ?owner ?(common=true) ?(interfaces=[]) path =
   let interfaces = if common then introspectable () :: properties () :: interfaces else interfaces in
@@ -720,17 +662,13 @@ let make ?owner ?(common=true) ?(interfaces=[]) path =
     exports = Connection_set.empty;
     owner = owner;
     data = None;
-    methods = [||];
     properties = [||];
-    interfaces =
-      List.fold_left
-        (fun acc iface -> Interface_map.add iface.interface_name iface acc)
-        Interface_map.empty
-        interfaces;
-    changed = Interface_map.empty;
+    interfaces = [||];
+    changed = [||];
     properties_changed = ref (fun name values -> assert false);
   } in
-  obj.properties_changed := (fun name values -> properties_changed obj name values []);
+  obj.properties_changed := (fun name values -> properties_changed obj name values);
+  add_interfaces obj interfaces;
   obj
 
 let attach obj data =

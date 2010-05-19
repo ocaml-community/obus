@@ -7,6 +7,14 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+open OBus_introspect
+
+let introspect_arguments args =
+  List.map2
+    (fun name typ -> (name, typ))
+    (OBus_value.arg_names args)
+    (OBus_value.C.type_sequence (OBus_value.arg_types args))
+
 module Method =
 struct
   type ('a, 'b) t = {
@@ -30,6 +38,9 @@ struct
   let i_args m = m.i_args
   let o_args m = m.o_args
   let annotations m = m.annotations
+
+  let introspect m =
+    Method(m.member, introspect_arguments m.i_args, introspect_arguments m.o_args, m.annotations)
 end
 
 module Signal =
@@ -52,6 +63,9 @@ struct
   let member s = s.member
   let args s = s.args
   let annotations s = s.annotations
+
+  let introspect s =
+    Signal(s.member, introspect_arguments s.args, s.annotations)
 end
 
 module Property =
@@ -86,4 +100,12 @@ struct
   let typ p = p.typ
   let access p = p.access
   let annotations p = p.annotations
+
+  let introspect p =
+    Property(p.member, OBus_value.C.type_single p.typ,
+             (match p.access with
+                | Readable -> Read
+                | Writable -> Write
+                | Readable_writable -> Read_write),
+             p.annotations)
 end

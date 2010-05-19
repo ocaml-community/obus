@@ -34,7 +34,7 @@ let remove_deprecated members =
        | Signal(_, _, annotations)
        | Property(_, _, _, annotations) ->
            try
-             List.assoc "org.freedesktop.DBus.Deprecated" annotations <> "true"
+             List.assoc OBus_introspect.deprecated annotations <> "true"
            with Not_found ->
              true)
     members
@@ -98,7 +98,7 @@ let print_impl oc name members annotations =
              i_convertors;
            let need_context = List.exists (fun (_, typ) -> contains_path typ) o_args in
            if List.for_all (fun conv -> conv = None) o_convertors then begin
-             if try List.assoc "org.freedesktop.DBus.Method.NoReply" annotations = "true" with Not_found -> false then
+             if try List.assoc OBus_introspect.no_reply annotations = "true" with Not_found -> false then
                fprintf oc "    OBus_method.call_no_reply m_%s proxy " name
              else
                fprintf oc "    OBus_method.call m_%s proxy " name;

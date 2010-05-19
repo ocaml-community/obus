@@ -85,7 +85,7 @@ let print_impl oc name members annotations =
                       \    Method.annotations = [%s];\n\
                       \  }\n"
              name name print_args i_args print_args o_args
-             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%S, %S)" name value) annotations))
+             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value) annotations))
        | Signal(name, args, annotations) ->
            fprintf oc "  let s_%s = {\n\
                       \    Signal.interface = interface;\n\
@@ -94,7 +94,7 @@ let print_impl oc name members annotations =
                       \    Signal.annotations = [%s];\n\
                       \  }\n"
              name name print_args args
-             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%S, %S)" name value) annotations))
+             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value) annotations))
        | Property(name, typ, access, annotations) ->
            fprintf oc "  let p_%s = {\n\
                       \    Property.interface = interface;\n\
@@ -108,7 +108,7 @@ let print_impl oc name members annotations =
                 | Read -> "readable"
                 | Write -> "writable"
                 | Read_write -> "readable_writable")
-             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%S, %S)" name value) annotations)))
+             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value) annotations)))
     members;
 
   (***** Interface description *****)
@@ -116,8 +116,8 @@ let print_impl oc name members annotations =
   if List.exists (function Method _ | Property _ -> true | _ -> false) members then
     print_record oc members;
   output_string oc "  let make members =\n";
-  output_string oc "    OBus_object.make_interface_unsafe interface\n\
-                   \      [|\n";
+  fprintf oc "    OBus_object.make_interface_unsafe interface [%s]\n\
+             \      [|\n" (String.concat "; " (List.map (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value) annotations));
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->

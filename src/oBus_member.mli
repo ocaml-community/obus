@@ -41,6 +41,10 @@ module Method : sig
   val i_args : ('a, 'b) t -> 'a OBus_value.arguments
   val o_args : ('a, 'b) t -> 'b OBus_value.arguments
   val annotations : ('a, 'b) t -> OBus_introspect.annotation list
+
+  (** {6 Introspection} *)
+
+  val introspect : ('a, 'b) t -> OBus_introspect.member
 end
 
 (** D-Bus signals *)
@@ -70,6 +74,10 @@ module Signal : sig
   val member : 'a t -> OBus_name.member
   val args : 'a t -> 'a OBus_value.arguments
   val annotations : 'a t -> OBus_introspect.annotation list
+
+  (** {6 Introspection} *)
+
+  val introspect : 'a t -> OBus_introspect.member
 end
 
 (** D-Bus properties *)
@@ -118,4 +126,8 @@ module Property : sig
   val typ : ('a, 'access) t -> 'a OBus_value.C.single
   val access : ('a, 'access) t -> 'access access
   val annotations : ('a, 'access) t -> OBus_introspect.annotation list
+
+  (** {6 Introspection} *)
+
+  val introspect : ('a, 'access) t -> OBus_introspect.member
 end

@@ -173,3 +173,12 @@ let output xo doc =
   Xmlm.output xo (`Dtd(Some "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n\
                              \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">"));
   aux (to_xml doc)
+
+(* +-----------------------------------------------------------------+
+   | Annotations                                                     |
+   +-----------------------------------------------------------------+ *)
+
+let deprecated = "org.freedesktop.DBus.Deprecated"
+let csymbol = "org.freedesktop.DBus.GLib.CSymbol"
+let no_reply = "org.freedesktop.DBus.Method.NoReply"
+let emits_changed_signal = "org.freedesktop.DBus.Property.EmitsChangedSignal"
