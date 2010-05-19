@@ -115,6 +115,33 @@ let get_all_no_cache proxy interface =
             dict)
 
 (* +-----------------------------------------------------------------+
+   | Clean up                                                        |
+   +-----------------------------------------------------------------+ *)
+
+let unmonitor_property_group property_group =
+  match property_group.property_group_monitor with
+    | None ->
+        ()
+    | Some(signal, send, stop) ->
+        property_group.property_group_monitor <- None;
+        cancel (React.S.value signal);
+        stop ()
+
+let cleanup_property_group property_group =
+  property_group.property_group_ref_count <- property_group.property_group_ref_count - 1;
+  if property_group.property_group_ref_count = 0 then begin
+    let running = running_of_connection property_group.property_group_connection in
+    running.running_properties <- (
+      Property_map.remove
+        (property_group.property_group_owner,
+         property_group.property_group_path,
+         property_group.property_group_interface)
+        running.running_properties
+    );
+    unmonitor_property_group property_group
+  end
+
+(* +-----------------------------------------------------------------+
    | Monitoring                                                      |
    +-----------------------------------------------------------------+ *)
 
@@ -162,8 +189,11 @@ let rec monitor property =
 
 let monitor_with_stopper property =
   lwt signal = monitor property in
-  (* TODO: implement the stop function *)
-  return (signal, ignore)
+  let stop = lazy(
+    React.S.stop signal;
+    cleanup_property_group (Lazy.force property.property_group)
+  ) in
+  return (signal, fun () -> Lazy.force stop))
 
 let invalidate property =
   let lazy property_group = property.property_group in
@@ -172,33 +202,6 @@ let invalidate property =
         send Invalidate
     | None ->
         ()
-
-(* +-----------------------------------------------------------------+
-   | Clean up                                                        |
-   +-----------------------------------------------------------------+ *)
-
-let unmonitor_property_group property_group =
-  match property_group.property_group_monitor with
-    | None ->
-        ()
-    | Some(signal, send, stop) ->
-        property_group.property_group_monitor <- None;
-        cancel (React.S.value signal);
-        stop ()
-
-let cleanup_property_group property_group =
-  property_group.property_group_ref_count <- property_group.property_group_ref_count - 1;
-  if property_group.property_group_ref_count = 0 then begin
-    let running = running_of_connection property_group.property_group_connection in
-    running.running_properties <- (
-      Property_map.remove
-        (property_group.property_group_owner,
-         property_group.property_group_path,
-         property_group.property_group_interface)
-        running.running_properties
-    );
-    unmonitor_property_group property_group
-  end
 
 (* +-----------------------------------------------------------------+
    | Property reading/writing                                        |
