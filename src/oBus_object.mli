@@ -72,6 +72,11 @@ val introspect : 'a t -> OBus_introspect.interface list
   (** [introspect obj] returns the introspection of all interfaces
       implemented by [obj] *)
 
+val on_properties_changed : 'a t -> (OBus_name.interface -> (OBus_name.member * OBus_value.V.single) list -> unit Lwt.t) ref
+  (** Function called when one or more properties of the given object
+      change. The default function use the standard
+      [org.freedesktop.DBus.Properties.PropertiesChanged] signal. *)
+
 (** {6 Exports} *)
 
 val export : OBus_connection.t -> 'a t -> unit

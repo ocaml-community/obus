@@ -93,6 +93,11 @@ and 'a t = {
 
   mutable changed : OBus_value.V.single Member_map.t Interface_map.t;
   (* Properties that changed since the last upadte *)
+
+  properties_changed : (OBus_name.interface -> (OBus_name.member * OBus_value.V.single) list -> unit Lwt.t) ref;
+  (* Function called when proeprties change. It may emit a
+     notification signal. The default one use
+     [org.freedesktop.DBus.Properties.PropertiesChanged] *)
 }
 
 (* +-----------------------------------------------------------------+
@@ -106,6 +111,7 @@ let introspect obj =
   Interface_map.fold
     (fun name interface acc -> interface.interface_introspect :: acc)
     obj.interfaces []
+let on_properties_changed obj = obj.properties_changed
 
 (* +-----------------------------------------------------------------+
    | Binary search                                                   |
@@ -301,13 +307,6 @@ let s_PropertiesChanged =
              (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)
              (None, OBus_value.C.array OBus_value.C.basic_string))
 
-let properties_changed obj interface updates invalidates =
-  emit obj
-    ~interface:s_PropertiesChanged.OBus_member.Signal.interface
-    ~member:s_PropertiesChanged.OBus_member.Signal.member
-    (OBus_value.arg_types s_PropertiesChanged.OBus_member.Signal.args)
-    (interface, updates, invalidates)
-
 (* The function which send the notifications *)
 let handle_property_change obj interface_name member_name value =
   let empty = Interface_map.is_empty obj.changed in
@@ -326,10 +325,14 @@ let handle_property_change obj interface_name member_name value =
       (fun name properties ->
          match try Some(Interface_map.find name obj.interfaces) with Not_found -> None with
            | Some interface ->
-               ignore (properties_changed obj
-                         name
-                         (Member_map.fold (fun name property acc -> (name, property) :: acc) properties [])
-                         [])
+               ignore (
+                 try_lwt
+                   !(obj.properties_changed)
+                     name
+                     (Member_map.fold (fun name property acc -> (name, property) :: acc) properties [])
+                 with exn ->
+                   Lwt_log.error ~exn ~section "properties_changed callback failed with"
+               );
            | None ->
                ())
       changed;
@@ -698,6 +701,13 @@ let properties () =
    | Constructors                                                    |
    +-----------------------------------------------------------------+ *)
 
+let properties_changed obj interface updates invalidates =
+  emit obj
+    ~interface:s_PropertiesChanged.OBus_member.Signal.interface
+    ~member:s_PropertiesChanged.OBus_member.Signal.member
+    (OBus_value.arg_types s_PropertiesChanged.OBus_member.Signal.args)
+    (interface, updates, invalidates)
+
 let make ?owner ?(common=true) ?(interfaces=[]) path =
   let interfaces = if common then introspectable () :: properties () :: interfaces else interfaces in
   let obj = {
@@ -713,7 +723,9 @@ let make ?owner ?(common=true) ?(interfaces=[]) path =
         Interface_map.empty
         interfaces;
     changed = Interface_map.empty;
+    properties_changed = ref (fun name values -> assert false);
   } in
+  obj.properties_changed := (fun name values -> properties_changed obj name values []);
   obj
 
 let attach obj data =
