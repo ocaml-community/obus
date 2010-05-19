@@ -193,7 +193,33 @@ let monitor_with_stopper property =
     React.S.stop signal;
     cleanup_property_group (Lazy.force property.property_group)
   ) in
-  return (signal, fun () -> Lazy.force stop))
+  return (signal, fun () -> Lazy.force stop)
+
+let monitor_custom property ~event ~stop =
+  let lazy property_group = property.property_group in
+  match property_group.property_group_monitor with
+    | Some _ ->
+        monitor property
+    | None ->
+        property_group.property_group_monitor <- Some(
+          let action, send_action = React.E.create () in
+          let properties_signal =
+            React.S.fold ~eq:(==)
+              (fun acc action -> acc >> get_all_no_cache property.proxy property_group.property_group_interface)
+              (get_all_no_cache property.proxy property_group.property_group_interface)
+              (React.E.select [React.E.map (fun _ -> Invalidate) event; action])
+          in
+          (properties_signal, send_action, stop)
+        );
+        monitor property
+
+let monitor_custom_with_stopper property ~event ~stop =
+  lwt signal = monitor_custom property ~event ~stop in
+  let stop = lazy(
+    React.S.stop signal;
+    cleanup_property_group (Lazy.force property.property_group)
+  ) in
+  return (signal, fun () -> Lazy.force stop)
 
 let invalidate property =
   let lazy property_group = property.property_group in

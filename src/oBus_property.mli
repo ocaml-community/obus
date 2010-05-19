@@ -100,6 +100,19 @@ val monitor_with_stopper : ('a, [> `readable ]) t -> ('a React.signal * (unit ->
   (** Same as {!monitor} but also returns a function that can be used
       to explicitly free resources *)
 
+val monitor_custom : ('a, [> `readable ]) t -> event : 'b React.event -> stop : (unit -> unit) -> 'a React.signal Lwt.t
+  (** [monitor_custom property ~event ~stop] uses [event]'s
+      occurrences to update [property]. By default obus use the
+      [org.freedesktop.DBus.Properties.PropertiesChanged] signal to
+      monitor a proeprty. But e not all services use this signal.
+      [monitor_custom] allow you to monitor a property using another
+      notification mechanism. Each time [event] occurs, obus will
+      refresh the property cache. *)
+
+val monitor_custom_with_stopper : ('a, [> `readable ]) t -> event : 'b React.event -> stop : (unit -> unit) -> ('a React.signal * (unit -> unit)) Lwt.t
+  (** Same as {!monitor_custom} but also returns a function that can
+      be used to explicitly free resources *)
+
 (** {6 Receving all properties} *)
 
 val get_all : OBus_proxy.t -> interface : OBus_name.interface -> properties Lwt.t
