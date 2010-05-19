@@ -177,7 +177,7 @@ and property_group = {
   (* How many user properties (of type OBus_property.t) are using this
      property group ? *)
 
-  mutable property_group_monitor : ((void context * properties) React.signal Lwt.t * (action -> unit) * (unit -> unit)) option;
+  mutable property_group_monitor : ((void context * properties) Lwt.t React.signal * (action -> unit) * (unit -> unit)) option;
 
   property_group_connection : t;
   property_group_owner : OBus_name.bus option;

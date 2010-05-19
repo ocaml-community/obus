@@ -124,38 +124,39 @@ let properties_equal (context1, values1) (context2, values2) =
 let rec monitor property =
   let lazy property_group = property.property_group in
   match property_group.property_group_monitor with
-    | Some(thread, send, stop) ->
-        lwt properties_with_context = thread in
+    | Some(signal, send, stop) ->
+        lwt context, properties = React.S.value signal in
         return
-          (React.S.map
-             (fun (context, properties) -> property.cast context properties)
-             properties_with_context)
+          (Lwt_signal.map_s
+             (fun thread ->
+                lwt context, properties = thread in
+                return (property.cast context properties))
+             (property.cast context properties)
+             signal)
     | None ->
         property_group.property_group_monitor <- Some(
           let signal = OBus_signal.connect s_PropertiesChanged property.proxy in
           (* Monitor only properties of the given interface *)
           OBus_signal.set_filters signal [(0, OBus_match.AF_string property_group.property_group_interface)];
           let action, send_action = React.E.create () in
-          let thread =
-            lwt initial = get_all_no_cache property.proxy property_group.property_group_interface in
-            return
-              (Lwt_signal.fold_s
-                 ~eq:properties_equal
-                 (fun (old_context, properties) action ->
-                    match action with
-                      | Update(context, (interface, updates, invalidates)) ->
-                          if invalidates <> [] then
-                            get_all_no_cache property.proxy property_group.property_group_interface
-                          else
-                            return (context, List.fold_left (fun map (member, value) -> String_map.add member value map) properties updates)
-                      | Invalidate ->
-                          get_all_no_cache property.proxy property_group.property_group_interface)
-                 initial
-                 (React.E.select
-                    [React.E.map (fun (ctx, props) -> Update(ctx, props)) (OBus_signal.event_with_context signal);
-                     action]))
+          let properties_signal =
+            React.S.fold ~eq:(==)
+              (fun acc action ->
+                 lwt old_context, properties = acc in
+                 match action with
+                   | Update(context, (interface, updates, invalidates)) ->
+                       if invalidates <> [] then
+                         get_all_no_cache property.proxy property_group.property_group_interface
+                       else
+                         return (context, List.fold_left (fun map (member, value) -> String_map.add member value map) properties updates)
+                   | Invalidate ->
+                       get_all_no_cache property.proxy property_group.property_group_interface)
+              (get_all_no_cache property.proxy property_group.property_group_interface)
+              (React.E.select
+                 [React.E.map (fun (ctx, props) -> Update(ctx, props)) (OBus_signal.event_with_context signal);
+                  action])
           in
-          (thread, send_action, fun () -> OBus_signal.disconnect signal)
+          (properties_signal, send_action, fun () -> OBus_signal.disconnect signal)
         );
         monitor property
 
@@ -167,7 +168,7 @@ let monitor_with_stopper property =
 let invalidate property =
   let lazy property_group = property.property_group in
   match property_group.property_group_monitor with
-    | Some(thread, send, stop) ->
+    | Some(signal, send, stop) ->
         send Invalidate
     | None ->
         ()
@@ -180,9 +181,9 @@ let unmonitor_property_group property_group =
   match property_group.property_group_monitor with
     | None ->
         ()
-    | Some(thread, send, stop) ->
+    | Some(signal, send, stop) ->
         property_group.property_group_monitor <- None;
-        cancel thread;
+        cancel (React.S.value signal);
         stop ()
 
 let cleanup_property_group property_group =
@@ -218,8 +219,8 @@ let get_with_context property =
           lwt context, properties = get_all_no_cache property.proxy property_group.property_group_interface in
           return (context, property.cast context properties)
         end
-    | Some(thread, send, stop) ->
-        lwt context, properties = thread >|= React.S.value in
+    | Some(signal, send, stop) ->
+        lwt context, properties = React.S.value signal in
         return (context, property.cast context properties)
 
 let get property =
@@ -298,8 +299,8 @@ let get_all_with_context proxy ~interface =
   with
     | None | Some{ property_group_monitor = None } ->
         get_all_no_cache proxy interface
-    | Some{ property_group_monitor = Some(thread, send, stop) } ->
-        thread >|= React.S.value
+    | Some{ property_group_monitor = Some(signal, send, stop) } ->
+        React.S.value signal
 
 let get_all proxy ~interface =
   get_all_with_context proxy interface >|= snd
