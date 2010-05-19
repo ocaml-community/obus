@@ -305,16 +305,6 @@ let emit obj ~interface ~member ?peer typ x =
    | Property change notifications                                   |
    +-----------------------------------------------------------------+ *)
 
-let s_PropertiesChanged =
-  OBus_member.Signal.make
-    ~interface:"org.freedesktop.DBus.Properties"
-    ~member:"PropertiesChanged"
-    ~args:(OBus_value.arg3
-             (None, OBus_value.C.basic_string)
-             (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)
-             (None, OBus_value.C.array OBus_value.C.basic_string))
-    ~annotations:[]
-
 let notify_properties_change obj interface_name changed index =
   (* Sleep a bit, so multiple changes are sent only one time. *)
   lwt () = pause () in
@@ -521,17 +511,11 @@ let remove_interfaces obj interfaces =
    | Common interfaces                                               |
    +-----------------------------------------------------------------+ *)
 
+open OBus_interfaces.Org_freedesktop_DBus_Introspectable
+
 let introspectable () =
-  let interface_name = "org.freedesktop.DBus.Introspectable" in
-  make_interface_unsafe interface_name [] [|
-    _method_info
-      (OBus_member.Method.make
-         interface_name
-         "Introspect"
-         OBus_value.arg0
-         (OBus_value.arg1
-            (Some "result", OBus_value.C.basic_string))
-         [])
+  make_interface_unsafe interface [] [|
+    _method_info m_Introspect
       (fun context obj () ->
          let document =
            (introspect obj,
@@ -546,19 +530,11 @@ let introspectable () =
          OBus_method.return context (Buffer.contents buf))
   |] [||] [||]
 
+open OBus_interfaces.Org_freedesktop_DBus_Properties
+
 let properties () =
-  let interface_name = "org.freedesktop.DBus.Properties" in
-  make_interface_unsafe interface_name [] [|
-    _method_info
-      (OBus_member.Method.make
-         interface_name
-         "Get"
-         (OBus_value.arg2
-            (Some "interface", OBus_value.C.basic_string)
-            (Some "member", OBus_value.C.basic_string))
-         (OBus_value.arg1
-            (Some "value", OBus_value.C.variant))
-         [])
+  make_interface_unsafe interface [] [|
+    _method_info m_Get
       (fun context obj (interface, member) ->
          match binary_search compare_interface interface obj.interfaces with
            | -1 ->
@@ -573,15 +549,7 @@ let properties () =
                            OBus_method.return context (React.S.value signal)
                        | None ->
                            Printf.ksprintf (OBus_method.fail context OBus_error.Failed) "property %S on interface %S is not readable" member interface);
-    _method_info
-      (OBus_member.Method.make
-         interface_name
-         "GetAll"
-         (OBus_value.arg1
-            (Some "interface", OBus_value.C.basic_string))
-         (OBus_value.arg1
-            (Some "values", OBus_value.C.dict OBus_value.C.string OBus_value.C.variant))
-         [])
+    _method_info m_GetAll
       (fun context obj interface ->
          match binary_search compare_interface interface obj.interfaces with
            | -1 ->
@@ -600,16 +568,7 @@ let properties () =
                          loop (j + 1) acc
                in
                OBus_method.return context (loop 0 []));
-    _method_info
-      (OBus_member.Method.make
-         interface_name
-         "Set"
-         (OBus_value.arg3
-            (Some "interface", OBus_value.C.basic_string)
-            (Some "member", OBus_value.C.basic_string)
-            (Some "value", OBus_value.C.variant))
-         OBus_value.arg0
-         [])
+    _method_info m_Set
       (fun context obj (interface, member, value) ->
          match binary_search compare_interface interface obj.interfaces with
            | -1 ->

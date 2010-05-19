@@ -11,6 +11,7 @@ let section = Lwt_log.Section.make "obus(property)"
 
 open Lwt
 open OBus_private_connection
+open OBus_interfaces.Org_freedesktop_DBus_Properties
 
 (* +-----------------------------------------------------------------+
    | Types                                                           |
@@ -65,46 +66,6 @@ let map_w g property = {
     cast = (fun context x -> assert false);
     make = (fun x -> property.make (g x));
 }
-
-(* +-----------------------------------------------------------------+
-   | Methods                                                         |
-   +-----------------------------------------------------------------+ *)
-
-let interface = "org.freedesktop.DBus.Properties"
-
-let m_Get =
-  OBus_member.Method.make
-    ~interface
-    ~member:"Get"
-    ~i_args:(OBus_value.arg2 (None, OBus_value.C.basic_string) (None, OBus_value.C.basic_string))
-    ~o_args:(OBus_value.arg1 (None, OBus_value.C.variant))
-    ~annotations:[]
-
-let m_Set =
-  OBus_member.Method.make
-    ~interface
-    ~member:"Set"
-    ~i_args:(OBus_value.arg3 (None, OBus_value.C.basic_string) (None, OBus_value.C.basic_string) (None, OBus_value.C.variant))
-    ~o_args:OBus_value.arg0
-    ~annotations:[]
-
-let m_GetAll =
-  OBus_member.Method.make
-    ~interface
-    ~member:"GetAll"
-    ~i_args:(OBus_value.arg1 (None, OBus_value.C.basic_string))
-    ~o_args:(OBus_value.arg1 (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant))
-    ~annotations:[]
-
-let s_PropertiesChanged =
-  OBus_member.Signal.make
-    ~interface
-    ~member:"PropertiesChanged"
-    ~args:(OBus_value.arg3
-             (None, OBus_value.C.basic_string)
-             (None, OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)
-             (None, OBus_value.C.array OBus_value.C.basic_string))
-    ~annotations:[]
 
 (* +-----------------------------------------------------------------+
    | Reading all properties with their contexts                      |

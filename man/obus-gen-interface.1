@@ -38,6 +38,12 @@ Use this name as output prefix. it defaults to "obus_interface".
 Keeps common interfaces, i.e. all interfaces starting with
 "org.freedesktop.DBus". By default they are dropped.
 
+.IP "-mode (both|client|server)"
+Set the code generation mode. It defaults to "both". In "client" mode,
+only code for client-side use is generated. In "server" mode, only
+code for server-side use is generated. In "both" mode, code for
+client-side and server-side use is generated.
+
 .IP "-help or --help"
 Display a short usage summary and exit.
 

@@ -284,7 +284,7 @@ let _ =
           ~prods:["%.ml"; "%.mli"]
           ~deps:["%.obus"; "tools/obus_gen_interface.best"]
           (fun env _ -> Cmd(S[P"tools/obus_gen_interface.best";
-                              A"-keep-common";
+                              A"-keep-common"; A"-mode"; A"client";
                               A"-o"; A(env "%");
                               A(env "%.obus")]));
 
