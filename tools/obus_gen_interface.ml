@@ -207,13 +207,8 @@ let print_intf oc name members annotations =
 
 let compare_members ma mb =
   match ma, mb with
-    | Method(name_a, i_args_a, _, _), Method(name_b, i_args_b, _, _) -> begin
-        match String.compare name_a name_b with
-          | 0 ->
-              Pervasives.compare (List.map snd i_args_a) (List.map snd i_args_b)
-          | n ->
-              n
-      end
+    | Method(name_a, i_args_a, _, _), Method(name_b, i_args_b, _, _) ->
+        String.compare name_a name_b
     | Signal(name_a, _, _), Signal(name_b, _, _) ->
         String.compare name_a name_b
     | Property(name_a, _, _, _), Property(name_b, _, _, _) ->

@@ -33,18 +33,17 @@ type emits_signal_changed =
 
 type 'a method_info = {
   method_name : OBus_name.member;
-  method_type : OBus_value.signature;
   method_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t;
   method_introspect : unit -> OBus_introspect.member;
 }
 
 and 'a signal_info = {
+  signal_name : OBus_name.member;
   signal_introspect : unit -> OBus_introspect.member;
 }
 
 and 'a property_info = {
   property_name : OBus_name.member;
-  property_type : OBus_value.T.single;
   property_signal : ('a -> OBus_value.V.single React.signal) option;
   property_setter : (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option;
   property_emits_changed_signal : emits_signal_changed;
@@ -160,12 +159,8 @@ let compare_interface name interface =
 let compare_property name property =
   String.compare name property.property_name
 
-let compare_method (name, typ) method_ =
-  match String.compare name method_.method_name with
-    | 0 ->
-        compare typ method_.method_type
-    | n ->
-        n
+let compare_method name method_ =
+  String.compare name method_.method_name
 
 (* +-----------------------------------------------------------------+
    | Exportation                                                     |
@@ -185,24 +180,18 @@ let handle_call obj context message =
               unknown_method context message
           | index ->
               let interface = obj.interfaces.(index) in
-              match
-                binary_search
-                  compare_method
-                  (member, OBus_value.V.type_of_sequence message.body)
-                  interface.interface_methods
-              with
+              match binary_search compare_method member interface.interface_methods with
                 | -1 ->
                     unknown_method context message
                 | index ->
                     interface.interface_methods.(index).method_handler context obj message
       end
     | { typ = Method_call(path, None, member) } ->
-        let key = (member, OBus_value.V.type_of_sequence message.body) in
         let rec loop i =
           if i = Array.length obj.interfaces then
             unknown_method context message
           else
-            match binary_search compare_method key obj.interfaces.(i).interface_methods with
+            match binary_search compare_method member obj.interfaces.(i).interface_methods with
               | -1 ->
                   loop (i + 1)
               | index ->
@@ -397,17 +386,27 @@ let _method_info info f =
         context
     in
     let args =
-      (* This will not fail since we already tested types in the
-         binary search for the method *)
-      OBus_value.C.cast_sequence
-        (OBus_value.arg_types (OBus_member.Method.i_args info))
-        (OBus_message.body message)
+      try
+        OBus_value.C.cast_sequence
+          (OBus_value.arg_types (OBus_member.Method.i_args info))
+          (OBus_message.body message)
+      with OBus_value.C.Signature_mismatch ->
+        Printf.ksprintf (OBus_error.raise OBus_error.Failed)
+          "invalid signature(%S) for method %S on interface %S, must be %S"
+          (OBus_value.string_of_signature
+             (OBus_value.V.type_of_sequence
+                (OBus_message.body message)))
+          (OBus_member.Method.member info)
+          (OBus_member.Method.interface info)
+          (OBus_value.string_of_signature
+             (OBus_value.C.type_sequence
+                (OBus_value.arg_types
+                   (OBus_member.Method.i_args info))))
     in
     f context obj args
   in
   {
     method_name = OBus_member.Method.member info;
-    method_type = OBus_value.C.type_sequence (OBus_value.arg_types (OBus_member.Method.i_args info));
     method_handler = handler;
     method_introspect = (fun () -> OBus_member.Method.introspect info);
   }
@@ -420,6 +419,7 @@ let method_info info f =
          | None -> assert false)
 
 let signal_info info = {
+  signal_name = OBus_member.Signal.member info;
   signal_introspect = (fun () -> OBus_member.Signal.introspect info);
 }
 
@@ -451,7 +451,6 @@ let property_info info signal setter =
   in
   {
     property_name = OBus_member.Property.member info;
-    property_type = OBus_value.C.type_single (OBus_member.Property.typ info);
     property_signal = signal;
     property_setter = setter;
     property_emits_changed_signal = get_emits_changed_signal (OBus_member.Property.annotations info);
@@ -475,20 +474,20 @@ let make_interface_unsafe name annotations methods signals properties = {
 }
 
 let compare_methods m1 m2 =
-  match String.compare m1.method_name m2.method_name with
-    | 0 -> Pervasives.compare m1.method_type m2.method_type
-    | n -> n
+  String.compare m1.method_name m2.method_name
+
+let compare_signals m1 m2 =
+  String.compare m1.signal_name m2.signal_name
 
 let compare_properties p1 p2 =
-  match String.compare p1.property_name p2.property_name with
-    | 0 -> Pervasives.compare p1.property_type p2.property_type
-    | n -> n
+  String.compare p1.property_name p2.property_name
 
 let make_interface ~name ?(annotations=[]) ?(methods=[]) ?(signals=[]) ?(properties=[]) () =
   let methods = Array.of_list methods
   and signals = Array.of_list signals
   and properties = Array.of_list properties in
-  Array.sort compare_methods  methods;
+  Array.sort compare_methods methods;
+  Array.sort compare_signals signals;
   Array.sort compare_properties properties;
   make_interface_unsafe name annotations methods signals properties
 
