@@ -242,7 +242,7 @@ let args = [
                 | "client" -> mode := `Client
                 | "server" -> mode := `Server
                 | _ -> assert false)),
-  "(both|client|server) code generation mode, defaults to \"both\""
+  " code generation mode, defaults to \"both\""
 ]
 
 let () =
