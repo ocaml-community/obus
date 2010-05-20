@@ -224,24 +224,36 @@ let print_args oc args =
   aux 1 args;
   output_char oc ')'
 
+let print_annotations oc = function
+  | [] ->
+      ()
+  | l ->
+      output_string oc "    with {\n";
+      List.iter (fun (name, value) -> fprintf oc "      %S = %S\n" name value) l;
+      output_string oc "    }\n"
+
 let print file_name interfaces =
   let oc = open_out file_name in
   List.iter
     (function (name, members, annotations) ->
        fprintf oc "\ninterface \"%s\" {\n" name;
+       List.iter (fun (name, value) -> fprintf oc "  annotation %S = %S\n" name value) annotations;
        List.iter
          (function
             | Method(name, i_args, o_args, annotations) ->
-                fprintf oc "  method %s : %a -> %a\n" name print_args i_args print_args o_args
+                fprintf oc "  method %s : %a -> %a\n" name print_args i_args print_args o_args;
+                print_annotations oc annotations
             | Signal(name, args, annotations) ->
-                fprintf oc "  signal %s : %a\n" name print_args args
+                fprintf oc "  signal %s : %a\n" name print_args args;
+                print_annotations oc annotations
             | Property(name, typ, access, annotations) ->
                 fprintf oc "  property.%s %s : %a\n"
                   (match access with
                      | Read -> "r"
                      | Write -> "w"
                      | Read_write -> "rw")
-                  name (print_type true) typ)
+                  name (print_type true) typ;
+                print_annotations oc annotations)
          members;
        output_string oc "}\n")
     interfaces;
