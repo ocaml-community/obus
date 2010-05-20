@@ -491,19 +491,21 @@ let make_interface ~name ?(annotations=[]) ?(methods=[]) ?(signals=[]) ?(propert
   Array.sort compare_properties properties;
   make_interface_unsafe name annotations methods signals properties
 
-let compare_interfaces i1 i2 =
-  String.compare i1.interface_name i2.interface_name
-
-let rec uniq = function
-  | iface :: iface' :: rest when iface.interface_name = iface'.interface_name ->
-      uniq (iface :: rest)
-  | iface :: rest ->
-      iface :: uniq rest
-  | [] ->
-      []
+let process_interfaces interfaces =
+  let rec uniq = function
+    | iface :: iface' :: rest when iface.interface_name = iface'.interface_name ->
+        uniq (iface :: rest)
+    | iface :: rest ->
+        iface :: uniq rest
+    | [] ->
+        []
+  and compare i1 i2 =
+    String.compare i1.interface_name i2.interface_name
+  in
+  Array.of_list (uniq (List.stable_sort compare interfaces))
 
 let add_interfaces obj interfaces =
-  obj.interfaces <- Array.of_list (uniq (List.stable_sort compare_interfaces (interfaces @ Array.to_list obj.interfaces)));
+  obj.interfaces <- process_interfaces (interfaces @ Array.to_list obj.interfaces);
   generate obj
 
 let remove_interfaces_by_names obj names =
@@ -628,12 +630,11 @@ let make ?owner ?(common=true) ?(interfaces=[]) path =
     owner = owner;
     data = None;
     properties = [||];
-    interfaces = [||];
+    interfaces = process_interfaces interfaces;
     changed = [||];
     properties_changed = ref (fun name values -> assert false);
   } in
   obj.properties_changed := (fun name values -> properties_changed obj name values);
-  add_interfaces obj interfaces;
   obj
 
 let attach obj data =
