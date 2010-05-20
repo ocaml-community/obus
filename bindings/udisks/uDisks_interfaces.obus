@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-interface "org.freedesktop.UDisks" {
+interface org.freedesktop.UDisks {
   method EnumerateAdapters : () -> (devices : object_path array)
   method EnumerateExpanders : () -> (devices : object_path array)
   method EnumeratePorts : () -> (devices : object_path array)
@@ -51,7 +51,7 @@ interface "org.freedesktop.UDisks" {
   property.r KnownFilesystems : ((string * string * boolean * boolean * boolean * uint32 * boolean * boolean * boolean * boolean * boolean * boolean * boolean * boolean) structure) array
 }
 
-interface "org.freedesktop.UDisks.Adapter" {
+interface org.freedesktop.UDisks.Adapter {
   signal Changed : ()
   property.r NativePath : string
   property.r Vendor : string
@@ -61,7 +61,7 @@ interface "org.freedesktop.UDisks.Adapter" {
   property.r Fabric : string
 }
 
-interface "org.freedesktop.UDisks.Device" {
+interface org.freedesktop.UDisks.Device {
   method JobCancel : () -> ()
   method PartitionTableCreate : (scheme : string, options : string array) -> ()
   method PartitionDelete : (options : string array) -> ()
@@ -228,7 +228,7 @@ interface "org.freedesktop.UDisks.Device" {
   property.r LinuxLoopFilename : string
 }
 
-interface "org.freedesktop.UDisks.Expander" {
+interface org.freedesktop.UDisks.Expander {
   signal Changed : ()
   property.r NativePath : string
   property.r Vendor : string
@@ -239,7 +239,7 @@ interface "org.freedesktop.UDisks.Expander" {
   property.r Adapter : object_path
 }
 
-interface "org.freedesktop.UDisks.Port" {
+interface org.freedesktop.UDisks.Port {
   signal Changed : ()
   property.r NativePath : string
   property.r Adapter : object_path

@@ -31,8 +31,14 @@ EXTEND Gram
   interfaces:
     [ [ l = LIST0 interface -> l ] ];
 
+  name:
+    [ [ n = ident; "."; rest = SELF ->
+          n ^ "." ^ rest
+      | n = ident ->
+          n ] ];
+
   interface:
-    [ [ LIDENT "interface"; name = STRING; "{"; members = LIST0 member; "}" ->
+    [ [ LIDENT "interface"; name = name; "{"; members = LIST0 member; "}" ->
           let rec get_members = function
             | [] -> []
             | `Member m :: rest -> m :: get_members rest
@@ -65,7 +71,7 @@ EXTEND Gram
       | -> [] ] ];
 
   annotation:
-    [ [ name = STRING; "="; value = STRING -> (name, value) ] ];
+    [ [ name = name; "="; value = STRING -> (name, value) ] ];
 
   arguments:
     [ [ "("; l = LIST0 argument SEP ","; ")" -> l ] ];
@@ -229,15 +235,15 @@ let print_annotations oc = function
       ()
   | l ->
       output_string oc "    with {\n";
-      List.iter (fun (name, value) -> fprintf oc "      %S = %S\n" name value) l;
+      List.iter (fun (name, value) -> fprintf oc "      %s = %S\n" name value) l;
       output_string oc "    }\n"
 
 let print file_name interfaces =
   let oc = open_out file_name in
   List.iter
     (function (name, members, annotations) ->
-       fprintf oc "\ninterface \"%s\" {\n" name;
-       List.iter (fun (name, value) -> fprintf oc "  annotation %S = %S\n" name value) annotations;
+       fprintf oc "\ninterface %s {\n" name;
+       List.iter (fun (name, value) -> fprintf oc "  annotation %s = %S\n" name value) annotations;
        List.iter
          (function
             | Method(name, i_args, o_args, annotations) ->

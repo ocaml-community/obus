@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-interface "org.freedesktop.UPower" {
+interface org.freedesktop.UPower {
   method EnumerateDevices : () -> (devices : object_path array)
 
 (* Introspections files are wrong for this signals:
@@ -37,7 +37,7 @@ interface "org.freedesktop.UPower" {
   property.r LidIsPresent : boolean
 }
 
-interface "org.freedesktop.UPower.Device" {
+interface org.freedesktop.UPower.Device {
   method Refresh : () -> ()
   signal Changed : ()
   method GetHistory : (type : string, timespan : uint32, resolution : uint32) -> (data : ((uint32 * double * uint32) structure) array)
@@ -71,7 +71,7 @@ interface "org.freedesktop.UPower.Device" {
   property.r RecallUrl : string
 }
 
-interface "org.freedesktop.UPower.QoS" {
+interface org.freedesktop.UPower.QoS {
   method SetMinimumLatency : (type : string, value : int32) -> ()
   method RequestLatency : (type : string, value : int32, persistent : boolean) -> (cookie : uint32)
   method CancelRequest : (type : string, cookie : uint32) -> ()
@@ -81,7 +81,7 @@ interface "org.freedesktop.UPower.QoS" {
   signal RequestsChanged : ()
 }
 
-interface "org.freedesktop.UPower.Wakeups" {
+interface org.freedesktop.UPower.Wakeups {
   property.r HasCapability : boolean
   method GetTotal : () -> (value : uint32)
   signal TotalChanged : (value : uint32)

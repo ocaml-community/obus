@@ -7,11 +7,11 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-interface "org.freedesktop.DBus.Introspectable" {
+interface org.freedesktop.DBus.Introspectable {
   method Introspect : () -> (data : string)
 }
 
-interface "org.freedesktop.Hal.Device" {
+interface org.freedesktop.Hal.Device {
   method GetAllProperties : () -> (properties : (string, variant) dict)
   method SetMultipleProperties : (properties : (string, variant) dict) -> ()
   method GetProperty : (key : string) -> (value : variant)
@@ -52,7 +52,7 @@ interface "org.freedesktop.Hal.Device" {
   signal InterfaceLockReleased : (interface_name : string, lock_holder : string, num_locks : int32)
 }
 
-interface "org.freedesktop.Hal.Device.CPUFreq" {
+interface org.freedesktop.Hal.Device.CPUFreq {
   method SetCPUFreqGovernor : (governor_string : string) -> ()
   method SetCPUFreqPerformance : (value : int32) -> ()
   method SetCPUFreqConsiderNice : (value : boolean) -> ()
@@ -62,31 +62,31 @@ interface "org.freedesktop.Hal.Device.CPUFreq" {
   method GetCPUFreqAvailableGovernors : () -> (return_code : string array)
 }
 
-interface "org.freedesktop.Hal.Device.KillSwitch" {
+interface org.freedesktop.Hal.Device.KillSwitch {
   method SetPower : (value : boolean) -> (return_code : int32)
   method GetPower : () -> (value : int32)
 }
 
-interface "org.freedesktop.Hal.Device.LaptopPanel" {
+interface org.freedesktop.Hal.Device.LaptopPanel {
   method SetBrightness : (brightness_value : int32) -> (return_code : int32)
   method GetBrightness : () -> (brightness_value : int32)
 }
 
-interface "org.freedesktop.Hal.Device.Leds" {
+interface org.freedesktop.Hal.Device.Leds {
   method SetBrightness : (brightness_value : int32) -> (return_code : int32)
   method GetBrightness : () -> (brightness_value : int32)
 }
 
-interface "org.freedesktop.Hal.Device.Storage" {
+interface org.freedesktop.Hal.Device.Storage {
   method Eject : (options : string array) -> (result : int32)
   method CloseTray : (options : string array) -> (result : int32)
 }
 
-interface "org.freedesktop.Hal.Device.Storage.Removable" {
+interface org.freedesktop.Hal.Device.Storage.Removable {
   method CheckForMedia : () -> (call_had_sideeffect : boolean)
 }
 
-interface "org.freedesktop.Hal.Device.SystemPowerManagement" {
+interface org.freedesktop.Hal.Device.SystemPowerManagement {
   method Suspend : (num_seconds_to_sleep : int32) -> (return_code : int32)
   method SuspendHybrid : (num_seconds_to_sleep : int32) -> (return_code : int32)
   method Hibernate : () -> (return_code : int32)
@@ -95,24 +95,24 @@ interface "org.freedesktop.Hal.Device.SystemPowerManagement" {
   method SetPowerSave : (enable_power_save : boolean) -> (return_code : int32)
 }
 
-interface "org.freedesktop.Hal.Device.Volume" {
+interface org.freedesktop.Hal.Device.Volume {
   method Mount : (mount_point : string, fstype : string, options : string array) -> (result : int32)
   method Unmount : (options : string array) -> (result : int32)
   method Eject : (options : string array) -> (result : int32)
 }
 
-interface "org.freedesktop.Hal.Device.Volume.Crypto" {
+interface org.freedesktop.Hal.Device.Volume.Crypto {
   method Setup : (passphrase : string) -> (result : int32)
   method Teardown : () -> (result : int32)
 }
 
-interface "org.freedesktop.Hal.Device.WakeOnLan" {
+interface org.freedesktop.Hal.Device.WakeOnLan {
   method GetSupported : () -> (return_code : int32)
   method GetEnabled : () -> (return_code : int32)
   method SetEnabled : (enable : boolean) -> (return_code : int32)
 }
 
-interface "org.freedesktop.Hal.Manager" {
+interface org.freedesktop.Hal.Manager {
   method GetAllDevices : () -> (devices : string array)
   method GetAllDevicesWithProperties : () -> (devices_with_props : ((string * (string, variant) dict) structure) array)
   method DeviceExists : (udi : string) -> (does_it_exist : boolean)

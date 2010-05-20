@@ -7,17 +7,17 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-interface "org.freedesktop.DBus.Introspectable" {
+interface org.freedesktop.DBus.Introspectable {
   method Introspect : () -> (data : string)
 }
 
-interface "org.freedesktop.DBus.Properties" {
+interface org.freedesktop.DBus.Properties {
   method Get : (interface : string, propname : string) -> (value : variant)
   method Set : (interface : string, propname : string, value : variant) -> ()
   method GetAll : (interface : string) -> (props : (string, variant) dict)
 }
 
-interface "org.freedesktop.Notifications" {
+interface org.freedesktop.Notifications {
   method GetServerInformation : () -> (return_name : string, return_vendor : string, return_version : string, return_spec_version : string)
   method GetCapabilities : () -> (return_caps : string array)
   method CloseNotification : (id : uint32) -> ()
