@@ -18,11 +18,18 @@ open OBus_message
 module Connection_set = Set.Make(OBus_connection)
 module Member_map = String_map
 
+(* Notification mode for a property *)
 type emits_signal_changed =
-  | Esc_not_specified
+  | Esc_default
+      (* Use the default value, which may be defined in the
+         interface *)
   | Esc_false
+      (* Do not notify property changes *)
   | Esc_true
+      (* Notify property changes, and send the new contents in the
+         notification *)
   | Esc_invalidates
+      (* Only send the property name in changes' notifications *)
 
 type 'a method_info = {
   method_name : OBus_name.member;
@@ -361,11 +368,11 @@ let generate obj =
                      property_instance_signal = signal;
                      property_instance_monitor =
                        (match properties.(j).property_emits_changed_signal, obj.interfaces.(i).interface_emits_changed_signal with
-                          | Esc_false, _ | Esc_not_specified, (Esc_not_specified | Esc_false) ->
+                          | Esc_false, _ | Esc_default, Esc_false ->
                               React.E.never
-                          | Esc_true, _ | Esc_not_specified, Esc_true ->
+                          | Esc_true, _ | Esc_default, (Esc_default | Esc_true) ->
                               React.E.map (handle_property_change_true obj i properties.(j).property_name) (React.S.changes signal)
-                          | Esc_invalidates, _ | Esc_not_specified, Esc_invalidates ->
+                          | Esc_invalidates, _ | Esc_default, Esc_invalidates ->
                               React.E.map (handle_property_change_invalidates obj i properties.(j).property_name) (React.S.changes signal))
                    })
             )
@@ -426,7 +433,7 @@ let get_emits_changed_signal annotations =
           ignore (Lwt_log.warning_f "invalid value(%S) for annotation %S, using default(\"true\")" value OBus_introspect.emits_changed_signal);
           Esc_true
   with Not_found ->
-    Esc_true
+    Esc_default
 
 let property_info info signal setter =
   let typ = OBus_member.Property.typ info in
