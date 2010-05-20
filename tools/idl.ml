@@ -46,7 +46,7 @@ EXTEND Gram
           (name, get_members members, get_annotations members) ] ];
 
   member:
-    [ [ "method"; name = ident; ":"; i_args = arguments; "->"; o_args = arguments; annotations = annotations ->
+    [ [ LIDENT "method"; name = ident; ":"; i_args = arguments; "->"; o_args = arguments; annotations = annotations ->
           `Member(Method(name, i_args, o_args, annotations))
       | LIDENT "signal"; name = ident; ":"; args = arguments; annotations = annotations ->
           `Member(Signal(name, args, annotations))
@@ -61,7 +61,7 @@ EXTEND Gram
       ] ];
 
   annotations:
-    [ [ "with"; "{"; l = LIST1 annotation; "}" -> l
+    [ [ LIDENT "with"; "{"; l = LIST1 annotation; "}" -> l
       | -> [] ] ];
 
   annotation:
@@ -94,7 +94,7 @@ EXTEND Gram
   dict_or_tuple:
     [ [ "*"; tl = LIST0 single_type SEP "*"; ")"; LIDENT "structure" ->
           `Structure tl
-      | ","; tv = single_type; ")"; "dict" ->
+      | ","; tv = single_type; ")"; LIDENT "dict" ->
           `Dict tv
       | ")"; LIDENT "structure" ->
           `Structure []
@@ -116,9 +116,34 @@ EXTEND Gram
       | LIDENT "unix_fd" -> T.Unix_fd ] ];
 END
 
+let is_ident s =
+  let rec loop i =
+    if i = String.length s then
+      true
+    else
+      match s.[i] with
+        | 'A' .. 'Z'
+        | 'a' .. 'z'
+        | '_'
+        | '\192' .. '\214'
+        | '\216' .. '\246'
+        | '\248' .. '\255'
+        | '\''
+        | '0' .. '9' -> loop (i + 1)
+        | _ -> false
+  in
+  loop 0
+
 let parse file_name =
   let ic = open_in file_name in
-  let result = Gram.parse interfaces (Loc.mk file_name) (Stream.of_channel ic) in
+  let tokens = Gram.filter (Gram.lex (Loc.mk file_name) (Stream.of_channel ic)) in
+  let result = Gram.parse_tokens_after_filter interfaces
+    (Stream.from
+       (fun i ->
+          match Stream.next tokens with
+            | (KEYWORD id, loc) when is_ident id -> Some(LIDENT id, loc)
+            | (token, loc) -> Some(token, loc)))
+  in
   close_in ic;
   result
 
