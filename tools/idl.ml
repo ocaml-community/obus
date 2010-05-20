@@ -33,20 +33,39 @@ EXTEND Gram
 
   interface:
     [ [ LIDENT "interface"; name = STRING; "{"; members = LIST0 member; "}" ->
-          (name, members, []) ] ];
+          let rec get_members = function
+            | [] -> []
+            | `Member m :: rest -> m :: get_members rest
+            | `Annotation _ :: rest -> get_members rest
+          in
+          let rec get_annotations = function
+            | [] -> []
+            | `Member _ :: rest -> get_annotations rest
+            | `Annotation a :: rest -> a :: get_annotations rest
+          in
+          (name, get_members members, get_annotations members) ] ];
 
   member:
-    [ [ "method"; name = ident; ":"; i_args = arguments; "->"; o_args = arguments ->
-          Method(name, i_args, o_args, [])
-      | LIDENT "signal"; name = ident; ":"; args = arguments ->
-          Signal(name, args, [])
-      | LIDENT "property"; "."; LIDENT "r"; name = ident; ":"; typ = single_type ->
-          Property(name, typ, Read, [])
-      | LIDENT "property"; "."; LIDENT "w"; name = ident; ":"; typ = single_type ->
-          Property(name, typ, Write, [])
-      | LIDENT "property"; "."; LIDENT "rw"; name = ident; ":"; typ = single_type ->
-          Property(name, typ, Read_write, [])
+    [ [ "method"; name = ident; ":"; i_args = arguments; "->"; o_args = arguments; annotations = annotations ->
+          `Member(Method(name, i_args, o_args, annotations))
+      | LIDENT "signal"; name = ident; ":"; args = arguments; annotations = annotations ->
+          `Member(Signal(name, args, annotations))
+      | LIDENT "property"; "."; LIDENT "r"; name = ident; ":"; typ = single_type; annotations = annotations ->
+          `Member(Property(name, typ, Read, annotations))
+      | LIDENT "property"; "."; LIDENT "w"; name = ident; ":"; typ = single_type; annotations = annotations ->
+          `Member(Property(name, typ, Write, annotations))
+      | LIDENT "property"; "."; LIDENT "rw"; name = ident; ":"; typ = single_type; annotations = annotations ->
+          `Member(Property(name, typ, Read_write, annotations))
+      | LIDENT "annotation"; name = STRING; "="; value = STRING ->
+          `Annotation(name, value)
       ] ];
+
+  annotations:
+    [ [ "with"; "{"; l = LIST1 annotation; "}" -> l
+      | -> [] ] ];
+
+  annotation:
+    [ [ name = STRING; "="; value = STRING -> (name, value) ] ];
 
   arguments:
     [ [ "("; l = LIST0 argument SEP ","; ")" -> l ] ];

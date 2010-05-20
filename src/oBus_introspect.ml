@@ -140,7 +140,8 @@ let to_xml (ifaces, nodes) =
   Element("node", [],
           List.map (fun (name, content, annots) ->
                       Element("interface", [("name", name)],
-                              List.map
+                              pannots annots
+                              @ List.map
                                 (function
                                    | Method(name, ins, outs, annots) ->
                                        Element("method", [("name", name)],
@@ -160,8 +161,7 @@ let to_xml (ifaces, nodes) =
                                                    | Write -> "write"
                                                    | Read_write -> "readwrite")],
                                                pannots annots))
-                                content
-                              @ pannots annots)) ifaces
+                                content)) ifaces
           @ List.map (fun n -> Element("node", [("name", n)], [])) nodes)
 
 let output xo doc =
