@@ -33,8 +33,8 @@ let call_with_context ~connection ~path ?destination ~interface ~member ~i_args 
             (Invalid_reply
                (Printf.sprintf
                   OBus_constant.invalid_reply
-                  interface
                   member
+                  interface
                   (OBus_value.string_of_signature (OBus_value.C.type_sequence o_args))
                   (OBus_value.string_of_signature (OBus_value.V.type_of_sequence msg.body))))
       end
