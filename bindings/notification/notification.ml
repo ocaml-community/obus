@@ -249,7 +249,6 @@ let notify ?(app_name= !app_name) ?desktop_entry
          (fun image ->
             V.structure
               [V.basic_int32 (Int32.of_int image.img_width);
-               V.basic_int32 (Int32.of_int image.img_width);
                V.basic_int32 (Int32.of_int image.img_height);
                V.basic_int32 (Int32.of_int image.img_rowstride);
                V.basic_boolean image.img_has_alpha;
