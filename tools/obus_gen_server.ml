@@ -126,6 +126,7 @@ let print_impl oc name members symbols annotations =
                         | None -> ())
                      o_convertors;
                    fprintf oc "                 %a)\n\
+                              \              ctx\n\
                               \          in\n" print_names o_names
            end;
            List.iter
