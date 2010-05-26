@@ -42,6 +42,6 @@ let () =
   let oc = open_out destination in
   OBus_introspect.output
     (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc))
-    (Utils.IFSet.elements (Utils.parse_idl source), []);
+    ((List.map OBus_introspect_ext.encode (Utils.IFSet.elements (Utils.parse_idl source)), []));
   close_out oc;
   Printf.printf "file \"%s\" written\n" destination

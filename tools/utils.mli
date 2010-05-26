@@ -9,7 +9,7 @@
 
 (** Utilities for tools *)
 
-module IFSet : Set.S with type elt = OBus_introspect.interface
+module IFSet : Set.S with type elt = OBus_introspect_ext.interface
   (** Set of interfaces *)
 
 val parse_xml : string -> IFSet.t
@@ -27,14 +27,16 @@ val parse_file : string -> IFSet.t
 val file_name_of_interface_name : OBus_name.interface -> string
   (** Convert an interface name into a valid module file name *)
 
-val convertor_send : OBus_value.T.single -> string option
-  (** [convertor_send typ] returns an expression which convert caml
-      values before they are sent. It returns [None] if no conversion
-      is needed. *)
+val convertor_send : bool -> OBus_introspect_ext.term -> string option
+  (** [convertor_send paren typ] returns an expression which convert
+      caml values before they are sent. It returns [None] if no
+      conversion is needed. If [paren] is [true] then no parenthesis
+      will be used, otherwise the expression may be surrounded by
+      parenthesis if needed *)
 
-val convertor_recv : OBus_value.T.single -> string option
-  (** [convertor_recv typ] returns an expression which convert caml
-      values after they are received. It returns [None] if no
+val convertor_recv : bool -> OBus_introspect_ext.term -> string option
+  (** [convertor_recv paren typ] returns an expression which convert
+      caml values after they are received. It returns [None] if no
       conversion is needed. *)
 
 val make_annotation : OBus_introspect.name -> string

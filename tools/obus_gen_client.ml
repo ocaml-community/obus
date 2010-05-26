@@ -8,7 +8,7 @@
  *)
 
 open Printf
-open OBus_introspect
+open OBus_introspect_ext
 open OBus_value
 
 let prog_name = Filename.basename Sys.argv.(0)
@@ -55,29 +55,25 @@ let print_names oc = function
       output_char oc ')'
 
 let rec contains_path = function
-  | T.Basic T.Object_path -> true
-  | T.Basic _ -> false
-  | T.Array t -> contains_path t
-  | T.Dict(T.Object_path, _) -> true
-  | T.Dict(_, tv) -> contains_path tv
-  | T.Structure tl -> List.exists contains_path tl
-  | T.Variant -> false
+  | Term("object_path", []) -> true
+  | Term(_, l) -> List.exists contains_path l
+  | Tuple l -> List.exists contains_path l
 
 let make_convertors make_convertor names args =
   List.map2
-    (fun (_, name) (_, typ) -> match make_convertor typ with
+    (fun (_, name) (_, typ) -> match make_convertor true typ with
        | Some f -> Some(sprintf "let %s = %s %s in\n" name f name)
        | None -> None)
     names args
 
-let print_impl oc name members annotations =
+let print_impl oc name members symbols annotations =
   let module_name = String.capitalize (Utils.file_name_of_interface_name name) in
   fprintf oc "\n\
               module %s =\n\
               struct\n\
-             \  open %s\n\
-              \n"
+             \  open %s\n\n"
     module_name module_name;
+  List.iter (fun (name, sym) -> fprintf oc "  type %s = type_%s\n" name name) symbols;
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->
@@ -150,7 +146,7 @@ let print_impl oc name members annotations =
            end
        | Property(name, typ, access, annotations) ->
            fprintf oc "\n  let %s proxy =\n" (OBus_name.ocaml_lid name);
-           match Utils.convertor_recv typ, Utils.convertor_send typ with
+           match Utils.convertor_recv true typ, Utils.convertor_send true typ with
              | Some f_recv, Some f_send -> begin
                  let need_context = contains_path typ in
                  fprintf oc "    OBus_property.map_%s%s\n"
@@ -177,8 +173,45 @@ let print_impl oc name members annotations =
    | Interface generation                                            |
    +-----------------------------------------------------------------+ *)
 
-let print_intf oc name members annotations =
+let rec term_intf = function
+  | Term("byte", []) -> term "char" []
+  | Term("boolean", []) -> term "bool" []
+  | Term("int16", []) -> term "int" []
+  | Term("int32", []) -> term "int32" []
+  | Term("int64", []) -> term "int64" []
+  | Term("uint16", []) -> term "int" []
+  | Term("uint32", []) -> term "int32" []
+  | Term("uint64", []) -> term "int64" []
+  | Term("double", []) -> term "float" []
+  | Term("string", []) -> term "string" []
+  | Term("signature", []) -> term "OBus_value.signature" []
+  | Term("object_path", []) -> term "OBus_proxy.t" []
+  | Term("unix_fd", []) -> term "Unix.file_descr" []
+  | Term("array", [Term("byte", [])]) -> term "string" []
+  | Term("array", [t]) -> term "list" [term_intf t]
+  | Term("dict", [tk; tv]) -> term "list" [tuple[term_intf tk; term_intf tv]]
+  | Term("variant", []) -> term "OBus_value.V.single" []
+  | Term(name, tl) -> term name (List.map term_intf tl)
+  | Tuple tl -> tuple (List.map term_intf tl)
+
+let print_symbol oc name sym =
+  let typ, values =
+    match sym with
+      | Sym_enum(typ, values) -> typ, values
+      | Sym_flag(typ, values) -> typ, values
+  in
+  fprintf oc "  type %s =\n" name;
+  match values with
+    | [] ->
+        ()
+    | (key, name) :: rest ->
+        fprintf oc "    [ `%s" (String.capitalize name);
+        List.iter (fun (key, name) -> fprintf oc "\n    | `%s" (String.capitalize name)) rest;
+        fprintf oc " ]\n"
+
+let print_intf oc name members symbols annotations =
   fprintf oc "\nmodule %s : sig\n" (String.capitalize (Utils.file_name_of_interface_name name));
+  List.iter (fun (name, sym) -> print_symbol oc name sym) symbols;
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->
@@ -186,28 +219,28 @@ let print_intf oc name members annotations =
            List.iter
              (function
                 | (None, typ) ->
-                    fprintf oc "%a -> " (Term.print_intf true) (Term.client_of_single typ)
+                    fprintf oc "%a -> " (Term.print_intf true) (term_intf typ)
                 | (Some name, typ) ->
-                    fprintf oc "%s : %a -> " name (Term.print_intf true) (Term.client_of_single typ))
+                    fprintf oc "%s : %a -> " name (Term.print_intf true) (term_intf typ))
              i_args;
            Term.print_intf true oc
-             (Term.T.term "Lwt.t"
-                [Term.T.tuple
-                   (List.map (fun (_, typ) -> Term.client_of_single typ) o_args)]);
+             (term "Lwt.t"
+                [tuple
+                   (List.map (fun (_, typ) -> term_intf typ) o_args)]);
            output_char oc '\n'
        | Signal(name, args, annotations) ->
            fprintf oc "  val %s : OBus_proxy.t -> %a\n"
              (OBus_name.ocaml_lid name)
              (Term.print_intf true)
-             (Term.T.term "OBus_signal.t"
-                [Term.T.tuple (List.map (fun (_, typ) -> Term.client_of_single typ) args)])
+             (term "OBus_signal.t"
+                [tuple (List.map (fun (_, typ) -> term_intf typ) args)])
        | Property(name, typ, access, annotations) ->
            fprintf oc "  val %s : OBus_proxy.t -> %a\n"
              (OBus_name.ocaml_lid name)
              (Term.print_intf true)
-             (Term.T.term "OBus_property.t"
-                [Term.client_of_single typ;
-                 Term.T.term
+             (term "OBus_property.t"
+                [term_intf typ;
+                 term
                    (match access with
                       | Read -> "[ `readable ]"
                       | Write -> "[ `writable ]"
@@ -257,13 +290,13 @@ let () =
   output_string oc_impl "open Lwt\n";
 
   Utils.IFSet.iter
-    (fun (name, members, annotations) ->
+    (fun (name, members, symbols, annotations) ->
        if !keep_common ||
          (match OBus_name.split name with
             | "org" :: "freedesktop" :: "DBus" :: _ -> false
             | _ -> true) then begin
-           print_impl oc_impl name (remove_deprecated members) annotations;
-           print_intf oc_intf name (remove_deprecated members) annotations
+           print_impl oc_impl name (remove_deprecated members) symbols annotations;
+           print_intf oc_intf name (remove_deprecated members) symbols annotations
          end)
     interfaces;
 

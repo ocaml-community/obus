@@ -28,47 +28,47 @@ interface org.freedesktop.UPower {
   method SuspendAllowed : () -> (allowed : boolean)
   method Hibernate : () -> ()
   method HibernateAllowed : () -> (allowed : boolean)
-  property.r DaemonVersion : string
-  property.r CanSuspend : boolean
-  property.r CanHibernate : boolean
-  property.r OnBattery : boolean
-  property.r OnLowBattery : boolean
-  property.r LidIsClosed : boolean
-  property.r LidIsPresent : boolean
+  property_r DaemonVersion : string
+  property_r CanSuspend : boolean
+  property_r CanHibernate : boolean
+  property_r OnBattery : boolean
+  property_r OnLowBattery : boolean
+  property_r LidIsClosed : boolean
+  property_r LidIsPresent : boolean
 }
 
 interface org.freedesktop.UPower.Device {
   method Refresh : () -> ()
   signal Changed : ()
-  method GetHistory : (type : string, timespan : uint32, resolution : uint32) -> (data : ((uint32 * double * uint32) structure) array)
-  method GetStatistics : (type : string) -> (data : ((double * double) structure) array)
-  property.r NativePath : string
-  property.r Vendor : string
-  property.r Model : string
-  property.r Serial : string
-  property.r UpdateTime : uint64
-  property.r Type : uint32
-  property.r PowerSupply : boolean
-  property.r HasHistory : boolean
-  property.r HasStatistics : boolean
-  property.r Online : boolean
-  property.r Energy : double
-  property.r EnergyEmpty : double
-  property.r EnergyFull : double
-  property.r EnergyFullDesign : double
-  property.r EnergyRate : double
-  property.r Voltage : double
-  property.r TimeToEmpty : int64
-  property.r TimeToFull : int64
-  property.r Percentage : double
-  property.r IsPresent : boolean
-  property.r State : uint32
-  property.r IsRechargeable : boolean
-  property.r Capacity : double
-  property.r Technology : uint32
-  property.r RecallNotice : boolean
-  property.r RecallVendor : string
-  property.r RecallUrl : string
+  method GetHistory : (type : string, timespan : uint32, resolution : uint32) -> (data : (uint32 * double * uint32) array)
+  method GetStatistics : (type : string) -> (data : (double * double) array)
+  property_r NativePath : string
+  property_r Vendor : string
+  property_r Model : string
+  property_r Serial : string
+  property_r UpdateTime : uint64
+  property_r Type : uint32
+  property_r PowerSupply : boolean
+  property_r HasHistory : boolean
+  property_r HasStatistics : boolean
+  property_r Online : boolean
+  property_r Energy : double
+  property_r EnergyEmpty : double
+  property_r EnergyFull : double
+  property_r EnergyFullDesign : double
+  property_r EnergyRate : double
+  property_r Voltage : double
+  property_r TimeToEmpty : int64
+  property_r TimeToFull : int64
+  property_r Percentage : double
+  property_r IsPresent : boolean
+  property_r State : uint32
+  property_r IsRechargeable : boolean
+  property_r Capacity : double
+  property_r Technology : uint32
+  property_r RecallNotice : boolean
+  property_r RecallVendor : string
+  property_r RecallUrl : string
 }
 
 interface org.freedesktop.UPower.QoS {
@@ -77,14 +77,14 @@ interface org.freedesktop.UPower.QoS {
   method CancelRequest : (type : string, cookie : uint32) -> ()
   method GetLatency : (type : string) -> (value : int32)
   signal LatencyChanged : (type : string, value : int32)
-  method GetLatencyRequests : () -> (requests : ((uint32 * uint32 * uint32 * string * int64 * boolean * string * string * int32) structure) array)
+  method GetLatencyRequests : () -> (requests : (uint32 * uint32 * uint32 * string * int64 * boolean * string * string * int32) array)
   signal RequestsChanged : ()
 }
 
 interface org.freedesktop.UPower.Wakeups {
-  property.r HasCapability : boolean
+  property_r HasCapability : boolean
   method GetTotal : () -> (value : uint32)
   signal TotalChanged : (value : uint32)
-  method GetData : () -> (data : ((boolean * uint32 * double * string * string) structure) array)
+  method GetData : () -> (data : (boolean * uint32 * double * string * string) array)
   signal DataChanged : ()
 }

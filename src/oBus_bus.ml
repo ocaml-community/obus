@@ -112,46 +112,24 @@ let acquired_names bus = match bus#get with
   | Crashed exn -> raise exn
   | Running running -> running.running_acquired_names
 
-type request_name_result =
-    [ `Primary_owner
-    | `In_queue
-    | `Exists
-    | `Already_owner ]
+type request_name_result = type_request_name_result
 
 let request_name bus ?(allow_replacement=false) ?(replace_existing=false) ?(do_not_queue=false) name =
-  let flags =
-    (if allow_replacement then 1 else 0) lor
-      (if replace_existing then 2 else 0) lor
-      (if do_not_queue then 4 else 0)
-  in
-  OBus_method.call m_RequestName (proxy bus) (name, Int32.of_int flags) >|= function
-    | 1l -> `Primary_owner
-    | 2l -> `In_queue
-    | 3l -> `Exists
-    | 4l -> `Already_owner
-    | n -> Printf.ksprintf failwith "invalid result for RequestName: %ld" n
+  let flags = [] in
+  let flags = if allow_replacement then `Allow_replacement :: flags else flags in
+  let flags = if replace_existing then `Replace_existing :: flags else flags in
+  let flags = if do_not_queue then `Do_not_queue :: flags else flags in
+  OBus_method.call m_RequestName (proxy bus) (name, cast_request_name_flags flags) >|= make_request_name_result
 
-type release_name_result =
-    [ `Released
-    | `Non_existent
-    | `Not_owner ]
+type release_name_result = type_release_name_result
 
 let release_name bus name =
-  OBus_method.call m_ReleaseName (proxy bus) name >|= function
-    | 1l -> `Released
-    | 2l -> `Non_existent
-    | 3l -> `Not_owner
-    | n -> Printf.ksprintf failwith "invalid result for ReleaseName: %ld" n
+  OBus_method.call m_ReleaseName (proxy bus) name >|= make_release_name_result
 
-type start_service_by_name_result =
-    [ `Success
-    | `Already_running ]
+type start_service_by_name_result = type_start_service_by_name_result
 
 let start_service_by_name bus name =
-  OBus_method.call m_StartServiceByName (proxy bus) (name, 0l) >|= function
-    | 1l -> `Success
-    | 2l -> `Already_running
-    | n ->  Printf.ksprintf failwith  "invalid result for StartServiceByName: %ld" n
+  OBus_method.call m_StartServiceByName (proxy bus) (name, 0l) >|= make_start_service_by_name_result
 
 let name_has_owner bus name =
   OBus_method.call m_NameHasOwner (proxy bus) name

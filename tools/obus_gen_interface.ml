@@ -8,50 +8,104 @@
  *)
 
 open Printf
+open OBus_value
+open OBus_introspect_ext
 open OBus_introspect
 
 let mode : [ `Both | `Client | `Server ] ref = ref `Both
 let prog_name = Filename.basename Sys.argv.(0)
+
+(* +-----------------------------------------------------------------+
+   | Common printers                                                 |
+   +-----------------------------------------------------------------+ *)
+
+let term_intf typ =
+  Term.intf (OBus_introspect_ext.term_of_single typ)
+
+let term_impl typ =
+  Term.impl (OBus_introspect_ext.term_of_single typ)
+
+let tuple_intf types =
+  Term.intf (OBus_introspect_ext.term_of_sequence types)
+
+let tuple_impl types =
+  Term.impl (OBus_introspect_ext.term_of_sequence types)
 
 let print_record oc members =
   output_string oc "  type 'a members = {\n";
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->
-           fprintf oc "    m_%s : %a -> 'a -> %a -> %a;\n"
+           fprintf oc "    m_%s : %a -> 'a -> %a -> [ `Replied | `No_reply ] Lwt.t;\n"
              name
              (Term.print_intf true)
-             (Term.T.term "OBus_context.t"
-                [Term.intf_of_sequence (List.map snd o_args)])
+             (term "OBus_context.t" [tuple (List.map (fun (name, typ) -> term_intf typ) o_args)])
              (Term.print_intf true)
-             (Term.intf_of_sequence (List.map snd i_args))
-             (Term.print_intf true)
-             (Term.T.term "Lwt.t" [Term.T.term "[ `Replied | `No_reply ]" []])
+             (tuple (List.map (fun (name, typ) -> term_intf typ) i_args))
        | Signal(name, args, annotations) ->
            ()
        | Property(name, typ, Read, annotations) ->
            fprintf oc "    p_%s : 'a -> %a;\n"
              name
              (Term.print_intf true)
-             (Term.T.term "React.signal" [Term.intf_of_single typ])
+             (term "React.signal" [term_intf typ])
        | Property(name, typ, Write, annotations) ->
            fprintf oc "    p_%s : unit OBus_context.t -> 'a -> %a -> [ `Replied | `No_reply ] Lwt.t;\n"
              name
              (Term.print_intf true)
-             (Term.intf_of_single typ)
+             (term_intf typ)
        | Property(name, typ, Read_write, annotations) ->
            fprintf oc "    p_%s : ('a -> %a) * (unit OBus_context.t -> 'a -> %a -> unit Lwt.t);\n"
              name
              (Term.print_intf true)
-             (Term.T.term "React.signal" [Term.intf_of_single typ])
+             (term "React.signal" [term_intf typ])
              (Term.print_intf true)
-             (Term.intf_of_single typ))
+             (term_intf typ))
     members;
   output_string oc "  }\n"
+
+let print_symbol oc name sym =
+  let typ, values =
+    match sym with
+      | Sym_enum(typ, values) -> typ, values
+      | Sym_flag(typ, values) -> typ, values
+  in
+  fprintf oc "  type type_%s =\n" name;
+  match values with
+    | [] ->
+        ()
+    | (key, name) :: rest ->
+        fprintf oc "    [ `%s" (String.capitalize name);
+        List.iter (fun (key, name) -> fprintf oc "\n    | `%s" (String.capitalize name)) rest;
+        fprintf oc " ]\n"
 
 (* +-----------------------------------------------------------------+
    | Implementation generation                                       |
    +-----------------------------------------------------------------+ *)
+
+let string_of_integer_enum = function
+  | V.Byte x ->
+      sprintf "%C" x
+  | V.Int16 x | V.Uint16 x ->
+      sprintf "%d" x
+  | V.Int32 x | V.Uint32 x ->
+      sprintf "%ldl" x
+  | V.Int64 x | V.Uint64 x ->
+      sprintf "%LdL" x
+  | _ ->
+      assert false
+
+let string_of_integer_flag = function
+  | V.Byte x ->
+      sprintf "%d" (Char.code x)
+  | V.Int16 x | V.Uint16 x ->
+      sprintf "%d" x
+  | V.Int32 x | V.Uint32 x ->
+      sprintf "%ldl" x
+  | V.Int64 x | V.Uint64 x ->
+      sprintf "%LdL" x
+  | _ ->
+      assert false
 
 let print_args oc args =
   fprintf oc "(arg%d" (List.length args);
@@ -59,25 +113,106 @@ let print_args oc args =
     (function
        | (None, typ) ->
            fprintf oc "\n                       (None, %a)"
-             (Term.print_impl true) (Term.impl_of_single typ)
+             (Term.print_impl true) (term_impl typ)
        | (Some name, typ) ->
            fprintf oc "\n                       (Some %S, %a)"
-             name (Term.print_impl true) (Term.impl_of_single typ))
+             name (Term.print_impl true) (term_impl typ))
     args;
   output_char oc ')'
 
-let print_impl oc name members annotations =
+let print_impl oc name members symbols annotations =
   fprintf oc "module %s =\n\
               struct\n\
              \  let interface = %S\n"
     (String.capitalize (Utils.file_name_of_interface_name name))
     name;
 
+  (***** Symbols *****)
+
+  List.iter
+    (fun (name, sym) ->
+       print_symbol oc name sym;
+       match sym with
+         | Sym_enum(typ, values) ->
+             fprintf oc "  let cast_%s = function\n" name;
+             List.iter
+               (fun (key, name) ->
+                  fprintf oc "    | `%s -> %s\n"
+                    (String.capitalize name)
+                    (string_of_integer_enum key))
+               values;
+             fprintf oc "  let make_%s = function\n" name;
+             List.iter
+               (fun (key, name) ->
+                  fprintf oc "    | %s -> `%s\n"
+                    (string_of_integer_enum key)
+                    (String.capitalize name))
+               values;
+             fprintf oc "    | n -> Printf.ksprintf failwith \"invalid value for \\\"%s\\\": %s\" n\n"
+               name
+               (match typ with
+                  | T.Byte -> "%c"
+                  | T.Int16 | T.Uint16 -> "%d"
+                  | T.Int32 | T.Uint32 -> "%ld"
+                  | T.Int64 | T.Uint64 -> "%Ld"
+                  | _ -> assert false)
+         | Sym_flag(typ, values) ->
+             fprintf oc "  let cast_%s l =\n\
+                        \    let rec loop acc = function\n\
+                        \      | [] -> %sacc\n"
+               name
+               (if typ = T.Byte then "char_of_int " else "");
+             List.iter
+               (fun (key, name) ->
+                  fprintf oc "      | `%s :: rest -> loop (%s) rest\n"
+                    (String.capitalize name)
+                    (match key with
+                       | V.Byte x ->
+                           sprintf "acc lor %d" (Char.code x)
+                       | V.Int16 x | V.Uint16 x ->
+                           sprintf "acc lor %d" x
+                       | V.Int32 x | V.Uint32 x ->
+                           sprintf "Int32.logor acc %ldl" x
+                       | V.Int64 x | V.Uint64 x ->
+                           sprintf "Int64.logor acc %LdL" x
+                       | _ ->
+                           assert false))
+               values;
+             fprintf oc "    in\n\
+                        \    loop %s l\n"
+               (match typ with
+                  | T.Byte | T.Int16 | T.Uint16 -> "0"
+                  | T.Int32 | T.Uint32 -> "0l"
+                  | T.Int64 | T.Uint64 -> "0L"
+                  | _ -> assert false);
+             fprintf oc "  let make_%s n =\n\
+                        \    let l = [] in\n"
+               name;
+             if typ = T.Byte then
+               fprintf oc "    let n = int_of_char n in\n";
+             List.iter
+               (fun (key, name) ->
+                  fprintf oc "    let l = if %s then `%s :: l else l in\n"
+                    (match key with
+                       | V.Byte x ->
+                           sprintf "n land %d <> 0" (Char.code x)
+                       | V.Int16 x | V.Uint16 x ->
+                           sprintf "n land %d <> 0" x
+                       | V.Int32 x | V.Uint32 x ->
+                           sprintf "Int32.logand n %ldl <> 0l" x
+                       | V.Int64 x | V.Uint64 x ->
+                           sprintf "Int64.logand n %LdL <> 0L" x
+                       | _ -> assert false)
+                    (String.capitalize name))
+               values;
+             fprintf oc "    l\n")
+    symbols;
+
   (***** Member description *****)
 
   List.iter
     (function
-       | Method(name, i_args, o_args, annotations) ->
+       | Method(name, i_args, o_args, _) ->
            fprintf oc "  let m_%s = {\n\
                       \    Method.interface = interface;\n\
                       \    Method.member = %S;\n\
@@ -86,8 +221,11 @@ let print_impl oc name members annotations =
                       \    Method.annotations = [%s];\n\
                       \  }\n"
              name name print_args i_args print_args o_args
-             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value) annotations))
-       | Signal(name, args, annotations) ->
+             (String.concat ";\n                          "
+                (List.map
+                   (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value)
+                   annotations))
+       | Signal(name, args, _) ->
            fprintf oc "  let s_%s = {\n\
                       \    Signal.interface = interface;\n\
                       \    Signal.member = %S;\n\
@@ -95,8 +233,11 @@ let print_impl oc name members annotations =
                       \    Signal.annotations = [%s];\n\
                       \  }\n"
              name name print_args args
-             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value) annotations))
-       | Property(name, typ, access, annotations) ->
+             (String.concat ";\n                          "
+                (List.map
+                   (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value)
+                   annotations))
+       | Property(name, typ, access, _) ->
            fprintf oc "  let p_%s = {\n\
                       \    Property.interface = interface;\n\
                       \    Property.member = %S;\n\
@@ -104,12 +245,15 @@ let print_impl oc name members annotations =
                       \    Property.access = Property.%s;\n\
                       \    Property.annotations = [%s];\n\
                       \  }\n"
-             name name (Term.print_impl true) (Term.impl_of_single typ)
+             name name (Term.print_impl true) (term_impl typ)
              (match access with
                 | Read -> "readable"
                 | Write -> "writable"
                 | Read_write -> "readable_writable")
-             (String.concat "; " (List.map (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value) annotations)))
+             (String.concat ";\n                          "
+                (List.map
+                   (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value)
+                   annotations)))
     members;
 
   (***** Interface description *****)
@@ -118,8 +262,14 @@ let print_impl oc name members annotations =
     if List.exists (function Method _ | Property _ -> true | _ -> false) members then
       print_record oc members;
     output_string oc "  let make members =\n";
-    fprintf oc "    OBus_object.make_interface_unsafe interface [%s]\n\
-               \      [|\n" (String.concat "; " (List.map (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value) annotations));
+    fprintf oc "    OBus_object.make_interface_unsafe interface\n\
+               \      [\n";
+    List.iter
+      (fun (name, value) ->
+         fprintf oc "        (%s, %S);\n" (Utils.make_annotation name) value)
+      annotations;
+    fprintf oc "      ]\n\
+               \      [|\n";
     List.iter
       (function
          | Method(name, i_args, o_args, annotations) ->
@@ -155,9 +305,42 @@ let print_impl oc name members annotations =
    | Interface generation                                            |
    +-----------------------------------------------------------------+ *)
 
-let print_intf oc name members annotations =
+let string_of_key_type = function
+  | T.Byte -> "char"
+  | T.Int16 | T.Uint16 -> "int"
+  | T.Int32 | T.Uint32 -> "int32"
+  | T.Int64 | T.Uint64 -> "int64"
+  | _ -> assert false
+
+let print_intf oc name members symbols annotations =
   fprintf oc "module %s : sig\n" (String.capitalize (Utils.file_name_of_interface_name name));
   fprintf oc "  val interface : OBus_name.interface\n";
+
+  (***** Symbols *****)
+
+  List.iter
+    (fun (name, sym) ->
+       print_symbol oc name sym;
+       match sym with
+         | Sym_enum(typ, values) ->
+             fprintf oc "  val make_%s : %s -> type_%s\n"
+               name
+               (string_of_key_type typ)
+               name;
+             fprintf oc "  val cast_%s : type_%s -> %s\n"
+               name
+               name
+               (string_of_key_type typ)
+         | Sym_flag(typ, values) ->
+             fprintf oc "  val make_%s : %s -> type_%s list\n"
+               name
+               (string_of_key_type typ)
+               name;
+             fprintf oc "  val cast_%s : type_%s list -> %s\n"
+               name
+               name
+               (string_of_key_type typ))
+    symbols;
 
   (***** Member description *****)
 
@@ -167,22 +350,22 @@ let print_intf oc name members annotations =
            fprintf oc "  val m_%s : %a\n"
              name
              (Term.print_intf true)
-             (Term.T.term "Method.t"
-                [Term.intf_of_sequence (List.map snd i_args);
-                 Term.intf_of_sequence (List.map snd o_args)])
+             (term "Method.t"
+                [tuple_intf (List.map snd i_args);
+                 tuple_intf (List.map snd o_args)])
        | Signal(name, args, annotations) ->
            fprintf oc "  val s_%s : %a\n"
              name
              (Term.print_intf true)
-             (Term.T.term "Signal.t"
-                [Term.intf_of_sequence (List.map snd args)])
+             (term "Signal.t"
+                [tuple_intf (List.map snd args)])
        | Property(name, typ, access, annotations) ->
            fprintf oc "  val p_%s : %a\n"
              name
              (Term.print_intf true)
-             (Term.T.term "Property.t"
-                [Term.intf_of_single typ;
-                 Term.T.term
+             (term "Property.t"
+                [term_intf typ;
+                 term
                    (match access with
                       | Read -> "[ `readable ]"
                       | Write -> "[ `writable ]"
@@ -281,14 +464,16 @@ let () =
     prog_name;
 
   Utils.IFSet.iter
-    (fun (name, members, annotations) ->
+    (fun ((name, members, symbols, annotations) as interface) ->
        if !keep_common ||
          (match OBus_name.split name with
             | "org" :: "freedesktop" :: "DBus" :: _ -> false
             | _ -> true) then begin
-           let members = sort_members members in
-           print_impl oc_impl name members annotations;
-           print_intf oc_intf name members annotations
+           (* We keeps only symbols from the extended interface *)
+           let name, members, annotations = OBus_introspect_ext.encode interface in
+           let members = sort_members members and annotations = List.sort compare annotations in
+           print_impl oc_impl name members symbols annotations;
+           print_intf oc_intf name members symbols annotations
          end)
     interfaces;
 

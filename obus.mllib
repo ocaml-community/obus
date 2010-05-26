@@ -9,6 +9,7 @@ src/private/OBus_xml_parser
 src/private/OBus_version
 src/private/OBus_private_method
 src/private/OBus_interfaces
+src/private/OBus_type_ext_lexer
 src/OBus_address
 src/OBus_auth
 src/OBus_bus
@@ -16,6 +17,7 @@ src/OBus_connection
 src/OBus_error
 src/OBus_info
 src/OBus_introspect
+src/OBus_introspect_ext
 src/OBus_wire
 src/OBus_transport
 src/OBus_message

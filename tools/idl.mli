@@ -12,11 +12,11 @@
 exception Parse_failure of Lexing.position * string
   (** Errors raised on parsing failure *)
 
-val parse : string -> OBus_introspect.interface list
+val parse : string -> OBus_introspect_ext.interface list
   (** [parse lexbuf] parses all interfaces defined in the file
       [file_name] *)
 
-val print : string -> OBus_introspect.interface list -> unit
+val print : string -> OBus_introspect_ext.interface list -> unit
   (** [print file_name interfaces] writes to [file_name] the given
       interfaces in the obus idl format *)
 

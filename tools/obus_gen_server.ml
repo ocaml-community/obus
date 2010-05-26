@@ -8,7 +8,7 @@
  *)
 
 open Printf
-open OBus_introspect
+open OBus_introspect_ext
 open OBus_value
 
 let prog_name = Filename.basename Sys.argv.(0)
@@ -42,28 +42,25 @@ let print_names oc = function
       output_char oc ')'
 
 let rec contains_path = function
-  | T.Basic T.Object_path -> true
-  | T.Basic _ -> false
-  | T.Array t -> contains_path t
-  | T.Dict(T.Object_path, _) -> true
-  | T.Dict(_, tv) -> contains_path tv
-  | T.Structure tl -> List.exists contains_path tl
-  | T.Variant -> false
+  | Term("object_path", []) -> true
+  | Term(_, l) -> List.exists contains_path l
+  | Tuple l -> List.exists contains_path l
 
 let make_convertors make_convertor names args =
   List.map2
-    (fun (_, name) (_, typ) -> match make_convertor typ with
-       | Some f -> Some(sprintf "let %s = %s %s in\n" name f name)
+    (fun (_, name) (_, typ) -> match make_convertor true typ with
+       | Some f -> Some(name, f)
        | None -> None)
     names args
 
-let print_impl oc name members annotations =
+let print_impl oc name members symbols annotations =
   let module_name = String.capitalize (Utils.file_name_of_interface_name name) in
   fprintf oc "\n\
               module %s =\n\
               struct\n\
-             \  open %s\n"
+             \  open %s\n\n"
     module_name module_name;
+  List.iter (fun (name, sym) -> fprintf oc "  type %s = type_%s\n" name name) symbols;
   List.iter
     (function
        | Signal(name, args, annotations) ->
@@ -78,7 +75,7 @@ let print_impl oc name members annotations =
            output_string oc " =\n";
            List.iter
              (function
-                | Some line -> fprintf oc "    %s" line
+                | Some(name, f) -> fprintf oc "    let %s = %s %s in\n" name f name
                 | None -> ())
              convertors;
            fprintf oc "    OBus_signal.emit s_%s obj" name;
@@ -113,20 +110,27 @@ let print_impl oc name members annotations =
            fprintf oc "      m_%s = (\n\
                       \        fun ctx obj %a ->\n" name print_names i_names;
            if List.exists ((<>) None) o_convertors then begin
-             fprintf oc "          let ctx =\n\
-                        \            OBus_context.map\n\
-                        \              (fun %a ->\n" print_names o_names;
-             List.iter
-               (function
-                  | Some line -> fprintf oc "                 %s" line
-                  | None -> ())
-               o_convertors;
-             fprintf oc "                 %a)\n\
-                        \          in\n" print_names o_names;
+             match o_args with
+               | [(name, term)] ->
+                   fprintf oc "          let ctx = OBus_context.map %s ctx in\n"
+                     (match Utils.convertor_send false term with
+                        | Some f -> f
+                        | None -> assert false)
+               | _ ->
+                   fprintf oc "          let ctx =\n\
+                              \            OBus_context.map\n\
+                              \              (fun %a ->\n" print_names o_names;
+                   List.iter
+                     (function
+                        | Some(name, f) -> fprintf oc "                 let %s = %s %s in\n" name f name
+                        | None -> ())
+                     o_convertors;
+                   fprintf oc "                 %a)\n\
+                              \          in\n" print_names o_names
            end;
            List.iter
              (function
-                | Some line -> fprintf oc "          %s" line
+                | Some(name, f) -> fprintf oc "          let %s = %s %s in\n" name f name
                 | None -> ())
              i_convertors;
            fprintf oc "          lwt result = %s obj"  (OBus_name.ocaml_lid name);
@@ -195,12 +199,12 @@ let () =
   output_string oc "open Lwt\n";
 
   Utils.IFSet.iter
-    (fun (name, members, annotations) ->
+    (fun (name, members, symbols, annotations) ->
        if !keep_common ||
          (match OBus_name.split name with
             | "org" :: "freedesktop" :: "DBus" :: _ -> false
             | _ -> true) then begin
-           print_impl oc name members annotations
+           print_impl oc name members symbols annotations
          end)
     interfaces;
 

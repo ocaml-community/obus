@@ -12,17 +12,45 @@ interface org.freedesktop.DBus.Introspectable {
 }
 
 interface org.freedesktop.DBus.Properties {
-  method Get : (interface : string, member : string) -> (value : variant)
-  method Set : (interface : string, member : string, value : variant) -> ()
-  method GetAll : (interface : string) -> (values : (string, variant) dict)
-  signal PropertiesChanged : (interface : string, updates : (string, variant) dict, invalidates : string array)
+  method Get : (interface_name : string, member : string) -> (value : variant)
+  method Set : (interface_name : string, member : string, value : variant) -> ()
+  method GetAll : (interface_name : string) -> (values : (string, variant) dict)
+  signal PropertiesChanged : (interface_name : string, updates : (string, variant) dict, invalidates : string array)
 }
 
 interface org.freedesktop.DBus {
-  method Hello : () -> (x1 : string)
-  method RequestName : (x1 : string, x2 : uint32) -> (x1 : uint32)
-  method ReleaseName : (x1 : string) -> (x1 : uint32)
-  method StartServiceByName : (x1 : string, x2 : uint32) -> (x1 : uint32)
+  method Hello : () -> (name : string)
+
+  flag request_name_flags : uint32 {
+    0b001: allow_replacement
+    0b010: replace_existing
+    0b100: do_not_queue
+  }
+
+  enum request_name_result : uint32 {
+    1: primary_owner
+    2: in_queue
+    3: exists
+    4: already_owner
+  }
+
+  method RequestName : (name : string, flags : request_name_flags) -> (result : request_name_result)
+
+  enum release_name_result : uint32 {
+    1: released
+    2: non_existent
+    3: not_owner
+  }
+
+  method ReleaseName : (name : string) -> (result : release_name_result)
+
+  enum start_service_by_name_result : uint32 {
+    1: success
+    2: already_running
+  }
+
+  method StartServiceByName : (name : string, flags : uint32) -> (result : start_service_by_name_result)
+
   method UpdateActivationEnvironment : (x1 : (string, string) dict) -> ()
   method NameHasOwner : (x1 : string) -> (x1 : boolean)
   method ListNames : () -> (x1 : string array)

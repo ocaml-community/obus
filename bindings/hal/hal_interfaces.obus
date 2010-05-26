@@ -7,10 +7,6 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-interface org.freedesktop.DBus.Introspectable {
-  method Introspect : () -> (data : string)
-}
-
 interface org.freedesktop.Hal.Device {
   method GetAllProperties : () -> (properties : (string, variant) dict)
   method SetMultipleProperties : (properties : (string, variant) dict) -> ()
@@ -46,7 +42,7 @@ interface org.freedesktop.Hal.Device {
   method Reprobe : () -> (call_had_sideeffect : boolean)
   method ClaimInterface : (interface_name : string, introspection_xml : string) -> (rc : boolean)
   method AddonIsReady : () -> (rc : boolean)
-  signal PropertyModified : (num_updates : int32, updates : ((string * boolean * boolean) structure) array)
+  signal PropertyModified : (num_updates : int32, updates : (string * boolean * boolean) array)
   signal Condition : (cond_name : string, cond_details : string)
   signal InterfaceLockAcquired : (interface_name : string, lock_holder : string, num_locks : int32)
   signal InterfaceLockReleased : (interface_name : string, lock_holder : string, num_locks : int32)
@@ -114,7 +110,7 @@ interface org.freedesktop.Hal.Device.WakeOnLan {
 
 interface org.freedesktop.Hal.Manager {
   method GetAllDevices : () -> (devices : string array)
-  method GetAllDevicesWithProperties : () -> (devices_with_props : ((string * (string, variant) dict) structure) array)
+  method GetAllDevicesWithProperties : () -> (devices_with_props : (string * (string, variant) dict) array)
   method DeviceExists : (udi : string) -> (does_it_exist : boolean)
   method FindDeviceStringMatch : (key : string, value : string) -> (devices : string array)
   method FindDeviceByCapability : (capability : string) -> (devices : string array)
