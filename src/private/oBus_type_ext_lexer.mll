@@ -29,7 +29,7 @@
     | l -> Tuple l
 }
 
-let int = ['0'-'9']+
+let int = ['-' '+']? ['0'-'9']+
 let space = [' ' '\t' '\n']
 let ident = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 

@@ -91,7 +91,10 @@ EXTEND Gram
       ] ];
 
   value:
-    [ [ key = INT; ":"; value = ident -> (key, value) ] ];
+    [ [ key = INT; ":"; value = ident -> (key, value)
+      | "-"; key = INT; ":"; value = ident -> ("-" ^ key, value)
+      | "+"; key = INT; ":"; value = ident -> (key, value)
+      ] ];
 
   annotations:
     [ [ "with"; "{"; l = LIST1 annotation; "}" -> l
