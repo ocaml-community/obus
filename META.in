@@ -11,7 +11,7 @@ archive(plugin,native) = "obus.cmxs"
 package "idl" (
   version = "[distrubuted with OBus]"
   description = "Intermediate language for writing D-Bus interfaces"
-  requires = "obus camlp4"
+  requires = "obus camlp4.lib"
   archive(byte) = "obus_idl.cma"
   archive(native) = "obus_idl.cmxa"
   archive(plugin,byte) = "obus_idl.cma"
