@@ -160,13 +160,13 @@ let _ =
             (fun env _ -> ln_s (Filename.basename (env "%.byte")) (env "%.best"));
 
         let libs_byte =
-          "obus.cma" :: List.map (fun name -> "bindings" / name / name ^ ".cma") bindings
+          "obus.cma" :: "obus_idl.cma" :: List.map (fun name -> "bindings" / name / name ^ ".cma") bindings
         and libs_native = List.concat [
-          "obus.cmxa" :: List.map (fun name -> "bindings" / name / name ^ ".cmxa") bindings;
-          "obus.cmxs" :: List.map (fun name -> "bindings" / name / name ^ ".cmxs") bindings;
+          "obus.cmxa" :: "obus_idl.cmxa" :: List.map (fun name -> "bindings" / name / name ^ ".cmxa") bindings;
+          "obus.cmxs" :: "obus_idl.cmxs" :: List.map (fun name -> "bindings" / name / name ^ ".cmxs") bindings;
         ]
         and libs_debug =
-          "obus.d.cma" :: List.map (fun name -> "bindings" / name / name ^ ".d.cma") bindings
+          "obus.d.cma" :: "obus_idl.d.cma" :: List.map (fun name -> "bindings" / name / name ^ ".d.cma") bindings
         and bins_byte = List.concat [
           List.map (sprintf "examples/%s.byte") examples;
           List.map (sprintf "tools/%s.byte") tools;
@@ -300,7 +300,7 @@ let _ =
           (fun _ _ -> Echo([sprintf "let version = %S\n" (Lazy.force version)], "src/private/OBus_version.ml"));
 
         (* Generation of the obus.odocl file *)
-        let mllibs = "obus.mllib" :: List.map (fun name -> "bindings" / name / name ^ ".mllib") bindings in
+        let mllibs = "obus.mllib" :: "obus_idl.mllib" :: List.map (fun name -> "bindings" / name / name ^ ".mllib") bindings in
         rule "obus doc" ~prod:"obus.odocl" ~deps:mllibs
           (fun _ _ -> Echo(List.map (sprintf "%s\n")
                              (List.concat

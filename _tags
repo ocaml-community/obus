@@ -21,7 +21,7 @@
 <syntax/*.ml>: -pkg_lwt.syntax.log
 
 # The IDL parser uses camlp4:
-<tools/idl.ml>: pkg_camlp4.extend
+<src/oBus_idl.ml>: pkg_camlp4.extend
 
 # Pa_monad for the monadic xml parser:
 <src/oBus_introspect.ml>: pa_monad

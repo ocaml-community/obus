@@ -1,6 +1,6 @@
 (*
- * idl.ml
- * ------
+ * oBus_idl.ml
+ * -----------
  * Copyright : (c) 2010, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -16,8 +16,6 @@ open OBus_value
 (* +-----------------------------------------------------------------+
    | Parsing                                                         |
    +-----------------------------------------------------------------+ *)
-
-exception Parse_failure of Lexing.position * string
 
 let interfaces = Gram.Entry.mk "interfaces"
 
