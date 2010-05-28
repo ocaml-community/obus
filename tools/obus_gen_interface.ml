@@ -212,7 +212,7 @@ let print_impl oc name members symbols annotations =
 
   List.iter
     (function
-       | Method(name, i_args, o_args, _) ->
+       | Method(name, i_args, o_args, annotations) ->
            fprintf oc "  let m_%s = {\n\
                       \    Method.interface = interface;\n\
                       \    Method.member = %S;\n\
@@ -225,7 +225,7 @@ let print_impl oc name members symbols annotations =
                 (List.map
                    (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value)
                    annotations))
-       | Signal(name, args, _) ->
+       | Signal(name, args, annotations) ->
            fprintf oc "  let s_%s = {\n\
                       \    Signal.interface = interface;\n\
                       \    Signal.member = %S;\n\
@@ -237,7 +237,7 @@ let print_impl oc name members symbols annotations =
                 (List.map
                    (fun (name, value) -> sprintf "(%s, %S)" (Utils.make_annotation name) value)
                    annotations))
-       | Property(name, typ, access, _) ->
+       | Property(name, typ, access, annotations) ->
            fprintf oc "  let p_%s = {\n\
                       \    Property.interface = interface;\n\
                       \    Property.member = %S;\n\
