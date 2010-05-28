@@ -73,6 +73,10 @@ and 'a interface = {
 
   interface_emits_changed_signal : emits_signal_changed;
   (* Default mode for sending notification of properties changes *)
+
+  interface_annotations : OBus_introspect.annotation list;
+  (* List of annotations of the interfaces. They are used for
+     introspection *)
 }
 
 (* D-Bus object informations *)
@@ -127,7 +131,7 @@ let introspect obj =
                 (fun property acc -> property.property_introspect () :: acc)
                 interface.interface_properties
                 [])),
-        []) :: acc)
+        interface.interface_annotations) :: acc)
     obj.interfaces []
 
 let on_properties_changed obj = obj.properties_changed
@@ -471,6 +475,7 @@ let make_interface_unsafe name annotations methods signals properties = {
   interface_methods = methods;
   interface_signals = signals;
   interface_properties = properties;
+  interface_annotations = annotations;
 }
 
 let compare_methods m1 m2 =
