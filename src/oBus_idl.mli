@@ -7,12 +7,22 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Intermediate language to write D-Bus interface *)
+(** Intermediate language for writing D-Bus interfaces *)
 
-val parse : string -> OBus_introspect_ext.interface list
-  (** [parse lexbuf] parses all interfaces defined in the file
-      [file_name] *)
+exception Parse_failure of string
+  (** Exception raised when parsing fails for some reason. The
+      argument is an error message. *)
 
-val print : string -> OBus_introspect_ext.interface list -> unit
-  (** [print file_name interfaces] writes to [file_name] the given
-      interfaces in the obus idl format *)
+val parse : ?file_name : string -> char Stream.t -> OBus_introspect_ext.interface list
+  (** [parse stream] parses the given stream. [file_name] is used for
+      error messages. *)
+
+val parse_file : string -> OBus_introspect_ext.interface list
+  (** Helper to parse the contents of a file *)
+
+val print : Format.formatter -> OBus_introspect_ext.interface list -> unit
+  (** [print pp interfaces] prints the given interfaces on [pp] in the
+      obus idl format *)
+
+val print_file : string -> OBus_introspect_ext.interface list -> unit
+  (** Helper to print to a file *)

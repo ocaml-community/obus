@@ -39,5 +39,5 @@ let () =
           name
   in
 
-  OBus_idl.print destination (Utils.IFSet.elements (Utils.parse_xml source));
+  OBus_idl.print_file destination (Utils.IFSet.elements (Utils.parse_xml source));
   Printf.printf "file \"%s\" written\n" destination

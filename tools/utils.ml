@@ -30,7 +30,7 @@ let parse_xml fname =
 
 let parse_idl fname =
   try
-    List.fold_left (fun acc iface -> IFSet.add iface acc) IFSet.empty (OBus_idl.parse fname)
+    List.fold_left (fun acc iface -> IFSet.add iface acc) IFSet.empty (OBus_idl.parse_file fname)
   with exn ->
     Format.eprintf "@[<v0>%a@]@." Camlp4.ErrorHandler.print exn;
     exit 1

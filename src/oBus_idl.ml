@@ -7,7 +7,6 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open Printf
 open Camlp4.PreCast
 open Syntax
 open OBus_introspect_ext
@@ -137,74 +136,67 @@ EXTEND Gram
             | "uint16" -> T.Uint16
             | "uint32" -> T.Uint32
             | "uint64" -> T.Uint64
-            | _ -> Loc.raise _loc (Failure(sprintf "invalid key type: %s" id)) ] ];
+            | _ -> Loc.raise _loc (Failure(Printf.sprintf "invalid key type: %s" id)) ] ];
 END
 
-let is_ident s =
-  let rec loop i =
-    if i = String.length s then
-      true
-    else
-      match s.[i] with
-        | 'A' .. 'Z'
-        | 'a' .. 'z'
-        | '_'
-        | '\192' .. '\214'
-        | '\216' .. '\246'
-        | '\248' .. '\255'
-        | '\''
-        | '0' .. '9' -> loop (i + 1)
-        | _ -> false
-  in
-  loop 0
+exception Parse_failure of string
 
-let parse file_name =
+let parse ?(file_name="<stream>") stream =
+  Gram.parse interfaces (Loc.mk file_name) stream
+
+let parse_file file_name =
   let ic = open_in file_name in
-  let result = Gram.parse interfaces (Loc.mk file_name) (Stream.of_channel ic) in
-  close_in ic;
-  result
+  try
+    let ifaces = parse ~file_name (Stream.of_channel ic) in
+    close_in ic;
+    ifaces
+  with exn ->
+    close_in ic;
+    raise (Parse_failure(Camlp4.ErrorHandler.to_string exn))
 
 (* +-----------------------------------------------------------------+
    | Printing                                                        |
    +-----------------------------------------------------------------+ *)
 
-let rec print_term top oc = function
-  | Term(id, []) -> output_string oc id
-  | Term(id, [t]) -> fprintf oc "%a %s" (print_term false) t id
-  | Term(id, tl) -> fprintf oc "(%a) %s" (print_seq true ", ") tl id
-  | Tuple tl -> if top then print_seq false " * " oc tl else fprintf oc "(%a)" (print_seq false " * ") tl
+open Format
 
-and print_seq top sep oc = function
+let rec print_term top pp = function
+  | Term(id, []) -> pp_print_string pp id
+  | Term(id, [t]) -> fprintf pp "%a %s" (print_term false) t id
+  | Term(id, tl) -> fprintf pp "(%a) %s" (print_seq true ", ") tl id
+  | Tuple tl -> if top then print_seq false " * " pp tl else fprintf pp "(%a)" (print_seq false " * ") tl
+
+and print_seq top sep pp = function
   | [] -> ()
-  | [t] -> print_term top oc t
-  | t :: tl -> fprintf oc "%a%s%a" (print_term top) t sep (print_seq top sep) tl
+  | [t] -> print_term top pp t
+  | t :: tl -> fprintf pp "%a%s%a" (print_term top) t sep (print_seq top sep) tl
 
-let print_args oc args =
+let print_args pp args =
   let rec aux = function
     | [] ->
         ()
     | [(None, typ)] ->
-        fprintf oc "_ : %a" (print_term true) typ
+        fprintf pp "_ : %a" (print_term true) typ
     | [(Some name, typ)] ->
-        fprintf oc "%s : %a" name (print_term true) typ
+        fprintf pp "%s : %a" name (print_term true) typ
     | (None, typ) :: l ->
-        fprintf oc "_ : %a, " (print_term true) typ;
+        fprintf pp "_ : %a, " (print_term true) typ;
         aux l
     | (Some name, typ) :: l ->
-        fprintf oc "%s : %a, " name (print_term true) typ;
+        fprintf pp "%s : %a, " name (print_term true) typ;
         aux l
   in
-  output_char oc '(';
+  pp_print_char pp '(';
   aux args;
-  output_char oc ')'
+  pp_print_char pp ')'
 
-let print_annotations oc = function
+let print_annotations pp = function
   | [] ->
       ()
   | l ->
-      output_string oc "    with {\n";
-      List.iter (fun (name, value) -> fprintf oc "      %s = %S\n" name value) l;
-      output_string oc "    }\n"
+      pp_print_string pp "    with {\n";
+      List.iter (fun (name, value) -> fprintf pp "      %s = %S\n" name value) l;
+      pp_print_string pp "    }\n"
 
 let string_of_key = function
   | T.Byte -> "byte"
@@ -216,11 +208,10 @@ let string_of_key = function
   | T.Uint64 -> "uint64"
   | _ -> assert false
 
-let print file_name interfaces =
-  let oc = open_out file_name in
+let print pp interfaces =
   List.iter
     (function (name, members, symbols, annotations) ->
-       fprintf oc "\ninterface %s {\n" name;
+       fprintf pp "\ninterface %s {\n" name;
        List.iter
          (fun (name, sym) ->
             let keyword, typ, values =
@@ -228,7 +219,7 @@ let print file_name interfaces =
                 | Sym_enum(typ, values) -> "enum", typ, values
                 | Sym_flag(typ, values) -> "flag", typ, values
             in
-            fprintf oc "  %s %s : %s {\n" keyword name (string_of_key typ);
+            fprintf pp "  %s %s : %s {\n" keyword name (string_of_key typ);
             let values =
               List.map
                 (fun (key, name) ->
@@ -249,28 +240,39 @@ let print file_name interfaces =
             let max_len = List.fold_left (fun m (key, name) -> max m (String.length key)) 0 values in
             List.iter
               (fun (key, name) ->
-                 fprintf oc "    0x%s%s: %s\n" (String.make (max_len - String.length key) '0') key name)
+                 fprintf pp "    0x%s%s: %s\n" (String.make (max_len - String.length key) '0') key name)
               values;
-            fprintf oc "  }\n")
+            fprintf pp "  }\n")
          symbols;
-       List.iter (fun (name, value) -> fprintf oc "  annotation %s = %S\n" name value) annotations;
+       List.iter (fun (name, value) -> fprintf pp "  annotation %s = %S\n" name value) annotations;
        List.iter
          (function
             | Method(name, i_args, o_args, annotations) ->
-                fprintf oc "  method %s : %a -> %a\n" name print_args i_args print_args o_args;
-                print_annotations oc annotations
+                fprintf pp "  method %s : %a -> %a\n" name print_args i_args print_args o_args;
+                print_annotations pp annotations
             | Signal(name, args, annotations) ->
-                fprintf oc "  signal %s : %a\n" name print_args args;
-                print_annotations oc annotations
+                fprintf pp "  signal %s : %a\n" name print_args args;
+                print_annotations pp annotations
             | Property(name, typ, access, annotations) ->
-                fprintf oc "  property.%s %s : %a\n"
+                fprintf pp "  property.%s %s : %a\n"
                   (match access with
                      | Read -> "r"
                      | Write -> "w"
                      | Read_write -> "rw")
                   name (print_term true) typ;
-                print_annotations oc annotations)
+                print_annotations pp annotations)
          members;
-       output_string oc "}\n")
-    interfaces;
-  close_out oc
+       pp_print_string pp "}\n")
+    interfaces
+
+let print_file name interfaces =
+  let oc = open_out name in
+  let pp = formatter_of_out_channel oc in
+  try
+    print pp interfaces;
+    pp_print_flush pp ();
+    close_out oc
+  with exn ->
+    (* Should never happen *)
+    close_out oc;
+    raise exn
