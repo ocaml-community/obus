@@ -11,8 +11,7 @@ open Lwt
 
 include OBus_peer.Private
 
-exception General_error
-let () = OBus_error.register ~name:"org.freedesktop.UPower.GeneralError" ~exn:General_error
+let general_error = "org.freedesktop.UPower.GeneralError"
 
 let daemon () =
   lwt bus = OBus_bus.system () in

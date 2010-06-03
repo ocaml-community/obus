@@ -14,7 +14,7 @@ include OBus_peer.Private
 val daemon : unit -> t Lwt.t
   (** [daemon ()] returns the peer object for the upower daemon *)
 
-exception General_error
+val general_error : OBus_error.name
 
 (** {6 Methods} *)
 

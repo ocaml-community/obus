@@ -60,19 +60,16 @@ exception Not_found
 exception Not_supported
 exception Permission_denied
 
-let () =
-  List.iter (fun (name, exn) -> OBus_error.register name exn) [
-    "org.freedesktop.UDisks.Error.Busy", Busy;
-    "org.freedesktop.UDisks.Error.Cancelled", Cancelled;
-    "org.freedesktop.UDisks.Error.Failed", Failed;
-    "org.freedesktop.UDisks.Error.FilesystemDriverMissing", Filesystem_driver_missing;
-    "org.freedesktop.UDisks.Error.FilesystemToolsMissing", Filesystem_tools_missing;
-    "org.freedesktop.UDisks.Error.Inhibited", Inhibited;
-    "org.freedesktop.UDisks.Error.InvalidOption", Invalid_option;
-    "org.freedesktop.UDisks.Error.NotFound", Not_found;
-    "org.freedesktop.UDisks.Error.NotSupported", Not_supported;
-    "org.freedesktop.UDisks.Error.PermissionDenied", Permission_denied;
-  ]
+let busy = "org.freedesktop.UDisks.Error.Busy"
+let cancelled = "org.freedesktop.UDisks.Error.Cancelled"
+let failed = "org.freedesktop.UDisks.Error.Failed"
+let filesystem_driver_missing = "org.freedesktop.UDisks.Error.FilesystemDriverMissing"
+let filesystem_tools_missing = "org.freedesktop.UDisks.Error.FilesystemToolsMissing"
+let inhibited = "org.freedesktop.UDisks.Error.Inhibited"
+let invalid_option = "org.freedesktop.UDisks.Error.InvalidOption"
+let not_found = "org.freedesktop.UDisks.Error.NotFound"
+let not_supported = "org.freedesktop.UDisks.Error.NotSupported"
+let permission_denied = "org.freedesktop.UDisks.Error.PermissionDenied"
 
 (* +-----------------------------------------------------------------+
    | D-Bus definitions                                               |

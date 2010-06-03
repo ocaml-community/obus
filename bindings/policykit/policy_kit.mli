@@ -9,7 +9,7 @@
 
 (** PolicyKit interface *)
 
-exception Not_authorized
+val not_authorized : OBus_error.name
   (** Exception raised by services when trying to perform an action
       for which we do not have authorization from PolicyKit *)
 

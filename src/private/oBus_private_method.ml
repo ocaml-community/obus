@@ -39,9 +39,9 @@ let call_with_context ~connection ~path ?destination ~interface ~member ~i_args 
                   (OBus_value.string_of_signature (OBus_value.V.type_of_sequence msg.body))))
       end
     | { typ = Error(_, error_name); body = OBus_value.V.Basic(OBus_value.V.String message) :: _  } ->
-        fail (OBus_error.make_by_name error_name message)
+        fail (OBus_error.make error_name message)
     | { typ = Error(_, error_name) } ->
-        fail (OBus_error.make_by_name error_name "")
+        fail (OBus_error.make error_name "")
     | _ ->
         assert false
 

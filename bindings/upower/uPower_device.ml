@@ -11,8 +11,7 @@ open Lwt
 
 include OBus_proxy.Private
 
-exception General_error
-let () = OBus_error.register ~name:"org.freedesktop.UPower.Device.GeneralError" ~exn:General_error
+let general_error = "org.freedesktop.UPower.Device.GeneralError"
 
 type typ =
     [ `Unknown

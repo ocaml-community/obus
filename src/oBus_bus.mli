@@ -75,7 +75,7 @@ val get_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t Lwt.t
 val acquired_names : t -> Set.Make(String).t React.signal
   (** Returns the list of names we currently own *)
 
-exception Access_denied
+val access_denied : OBus_error.name
   (** Exception raised when a name cannot be owned due to security
       policies *)
 
@@ -114,7 +114,7 @@ val release_name : t -> OBus_name.bus -> release_name_result Lwt.t
 
 (** {6 Service starting/discovering} *)
 
-exception Service_unknown
+val service_unknown : OBus_error.name
   (** Exception raised when a service is not present on a message bus
       and can not be started automatically *)
 
@@ -137,7 +137,7 @@ val list_activatable_names : t -> OBus_name.bus list Lwt.t
       activated when you call one of its method or when you use
       [start_service_by_name] *)
 
-exception Name_has_no_owner
+val name_has_no_owner : OBus_error.name
 
 val get_name_owner : t -> OBus_name.bus -> OBus_name.bus Lwt.t
   (** Return the connection unique name of the given service. Raise a
@@ -147,13 +147,13 @@ val list_queued_owners : t -> OBus_name.bus -> OBus_name.bus list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
-exception Service_unknown
+val service_unknown : OBus_error.name
   (** Raised when we try to contact a service which is not available
       and the bus do not known how to start it *)
 
 (** {6 Messages routing} *)
 
-exception Match_rule_invalid
+val match_rule_invalid : OBus_error.name
   (** Exception raised when the program trey to send an invalid match
       rule. This should never happen since values of type
       {!OBus_match.rule} are always valid. *)
@@ -165,7 +165,7 @@ val add_match : t -> OBus_match.rule -> unit Lwt.t
 
       It can raise an [Out_of_memory]. *)
 
-exception Match_rule_not_found
+val match_rule_not_found : OBus_error.name
 
 val remove_match : t -> OBus_match.rule -> unit Lwt.t
   (** Remove a match rule from the message bus. It raise a
@@ -175,8 +175,8 @@ val remove_match : t -> OBus_match.rule -> unit Lwt.t
 
 (** These functions are also offered by the message bus *)
 
-exception Adt_audit_data_unknown
-exception Selinux_security_context_unknown
+val adt_audit_data_unknown : OBus_error.name
+val selinux_security_context_unknown : OBus_error.name
 
 val update_activation_environment : t -> (string * string) list -> unit Lwt.t
 val get_connection_unix_user : t -> OBus_name.bus -> int Lwt.t

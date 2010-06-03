@@ -16,16 +16,16 @@ val daemon : unit -> t Lwt.t
 
 (** {6 Exceptions} *)
 
-exception Busy
-exception Cancelled
-exception Failed
-exception Filesystem_driver_missing
-exception Filesystem_tools_missing
-exception Inhibited
-exception Invalid_option
-exception Not_found
-exception Not_supported
-exception Permission_denied
+val busy : OBus_error.name
+val cancelled : OBus_error.name
+val failed : OBus_error.name
+val filesystem_driver_missing : OBus_error.name
+val filesystem_tools_missing : OBus_error.name
+val inhibited : OBus_error.name
+val invalid_option : OBus_error.name
+val not_found : OBus_error.name
+val not_supported : OBus_error.name
+val permission_denied : OBus_error.name
 
 (** {6 Methods} *)
 

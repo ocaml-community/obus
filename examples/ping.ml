@@ -30,7 +30,7 @@ let _ = Lwt_main.run begin
     lwt msg = ping proxy "coucou" in
     printlf "received: %s" msg
   with
-    | OBus_error.DBus(OBus_bus.Service_unknown, _, _) ->
+    | OBus_error.DBus(name, _) when name = OBus_bus.name_has_no_owner ->
         lwt () = printl "You must run pong to try this sample!" in
         exit 1
     | exn ->

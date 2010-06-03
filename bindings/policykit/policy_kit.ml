@@ -7,9 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-exception Not_authorized
-
-let () = OBus_error.register "org.freedesktop.PolicyKit.Error.NotAuthorized" Not_authorized
+let not_authorized = "org.freedesktop.PolicyKit.Error.NotAuthorized"
 
 open Policy_kit_interfaces.Org_freedesktop_PolicyKit_AuthenticationAgent
 

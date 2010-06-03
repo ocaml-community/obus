@@ -483,7 +483,7 @@ let send_reply context x =
     body = context.context_make_body x
   }
 
-let send_error_by_name context name error_message =
+let send_error context name error_message =
   send_message context.context_connection {
     destination = context.context_sender;
     sender = None;
@@ -492,6 +492,3 @@ let send_error_by_name context name error_message =
     typ = Error(context.context_serial, name);
     body = [OBus_value.V.basic_string error_message];
   }
-
-let send_error context exn error_message =
-  send_error_by_name context (OBus_error.name_of_exn exn) error_message

@@ -33,11 +33,6 @@ val call_no_reply : ('a, 'b) OBus_member.Method.t -> OBus_proxy.t -> 'a -> unit 
 val return : 'a OBus_context.t -> 'a -> [> `Replied ] Lwt.t
   (** [return ~context args] sends a reply using the given context *)
 
-val fail : 'a OBus_context.t -> exn -> OBus_error.message -> [> `Replied ] Lwt.t
-  (** [fail ~context exn message] sends an error using the given
-      context. [exn] must be an exception that has been previously
-      registered with {!OBus_error.register}. *)
-
-val fail_by_name : 'a OBus_context.t -> OBus_error.name -> OBus_error.message -> [> `Replied ] Lwt.t
-  (** [fail_by_name ~context name message] sends an error using the
-      given context. *)
+val fail : 'a OBus_context.t -> OBus_error.name -> OBus_error.message -> [> `Replied ] Lwt.t
+  (** [fail ~context name message] sends an error using the given
+      context. *)

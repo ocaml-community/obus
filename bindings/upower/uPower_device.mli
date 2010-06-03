@@ -45,7 +45,7 @@ type technology =
     | `Nickel_cadmium
     | `Nickel_metal_hydride ]
 
-exception General_error
+val general_error : OBus_error.name
 
 (** {6 Methods} *)
 
