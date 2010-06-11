@@ -9,7 +9,16 @@
 
 type name = string
 type message = string
+
+type error = {
+  name : name;
+  make : message -> exn;
+  cast : exn -> message option;
+}
+
 exception DBus of name * message
+
+let ocaml = "org.ocamlcore.forge.obus.OCamlException"
 
 let () =
   Printexc.register_printer
@@ -17,14 +26,83 @@ let () =
        | DBus(name, message) -> Some(Printf.sprintf "%s: %s" name message)
        | _ -> None)
 
-let failed = "org.freedesktop.DBus.Error.Failed"
-let invalid_args = "org.freedesktop.DBus.Error.InvalidArgs"
-let unknown_method = "org.freedesktop.DBus.Error.UnknownMethod"
-let no_memory = "org.freedesktop.DBus.Error.NoMemory"
-let no_reply = "org.freedesktop.DBus.Error.NoReply"
-let ocaml = "org.ocamlcore.forge.obus.OCamlException"
+(* List of all registered D-Bus errors *)
+let errors = ref []
 
-let make name message = DBus(name, message)
+(* +-----------------------------------------------------------------+
+   | Creation/casting                                                |
+   +-----------------------------------------------------------------+ *)
 
-let raise exn message = raise (make exn message)
-let fail exn message = Lwt.fail (make exn message)
+let make name message =
+  let rec loop = function
+    | [] ->
+        DBus(name, message)
+    | error :: errors ->
+        if error.name = name then
+          error.make message
+        else
+          loop errors
+  in
+  loop !errors
+
+let cast exn =
+  let rec loop = function
+    | [] ->
+        (ocaml, Printexc.to_string exn)
+    | error :: errors ->
+        match error.cast exn with
+          | Some message -> (error.name, message)
+          | None -> loop errors
+  in
+  loop !errors
+
+let name exn =
+  let rec loop = function
+    | [] ->
+        ocaml
+    | error :: errors ->
+        match error.cast exn with
+          | Some message -> error.name
+          | None -> loop errors
+  in
+  loop !errors
+
+(* +-----------------------------------------------------------------+
+   | Registration                                                    |
+   +-----------------------------------------------------------------+ *)
+
+module type Error = sig
+  exception E of string
+  val name : name
+end
+
+module Register(Error : Error) =
+struct
+  let () =
+    errors := {
+      name = Error.name;
+      make = (fun message -> Error.E message);
+      cast = (function
+                | Error.E message -> Some message
+                | _ -> None);
+    } :: !errors
+end
+
+(* +-----------------------------------------------------------------+
+   | Well-known exceptions                                           |
+   +-----------------------------------------------------------------+ *)
+
+exception Failed of message
+  with obus("org.freedesktop.DBus.Error.Failed")
+
+exception Invalid_args of message
+  with obus("org.freedesktop.DBus.Error.InvalidArgs")
+
+exception Unknown_method of message
+  with obus("org.freedesktop.DBus.Error.UnknownMethod")
+
+exception No_memory of message
+  with obus("org.freedesktop.DBus.Error.NoMemory")
+
+exception No_reply of message
+  with obus("org.freedesktop.DBus.Error.NoReply")

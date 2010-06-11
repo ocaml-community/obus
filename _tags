@@ -16,9 +16,13 @@
 # Use syntax extesions on all files:
 <**/*.ml>: pkg_lwt.syntax
 <**/*.ml>: pkg_lwt.syntax.log
+<**/*.ml>: pkg_type-conv.syntax
+<**/*.ml>: pa_obus
 # Except for syntax extensions themselves:
 <syntax/*.ml>: -pkg_lwt.syntax
 <syntax/*.ml>: -pkg_lwt.syntax.log
+<syntax/*.ml>: -pkg_type_conv.syntax
+<syntax/*.ml>: -pa_obus
 
 # The IDL parser uses camlp4:
 <src/oBus_idl.ml>: pkg_camlp4.extend
@@ -27,8 +31,8 @@
 <src/oBus_introspect.ml>: pa_monad
 
 # Extension for syntax extensions:
-<syntax/*.ml>: pkg_camlp4.extend
-<syntax/pa_monad.ml>: pkg_camlp4.quotations.r
+<syntax/pa_monad.ml>: pkg_camlp4.quotations.r, pkg_camlp4.extend
+<syntax/pa_obus.ml>: pkg_camlp4.quotations.o
 
 # +------------------------------------------------------------------+
 # | Packages                                                         |
@@ -36,6 +40,9 @@
 
 # Packages used by syntax extensons:
 <syntax/*>: pkg_camlp4.lib
+
+# Pa_obus use type-conv:
+<syntax/pa_obus.*>: pkg_type-conv
 
 # Tools use the IDL parser which requires camlp4:
 <tools/*>: pkg_camlp4.lib

@@ -173,8 +173,7 @@ let compare_method name method_ =
 let unknown_method context message =
   OBus_method.fail
     context
-    OBus_error.unknown_method
-    (unknown_method_message message)
+    (OBus_error.Unknown_method (unknown_method_message message))
 
 let handle_call obj context message =
   match message with
@@ -395,17 +394,19 @@ let _method_info info f =
           (OBus_value.arg_types (OBus_member.Method.i_args info))
           (OBus_message.body message)
       with OBus_value.C.Signature_mismatch ->
-        Printf.ksprintf (OBus_error.raise OBus_error.failed)
-          "invalid signature(%S) for method %S on interface %S, must be %S"
-          (OBus_value.string_of_signature
-             (OBus_value.V.type_of_sequence
-                (OBus_message.body message)))
-          (OBus_member.Method.member info)
-          (OBus_member.Method.interface info)
-          (OBus_value.string_of_signature
-             (OBus_value.C.type_sequence
-                (OBus_value.arg_types
-                   (OBus_member.Method.i_args info))))
+        raise
+          (OBus_error.Failed
+             (Printf.sprintf
+                "invalid signature(%S) for method %S on interface %S, must be %S"
+                (OBus_value.string_of_signature
+                   (OBus_value.V.type_of_sequence
+                      (OBus_message.body message)))
+                (OBus_member.Method.member info)
+                (OBus_member.Method.interface info)
+                (OBus_value.string_of_signature
+                   (OBus_value.C.type_sequence
+                      (OBus_value.arg_types
+                         (OBus_member.Method.i_args info))))))
     in
     f context obj args
   in
@@ -551,22 +552,22 @@ let properties () =
       (fun context obj (interface, member) ->
          match binary_search compare_interface interface obj.interfaces with
            | -1 ->
-               Printf.ksprintf (OBus_method.fail context OBus_error.failed) "no such interface: %S" interface
+               OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
            | i ->
                match binary_search compare_property member obj.interfaces.(i).interface_properties with
                  | -1 ->
-                     Printf.ksprintf (OBus_method.fail context OBus_error.failed) "no such property: %S on interface %S" member interface
+                     OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
                  | j ->
                      match obj.properties.(i).(j) with
                        | Some{ property_instance_signal = signal } ->
                            OBus_method.return context (React.S.value signal)
                        | None ->
-                           Printf.ksprintf (OBus_method.fail context OBus_error.failed) "property %S on interface %S is not readable" member interface);
+                           OBus_method.fail context (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not readable" member interface)));
     _method_info m_GetAll
       (fun context obj interface ->
          match binary_search compare_interface interface obj.interfaces with
            | -1 ->
-               Printf.ksprintf (OBus_method.fail context OBus_error.failed) "no such interface: %S" interface
+               OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
            | i ->
                let count = Array.length obj.properties.(i) in
                let rec loop j acc =
@@ -585,11 +586,11 @@ let properties () =
       (fun context obj (interface, member, value) ->
          match binary_search compare_interface interface obj.interfaces with
            | -1 ->
-               Printf.ksprintf (OBus_method.fail context OBus_error.failed) "no such interface: %S" interface
+               OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
            | i ->
                match binary_search compare_property member obj.interfaces.(i).interface_properties with
                  | -1 ->
-                     Printf.ksprintf (OBus_method.fail context OBus_error.failed) "no such property: %S on interface %S" member interface
+                     OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
                  | j ->
                      match obj.interfaces.(i).interface_properties.(j).property_setter with
                        | Some f -> begin
@@ -601,7 +602,7 @@ let properties () =
                                  assert false
                          end
                        | None ->
-                           Printf.ksprintf (OBus_method.fail context OBus_error.failed) "property %S on interface %S is not writable" member interface);
+                           OBus_method.fail context (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not writable" member interface)));
   |]
     [|signal_info s_PropertiesChanged|]
     [||]

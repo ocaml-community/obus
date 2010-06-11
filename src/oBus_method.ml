@@ -58,6 +58,6 @@ let return context x =
   lwt () = OBus_private_connection.send_reply context x in
   Lwt.return `Replied
 
-let fail context name message =
-  lwt () = OBus_private_connection.send_error context name message in
+let fail context exn =
+  lwt () = OBus_private_connection.send_error context exn in
   Lwt.return `Replied

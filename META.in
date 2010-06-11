@@ -8,6 +8,14 @@ archive(native) = "obus.cmxa"
 archive(plugin,byte) = "obus.cma"
 archive(plugin,native) = "obus.cmxs"
 
+package "syntax" (
+  version = "[distrubuted with OBus]"
+  description = "Syntactic sugars for defining D-Bus errors"
+  requires = "camlp4 type-conv.syntax"
+  archive(syntax,preprocessor) = "pa_obus.cmo"
+  archive(syntax,toploop) = "pa_obus.cmo"
+)
+
 package "idl" (
   version = "[distrubuted with OBus]"
   description = "Intermediate language for writing D-Bus interfaces"

@@ -87,14 +87,29 @@ let system () =
    | Bindings to functions of the message bus                        |
    +-----------------------------------------------------------------+ *)
 
-let access_denied = "org.freedesktop.DBus.Error.AccessDenied"
-let service_unknown = "org.freedesktop.DBus.Error.ServiceUnknown"
-let match_rule_not_found = "org.freedesktop.DBus.Error.MatchRuleNotFound"
-let match_rule_invalid = "org.freedesktop.DBus.Error.MatchRuleInvalid"
-let service_unknown = "org.freedesktop.DBus.Error.ServiceUnknown"
-let name_has_no_owner = "org.freedesktop.DBus.Error.NameHasNoOwner"
-let adt_audit_data_unknown = "org.freedesktop.DBus.Error.AdtAuditDataUnknown"
-let selinux_security_context_unknown = "org.freedesktop.DBus.Error.SELinuxSecurityContextUnknown"
+exception Access_denied of string
+ with obus("org.freedesktop.DBus.Error.AccessDenied")
+
+exception Service_unknown of string
+ with obus("org.freedesktop.DBus.Error.ServiceUnknown")
+
+exception Match_rule_not_found of string
+ with obus("org.freedesktop.DBus.Error.MatchRuleNotFound")
+
+exception Match_rule_invalid of string
+ with obus("org.freedesktop.DBus.Error.MatchRuleInvalid")
+
+exception Service_unknown of string
+ with obus("org.freedesktop.DBus.Error.ServiceUnknown")
+
+exception Name_has_no_owner of string
+ with obus("org.freedesktop.DBus.Error.NameHasNoOwner")
+
+exception Adt_audit_data_unknown of string
+ with obus("org.freedesktop.DBus.Error.AdtAuditDataUnknown")
+
+exception Selinux_security_context_unknown of string
+ with obus("org.freedesktop.DBus.Error.SELinuxSecurityContextUnknown")
 
 let acquired_names bus = match bus#get with
   | Crashed exn -> raise exn
@@ -181,7 +196,7 @@ let get_peer bus name =
   try_lwt
     lwt unique_name = get_name_owner bus name in
     return (OBus_peer.make bus unique_name)
-  with OBus_error.DBus(name, msg) when name = name_has_no_owner ->
+  with Name_has_no_owner msg ->
     lwt _ = start_service_by_name bus name in
     lwt unique_name = get_name_owner bus name in
     return (OBus_peer.make bus unique_name)

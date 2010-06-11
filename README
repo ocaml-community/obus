@@ -7,6 +7,7 @@ url: https://forge.ocamlcore.org/projects/obus/
   obus depends on the following packages:
 
   lwt:        http://www.ocsigen.org/install/lwt
+  type-conv:  http://www.ocaml.info/home/ocaml_sources.html#type-conv
   xmlm:       http://erratique.ch/software/xmlm
 
 * Installation:

@@ -262,9 +262,9 @@ let dispatch_message connection running message = match message with
               (fun machine_uuid ->
                  send_reply context [V.basic_string (OBus_uuid.to_string machine_uuid)])
               (fun exn ->
-                 send_error context OBus_error.failed "cannot get machine uuuid")
+                 send_error context (OBus_error.Failed "cannot get machine uuuid"))
         | _ ->
-            send_error context OBus_error.unknown_method (unknown_method_message message)
+            send_error context (OBus_error.Unknown_method (unknown_method_message message))
     end
 
   | { typ = Method_call(path, interface_opt, member); body = body } ->
@@ -313,11 +313,14 @@ let dispatch_message connection running message = match message with
                     return ()
                   else
                     reply_expected message
-              | `Failure(OBus_error.DBus(name, message)) ->
-                  send_error context name message
               | `Failure exn ->
-                  lwt () = Lwt_log.error ~section ~exn "method call handler failed with" in
-                  send_error context OBus_error.ocaml (Printexc.to_string exn)
+                  lwt () =
+                    if OBus_error.name exn = OBus_error.ocaml then
+                      Lwt_log.error ~section ~exn "method call handler failed with"
+                    else
+                      return ()
+                  in
+                  send_error context exn
           end
         | `Replied ->
             return ()
@@ -338,7 +341,7 @@ let dispatch_message connection running message = match message with
               | Some "org.freedesktop.DBus.Introspectable", "Introspect", [] ->
                   send_reply context [V.basic_string (introspection (children running path))]
               | _ ->
-                  Printf.ksprintf (send_error context OBus_error.failed) "No such object: %S" (OBus_path.to_string path)
+                  send_error context (OBus_error.Failed (Printf.sprintf "No such object: %S" (OBus_path.to_string path)))
 
 let rec dispatch_forever connection running =
   try_bind

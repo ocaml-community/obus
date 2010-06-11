@@ -483,7 +483,8 @@ let send_reply context x =
     body = context.context_make_body x
   }
 
-let send_error context name error_message =
+let send_error context exn =
+  let name, error_message = OBus_error.cast exn in
   send_message context.context_connection {
     destination = context.context_sender;
     sender = None;

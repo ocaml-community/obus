@@ -9,6 +9,9 @@
 
 (** D-Bus errors *)
 
+(** This module integrates D-Bus errors into OCaml exceptions, and
+    OCaml exceptions into D-Bus errors. *)
+
 type name = OBus_name.error
     (** An error name. For example: ["org.foo.bar.Error.Failed"] *)
 
@@ -16,8 +19,9 @@ type message = string
     (** An error message *)
 
 exception DBus of name * message
-  (** A reply to a method call can be an error. When an error is
-      received in response to a method call, this error is raised.
+  (** General exception for D-Bus errors. When the reply to a method
+      call is a D-Bus error that have not been registered, this
+      exception is raised.
 
       Arguments are:
       - the D-Bus error name
@@ -25,44 +29,77 @@ exception DBus of name * message
   *)
 
 val ocaml : name
-  (** Exception used for uncaught exceptions *)
+  (** The name of the D-Bus error which is generated for uncaught
+      ocaml exceptions that have not been registered *)
 
-(** {6 Raising D-Bus errors} *)
+(** {6 D-Bus errors creating/casting} *)
+
+val name : exn -> name
+  (** [name exn] returns the D-Bus error name under which this
+      exception is registered. If the exception is not registered,
+      then [ocaml] is returned. *)
 
 val make : name -> message -> exn
-  (** [make exn message] creates an exception [DBus(exn, name,
-      message)] where [name] is the name under which [exn] is
-      registered.
+  (** [make exn message] creates an exception from an error name and
+      an error message. If the name is not registered, then
+      [DBus(name, message)] is returned. *)
 
-      If [exn] is not registered, it raises [Not_found]. *)
+val cast : exn -> name * message
+  (** [cast exn] returns the D-Bus name and message of the given
+      exception. If the exception is not registered, [(ocaml,
+      Printexc.to_string exn)] is returned. *)
 
-val raise : name -> message -> 'a
-  (** [raise exn message] is a short-hand for [raise (make exn
-      message)] *)
+(** {6 Errors registration} *)
 
-val fail : name -> message -> 'a Lwt.t
-  (** [fail exn message] is a short-hand for [fail (make exn
-      message)] *)
+(** Signature for D-Bus error *)
+module type Error = sig
+  exception E of string
+    (** The OCaml exception for this error *)
+
+  val name : name
+    (** The D-Bus name if this error *)
+end
+
+module Register(Error : Error) : sig end
+  (** Register an error. The typical use of the functor is:
+
+      {[
+        exception My_exception of string
+        let module M =
+          OBus_error.Register(struct
+                                exception E = My_exception
+                                let name = "my.exception.name"
+                              end)
+        in ()
+      ]}
+
+      But you can althoug write this with the syntax extension:
+
+      {[
+        exception My_exception of string
+          with obus("my.exception.name")
+      ]}
+  *)
 
 (** {6 Well-known dbus exception} *)
 
-(** This errors can be raised by any service. You can also raise them
-    in a method your service implement.
+(** The following errors can be raised by any service. You can also
+    raise them in a method your service implement.
 
     Note that the error message will normally be shown to the user so
-    it must be explicative. *)
+    they must be explicative. *)
 
-val failed : name
-  (** "org.freedesktop.DBus.Error.Failed" *)
+exception Failed of message
+  (** The [org.freedesktop.DBus.Error.Failed] error *)
 
-val invalid_args : name
-  (** "org.freedesktop.DBus.Error.InvalidArgs" *)
+exception Invalid_args of message
+  (** The [org.freedesktop.DBus.Error.InvalidArgs] error *)
 
-val unknown_method : name
-  (** "org.freedesktop.DBus.Error.UnknownMethod" *)
+exception Unknown_method of message
+  (** The [org.freedesktop.DBus.Error.UnknownMethod] error *)
 
-val no_memory : name
-  (** "org.freedesktop.DBus.Error.NoMemory" *)
+exception No_memory of message
+  (** The [org.freedesktop.DBus.Error.NoMemory] error *)
 
-val no_reply : name
+exception No_reply of message
   (** "org.freedesktop.DBus.Error.NoReply" *)
