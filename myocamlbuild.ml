@@ -163,7 +163,7 @@ let _ =
             (fun env _ -> ln_s (Filename.basename (env "%.byte")) (env "%.best"));
 
         let libs_byte =
-          "obus.cma" :: "obus_idl.cma" :: List.map (fun name -> "bindings" / name / name ^ ".cma") bindings
+          "syntax/pa_obus.cmo" :: "obus.cma" :: "obus_idl.cma" :: List.map (fun name -> "bindings" / name / name ^ ".cma") bindings
         and libs_native = List.concat [
           "obus.cmxa" :: "obus_idl.cmxa" :: List.map (fun name -> "bindings" / name / name ^ ".cmxa") bindings;
           "obus.cmxs" :: "obus_idl.cmxs" :: List.map (fun name -> "bindings" / name / name ^ ".cmxs") bindings;
