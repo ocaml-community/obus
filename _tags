@@ -27,8 +27,7 @@
 # The IDL parser uses camlp4:
 <src/oBus_idl.ml>: pkg_camlp4.extend
 
-# Extension for syntax extensions:
-<syntax/pa_monad.ml>: pkg_camlp4.quotations.r, pkg_camlp4.extend
+# Extension for the syntax extension:
 <syntax/pa_obus.ml>: pkg_camlp4.quotations.o
 
 # +------------------------------------------------------------------+
