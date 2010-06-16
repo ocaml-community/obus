@@ -35,35 +35,35 @@ let () =
        | _ ->
            None)
 
-let annotations =
-  any (elt "annotation"
-         (perform
-            name <-- ar "name";
-            value <-- ar "value";
-            return (name, value)))
+let annotations p =
+  any p (elt "annotation"
+           (fun p ->
+              let name = ar p "name" in
+              let value = ar p "value" in
+              (name, value)))
 
 type direction = In | Out
 
-let atype =
-  ar "type" >>=
-    (fun signature -> match OBus_value.signature_of_string signature with
-       | [] -> failwith "empty signature"
-       | [t] -> return t
-       | _ -> Printf.ksprintf failwith "this signature contains more than one single type: %S" signature)
+let atype p =
+  let signature = ar p "type" in
+  match OBus_value.signature_of_string signature with
+    | [] -> failwith p "empty signature"
+    | [t] -> t
+    | _ -> Printf.ksprintf (failwith p) "this signature contains more than one single type: %S" signature
 
-let arguments =
-  any (elt "arg"
-         (perform
-            name <-- ao "name";
-            dir <-- afd "direction" In [("in", In); ("out", Out)];
-            typ <-- atype;
-            return (dir, (name, typ))))
+let arguments p =
+  any p (elt "arg"
+           (fun p ->
+              let name = ao p "name" in
+              let dir = afd p "direction" In [("in", In); ("out", Out)] in
+              let typ = atype p in
+              (dir, (name, typ))))
 
-let mk_aname test =
-  ar "name" >>= fun name ->
-    match test name with
-      | Some error -> failwith (OBus_string.error_message error)
-      | None -> return name
+let mk_aname test p =
+  let name = ar p "name" in
+  match test name with
+    | Some error -> failwith p (OBus_string.error_message error)
+    | None -> name
 
 let amember = mk_aname OBus_name.validate_member
 let anode = mk_aname OBus_path.validate_element
@@ -71,55 +71,59 @@ let ainterface = mk_aname OBus_name.validate_interface
 
 let method_decl =
   elt "method"
-    (perform
-       name <-- amember;
-       (ins, outs) <-- arguments >>= (fun args ->
-                                        return (OBus_util.split (function
-                                                                   | (In, x) -> OBus_util.Left x
-                                                                   | (Out, x) -> OBus_util.Right x) args));
-       annots <-- annotations;
-       return (Method(name, ins, outs, annots)))
+    (fun p ->
+       let name = amember p in
+       let args = arguments p in
+       let ins, outs =
+         OBus_util.split
+           (function
+              | (In, x) -> OBus_util.InL x
+              | (Out, x) -> OBus_util.InR x)
+           args
+       in
+       let annots = annotations p in
+       (Method(name, ins, outs, annots)))
 
 let signal_decl =
   elt "signal"
-    (perform
-       name <-- amember;
-       args <-- arguments;
-       annots <-- annotations;
-       return (Signal(name, List.map snd args, annots)))
+    (fun p ->
+       let name = amember p in
+       let args = arguments p in
+       let annots = annotations p in
+       (Signal(name, List.map snd args, annots)))
 
 let property_decl =
   elt "property"
-    (perform
-       name <-- amember;
-       access <-- afr "access" [("read", Read); ("write", Write); ("readwrite", Read_write)];
-       typ <-- atype;
-       annots <-- annotations;
-       return (Property(name, typ, access, annots)))
+    (fun p ->
+       let name = amember p in
+       let access = afr p "access" [("read", Read); ("write", Write); ("readwrite", Read_write)] in
+       let typ = atype p in
+       let annots = annotations p in
+       (Property(name, typ, access, annots)))
 
 let node =
-  elt "node" (perform
-                name <-- anode;
+  elt "node" (fun p ->
+                let name = anode p in
                 match OBus_path.validate_element name with
-                  | None -> return name
-                  | Some error -> failwith (OBus_string.error_message { error with OBus_string.typ = "node name" }))
+                  | None -> name
+                  | Some error -> failwith p (OBus_string.error_message { error with OBus_string.typ = "node name" }))
 
 let interface =
   elt "interface"
-    (perform
-       name <-- ainterface;
-       decls <-- any (union [method_decl;
-                             signal_decl;
-                             property_decl]);
-       annots <-- annotations;
-       return (name, decls, annots))
+    (fun p ->
+       let name = ainterface p in
+       let decls = any p (union [method_decl;
+                                 signal_decl;
+                                 property_decl]) in
+       let annots = annotations p in
+       (name, decls, annots))
 
 let document =
   elt "node"
-    (perform
-       interfs <-- any interface;
-       subs <-- any node;
-       return (interfs, subs))
+    (fun p ->
+       let interfs = any p interface in
+       let subs = any p node in
+       (interfs, subs))
 
 let input xi = OBus_xml_parser.input xi document
 

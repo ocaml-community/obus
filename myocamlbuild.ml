@@ -62,7 +62,6 @@ let tools = [
 
 (* Syntax extensions used internally, (tag and the byte-code file). *)
 let intern_syntaxes = [
-  "pa_monad", "syntax/pa_monad.cmo";
   "pa_obus", "syntax/pa_obus.cmo";
 ]
 

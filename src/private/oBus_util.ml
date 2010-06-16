@@ -39,13 +39,13 @@ let part_map f l =
                      | Some(v) -> (v :: success, failure)) l ([], [])
 
 type ('a, 'b) either =
-  | Left of 'a
-  | Right of 'b
+  | InL of 'a
+  | InR of 'b
 
 let rec split f l =
   List.fold_right (fun x (a, b) -> match f x with
-                     | Left x -> (x :: a, b)
-                     | Right x -> (a, x :: b)) l ([], [])
+                     | InL x -> (x :: a, b)
+                     | InR x -> (a, x :: b)) l ([], [])
 
 let map_option x f = match x with
   | Some x -> Some(f x)

@@ -16,25 +16,19 @@
 
 exception Parse_failure of Xmlm.pos * string
 
-type 'a t
-  (** Type of an xml parser *)
+type xml_parser
+  (** Type of an xml parser. It is used to parse a sequence of
+      arguments and children of an element. *)
 
 type 'a node
-  (** Type of a single node parser *)
+  (** Type of a single xml node parser, returning a value of type
+      ['a] *)
 
-val bind : 'a t -> ('a -> 'b t) -> 'b t
-val return : 'a -> 'a t
-val (>>=) : 'a t -> ('a -> 'b t) -> 'b t
-  (** Monad operations *)
-
-(** Note that it is not possible to catch errors during parsing,
-    error are reported only by the [run] operation. *)
-
-val failwith : string -> 'a t
-  (** Fail at current position with this error message *)
+val failwith : xml_parser -> string -> 'a
+  (** Fail at current position with the given error message *)
 
 val input : Xmlm.input -> 'a node -> 'a
-  (** Run a parser on a xml input. If it fail it raises a
+  (** Run a parser on a xml input. If it fails it raises a
       [Parse_failure] *)
 
 (** {6 Parsing of attributes} *)
@@ -47,16 +41,16 @@ val input : Xmlm.input -> 'a node -> 'a
     - [d] : a default value is given
     - [f] : a associative list  for the attribute value is specified. *)
 
-val ar : string -> string t
-val ao : string -> string option t
-val ad : string -> string -> string t
-val afr : string -> (string * 'a) list -> 'a t
-val afo : string -> (string * 'a) list -> 'a option t
-val afd : string -> 'a -> (string * 'a) list -> 'a t
+val ar : xml_parser -> string -> string
+val ao : xml_parser -> string -> string option
+val ad : xml_parser -> string -> string -> string
+val afr : xml_parser -> string -> (string * 'a) list -> 'a
+val afo : xml_parser -> string -> (string * 'a) list -> 'a option
+val afd : xml_parser -> string -> 'a -> (string * 'a) list -> 'a
 
 (** {6 Parsing of elements} *)
 
-val elt : string -> 'a t -> 'a node
+val elt : string -> (xml_parser -> 'a) -> 'a node
   (** [elt typ parser] Create a node parser . It will parse element of
       type [typ]. [parser] is used to parse the attributes and
       children of the element.
@@ -76,16 +70,16 @@ val union : 'a node list -> 'a node
 
 (** {6 Modifiers} *)
 
-val one : 'a node -> 'a t
+val one : xml_parser -> 'a node -> 'a
   (** [one node] parse exactly one node with the given node parser. It
       will fail if there is 0 or more than one node matched by
       [node]. *)
 
-val opt : 'a node -> 'a option t
+val opt : xml_parser -> 'a node -> 'a option
   (** same as [one] but do not fail if there is no node matched by
       [node]. *)
 
-val any : 'a node -> 'a list t
+val any : xml_parser -> 'a node -> 'a list
   (** [any node] Parse all element matched by [node]. The resulting
       list is in the same order as the order in which nodes appears in
       the xml. *)

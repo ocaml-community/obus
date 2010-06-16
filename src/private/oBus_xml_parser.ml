@@ -9,16 +9,11 @@
 
 open Printf
 
-type attributes = (string * string) list
 exception Parse_failure of Xmlm.pos * string
 
 type xml =
   | Element of Xmlm.pos * string * (string * string) list * xml list
   | PCData of Xmlm.pos * string
-
-type 'a result =
-  | Value of 'a
-  | Error of Xmlm.pos * string
 
 type node_type =
   | NT_element of string
@@ -26,72 +21,73 @@ type node_type =
   | NT_any
   | NT_union of node_type list
 
-type 'a node = node_type * (xml -> 'a result option)
+type 'a node = node_type * (xml -> 'a option)
 
-type 'a t = Xmlm.pos -> xml list -> attributes -> xml list * 'a result
-let bind m f pos xmls attrs =
-  let rest, result = m pos xmls attrs in
-  match result with
-    | Value v -> f v pos rest attrs
-    | Error _ as e -> (rest, e)
-let return v pos xmls attrs = (xmls, Value v)
-let failwith msg pos xmls attrs = (xmls, Error(pos, msg))
+type xml_parser = {
+  position : Xmlm.pos;
+  attributes : (string * string) list;
+  mutable children : xml list;
+}
 
-let (>>=) = bind
+let failwith p msg = raise (Parse_failure(p.position, msg))
 
-let ao name pos xmls attrs =
-  (xmls, Value(OBus_util.assoc name attrs))
+let ao p name =
+  OBus_util.assoc name p.attributes
 
-let ar name =
-  ao name >>= function
-    | Some v -> return v
-    | None -> ksprintf failwith  "attribute '%s' missing" name
+let ar p name =
+  match ao p name with
+    | Some v -> v
+    | None -> ksprintf (failwith p)  "attribute '%s' missing" name
 
-let ad name default =
-  ao name >>= function
-    | Some v -> return v
-    | None -> return default
+let ad p name default =
+  match ao p name with
+    | Some v -> v
+    | None -> default
 
-let afo name field pos xmls attrs = match OBus_util.assoc name attrs with
-  | None ->
-      (xmls, Value None)
-  | Some v ->
-      match OBus_util.assoc v field with
-        | Some v ->
-            (xmls, Value(Some v))
-        | None ->
-            (xmls, Error(pos, sprintf "unexpected value for '%s' (%s), must be one of %s"
-                           name v (String.concat ", " (List.map (fun (name, v) -> "'" ^ name ^ "'") field))))
+let afo p name field =
+  match OBus_util.assoc name p.attributes with
+    | None ->
+        None
+    | Some v ->
+        match OBus_util.assoc v field with
+          | Some v ->
+              Some v
+          | None ->
+              ksprintf (failwith p)
+                "unexpected value for '%s' (%s), must be one of %s"
+                name v (String.concat ", " (List.map (fun (name, v) -> "'" ^ name ^ "'") field))
 
-let afr name field =
-  afo name field >>= function
-    | Some v -> return v
-    | None -> ksprintf failwith  "attribute '%s' missing" name
+let afr p name field =
+  match afo p name field with
+    | Some v -> v
+    | None -> ksprintf (failwith p)  "attribute '%s' missing" name
 
-let afd name default field =
-  afo name field >>= function
-    | Some v -> return v
-    | None -> return default
+let afd p name default field =
+  match afo p name field with
+    | Some v -> v
+    | None -> default
 
-let execute xml_parser pos xmls attrs =
+let execute xml_parser p =
   try
-    match xml_parser pos xmls attrs with
-      | [], result ->
+    let result = xml_parser p in
+    match p.children with
+      | [] ->
           result
-      | _, (Error _ as error) ->
-          error
-      | Element(pos, name, _, _) :: _, _ ->
-          Error(pos, sprintf "unknown element '%s'" name)
-      | PCData(pos, _) :: _, _ ->
-          Error(pos, "trailing pc-data")
-  with exn ->
-    Error(pos, Printexc.to_string exn)
+      | Element(pos, name, _, _) :: _ ->
+          ksprintf (failwith p) "unknown element '%s'" name
+      | PCData(pos, _) :: _ ->
+          failwith p "trailing pc-data"
+  with
+    | Parse_failure _ as exn ->
+        raise exn
+    | exn ->
+        failwith p (Printexc.to_string exn)
 
 let elt name elt_parser =
   (NT_element name,
    function
      | Element(pos, name', attrs, children) when name = name' ->
-         Some(execute elt_parser pos children attrs)
+         Some(execute elt_parser { position = pos; children = children; attributes =  attrs})
      | _ ->
          None)
 
@@ -99,17 +95,13 @@ let pcdata =
   (NT_pcdata,
    function
      | Element _ -> None
-     | PCData(_, x) -> Some(Value x))
+     | PCData(_, x) -> Some x)
 
 let union nodes =
   let types, fl = List.split nodes in
   (NT_union types, fun node -> OBus_util.find_map (fun f -> f node) fl)
 
-let map (typ, f) g = (typ, fun node ->
-                        OBus_util.map_option (f node)
-                          (function
-                             | Value v -> Value (g v)
-                             | Error _ as e -> e))
+let map (typ, f) g = (typ, fun node -> OBus_util.map_option (f node) g)
 
 let string_of_type typ =
   let rec flat acc = function
@@ -123,35 +115,32 @@ let string_of_type typ =
     | [x] -> x
     | l -> String.concat " or " l
 
-let opt (typ, f) pos xmls attrs =
-  match OBus_util.part_map f xmls with
-    | [], rest -> (rest, Value None)
-    | [Value x], rest -> (rest, Value (Some x))
-    | [Error _ as err], rest -> (rest, err)
-    | _, rest -> (rest, Error(pos, "too many nodes of type: " ^ string_of_type typ))
+let opt p (typ, f) =
+  match OBus_util.part_map f p.children with
+    | [], rest ->
+        None
+    | [x], rest ->
+        p.children <- rest;
+        Some x
+    | _, rest ->
+        ksprintf (failwith p) "too many nodes of type %S" (string_of_type typ)
 
-let one (typ, f) =
-  opt (typ, f) >>= function
-    | Some x -> return x
-    | None -> ksprintf failwith "element missing: %s" (string_of_type typ)
+let one p (typ, f) =
+  match opt p (typ, f) with
+    | Some x -> x
+    | None -> ksprintf (failwith p) "element missing: %S" (string_of_type typ)
 
-let rec any (typ, f) pos xmls attrs =
-  let success, rest = OBus_util.part_map f xmls in
-  (rest,
-   List.fold_right
-     (fun result acc -> match result, acc with
-        | Value v, Value l -> Value (v :: l)
-        | (Error _ as err), _ -> err
-        | _, (Error _ as err) -> err) success (Value []))
+let rec any p (typ, f) =
+  let success, rest = OBus_util.part_map f p.children in
+  p.children <- rest;
+  success
 
 let pos_of_xml = function
   | Element(pos, _, _, _) -> pos
   | PCData(pos, _) -> pos
 
 let parse node xml =
-  match execute (one node) (pos_of_xml xml) [xml] [] with
-    | Value x -> x
-    | Error(pos, msg) -> raise (Parse_failure(pos, msg))
+  execute (fun p -> one p node) { position = pos_of_xml xml; attributes = []; children = [xml] }
 
 let input input node =
   let rec make () =

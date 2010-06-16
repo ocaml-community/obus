@@ -29,8 +29,8 @@ val part_map : ('a -> 'b option) -> 'a list -> 'b list * 'a list
       list of success and the list of failure *)
 
 type ('a, 'b) either =
-  | Left of 'a
-  | Right of 'b
+  | InL of 'a
+  | InR of 'b
 
 val split : ('a -> ('b, 'c) either) -> 'a list -> 'b list * 'c list
   (** Split a list *)

@@ -27,9 +27,6 @@
 # The IDL parser uses camlp4:
 <src/oBus_idl.ml>: pkg_camlp4.extend
 
-# Pa_monad for the monadic xml parser:
-<src/oBus_introspect.ml>: pa_monad
-
 # Extension for syntax extensions:
 <syntax/pa_monad.ml>: pkg_camlp4.quotations.r, pkg_camlp4.extend
 <syntax/pa_obus.ml>: pkg_camlp4.quotations.o
