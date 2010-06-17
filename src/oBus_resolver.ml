@@ -59,7 +59,7 @@ let make connection name =
                    ~interface:"org.freedesktop.DBus"
                    ~member:"NameOwnerChanged"
                    ~path:["org"; "freedesktop"; "DBus"]
-                   ~arguments:[(0, OBus_match.AF_string name)] ()) in
+                   ~arguments:(OBus_match.make_arguments [(0, OBus_match.AF_string name)]) ()) in
 
             let init_waiter, init_wakener = Lwt.wait () and owner, set = React.S.create None in
             let name_resolver = {

@@ -25,16 +25,28 @@ type argument_filter =
           - [path] ends with ['/'] and is a prefix of [arg]
           - [arg] ends with ['/'] and is a prefix of [path] *)
 
+type arguments = private (int * argument_filter) list
+    (** Type of lists of argument filters. The private type ensures
+        that such lists are always sorted by argument number, does not
+        contain duplicates and indexes are in the range [0..63].. *)
+
+val make_arguments : (int * argument_filter) list -> arguments
+  (** Creates an arguments filter from a list of filters. It raises
+      [Invalid_argument] if one of the argument filters use a number
+      outside of the range [1..63] *)
+
+external cast_arguments : arguments -> (int * argument_filter) list = "%identity"
+  (** Returns the list of filters for the given arguments filter. *)
+
 (** Type of a rule used to match a message *)
-type rule = private {
+type rule = {
   typ : [ `Signal | `Error | `Method_call | `Method_return ] option;
   sender : OBus_name.bus option;
   interface : OBus_name.interface option;
   member : OBus_name.member option;
   path : OBus_path.t option;
   destination : OBus_name.bus option;
-  arguments : (int * argument_filter) list;
-  (** [arguments] is always a sorted list. *)
+  arguments : arguments;
 }
 
 (** {8 Rule projections} *)
@@ -45,7 +57,7 @@ val interface : rule -> OBus_name.interface option
 val member : rule -> OBus_name.member option
 val path : rule -> OBus_path.t option
 val destination : rule -> OBus_name.bus option
-val arguments : rule -> (int * argument_filter) list
+val arguments : rule -> arguments
 
 (** {8 Rule construction} *)
 
@@ -56,11 +68,9 @@ val rule :
   ?member : OBus_name.member ->
   ?path : OBus_path.t ->
   ?destination : OBus_name.bus ->
-  ?arguments : (int * argument_filter) list ->
+  ?arguments : arguments ->
   unit -> rule
-    (** Create a matching rule. It raises [Invalid_argument] if one of
-        the argument filters use a number outside of the range
-        [1..63] *)
+    (** Create a matching rule. *)
 
 (** {6 Matching} *)
 
@@ -68,12 +78,9 @@ val match_message : rule -> OBus_message.t -> bool
   (** [match_message rule message] returns wether [message] is matched
       by [rule] *)
 
-val match_values : (int * argument_filter) list -> OBus_value.V.sequence -> bool
+val match_values : arguments -> OBus_value.V.sequence -> bool
   (** [match_values filters values] returns whether [values] are
-      matched by the given list of argument filters.
-
-      [filters] must be sorted by argument number, and must not
-      contains to filters with the same argument number. *)
+      matched by the given list of argument filters. *)
 
 (** {6 Comparison} *)
 

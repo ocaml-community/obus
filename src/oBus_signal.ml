@@ -304,7 +304,7 @@ let set_auto_match_rule signal auto_match_rule  =
           ~path:descr.receiver_group.receiver_group_path
           ~interface:descr.receiver_group.receiver_group_interface
           ~member:descr.receiver_group.receiver_group_member
-          ~arguments:descr.filters
+          ~arguments:(OBus_match.make_arguments descr.filters)
           ()
       in
       (* Use the sorted list of argument filters: *)
@@ -333,7 +333,7 @@ let set_filters signal filters =
         ~path:descr.receiver_group.receiver_group_path
         ~interface:descr.receiver_group.receiver_group_interface
         ~member:descr.receiver_group.receiver_group_member
-        ~arguments:descr.filters
+        ~arguments:(OBus_match.make_arguments descr.filters)
         ()
     in
     let filters = OBus_match.arguments rule in

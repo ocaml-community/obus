@@ -11,6 +11,8 @@ type argument_filter =
   | AF_string of string
   | AF_string_path of string
 
+type arguments = (int * argument_filter) list
+
 type rule = {
   typ : [ `Signal | `Error | `Method_call | `Method_return ] option;
   sender : OBus_name.bus option;
@@ -18,7 +20,7 @@ type rule = {
   member : OBus_name.member option;
   path : OBus_path.t option;
   destination : OBus_name.bus option;
-  arguments : (int * argument_filter) list;
+  arguments : arguments;
 }
 
 let typ e = e.typ
@@ -38,6 +40,17 @@ let rec insert_sorted num filter = function
   | ((num', _) :: rest) as l ->
       (num, filter) :: l
 
+let make_arguments list =
+  List.fold_left
+    (fun l (num, filter) ->
+       if num < 0 || num > 63 then
+         Printf.ksprintf invalid_arg "OBus_match.arguments_of_list: invalid argument number '%d': it must be in the rane [1..63]" num
+       else
+         insert_sorted num filter l)
+    [] list
+
+external cast_arguments : arguments -> (int * argument_filter) list = "%identity"
+
 let rule ?typ ?sender ?interface ?member ?path ?destination ?(arguments=[]) () = {
   typ = typ;
   sender = sender;
@@ -45,11 +58,7 @@ let rule ?typ ?sender ?interface ?member ?path ?destination ?(arguments=[]) () =
   member = member;
   path = path;
   destination = destination;
-  arguments = List.fold_left (fun l (num, filter) ->
-                                if num < 0 || num > 63 then
-                                  Printf.ksprintf invalid_arg "OBus_match.rule: invalid argument number '%d': it must be in the rane [1..63]" num
-                                else
-                                  insert_sorted num filter l) [] arguments;
+  arguments = arguments;
 }
 
 let string_of_rule mr =
