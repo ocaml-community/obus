@@ -86,7 +86,7 @@ let get_all_no_cache proxy interface =
 let unmonitor_property_group property_group =
   match property_group.property_group_monitor with
     | None ->
-        ()
+        return ()
     | Some(signal, send, stop) ->
         property_group.property_group_monitor <- None;
         cancel (React.S.value signal);
@@ -104,7 +104,8 @@ let cleanup_property_group property_group =
         running.running_properties
     );
     unmonitor_property_group property_group
-  end
+  end else
+    return ()
 
 (* +-----------------------------------------------------------------+
    | Monitoring                                                      |
@@ -126,6 +127,14 @@ let rec monitor property =
              (property.cast context properties)
              signal)
     | None ->
+        lwt resolver, owner =
+          match property_group.property_group_owner with
+            | Some name ->
+                lwt resolver = OBus_resolver.make property_group.property_group_connection name in
+                return (Some resolver, OBus_resolver.owner resolver)
+            | None ->
+                return (None, React.S.const None)
+        in
         property_group.property_group_monitor <- Some(
           let signal = OBus_signal.connect s_PropertiesChanged property.proxy in
           (* Monitor only properties of the given interface *)
@@ -146,9 +155,17 @@ let rec monitor property =
               (get_all_no_cache property.proxy property_group.property_group_interface)
               (React.E.select
                  [React.E.map (fun (ctx, props) -> Update(ctx, props)) (OBus_signal.event_with_context signal);
-                  action])
+                  action;
+                  React.E.stamp (React.S.changes owner) Invalidate])
           in
-          (properties_signal, send_action, fun () -> OBus_signal.disconnect signal)
+          (properties_signal, send_action,
+           fun () ->
+             OBus_signal.disconnect signal;
+             match resolver with
+               | Some resolver ->
+                   OBus_resolver.disable resolver
+               | None ->
+                   return ())
         );
         monitor property
 
@@ -251,7 +268,7 @@ let make_property_group proxy interface =
         running.running_properties <- Property_map.add key property_group running.running_properties;
         property_group
   in
-  Gc.finalise cleanup_property_group property_group;
+  Lwt_gc.finalise cleanup_property_group property_group;
   property_group
 
 let make info proxy =

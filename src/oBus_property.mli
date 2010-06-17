@@ -96,11 +96,11 @@ val monitor : ('a, [> `readable ]) t -> 'a React.signal Lwt.t
       Resources allocated to monitor the property are automatically
       freed when the signal is garbage collected *)
 
-val monitor_with_stopper : ('a, [> `readable ]) t -> ('a React.signal * (unit -> unit)) Lwt.t
+val monitor_with_stopper : ('a, [> `readable ]) t -> ('a React.signal * (unit -> unit Lwt.t)) Lwt.t
   (** Same as {!monitor} but also returns a function that can be used
       to explicitly free resources *)
 
-val monitor_custom : ('a, [> `readable ]) t -> event : 'b React.event -> stop : (unit -> unit) -> 'a React.signal Lwt.t
+val monitor_custom : ('a, [> `readable ]) t -> event : 'b React.event -> stop : (unit -> unit Lwt.t) -> 'a React.signal Lwt.t
   (** [monitor_custom property ~event ~stop] uses [event]'s
       occurrences to update [property]. By default obus use the
       [org.freedesktop.DBus.Properties.PropertiesChanged] signal to
@@ -109,7 +109,7 @@ val monitor_custom : ('a, [> `readable ]) t -> event : 'b React.event -> stop : 
       notification mechanism. Each time [event] occurs, obus will
       refresh the property cache. *)
 
-val monitor_custom_with_stopper : ('a, [> `readable ]) t -> event : 'b React.event -> stop : (unit -> unit) -> ('a React.signal * (unit -> unit)) Lwt.t
+val monitor_custom_with_stopper : ('a, [> `readable ]) t -> event : 'b React.event -> stop : (unit -> unit Lwt.t) -> ('a React.signal * (unit -> unit Lwt.t)) Lwt.t
   (** Same as {!monitor_custom} but also returns a function that can
       be used to explicitly free resources *)
 
