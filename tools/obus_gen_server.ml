@@ -109,36 +109,22 @@ let print_impl oc name members symbols annotations =
            and o_convertors = make_convertors Utils.convertor_send o_names o_args in
            fprintf oc "      m_%s = (\n\
                       \        fun ctx obj %a ->\n" name print_names i_names;
-           if List.exists ((<>) None) o_convertors then begin
-             match o_args with
-               | [(name, term)] ->
-                   fprintf oc "          let ctx = OBus_context.map %s ctx in\n"
-                     (match Utils.convertor_send false term with
-                        | Some f -> f
-                        | None -> assert false)
-               | _ ->
-                   fprintf oc "          let ctx =\n\
-                              \            OBus_context.map\n\
-                              \              (fun %a ->\n" print_names o_names;
-                   List.iter
-                     (function
-                        | Some(name, f) -> fprintf oc "                 let %s = %s %s in\n" name f name
-                        | None -> ())
-                     o_convertors;
-                   fprintf oc "                 %a)\n\
-                              \              ctx\n\
-                              \          in\n" print_names o_names
-           end;
            List.iter
              (function
                 | Some(name, f) -> fprintf oc "          let %s = %s %s in\n" name f name
                 | None -> ())
              i_convertors;
-           fprintf oc "          lwt result = %s obj"  (OBus_name.ocaml_lid name);
+           fprintf oc "          lwt %a = %s obj" print_names o_names (OBus_name.ocaml_lid name);
            List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
            output_string oc " in\n";
-           fprintf oc "          OBus_method.return ctx result\n\
-                      \      );\n";
+           List.iter
+             (function
+                | Some(name, f) -> fprintf oc "          let %s = %s %s in\n" name f name
+                | None -> ())
+             o_convertors;
+           fprintf oc "          OBus_method.return ctx %a\n\
+                      \      );\n"
+             print_names o_names
        | Property(name, typ, access, annotations) ->
            fprintf oc "      p_%s = " name;
            if access = Read_write then output_char oc '(';
