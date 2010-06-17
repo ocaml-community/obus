@@ -156,7 +156,11 @@ let rec monitor property =
               (React.E.select
                  [React.E.map (fun (ctx, props) -> Update(ctx, props)) (OBus_signal.event_with_context signal);
                   action;
-                  React.E.stamp (React.S.changes owner) Invalidate])
+                  React.E.fmap
+                    (function
+                       | Some _ -> Some Invalidate
+                       | None -> None)
+                    (React.S.changes owner)])
           in
           (properties_signal, send_action,
            fun () ->
