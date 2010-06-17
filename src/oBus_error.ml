@@ -54,7 +54,9 @@ let cast exn =
           | Some message -> (error.name, message)
           | None -> loop errors
   in
-  loop !errors
+  match exn with
+    | DBus(name, message) -> (name, message)
+    | _ -> loop !errors
 
 let name exn =
   let rec loop = function
@@ -65,7 +67,9 @@ let name exn =
           | Some message -> error.name
           | None -> loop errors
   in
-  loop !errors
+  match exn with
+    | DBus(name, message) -> name
+    | _ -> loop !errors
 
 (* +-----------------------------------------------------------------+
    | Registration                                                    |

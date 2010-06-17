@@ -316,7 +316,14 @@ let dispatch_message connection running message = match message with
               | `Failure exn ->
                   lwt () =
                     if OBus_error.name exn = OBus_error.ocaml then
-                      Lwt_log.error ~section ~exn "method call handler failed with"
+                      match interface_opt with
+                        | Some interface ->
+                            Lwt_log.error_f ~section ~exn
+                              "method call handler for method %S on interface %S failed with"
+                              member interface
+                        | None ->
+                            Lwt_log.error_f ~section ~exn
+                              "method call handler for method %S failed with" member
                     else
                       return ()
                   in
