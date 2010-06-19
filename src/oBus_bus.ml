@@ -39,15 +39,15 @@ let error_handler = function
 
 let register_connection ?(set_on_disconnect=true) connection =
   let running = running_of_connection connection in
-  match running.running_name with
+  match running.rc_name with
     | Some _ ->
         (* Do not call two times the Hello method *)
         return ()
 
     | None ->
-        if set_on_disconnect then running.running_on_disconnect := error_handler;
+        if set_on_disconnect then running.rc_on_disconnect := error_handler;
         lwt name = OBus_method.call m_Hello (proxy connection) () in
-        running.running_name <- Some name;
+        running.rc_name <- Some name;
         return ()
 
 let of_addresses addresses =
@@ -113,7 +113,7 @@ exception Selinux_security_context_unknown of string
 
 let acquired_names bus = match bus#get with
   | Crashed exn -> raise exn
-  | Running running -> running.running_acquired_names
+  | Running running -> running.rc_acquired_names
 
 type request_name_result = type_request_name_result
 

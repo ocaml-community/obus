@@ -27,27 +27,27 @@ type signal_state =
          running *)
 
 (* A signal description *)
-type descr = {
-  mutable state : signal_state;
-  mutable auto_match_rule : bool;
-  mutable filters : (int * OBus_match.argument_filter) list;
+type signal_descriptor = {
+  mutable sd_state : signal_state;
+  mutable sd_auto_match_rule : bool;
+  mutable sd_filters : (int * OBus_match.argument_filter) list;
 
-  receiver : receiver;
-  receiver_group : receiver_group;
-  node : receiver Lwt_sequence.node;
+  sd_receiver : signal_receiver;
+  sd_group : signal_receiver_group;
+  sd_node : signal_receiver Lwt_sequence.node;
 
-  sender : OBus_name.bus option;
+  sd_sender : OBus_name.bus option;
 
   (* Thread which is wake up when the signal is disconnected: *)
-  done_waiter : unit Lwt.t;
-  done_wakener : unit Lwt.u;
+  sd_done_waiter : unit Lwt.t;
+  sd_done_wakener : unit Lwt.u;
 }
 
 type 'a t = {
-  event : (OBus_context.void OBus_context.t * 'a) React.event;
+  s_event : (OBus_context.void OBus_context.t * 'a) React.event;
   (* The event that is passed to the user *)
 
-  descr : descr;
+  s_descr : signal_descriptor;
   (* Description which is shared by all mapped version of the
      signal *)
 }
@@ -58,12 +58,12 @@ type 'a t = {
 
 let map f signal = {
   signal with
-    event = React.E.map (fun (context, x) -> (context, f x)) signal.event
+    s_event = React.E.map (fun (context, x) -> (context, f x)) signal.s_event
 }
 
 let map_with_context f signal = {
   signal with
-    event = React.E.map (fun (context, x) -> (context, f context x)) signal.event
+    s_event = React.E.map (fun (context, x) -> (context, f context x)) signal.s_event
 }
 
 (* +-----------------------------------------------------------------+
@@ -86,18 +86,18 @@ let rec add_rule rule rules = match rules with
 
 (* Commit rules changes on the message bus *)
 let commit_rules descr =
-  let group = descr.receiver_group in
+  let group = descr.sd_group in
   let rules =
     (* Computes the set of more general rules: *)
     Lwt_sequence.fold_l
       (fun receiver rules ->
-         if receiver.receiver_active then
-           match receiver.receiver_rule with
+         if receiver.sr_active then
+           match receiver.sr_rule with
              | None -> rules
              | Some rule -> add_rule rule rules
          else
            rules)
-      group.receiver_group_receivers []
+      group.srg_receivers []
   in
   let rules =
     List.fold_left
@@ -109,13 +109,13 @@ let commit_rules descr =
 
   (* If rules have changed, compute the minimal set of changes to make
      with the message bus and do them: *)
-  if not (String_set.equal rules group.receiver_group_rules) then
-   Lwt_mutex.with_lock group.receiver_group_mutex
+  if not (String_set.equal rules group.srg_rules) then
+   Lwt_mutex.with_lock group.srg_mutex
      (fun () ->
-        let new_rules = String_set.diff rules group.receiver_group_rules
-        and old_rules = String_set.diff group.receiver_group_rules rules in
-        group.receiver_group_rules <- new_rules;
-        let connection = descr.receiver_group.receiver_group_connection in
+        let new_rules = String_set.diff rules group.srg_rules
+        and old_rules = String_set.diff group.srg_rules rules in
+        group.srg_rules <- new_rules;
+        let connection = descr.sd_group.srg_connection in
         lwt () = String_set.fold (fun rule thread -> thread <&> OBus_private_bus.add_match connection rule) new_rules (return ())
         and () = String_set.fold (fun rule thread -> thread <&> OBus_private_bus.remove_match connection rule) old_rules (return ()) in
         return ())
@@ -127,23 +127,23 @@ let commit_rules descr =
    +-----------------------------------------------------------------+ *)
 
 let init_signal descr =
-  let connection = descr.receiver_group.receiver_group_connection in
+  let connection = descr.sd_group.srg_connection in
   try_lwt
     if OBus_connection.name connection = None then begin
       (* If the connection is a peer-to-peer connection, there is
          nothing else to do. *)
-      descr.receiver.receiver_active <- true;
-      descr.done_waiter
+      descr.sd_receiver.sr_active <- true;
+      descr.sd_done_waiter
     end else begin
       lwt resolver =
-        match descr.sender with
+        match descr.sd_sender with
           | None ->
               return None
           | Some name ->
               (* If we are interested on signals coming from a
                  particular peer, we need a name resolver: *)
               lwt resolver = OBus_resolver.make connection name in
-              descr.receiver.receiver_sender <- Some (OBus_resolver.owner resolver);
+              descr.sd_receiver.sr_sender <- Some (OBus_resolver.owner resolver);
               return (Some resolver)
       in
       try_lwt
@@ -151,12 +151,12 @@ let init_signal descr =
         lwt () = pause () in
         (* Since we yielded, check the connection again: *)
         check_connection connection;
-        if descr.state = Sig_disconnected then
+        if descr.sd_state = Sig_disconnected then
           return ()
         else begin
-          descr.receiver.receiver_active <- true;
+          descr.sd_receiver.sr_active <- true;
           lwt () = commit_rules descr in
-          descr.done_waiter
+          descr.sd_done_waiter
         end
       finally
         match resolver with
@@ -164,16 +164,16 @@ let init_signal descr =
           | Some resolver -> OBus_resolver.disable resolver
     end
   finally
-    Lwt_sequence.remove descr.node;
+    Lwt_sequence.remove descr.sd_node;
     lwt () = commit_rules descr in
-    if Lwt_sequence.is_empty descr.receiver_group.receiver_group_receivers then begin
+    if Lwt_sequence.is_empty descr.sd_group.srg_receivers then begin
       let running = running_of_connection connection in
-      running.running_receiver_groups <- (
+      running.rc_receiver_groups <- (
         Signal_map.remove
-          (descr.receiver_group.receiver_group_path,
-           descr.receiver_group.receiver_group_interface,
-           descr.receiver_group.receiver_group_member)
-          running.running_receiver_groups;
+          (descr.sd_group.srg_path,
+           descr.sd_group.srg_interface,
+           descr.sd_group.srg_member)
+          running.rc_receiver_groups;
       )
     end;
     return ()
@@ -206,16 +206,16 @@ let cast info (context, message) =
     None
 
 let disconnect signal =
-  let descr = signal.descr in
-   if descr.state <> Sig_disconnected then begin
-     descr.state <- Sig_disconnected;
-     wakeup descr.done_wakener ()
+  let descr = signal.s_descr in
+   if descr.sd_state <> Sig_disconnected then begin
+     descr.sd_state <- Sig_disconnected;
+     wakeup descr.sd_done_wakener ()
    end
 
 let stop descr () =
-  if descr.state <> Sig_disconnected then begin
-    descr.state <- Sig_disconnected;
-    wakeup descr.done_wakener ()
+  if descr.sd_state <> Sig_disconnected then begin
+    descr.sd_state <- Sig_disconnected;
+    wakeup descr.sd_done_wakener ()
   end
 
 let connect info proxy =
@@ -226,28 +226,28 @@ let connect info proxy =
              OBus_member.Signal.interface info,
              OBus_member.Signal.member info) in
   let group =
-    match try Some(Signal_map.find key running.running_receiver_groups) with Not_found -> None with
+    match try Some(Signal_map.find key running.rc_receiver_groups) with Not_found -> None with
       | Some group ->
           group
       | None ->
           (* If the group do not exists, create a new one *)
           let group = {
-            receiver_group_rules = String_set.empty;
-            receiver_group_mutex = Lwt_mutex.create ();
-            receiver_group_receivers = Lwt_sequence.create ();
-            receiver_group_connection = connection;
-            receiver_group_path = OBus_proxy.path proxy;
-            receiver_group_interface = OBus_member.Signal.interface info;
-            receiver_group_member = OBus_member.Signal.member info;
+            srg_rules = String_set.empty;
+            srg_mutex = Lwt_mutex.create ();
+            srg_receivers = Lwt_sequence.create ();
+            srg_connection = connection;
+            srg_path = OBus_proxy.path proxy;
+            srg_interface = OBus_member.Signal.interface info;
+            srg_member = OBus_member.Signal.member info;
           } in
-          running.running_receiver_groups <- Signal_map.add key group running.running_receiver_groups;
+          running.rc_receiver_groups <- Signal_map.add key group running.rc_receiver_groups;
           group
   in
   let event, push = React.E.create () in
   let receiver = {
-    receiver_active = false;
-    receiver_sender = None;
-    receiver_rule = (
+    sr_active = false;
+    sr_sender = None;
+    sr_rule = (
       Some(OBus_match.rule
              ~typ:`Signal
              ?sender:(OBus_proxy.name proxy)
@@ -256,64 +256,64 @@ let connect info proxy =
              ~member:(OBus_member.Signal.member info)
              ())
     );
-    receiver_filter = (fun _ -> true);
-    receiver_push = push;
+    sr_filter = (fun _ -> true);
+    sr_push = push;
   } in
   (* Immediatly add the recevier to avoid race condition *)
-  let node = Lwt_sequence.add_r receiver group.receiver_group_receivers in
+  let node = Lwt_sequence.add_r receiver group.srg_receivers in
 
   (* Thread which is wake up when the signal is disconnected *)
   let done_waiter, done_wakener = Lwt.wait () in
 
   let descr = {
-    state = Sig_init;
-    auto_match_rule = true;
-    filters = [];
-    done_waiter = done_waiter;
-    done_wakener = done_wakener;
-    receiver = receiver;
-    receiver_group = group;
-    node = node;
-    sender = OBus_proxy.name proxy;
+    sd_state = Sig_init;
+    sd_auto_match_rule = true;
+    sd_filters = [];
+    sd_done_waiter = done_waiter;
+    sd_done_wakener = done_wakener;
+    sd_receiver = receiver;
+    sd_group = group;
+    sd_node = node;
+    sd_sender = OBus_proxy.name proxy;
   } in
   let signal = {
-    event = Lwt_event.with_finaliser (stop descr) (React.E.fmap (cast info) event);
-    descr = descr;
+    s_event = Lwt_event.with_finaliser (stop descr) (React.E.fmap (cast info) event);
+    s_descr = descr;
   } in
   ignore (init_signal descr);
   signal
 
-let event signal = React.E.map snd signal.event
-let event_with_context signal = signal.event
+let event signal = React.E.map snd signal.s_event
+let event_with_context signal = signal.s_event
 
 (* +-----------------------------------------------------------------+
    | Signal settings                                                 |
    +-----------------------------------------------------------------+ *)
 
-let auto_match_rule signal = signal.descr.auto_match_rule
+let auto_match_rule signal = signal.s_descr.sd_auto_match_rule
 
 let set_auto_match_rule signal auto_match_rule  =
-  let descr = signal.descr in
-  if auto_match_rule <> descr.auto_match_rule then begin
-    descr.auto_match_rule <- auto_match_rule;
+  let descr = signal.s_descr in
+  if auto_match_rule <> descr.sd_auto_match_rule then begin
+    descr.sd_auto_match_rule <- auto_match_rule;
     if auto_match_rule then begin
       let rule =
         OBus_match.rule
           ~typ:`Signal
-          ?sender:descr.sender
-          ~path:descr.receiver_group.receiver_group_path
-          ~interface:descr.receiver_group.receiver_group_interface
-          ~member:descr.receiver_group.receiver_group_member
-          ~arguments:(OBus_match.make_arguments descr.filters)
+          ?sender:descr.sd_sender
+          ~path:descr.sd_group.srg_path
+          ~interface:descr.sd_group.srg_interface
+          ~member:descr.sd_group.srg_member
+          ~arguments:(OBus_match.make_arguments descr.sd_filters)
           ()
       in
       (* Use the sorted list of argument filters: *)
       let filters = OBus_match.arguments rule in
-      descr.receiver.receiver_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
-      descr.receiver.receiver_rule <- Some rule
+      descr.sd_receiver.sr_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
+      descr.sd_receiver.sr_rule <- Some rule
     end else
-      descr.receiver.receiver_rule <- None;
-    match descr.state with
+      descr.sd_receiver.sr_rule <- None;
+    match descr.sd_state with
       | Sig_init ->
           ()
       | Sig_disconnected ->
@@ -323,23 +323,23 @@ let set_auto_match_rule signal auto_match_rule  =
   end
 
 let set_filters signal filters =
-  let descr = signal.descr in
-  descr.filters <- filters;
-  if descr.auto_match_rule then begin
+  let descr = signal.s_descr in
+  descr.sd_filters <- filters;
+  if descr.sd_auto_match_rule then begin
     let rule =
       OBus_match.rule
         ~typ:`Signal
-        ?sender:descr.sender
-        ~path:descr.receiver_group.receiver_group_path
-        ~interface:descr.receiver_group.receiver_group_interface
-        ~member:descr.receiver_group.receiver_group_member
-        ~arguments:(OBus_match.make_arguments descr.filters)
+        ?sender:descr.sd_sender
+        ~path:descr.sd_group.srg_path
+        ~interface:descr.sd_group.srg_interface
+        ~member:descr.sd_group.srg_member
+        ~arguments:(OBus_match.make_arguments descr.sd_filters)
         ()
     in
     let filters = OBus_match.arguments rule in
-    descr.receiver.receiver_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
-    descr.receiver.receiver_rule <- Some rule;
-    match descr.state with
+    descr.sd_receiver.sr_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
+    descr.sd_receiver.sr_rule <- Some rule;
+    match descr.sd_state with
       | Sig_init ->
           ()
       | Sig_disconnected ->
@@ -349,10 +349,10 @@ let set_filters signal filters =
   end
 
 let init ?(filters=[]) ?(auto_match_rule=true) signal =
-  let descr = signal.descr in
-  descr.filters <- filters;
+  let descr = signal.s_descr in
+  descr.sd_filters <- filters;
   (* Force a refresh of the match rule if necessary: *)
-  descr.auto_match_rule <- not auto_match_rule;
+  descr.sd_auto_match_rule <- not auto_match_rule;
   set_auto_match_rule signal auto_match_rule;
   event signal
 

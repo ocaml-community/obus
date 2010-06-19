@@ -9,30 +9,30 @@
 
 open OBus_private_connection
 
-type 'a t = 'a OBus_private_connection.context
+type 'a t = 'a OBus_private_connection.message_context
 type void = OBus_private_connection.void
 
 let make = OBus_private_connection.make_context
 let make_with_reply = OBus_private_connection.make_context_with_reply
 
-let connection ctx = ctx.context_connection
-let flags ctx = ctx.context_flags
-let serial ctx = ctx.context_serial
+let connection ctx = ctx.mc_connection
+let flags ctx = ctx.mc_flags
+let serial ctx = ctx.mc_serial
 
 let sender ctx = {
-  OBus_peer.connection = ctx.context_connection;
-  OBus_peer.name = ctx.context_sender;
+  OBus_peer.connection = ctx.mc_connection;
+  OBus_peer.name = ctx.mc_sender;
 }
 
 let destination ctx = {
-  OBus_peer.connection = ctx.context_connection;
-  OBus_peer.name = ctx.context_destination;
+  OBus_peer.connection = ctx.mc_connection;
+  OBus_peer.name = ctx.mc_destination;
 }
 
 let map f ctx = {
   ctx with
-    context_make_body = (fun x -> ctx.context_make_body (f x));
+    mc_make_body = (fun x -> ctx.mc_make_body (f x));
 }
 
 let make_body ctx x =
-  ctx.context_make_body x
+  ctx.mc_make_body x

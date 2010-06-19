@@ -27,7 +27,7 @@ val call_with_context :
   interface : OBus_name.interface ->
   member : OBus_name.member ->
   i_args : 'a OBus_value.C.sequence ->
-  o_args : 'b OBus_value.C.sequence -> 'a -> (OBus_private_connection.void OBus_private_connection.context * 'b) Lwt.t
+  o_args : 'b OBus_value.C.sequence -> 'a -> (OBus_private_connection.void OBus_private_connection.message_context * 'b) Lwt.t
 
 val call_no_reply :
   connection : OBus_connection.t ->

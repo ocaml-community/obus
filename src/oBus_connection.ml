@@ -51,7 +51,7 @@ let send_message_with_reply = OBus_private_connection.send_message_with_reply
    +-----------------------------------------------------------------+ *)
 
 let match_sender receiver message =
-  match receiver.receiver_sender, message.sender with
+  match receiver.sr_sender, message.sender with
     | None, _ ->
         true
 
@@ -101,9 +101,9 @@ let dispatch_message connection running message = match message with
      dropped. *)
   | { typ = Method_return(reply_serial) }
   | { typ = Error(reply_serial, _) } -> begin
-      match try Some(Serial_map.find reply_serial running.running_reply_waiters) with Not_found -> None with
+      match try Some(Serial_map.find reply_serial running.rc_reply_waiters) with Not_found -> None with
         | Some w ->
-            running.running_reply_waiters <- Serial_map.remove reply_serial running.running_reply_waiters;
+            running.rc_reply_waiters <- Serial_map.remove reply_serial running.rc_reply_waiters;
             wakeup w message;
             return ()
         | None ->
@@ -121,26 +121,26 @@ let dispatch_message connection running message = match message with
 
   | { typ = Signal(path, interface, member) } -> begin
       let context = make_context connection message in
-      match running.running_name, message.sender with
+      match running.rc_name, message.sender with
         | None, _ -> begin
             (* If this is a peer-to-peer connection, we do not match
                on the sender *)
-            match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
+            match try Some(Signal_map.find (path, interface, member) running.rc_receiver_groups) with Not_found -> None with
               | Some receiver_group ->
                   Lwt_sequence.fold_l
                     (fun receiver thread ->
                        join [
                          thread;
-                         if receiver.receiver_active && receiver.receiver_filter message then
+                         if receiver.sr_active && receiver.sr_filter message then
                            try_lwt
-                             receiver.receiver_push (context, message);
+                             receiver.sr_push (context, message);
                              return ()
                            with exn ->
                              Lwt_log.error ~section ~exn "signal event failed with"
                          else
                            return ()
                        ])
-                    receiver_group.receiver_group_receivers (return ())
+                    receiver_group.srg_receivers (return ())
               | None ->
                   return ()
           end
@@ -164,9 +164,9 @@ let dispatch_message connection running message = match message with
                        and it is not owned anymore, this means that
                        the peer with this name has exited. We remember
                        this information here. *)
-                    OBus_cache.add running.running_exited_peers name;
+                    OBus_cache.add running.rc_exited_peers name;
 
-                  begin match try Some(Name_map.find name running.running_resolvers) with Not_found -> None with
+                  begin match try Some(Name_map.find name running.rc_resolvers) with Not_found -> None with
                     | Some resolver ->
                         lwt () =
                           Lwt_log.debug_f ~section "updating internal name resolver: %S -> %S"
@@ -176,10 +176,10 @@ let dispatch_message connection running message = match message with
                                | None -> "")
                         in
 
-                        resolver.resolver_set owner;
+                        resolver.nr_set owner;
 
                         begin
-                          match resolver.resolver_state with
+                          match resolver.nr_state with
                             | Resolver_init(waiter, wakener) ->
                                 (* The resolver has not yet been
                                    initialized; this means that the
@@ -188,7 +188,7 @@ let dispatch_message connection running message = match message with
                                    been received. We consider that
                                    this first signal has precedence
                                    and terminate initialization. *)
-                                resolver.resolver_state <- Resolver_running;
+                                resolver.nr_state <- Resolver_running;
                                 Lwt.wakeup wakener resolver
                             | Resolver_running ->
                                 ()
@@ -205,9 +205,9 @@ let dispatch_message connection running message = match message with
                    body = [V.Basic(V.String name)] })
 
                   (* Only handle signals destined to us *)
-                  when message.destination = running.running_name ->
+                  when message.destination = running.rc_name ->
 
-                  running.running_set_acquired_names (Name_set.add name (React.S.value running.running_acquired_names));
+                  running.rc_set_acquired_names (Name_set.add name (React.S.value running.rc_acquired_names));
                     return ()
 
               (* Internal handling of "NameLost" signals *)
@@ -216,9 +216,9 @@ let dispatch_message connection running message = match message with
                    body = [V.Basic(V.String name)] })
 
                   (* Only handle signals destined to us *)
-                  when message.destination = running.running_name ->
+                  when message.destination = running.rc_name ->
 
-                  running.running_set_acquired_names (Name_set.remove name (React.S.value running.running_acquired_names));
+                  running.rc_set_acquired_names (Name_set.remove name (React.S.value running.rc_acquired_names));
                     return ()
 
               | _ ->
@@ -226,23 +226,23 @@ let dispatch_message connection running message = match message with
             in
 
             (* Only handle signals broadcasted or destined to us *)
-            if message.destination = None || message.destination = running.running_name then
-              match try Some(Signal_map.find (path, interface, member) running.running_receiver_groups) with Not_found -> None with
+            if message.destination = None || message.destination = running.rc_name then
+              match try Some(Signal_map.find (path, interface, member) running.rc_receiver_groups) with Not_found -> None with
                 | Some receiver_group ->
                     Lwt_sequence.fold_l
                       (fun receiver thread ->
                          join [
                            thread;
-                           if receiver.receiver_active && match_sender receiver message && receiver.receiver_filter message then
+                           if receiver.sr_active && match_sender receiver message && receiver.sr_filter message then
                              try_lwt
-                               receiver.receiver_push (context, message);
+                               receiver.sr_push (context, message);
                                return ()
                              with exn ->
                                Lwt_log.error ~section ~exn "signal event failed with"
                            else
                              return ()
                          ])
-                      receiver_group.receiver_group_receivers (return ())
+                      receiver_group.srg_receivers (return ())
                 | None ->
                     return ()
             else
@@ -272,7 +272,7 @@ let dispatch_message connection running message = match message with
       (* Look in static objects *)
       begin
         try
-          return (`Object(Object_map.find path running.running_static_objects))
+          return (`Object(Object_map.find path running.rc_static_objects))
         with Not_found ->
           (* Look in dynamic objects *)
           match
@@ -287,7 +287,7 @@ let dispatch_message connection running message = match message with
                              Some(path, dynamic_object)
                          | None ->
                              None)
-              running.running_dynamic_objects None
+              running.rc_dynamic_objects None
           with
             | None ->
                 return `Not_found
@@ -301,7 +301,7 @@ let dispatch_message connection running message = match message with
         | `Object static_object -> begin
             lwt result =
               try_lwt
-                (static_object.static_object_handle context message :> [ `Replied | `No_reply | `Failure of exn ] Lwt.t)
+                (static_object.so_handle context message :> [ `Replied | `No_reply | `Failure of exn ] Lwt.t)
               with exn ->
                 return (`Failure exn)
             in
@@ -309,7 +309,7 @@ let dispatch_message connection running message = match message with
               | `Replied ->
                   return ()
               | `No_reply ->
-                  if OBus_message.no_reply_expected context.context_flags then
+                  if OBus_message.no_reply_expected context.mc_flags then
                     return ()
                   else
                     reply_expected message
@@ -332,7 +332,7 @@ let dispatch_message connection running message = match message with
         | `Replied ->
             return ()
         | `No_reply ->
-            if OBus_message.no_reply_expected context.context_flags then
+            if OBus_message.no_reply_expected context.mc_flags then
               return ()
             else
               reply_expected message
@@ -354,7 +354,7 @@ let rec dispatch_forever connection running =
   try_bind
     (fun () ->
        lwt () =
-         match React.S.value running.running_down with
+         match React.S.value running.rc_down with
            | Some(waiter, wakener) ->
                waiter
            | None ->
@@ -362,8 +362,8 @@ let rec dispatch_forever connection running =
        in
        lwt message =
          try_lwt
-           choose [OBus_transport.recv running.running_transport;
-                   running.running_abort_recv]
+           choose [OBus_transport.recv running.rc_transport;
+                   running.rc_abort_recv]
          with exn ->
            fail =<< (connection#set_crash
                        (match exn with
@@ -371,7 +371,7 @@ let rec dispatch_forever connection running =
                           | OBus_wire.Protocol_error _ as exn -> exn
                           | exn -> Transport_error exn))
        in
-       match apply_filters "incoming" message running.running_incoming_filters with
+       match apply_filters "incoming" message running.rc_incoming_filters with
          | None ->
              lwt () = Lwt_log.debug ~section "incoming message dropped by filters" in
              return ()
@@ -399,7 +399,7 @@ let rec dispatch_forever connection running =
            *)
            lwt exn = connection#set_crash exn in
            try
-             !(running.running_on_disconnect) exn;
+             !(running.rc_on_disconnect) exn;
              return ()
            with exn ->
              Lwt_log.error ~section ~exn "the error handler (OBus_connection.on_disconnect) failed with")
@@ -431,34 +431,34 @@ object(self)
         state <- Crashed exn;
         set_running false;
 
-        begin match running.running_guid with
+        begin match running.rc_guid with
           | Some guid -> guid_connection_map := Guid_map.remove guid !guid_connection_map
           | None -> ()
         end;
 
         (* This make the dispatcher to exit if it is waiting on
            [get_message] *)
-        wakeup_exn running.running_abort_recv_wakener exn;
-        begin match React.S.value running.running_down with
+        wakeup_exn running.rc_abort_recv_wakener exn;
+        begin match React.S.value running.rc_down with
           | Some(waiter, wakener) -> wakeup_exn wakener exn
           | None -> ()
         end;
 
         (* Wakeup all reply handlers so they will not wait forever *)
-        Serial_map.iter (fun _ w -> wakeup_exn w exn) running.running_reply_waiters;
+        Serial_map.iter (fun _ w -> wakeup_exn w exn) running.rc_reply_waiters;
 
         (* Remove all objects *)
         Object_map.iter
           (fun path static_object ->
-             static_object.static_object_connection_closed running.running_wrapper)
-          running.running_static_objects;
+             static_object.so_connection_closed running.rc_wrapper)
+          running.rc_static_objects;
 
         (* If the connection is closed normally, flush it *)
         lwt () =
           if exn = Connection_closed then
-            Lwt_mutex.with_lock running.running_outgoing_m return
+            Lwt_mutex.with_lock running.rc_outgoing_m return
           else begin
-            wakeup_exn running.running_abort_send_wakener exn;
+            wakeup_exn running.rc_abort_send_wakener exn;
             return ()
           end
         in
@@ -466,7 +466,7 @@ object(self)
         (* Shutdown the transport *)
         lwt () =
             try_lwt
-              OBus_transport.shutdown running.running_transport
+              OBus_transport.shutdown running.rc_transport
             with exn ->
               Lwt_log.error ~section ~exn "failed to abort/shutdown the transport"
         in
@@ -486,37 +486,37 @@ let of_transport ?guid ?(up=true) transport =
     and acquired_names, set_acquired_names = React.S.create ~eq:Name_set.equal Name_set.empty in
     let state = React.S.map (function None -> `Up | Some _ -> `Down) down in
     let running = {
-      running_name = None;
-      running_acquired_names = acquired_names;
-      running_set_acquired_names = set_acquired_names;
-      running_transport = transport;
-      running_on_disconnect = ref (fun _ -> ());
-      running_guid = guid;
-      running_down = down;
-      running_set_down = set_down;
-      running_state = state;
-      running_abort_recv = abort_recv;
-      running_abort_send = abort_send;
-      running_abort_recv_wakener = abort_recv_wakener;
-      running_abort_send_wakener = abort_send_wakener;
-      running_watch = (try_lwt
+      rc_name = None;
+      rc_acquired_names = acquired_names;
+      rc_set_acquired_names = set_acquired_names;
+      rc_transport = transport;
+      rc_on_disconnect = ref (fun _ -> ());
+      rc_guid = guid;
+      rc_down = down;
+      rc_set_down = set_down;
+      rc_state = state;
+      rc_abort_recv = abort_recv;
+      rc_abort_send = abort_send;
+      rc_abort_recv_wakener = abort_recv_wakener;
+      rc_abort_send_wakener = abort_send_wakener;
+      rc_watch = (try_lwt
                          lwt _ = abort_recv in
                          return ()
                        with
                          | Connection_closed -> return ()
                          | exn -> fail exn);
-      running_resolvers = Name_map.empty;
-      running_exited_peers = OBus_cache.create 100;
-      running_outgoing_m = Lwt_mutex.create ();
-      running_next_serial = 1l;
-      running_static_objects = Object_map.empty;
-      running_dynamic_objects = Object_map.empty;
-      running_incoming_filters = Lwt_sequence.create ();
-      running_outgoing_filters = Lwt_sequence.create ();
-      running_reply_waiters = Serial_map.empty;
-      running_receiver_groups = Signal_map.empty;
-      running_properties = Property_map.empty;
-      running_wrapper = (connection :> t);
+      rc_resolvers = Name_map.empty;
+      rc_exited_peers = OBus_cache.create 100;
+      rc_outgoing_m = Lwt_mutex.create ();
+      rc_next_serial = 1l;
+      rc_static_objects = Object_map.empty;
+      rc_dynamic_objects = Object_map.empty;
+      rc_incoming_filters = Lwt_sequence.create ();
+      rc_outgoing_filters = Lwt_sequence.create ();
+      rc_reply_waiters = Serial_map.empty;
+      rc_receiver_groups = Signal_map.empty;
+      rc_properties = Property_map.empty;
+      rc_wrapper = (connection :> t);
     } in
     connection#set_running running;
     (* Start the dispatcher *)
@@ -564,14 +564,14 @@ let loopback () = of_transport (OBus_transport.loopback ())
 
 let running connection = connection#running
 
-let watch connection = (running_of_connection connection).running_watch
+let watch connection = (running_of_connection connection).rc_watch
 
-let guid connection = (running_of_connection connection).running_guid
-let transport connection = (running_of_connection connection).running_transport
-let name connection = (running_of_connection connection).running_name
+let guid connection = (running_of_connection connection).rc_guid
+let transport connection = (running_of_connection connection).rc_transport
+let name connection = (running_of_connection connection).rc_name
 let support_unix_fd_passing connection =
-  List.mem `Unix_fd (OBus_transport.capabilities (running_of_connection connection).running_transport)
-let on_disconnect connection = (running_of_connection connection).running_on_disconnect
+  List.mem `Unix_fd (OBus_transport.capabilities (running_of_connection connection).rc_transport)
+let on_disconnect connection = (running_of_connection connection).rc_on_disconnect
 let close connection = match connection#get with
   | Crashed _ ->
       return ()
@@ -579,25 +579,25 @@ let close connection = match connection#get with
       lwt _ = connection#set_crash Connection_closed in
       return ()
 
-let state connection = (running_of_connection connection).running_state
+let state connection = (running_of_connection connection).rc_state
 
 let set_up connection =
   let running = running_of_connection connection in
-  match React.S.value running.running_down with
+  match React.S.value running.rc_down with
     | None ->
         ()
     | Some(waiter, wakener) ->
-        running.running_set_down None;
+        running.rc_set_down None;
         wakeup wakener ()
 
 let set_down connection =
   let running = running_of_connection connection in
-  match React.S.value running.running_down with
+  match React.S.value running.rc_down with
     | Some _ ->
         ()
     | None ->
-        running.running_set_down (Some(wait ()))
+        running.rc_set_down (Some(wait ()))
 
-let incoming_filters connection = (running_of_connection connection).running_incoming_filters
-let outgoing_filters connection = (running_of_connection connection).running_outgoing_filters
+let incoming_filters connection = (running_of_connection connection).rc_incoming_filters
+let outgoing_filters connection = (running_of_connection connection).rc_outgoing_filters
 

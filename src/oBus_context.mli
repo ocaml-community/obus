@@ -14,7 +14,7 @@
 (** A context contains information about the reception of a
     message. It may also be used to send a reply to a method call *)
 
-type 'a t = 'a OBus_private_connection.context
+type 'a t = 'a OBus_private_connection.message_context
     (** Type of a context. In case of a method call, [`a] is a value
         of the type of the method reply, otherwise, it is
         meaningless. *)

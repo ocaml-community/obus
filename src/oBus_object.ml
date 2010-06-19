@@ -32,27 +32,27 @@ type emits_signal_changed =
       (* Only send the property name in changes' notifications *)
 
 type 'a method_info = {
-  method_name : OBus_name.member;
-  method_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t;
-  method_introspect : unit -> OBus_introspect.member;
+  mi_name : OBus_name.member;
+  mi_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t;
+  mi_introspect : unit -> OBus_introspect.member;
 }
 
 and 'a signal_info = {
-  signal_name : OBus_name.member;
-  signal_introspect : unit -> OBus_introspect.member;
+  si_name : OBus_name.member;
+  si_introspect : unit -> OBus_introspect.member;
 }
 
 and 'a property_info = {
-  property_name : OBus_name.member;
-  property_signal : ('a -> OBus_value.V.single React.signal) option;
-  property_setter : (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option;
-  property_emits_changed_signal : emits_signal_changed;
-  property_introspect : unit -> OBus_introspect.member;
+  pi_name : OBus_name.member;
+  pi_signal : ('a -> OBus_value.V.single React.signal) option;
+  pi_setter : (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option;
+  pi_emits_changed_signal : emits_signal_changed;
+  pi_introspect : unit -> OBus_introspect.member;
 }
 
-and 'a property_instance = {
-  property_instance_signal : OBus_value.V.single React.signal;
-  property_instance_monitor : unit React.event;
+and 'a property_signal = {
+  ps_signal : OBus_value.V.single React.signal;
+  ps_monitor : unit React.event;
   (* Event which send notifications when the contents of the property
      changes *)
 }
@@ -96,7 +96,7 @@ and 'a t = {
   mutable interfaces : 'a interface array;
   (* Interfaces implemented by this object *)
 
-  mutable properties : 'a property_instance option array array;
+  mutable properties : 'a property_signal option array array;
   (* All property instances of the object *)
 
   mutable changed : OBus_value.V.single option Member_map.t array;
@@ -122,13 +122,13 @@ let introspect obj =
     (fun interface acc ->
        (interface.interface_name,
         Array.fold_right
-          (fun method_ acc -> method_.method_introspect () :: acc)
+          (fun method_ acc -> method_.mi_introspect () :: acc)
           interface.interface_methods
           (Array.fold_right
-             (fun signal acc -> signal.signal_introspect () :: acc)
+             (fun signal acc -> signal.si_introspect () :: acc)
              interface.interface_signals
              (Array.fold_right
-                (fun property acc -> property.property_introspect () :: acc)
+                (fun property acc -> property.pi_introspect () :: acc)
                 interface.interface_properties
                 [])),
         interface.interface_annotations) :: acc)
@@ -161,10 +161,10 @@ let compare_interface name interface =
   String.compare name interface.interface_name
 
 let compare_property name property =
-  String.compare name property.property_name
+  String.compare name property.pi_name
 
 let compare_method name method_ =
-  String.compare name method_.method_name
+  String.compare name method_.mi_name
 
 (* +-----------------------------------------------------------------+
    | Exportation                                                     |
@@ -187,7 +187,7 @@ let handle_call obj context message =
                 | -1 ->
                     unknown_method context message
                 | index ->
-                    interface.interface_methods.(index).method_handler context obj message
+                    interface.interface_methods.(index).mi_handler context obj message
       end
     | { typ = Method_call(path, None, member) } ->
         let rec loop i =
@@ -198,7 +198,7 @@ let handle_call obj context message =
               | -1 ->
                   loop (i + 1)
               | index ->
-                  obj.interfaces.(i).interface_methods.(index).method_handler context obj message
+                  obj.interfaces.(i).interface_methods.(index).mi_handler context obj message
         in
         loop 0
     | _ ->
@@ -210,10 +210,10 @@ let export connection obj =
   else begin
     let running = running_of_connection connection in
     if not (Connection_set.mem connection obj.exports) then begin
-      running.running_static_objects <- Object_map.add obj.path {
-        static_object_handle = handle_call obj;
-        static_object_connection_closed = (fun connection -> obj.exports <- Connection_set.remove connection obj.exports);
-      } running.running_static_objects;
+      running.rc_static_objects <- Object_map.add obj.path {
+        so_handle = handle_call obj;
+        so_connection_closed = (fun connection -> obj.exports <- Connection_set.remove connection obj.exports);
+      } running.rc_static_objects;
       obj.exports <- Connection_set.add connection obj.exports
     end
   end
@@ -223,11 +223,11 @@ let remove_by_path connection path =
     | Crashed _ ->
         ()
     | Running running ->
-        running.running_dynamic_objects <- Object_map.remove path running.running_dynamic_objects;
-        match try Some(Object_map.find path running.running_static_objects) with Not_found -> None with
+        running.rc_dynamic_objects <- Object_map.remove path running.rc_dynamic_objects;
+        match try Some(Object_map.find path running.rc_static_objects) with Not_found -> None with
           | Some static_object ->
-              running.running_static_objects <- Object_map.remove path running.running_static_objects;
-              static_object.static_object_connection_closed connection
+              running.rc_static_objects <- Object_map.remove path running.rc_static_objects;
+              static_object.so_connection_closed connection
           | None ->
               ()
 
@@ -238,7 +238,7 @@ let remove connection obj =
       | Crashed _ ->
           ()
       | Running running ->
-          running.running_static_objects <- Object_map.remove obj.path running.running_static_objects
+          running.rc_static_objects <- Object_map.remove obj.path running.rc_static_objects
   end
 
 let destroy obj =
@@ -247,7 +247,7 @@ let destroy obj =
        | Crashed exn ->
            ()
        | Running running ->
-           running.running_static_objects <- Object_map.remove obj.path running.running_static_objects)
+           running.rc_static_objects <- Object_map.remove obj.path running.rc_static_objects)
     obj.exports;
   obj.exports <- Connection_set.empty
 
@@ -258,8 +258,8 @@ let dynamic ~connection ~prefix ~handler =
     handler context path >>= function
       | `Object obj ->
           return (`Object{
-                    static_object_handle = handle_call obj;
-                    static_object_connection_closed = ignore;
+                    so_handle = handle_call obj;
+                    so_connection_closed = ignore;
                   })
       | `Replied ->
           return `Replied
@@ -268,7 +268,7 @@ let dynamic ~connection ~prefix ~handler =
       | `Not_found ->
           return `Not_found
   in
-  running.running_dynamic_objects <- Object_map.add prefix create running.running_dynamic_objects
+  running.rc_dynamic_objects <- Object_map.add prefix create running.rc_dynamic_objects
 
 (* +-----------------------------------------------------------------+
    | Signals                                                         |
@@ -339,7 +339,7 @@ let generate obj =
     (fun instances ->
        Array.iter
          (function
-            | Some instance -> React.E.stop instance.property_instance_monitor
+            | Some instance -> React.E.stop instance.ps_monitor
             | None -> ())
          instances)
     obj.properties;
@@ -352,20 +352,20 @@ let generate obj =
     let instances = Array.make count' None in
     obj.properties.(i) <- instances;
     for j = 0 to count' - 1 do
-      match properties.(j).property_signal with
+      match properties.(j).pi_signal with
         | Some make ->
             let signal = make (match obj.data with Some data -> data | None -> assert false) in
             instances.(j) <- (
               Some({
-                     property_instance_signal = signal;
-                     property_instance_monitor =
-                       (match properties.(j).property_emits_changed_signal, obj.interfaces.(i).interface_emits_changed_signal with
+                     ps_signal = signal;
+                     ps_monitor =
+                       (match properties.(j).pi_emits_changed_signal, obj.interfaces.(i).interface_emits_changed_signal with
                           | Esc_false, _ | Esc_default, Esc_false ->
                               React.E.never
                           | Esc_true, _ | Esc_default, (Esc_default | Esc_true) ->
-                              React.E.map (handle_property_change_true obj i properties.(j).property_name) (React.S.changes signal)
+                              React.E.map (handle_property_change_true obj i properties.(j).pi_name) (React.S.changes signal)
                           | Esc_invalidates, _ | Esc_default, Esc_invalidates ->
-                              React.E.map (handle_property_change_invalidates obj i properties.(j).property_name) (React.S.changes signal))
+                              React.E.map (handle_property_change_invalidates obj i properties.(j).pi_name) (React.S.changes signal))
                    })
             )
         | None ->
@@ -411,9 +411,9 @@ let _method_info info f =
     f context obj args
   in
   {
-    method_name = OBus_member.Method.member info;
-    method_handler = handler;
-    method_introspect = (fun () -> OBus_member.Method.introspect info);
+    mi_name = OBus_member.Method.member info;
+    mi_handler = handler;
+    mi_introspect = (fun () -> OBus_member.Method.introspect info);
   }
 
 let method_info info f =
@@ -424,8 +424,8 @@ let method_info info f =
          | None -> assert false)
 
 let signal_info info = {
-  signal_name = OBus_member.Signal.member info;
-  signal_introspect = (fun () -> OBus_member.Signal.introspect info);
+  si_name = OBus_member.Signal.member info;
+  si_introspect = (fun () -> OBus_member.Signal.introspect info);
 }
 
 let get_emits_changed_signal annotations =
@@ -455,11 +455,11 @@ let property_info info signal setter =
         Some(fun context data value -> f context data (OBus_value.C.cast_single typ value))
   in
   {
-    property_name = OBus_member.Property.member info;
-    property_signal = signal;
-    property_setter = setter;
-    property_emits_changed_signal = get_emits_changed_signal (OBus_member.Property.annotations info);
-    property_introspect = (fun () -> OBus_member.Property.introspect info);
+    pi_name = OBus_member.Property.member info;
+    pi_signal = signal;
+    pi_setter = setter;
+    pi_emits_changed_signal = get_emits_changed_signal (OBus_member.Property.annotations info);
+    pi_introspect = (fun () -> OBus_member.Property.introspect info);
   }
 
 let property_r_info info signal = property_info info (Some signal) None
@@ -480,13 +480,13 @@ let make_interface_unsafe name annotations methods signals properties = {
 }
 
 let compare_methods m1 m2 =
-  String.compare m1.method_name m2.method_name
+  String.compare m1.mi_name m2.mi_name
 
 let compare_signals m1 m2 =
-  String.compare m1.signal_name m2.signal_name
+  String.compare m1.si_name m2.si_name
 
 let compare_properties p1 p2 =
-  String.compare p1.property_name p2.property_name
+  String.compare p1.pi_name p2.pi_name
 
 let make_interface ~name ?(annotations=[]) ?(methods=[]) ?(signals=[]) ?(properties=[]) () =
   let methods = Array.of_list methods
@@ -533,7 +533,7 @@ let introspectable () =
       (fun context obj () ->
          let document =
            (introspect obj,
-            match context.context_connection#get with
+            match context.mc_connection#get with
               | Crashed _ ->
                   []
               | Running running ->
@@ -559,7 +559,7 @@ let properties () =
                      OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
                  | j ->
                      match obj.properties.(i).(j) with
-                       | Some{ property_instance_signal = signal } ->
+                       | Some{ ps_signal = signal } ->
                            OBus_method.return context (React.S.value signal)
                        | None ->
                            OBus_method.fail context (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not readable" member interface)));
@@ -575,8 +575,8 @@ let properties () =
                    acc
                  else
                    match obj.properties.(i).(j) with
-                     | Some{ property_instance_signal = signal } ->
-                         loop (j + 1) ((obj.interfaces.(i).interface_properties.(j).property_name,
+                     | Some{ ps_signal = signal } ->
+                         loop (j + 1) ((obj.interfaces.(i).interface_properties.(j).pi_name,
                                         React.S.value signal) :: acc)
                      | None ->
                          loop (j + 1) acc
@@ -592,7 +592,7 @@ let properties () =
                  | -1 ->
                      OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
                  | j ->
-                     match obj.interfaces.(i).interface_properties.(j).property_setter with
+                     match obj.interfaces.(i).interface_properties.(j).pi_setter with
                        | Some f -> begin
                            match obj.data with
                              | Some data ->
