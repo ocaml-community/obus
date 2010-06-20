@@ -50,8 +50,7 @@ val map_r : ('a -> 'b) -> ('a, [> `readable ]) t -> 'b r
   (** Maps a read-only properties *)
 
 val map_r_with_context :  (OBus_context.void OBus_context.t -> 'a -> 'b) -> ('a, [> `readable ]) t -> 'b r
-  (** Maps a read-only properties, passing the con
-texxot to the mapping
+  (** Maps a read-only properties, passing the conntext to the mapping
       function *)
 
 val map_w : ('b -> 'a) -> ('a, [> `writable ]) t -> 'b w
