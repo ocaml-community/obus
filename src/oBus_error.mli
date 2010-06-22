@@ -7,10 +7,13 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** D-Bus errors *)
+(** D-Bus errors management *)
 
 (** This module integrates D-Bus errors into OCaml exceptions, and
-    OCaml exceptions into D-Bus errors. *)
+    OCaml exceptions into D-Bus errors.
+
+    To do this, an OCaml exception that maps a D-Bus error should be
+    registered with {!Register}. *)
 
 type name = OBus_name.error
     (** An error name. For example: ["org.foo.bar.Error.Failed"] *)

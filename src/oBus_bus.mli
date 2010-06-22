@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Interface to D-Bus message bus *)
+(** Message buses management *)
 
 type t = OBus_connection.t
 

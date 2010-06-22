@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** A dbus peer *)
+(** D-Bus peers *)
 
 (** A D-Bus peer represent an application which can be reach though a
     D-Bus connection. It is the application at the end-point of the

@@ -7,6 +7,8 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+(** Ip6 configuration *)
+
 include OBus_proxy.Private
 
 val addresses : t -> (string * int) list OBus_property.r

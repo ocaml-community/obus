@@ -9,8 +9,9 @@
 
 (** Popup notifications *)
 
-(** For complete details about notifications,
-    @see <http://www.galago-project.org/specs/notification/> the official specifications *)
+(** For complete details about notifications, look at the
+    {{:http://www.galago-project.org/specs/notification/} the official
+    specifications} *)
 
 val app_name : string ref
   (** Application name used for notification. The default value is

@@ -1,82 +1,66 @@
 {1 OBus - API Reference}
 
-{2 High-level}
+{2 OBus library}
 
-{3 Connection and message bus}
+This section describe modules of the core OBus library. OBus is
+composed of a lot of modules, but you will usually need only a few of
+them.
+
+{3 Connections and message Buses}
 
 {!modules:
-OBus_connection
 OBus_bus
+OBus_connection
 OBus_server
 }
 
-{3 D-Bus names, strings and paths}
+{3 D-Bus objects}
 
 {!modules:
-OBus_string
-OBus_name
-OBus_path
-OBus_resolver
-}
-
-{3 D-Bus values}
-
-{!modules:
-OBus_value
-}
-
-{3 OBus type combinator system}
-
-{!modules:
-OBus_type
-OBus_pervasives
-}
-
-{3 Proxies}
-
-{!modules:
-OBus_peer
 OBus_proxy
+OBus_object
 OBus_method
 OBus_signal
 OBus_property
-}
-
-{3 Local objects}
-
-{!modules:
-OBus_object
+OBus_member
 }
 
 {3 Introspection}
 
 {!modules:
 OBus_introspect
+OBus_introspect_ext
 }
 
-{3 Low-level}
-
-{!modules:
-OBus_wire
-OBus_transport
-OBus_address
-OBus_auth
-OBus_message
-OBus_match
-
-}
-
-{3 Miscellaneous}
+{3 Misc}
 
 {!modules:
 OBus_error
+OBus_value
+OBus_resolver
+OBus_peer
 OBus_info
+OBus_name
+OBus_path
+OBus_string
 OBus_uuid
+OBus_context
+}
+
+{3 OBus low-level API}
+
+{!modules:
+OBus_match
+OBus_message
+OBus_address
+OBus_auth
+OBus_transport
+OBus_wire
 }
 
 {2 Service bindings}
 
-This section describe bindings to D-Bus services shipped with OBus.
+This section list bindings to D-Bus services shipped with OBus.
 
 {3 Notifications}
 
@@ -142,7 +126,6 @@ Nm_ppp
 Nm_settings
 Nm_vpn_connection
 Nm_vpn_plugin
-Nm_interfaces
 }
 
 {3 Index}

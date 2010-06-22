@@ -316,8 +316,8 @@ let _ =
                            "obus.odocl"));
 
         (* Use an introduction page with categories *)
-        dep ["file:obus.docdir/index.html"] ["utils/doc/apiref-intro"];
-        flag ["file:obus.docdir/index.html"] & S[A"-intro"; P"utils/doc/apiref-intro"; A"-colorize-code"];
+        dep ["file:obus.docdir/index.html"] ["apiref-intro"];
+        flag ["file:obus.docdir/index.html"] & S[A"-intro"; P"apiref-intro"; A"-colorize-code"];
 
         (* Build documentation then copy our css to the documentation
            directory *)

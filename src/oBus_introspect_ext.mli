@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Extended introspection *)
+(** OBus extended introspection *)
 
 (** By default, introspection document do not convey semantical
     informations, such as enumeration or flags. However it is possible

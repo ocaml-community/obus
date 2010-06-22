@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** D-Bus types, values and converter *)
+(** D-Bus types, values and converters *)
 
 (** {6 Types} *)
 

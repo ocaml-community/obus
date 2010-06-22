@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Server for one-to-one communication *)
+(** Servers for one-to-one communication *)
 
 type t
   (** Type of a server *)

@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** Introspection *)
+(** D-Bus obejct introspection *)
 
 type name = string
 

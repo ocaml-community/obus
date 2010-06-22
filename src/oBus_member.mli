@@ -7,7 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(** D-Bus member descriptions *)
+(** D-Bus members description *)
 
 (** D-Bus Methods *)
 module Method : sig
