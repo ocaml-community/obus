@@ -16,7 +16,7 @@ let () =
     (fun typ arg -> match typ, arg with
        | _, None ->
            Loc.raise (Ast.loc_of_ctyp typ) (Stream.Error "pa_obus: argument recquired for the 'obus' generator")
-       | <:ctyp@_loc< $uid:caml_name$ of $_$ >>, Some dbus_name ->
+       | Ast.TyOf(_loc, (Ast.TyId(_, (Ast.IdUid(_, caml_name)))), _), Some dbus_name ->
            if Filename.basename (Loc.file_name _loc) = "oBus_error.ml" then
              <:str_item<
                let module M =
