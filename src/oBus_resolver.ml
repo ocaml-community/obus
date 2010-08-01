@@ -24,7 +24,7 @@ let finalise stop () =
   ignore_result (Lazy.force stop)
 
 let make connection name =
-  let running = running_of_connection connection in
+  let running = connection#get in
   (* If the connection is a peer-to-peer connection, act as if there
      is no owner *)
   if (running.rc_name = None ||
@@ -107,7 +107,7 @@ let make connection name =
     let disable = lazy(
       name_resolver.nr_ref_count <- name_resolver.nr_ref_count - 1;
       if name_resolver.nr_ref_count = 0 then
-        match connection#get with
+        match connection#state with
           | Running running ->
               running.rc_resolvers <- Name_map.remove name running.rc_resolvers;
               React.S.stop name_resolver.nr_owner;

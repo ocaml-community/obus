@@ -315,8 +315,11 @@ and connection_state =
 
 (* Connections are packed into objects to make them comparable *)
 and t = <
-  get : connection_state;
+  state : connection_state;
   (* Get the connection state *)
+
+  get : running_connection;
+  (* Returns the connection if it is running, and fail otherwise *)
 
   set_crash : exn -> exn Lwt.t;
   (* Put the connection in a 'crashed' state if not already
@@ -354,15 +357,8 @@ let children running prefix =
        running.rc_static_objects
        String_set.empty)
 
-let running_of_connection connection =
-  match connection#get with
-    | Crashed exn ->
-        raise exn
-    | Running running ->
-        running
-
 let check_connection connection =
-  match connection#get with
+  match connection#state with
     | Crashed exn ->
         raise exn
     | Running running ->
@@ -398,9 +394,9 @@ open OBus_message
 (* Send a message, maybe adding a reply waiter and return
    [return_thread] *)
 let send_message_backend connection reply_waiter_opt message =
-  let running = running_of_connection connection in
+  let running = connection#get in
   Lwt_mutex.with_lock running.rc_outgoing_m begin fun () ->
-    let send_it, closed = match connection#get with
+    let send_it, closed = match connection#state with
       | Running _ ->
           (true, false)
       | Crashed Connection_closed ->
@@ -421,7 +417,7 @@ let send_message_backend connection reply_waiter_opt message =
                 | Some(waiter, wakener) ->
                     running.rc_reply_waiters <- Serial_map.add message.serial wakener running.rc_reply_waiters;
                     on_cancel waiter (fun () ->
-                                        match connection#get with
+                                        match connection#state with
                                           | Crashed _ ->
                                               ()
                                           | Running running ->
@@ -456,7 +452,7 @@ let send_message_backend connection reply_waiter_opt message =
                   lwt exn = connection#set_crash (Transport_error exn) in
                   fail exn
     end else
-      match connection#get with
+      match connection#state with
         | Crashed exn ->
             fail exn
         | Running _ ->

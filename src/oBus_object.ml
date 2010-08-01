@@ -208,7 +208,7 @@ let export connection obj =
   if obj.data = None then
     failwith "OBus_object.export: cannot export an object without data attahed"
   else begin
-    let running = running_of_connection connection in
+    let running = connection#get in
     if not (Connection_set.mem connection obj.exports) then begin
       running.rc_static_objects <- Object_map.add obj.path {
         so_handle = handle_call obj;
@@ -219,7 +219,7 @@ let export connection obj =
   end
 
 let remove_by_path connection path =
-  match connection#get with
+  match connection#state with
     | Crashed _ ->
         ()
     | Running running ->
@@ -234,7 +234,7 @@ let remove_by_path connection path =
 let remove connection obj =
   if Connection_set.mem connection obj.exports then begin
     obj.exports <- Connection_set.remove connection obj.exports;
-    match connection#get with
+    match connection#state with
       | Crashed _ ->
           ()
       | Running running ->
@@ -243,7 +243,7 @@ let remove connection obj =
 
 let destroy obj =
   Connection_set.iter
-    (fun connection -> match connection#get with
+    (fun connection -> match connection#state with
        | Crashed exn ->
            ()
        | Running running ->
@@ -252,7 +252,7 @@ let destroy obj =
   obj.exports <- Connection_set.empty
 
 let dynamic ~connection ~prefix ~handler =
-  let running = running_of_connection connection in
+  let running = connection#get in
   (* Remove any dynamic node declared with the same prefix: *)
   let create context path =
     handler context path >>= function
@@ -533,7 +533,7 @@ let introspectable () =
       (fun context obj () ->
          let document =
            (introspect obj,
-            match context.mc_connection#get with
+            match context.mc_connection#state with
               | Crashed _ ->
                   []
               | Running running ->

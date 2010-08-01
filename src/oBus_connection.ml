@@ -420,7 +420,12 @@ object(self)
   method set_running running =
     state <- Running running
 
-  method get = state
+  method get =
+    match state with
+      | Crashed exn -> raise exn
+      | Running running -> running
+
+  method state = state
 
   (* Put the connection in a "crashed" state. This means that all
      subsequent call using the connection will fail. *)
@@ -564,25 +569,25 @@ let loopback () = of_transport (OBus_transport.loopback ())
 
 let running connection = connection#running
 
-let watch connection = (running_of_connection connection).rc_watch
+let watch connection = connection#get.rc_watch
 
-let guid connection = (running_of_connection connection).rc_guid
-let transport connection = (running_of_connection connection).rc_transport
-let name connection = (running_of_connection connection).rc_name
+let guid connection = connection#get.rc_guid
+let transport connection = connection#get.rc_transport
+let name connection = connection#get.rc_name
 let support_unix_fd_passing connection =
-  List.mem `Unix_fd (OBus_transport.capabilities (running_of_connection connection).rc_transport)
-let on_disconnect connection = (running_of_connection connection).rc_on_disconnect
-let close connection = match connection#get with
+  List.mem `Unix_fd (OBus_transport.capabilities connection#get.rc_transport)
+let on_disconnect connection = connection#get.rc_on_disconnect
+let close connection = match connection#state with
   | Crashed _ ->
       return ()
   | Running _ ->
       lwt _ = connection#set_crash Connection_closed in
       return ()
 
-let state connection = (running_of_connection connection).rc_state
+let state connection = connection#get.rc_state
 
 let set_up connection =
-  let running = running_of_connection connection in
+  let running = connection#get in
   match React.S.value running.rc_down with
     | None ->
         ()
@@ -591,13 +596,13 @@ let set_up connection =
         wakeup wakener ()
 
 let set_down connection =
-  let running = running_of_connection connection in
+  let running = connection#get in
   match React.S.value running.rc_down with
     | Some _ ->
         ()
     | None ->
         running.rc_set_down (Some(wait ()))
 
-let incoming_filters connection = (running_of_connection connection).rc_incoming_filters
-let outgoing_filters connection = (running_of_connection connection).rc_outgoing_filters
+let incoming_filters connection = connection#get.rc_incoming_filters
+let outgoing_filters connection = connection#get.rc_outgoing_filters
 

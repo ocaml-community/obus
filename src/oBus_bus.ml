@@ -38,7 +38,7 @@ let error_handler = function
       exit 1
 
 let register_connection ?(set_on_disconnect=true) connection =
-  let running = running_of_connection connection in
+  let running = connection#get in
   match running.rc_name with
     | Some _ ->
         (* Do not call two times the Hello method *)
@@ -111,9 +111,7 @@ exception Adt_audit_data_unknown of string
 exception Selinux_security_context_unknown of string
  with obus("org.freedesktop.DBus.Error.SELinuxSecurityContextUnknown")
 
-let acquired_names bus = match bus#get with
-  | Crashed exn -> raise exn
-  | Running running -> running.rc_acquired_names
+let acquired_names bus = bus#get.rc_acquired_names
 
 type request_name_result = type_request_name_result
 

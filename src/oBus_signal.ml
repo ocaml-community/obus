@@ -167,7 +167,7 @@ let init_signal descr =
     Lwt_sequence.remove descr.sd_node;
     lwt () = commit_rules descr in
     if Lwt_sequence.is_empty descr.sd_group.srg_receivers then begin
-      let running = running_of_connection connection in
+      let running = connection#get in
       running.rc_receiver_groups <- (
         Signal_map.remove
           (descr.sd_group.srg_path,
@@ -220,7 +220,7 @@ let stop descr () =
 
 let connect info proxy =
   let connection = OBus_proxy.connection proxy in
-  let running = running_of_connection (OBus_proxy.connection proxy) in
+  let running = connection#get in
   (* Signal groups are indexed by tuples [(path, interface, member)]: *)
   let key = (OBus_proxy.path proxy,
              OBus_member.Signal.interface info,

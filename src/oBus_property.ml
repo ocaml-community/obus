@@ -95,7 +95,7 @@ let unmonitor_property_group property_group =
 let cleanup_property_group property_group =
   property_group.pg_ref_count <- property_group.pg_ref_count - 1;
   if property_group.pg_ref_count = 0 then begin
-    let running = running_of_connection property_group.pg_connection in
+    let running = property_group.pg_connection#get in
     running.rc_properties <- (
       Property_map.remove
         (property_group.pg_owner,
@@ -258,7 +258,7 @@ let set property value =
 
 let make_property_group proxy interface =
   let connection = OBus_proxy.connection proxy in
-  let running = running_of_connection connection in
+  let running = connection#get in
   let key = (OBus_proxy.name proxy, OBus_proxy.path proxy, interface) in
   let property_group =
   match try Some(Property_map.find key running.rc_properties) with Not_found -> None with
@@ -306,7 +306,7 @@ let make_group proxy interface =
 
 let get_all_with_context proxy ~interface =
   let connection = OBus_proxy.connection proxy in
-  let running = running_of_connection connection in
+  let running = connection#get in
   match
     try
       Some(Property_map.find
@@ -329,7 +329,7 @@ let get_all proxy ~interface =
 
 let invalidate_all proxy ~interface =
   let connection = OBus_proxy.connection proxy in
-  let running = running_of_connection connection in
+  let running = connection#get in
   match
     try
       Some(Property_map.find
