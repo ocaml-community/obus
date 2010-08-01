@@ -5,10 +5,10 @@
 
 # Build the user manual for release
 cd manual
-melt -pdf -no-link manual.mlt
+make
 mv _melt/manual.pdf .
 # Remove intermediate files
-melt -clean
+make clean
 cd ..
 
 # Remove this file

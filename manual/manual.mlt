@@ -70,7 +70,6 @@ allow programs running in the session to talk to each other.
 
 OBus offers have predefined connections for connecting to these
 message buses:
-
 "
 
 let () = emit (document
