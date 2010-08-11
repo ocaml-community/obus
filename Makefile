@@ -9,14 +9,8 @@
 # | Configuration                                                    |
 # +------------------------------------------------------------------+
 
-OC := ocamlbuild
+OC := ocamlbuild -classic-display -use-ocamlfind
 OF := ocamlfind
-
-# Use classic-display when compiling under a terminal which does not
-# support ANSI sequence:
-ifeq ($(TERM),dumb)
-OC += -classic-display
-endif
 
 # Avoid compilation of native plugin if ocamlopt is not available
 ifeq ($(shell if which ocamlopt >/dev/null; then echo yes; fi),)
@@ -49,13 +43,13 @@ byte:
 # in native-code
 .PHONY: native
 native:
-	$(OC) byte
+	$(OC) native
 
 # Same as "byte" except that everything is compiled with debugging
 # support
 .PHONY: debug
 debug:
-	$(OC) byte
+	$(OC) debug
 
 # Compiles only libraries in byte-code and in native-code if possible
 .PHONY: libs

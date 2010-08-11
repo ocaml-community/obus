@@ -1,53 +1,47 @@
 # -*- conf -*-
 
-# For shared libraries
-<**/*.cmxs>: plugin
-
-# Set the debug tag to keep debugging logs
-<**/*.d.*>: debug
-
 # +------------------------------------------------------------------+
 # | Use of syntax extensions                                         |
 # +------------------------------------------------------------------+
 
 # Use camlp4 for all implementation files
-<**/*.ml>: syntax_camlp4o, pkg_camlp4
+<**/*.ml>: syntax(camlp4o), package(camlp4)
 
 # Use syntax extesions on all files:
-<**/*.ml>: pkg_lwt.syntax
-<**/*.ml>: pkg_lwt.syntax.log
-<**/*.ml>: pkg_type-conv.syntax
+<**/*.ml>: package(lwt.syntax)
+<**/*.ml>: package(lwt.syntax.log)
+<**/*.ml>: package(type-conv.syntax)
 <**/*.ml>: pa_obus
 # Except for syntax extensions themselves:
-<syntax/*.ml>: -pkg_lwt.syntax
-<syntax/*.ml>: -pkg_lwt.syntax.log
-<syntax/*.ml>: -pkg_type_conv.syntax
+<syntax/*.ml>: -package(lwt.syntax)
+<syntax/*.ml>: -package(lwt.syntax.log)
+<syntax/*.ml>: -package(type_conv.syntax)
 <syntax/*.ml>: -pa_obus
 
 # The IDL parser uses camlp4:
-<src/oBus_idl.ml>: pkg_camlp4.extend
+<src/oBus_idl.ml>: package(camlp4.extend)
 
 # Extension for the syntax extension:
-<syntax/pa_obus.ml>: pkg_camlp4.quotations.o
+<syntax/pa_obus.ml>: package(camlp4.quotations.o)
 
 # +------------------------------------------------------------------+
 # | Packages                                                         |
 # +------------------------------------------------------------------+
 
 # Packages used by syntax extensons:
-<syntax/*>: pkg_camlp4.lib
+<syntax/*>: package(camlp4.lib)
 
 # Pa_obus use type-conv:
-<syntax/pa_obus.*>: pkg_type-conv
+<syntax/pa_obus.*>: package(type-conv)
 
 # Tools use the IDL parser which requires camlp4:
-<tools/*>: pkg_camlp4.lib
+<tools/*>: package(camlp4.lib)
 
 # Common dependencies:
-<**/*>: pkg_lwt.unix, pkg_lwt.react, pkg_xmlm
+<**/*>: package(lwt.unix), package(lwt.react), package(xmlm)
 # Except for syntax extensions and libraries:
-<*.cm{a,xa,xs}>: -pkg_lwt.unix, -pkg_lwt.react, -pkg_xmlm
-<syntax/**/*>: -pkg_lwt.unix, -pkg_lwt.react, -pkg_xmlm
+<**/*.cm{a,xa,xs}>: -package(lwt.unix), -package(lwt.react), -package(xmlm)
+<syntax/**/*>: -package(lwt.unix), -package(lwt.react), -package(xmlm)
 
 # Use obus everywhere:
 <**/*>: use_obus
@@ -60,4 +54,4 @@
 # Examples
 <examples/{eject,signals}.*>: use_hal
 <examples/notify.*>: use_notification
-<examples/network_state.*>: use_NetworkManager, pkg_lwt.text
+<examples/network_state.*>: use_NetworkManager, package(lwt.text)

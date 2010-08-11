@@ -21,12 +21,6 @@ let try_exec command =
   with _ ->
     false
 
-let () =
-  if not (try_exec "ocamlfind printconf") then begin
-    prerr_endline "ocamlfind is not available, please install it";
-    exit 1
-  end
-
 let have_native = try_exec "ocamlfind ocamlopt -version"
 
 let examples = [
@@ -66,36 +60,6 @@ let intern_syntaxes = [
 ]
 
 (* +-----------------------------------------------------------------+
-   | Ocamlfind                                                       |
-   +-----------------------------------------------------------------+ *)
-
-let packages = [
-  "camlp4";
-  "camlp4.extend";
-  "camlp4.lib";
-  "camlp4.macro";
-  "camlp4.quotations.o";
-  "camlp4.quotations.r";
-  "lwt";
-  "lwt.unix";
-  "lwt.syntax";
-  "lwt.syntax.log";
-  "lwt.react";
-  "lwt.text";
-  "str";
-  "xmlm";
-  "react";
-  "dynlink";
-  "type-conv";
-  "type-conv.syntax";
-]
-
-let syntaxes = [
-  "camlp4o";
-  "camlp4r";
-]
-
-(* +-----------------------------------------------------------------+
    | Utils                                                           |
    +-----------------------------------------------------------------+ *)
 
@@ -122,17 +86,7 @@ let version = lazy(
 let _ =
   dispatch begin function
     | Before_options ->
-
         Options.make_links := false;
-
-        (* override default commands by ocamlfind ones *)
-        let ocamlfind x = S[A"ocamlfind"; A x] in
-        Options.ocamlc   := ocamlfind "ocamlc";
-        Options.ocamlopt := ocamlfind "ocamlopt";
-        Options.ocamldep := ocamlfind "ocamldep";
-        (* FIXME: sometimes ocamldoc say that elements are not found
-           even if they are present: *)
-        Options.ocamldoc := S[A"ocamlfind"; A"ocamldoc"; A"-hide-warnings"]
 
     | After_rules ->
         (* Tests must see everything *)
@@ -234,34 +188,6 @@ let _ =
           bindings;
 
         (* +---------------------------------------------------------+
-           | Shared libraries                                        |
-           +---------------------------------------------------------+ *)
-
-        rule "shared libraries (cmxs)"
-          ~dep:"%.cmxa" ~prod:"%.cmxs"
-          (fun env _ -> Cmd(S[!(Options.ocamlopt); A"-shared"; A"-linkall"; A(env "%.cmxa"); A"-o"; A(env "%.cmxs")]));
-
-        (* +---------------------------------------------------------+
-           | Ocamlfind stuff                                         |
-           +---------------------------------------------------------+ *)
-
-        (* When one link an OCaml binary, one should use -linkpkg *)
-        flag ["ocaml"; "link"; "program"] & A"-linkpkg";
-
-        (* For each ocamlfind package one inject the -package option
-           when compiling, computing dependencies, generating
-           documentation and linking. *)
-        List.iter
-          (fun package -> flag_all_stages ["pkg_" ^ package] (S[A"-package"; A package]))
-          packages;
-
-        (* Like -package but for extensions syntax. Morover -syntax is
-           useless when linking. *)
-        List.iter
-          (fun syntax -> flag_all_stages_except_link ["syntax_" ^ syntax] (S[A"-syntax"; A syntax]))
-          syntaxes;
-
-        (* +---------------------------------------------------------+
            | Internal syntaxes                                       |
            +---------------------------------------------------------+ *)
 
@@ -295,7 +221,7 @@ let _ =
            +---------------------------------------------------------+ *)
 
         (* Keep debugging message if compiling in debug mode *)
-        flag_all_stages_except_link ["pkg_lwt.syntax.log"; "debug"] & S[A"-ppopt"; A"-lwt-debug"];
+        flag_all_stages_except_link ["package(lwt.syntax.log)"; "debug"] & S[A"-ppopt"; A"-lwt-debug"];
 
         (* Generation of the OBus_version.ml file *)
         rule "version" ~prod:"src/private/OBus_version.ml" ~dep:"VERSION"
