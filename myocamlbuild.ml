@@ -87,6 +87,7 @@ let _ =
   dispatch begin function
     | Before_options ->
         Options.make_links := false;
+        Options.use_ocamlfind := true
 
     | After_rules ->
         (* Tests must see everything *)

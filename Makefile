@@ -9,7 +9,7 @@
 # | Configuration                                                    |
 # +------------------------------------------------------------------+
 
-OC := ocamlbuild -classic-display -use-ocamlfind
+OC := ocamlbuild -classic-display
 OF := ocamlfind
 
 # Avoid compilation of native plugin if ocamlopt is not available
