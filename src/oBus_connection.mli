@@ -83,14 +83,14 @@ val transport : t -> OBus_transport.t
   (** [transport connection] get the transport associated with a
       connection *)
 
-val name : t -> OBus_name.bus option
+val name : t -> OBus_name.bus
   (** Unique name of the connection. This is only relevant if the
       other side of the connection is a message bus.
 
       In this case this is the unique name assigned by the message bus
       for the lifetime of the connection.
 
-      In other cases it is [None]. *)
+      In other cases it is [""]. *)
 
 val support_unix_fd_passing : t -> bool
   (** Tell whether the underlying transport support file descriptors

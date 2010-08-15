@@ -51,7 +51,7 @@ let member () = string 20
 let serial () = Random.int32 Int32.max_int
 
 let message_type () = match Random.int 4 with
-  | 0 -> Method_call(path (), option name, member ())
+  | 0 -> Method_call(path (), name (), member ())
   | 1 -> Method_return(serial ())
   | 2 -> Error(serial (), name ())
   | _ -> Signal(path (), name (), member ())
@@ -160,7 +160,7 @@ let message () = {
   flags = { no_reply_expected = Random.bool (); no_auto_start = Random.bool () };
   serial = serial ();
   typ = message_type ();
-  destination = option name;
-  sender = option unique_name;
+  destination = name ();
+  sender = unique_name ();
   body = snd (sequence 0 0 (snd (tsequence 0 0)));
 }

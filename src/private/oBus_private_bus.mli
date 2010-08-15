@@ -14,6 +14,6 @@ val remove_match : OBus_connection.t -> string -> unit Lwt.t
   (** Add/remove a match rule. These function do not wait for a reply,
       so errors are ignored. *)
 
-val get_name_owner : OBus_connection.t -> OBus_name.bus -> OBus_name.bus option Lwt.t
-  (** Get the name owner of a name. If any error happen, returns
-      [None] *)
+val get_name_owner : OBus_connection.t -> OBus_name.bus -> OBus_name.bus Lwt.t
+  (** Get the name owner of a name. If any error happen, [""] is
+      returned. *)

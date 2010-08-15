@@ -55,19 +55,19 @@ let match_sender receiver message =
     | None, _ ->
         true
 
-    | Some _, None ->
+    | Some _, "" ->
         (* this normally never happen because with a message bus, all
            messages have a sender field *)
         false
 
-    | Some name, Some sender ->
+    | Some name, sender ->
         match React.S.value name with
-          | None ->
+          | "" ->
               (* This case is when the name the rule filter on do not
                  currently have an owner *)
               false
 
-          | Some owner ->
+          | owner ->
               owner = sender
 
 (* +-----------------------------------------------------------------+
@@ -88,9 +88,9 @@ let introspection children =
 
 let reply_expected message =
   match message .typ with
-    | Method_call(path, interface_opt, member) ->
+    | Method_call(path, interface, member) ->
         Lwt_log.error_f ~section "no reply sent by %S on interface %S, but one was expected"
-          member (match interface_opt with None -> "" | Some name -> name)
+          member interface
     | _ ->
         return ()
 
@@ -122,7 +122,7 @@ let dispatch_message connection running message = match message with
   | { typ = Signal(path, interface, member) } -> begin
       let context = make_context connection message in
       match running.rc_name, message.sender with
-        | None, _ -> begin
+        | "", _ -> begin
             (* If this is a peer-to-peer connection, we do not match
                on the sender *)
             match try Some(Signal_map.find (path, interface, member) running.rc_receiver_groups) with Not_found -> None with
@@ -145,10 +145,10 @@ let dispatch_message connection running message = match message with
                   return ()
           end
 
-        | Some _, None ->
+        | _, "" ->
             Lwt_log.error_f ~section "signal without sender received from message bus"
 
-        | Some _, Some sender ->
+        | _, sender ->
             lwt () = match sender, message with
 
               (* Internal handling of "NameOwnerChange" messages for
@@ -157,9 +157,7 @@ let dispatch_message connection running message = match message with
                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
                   body = [V.Basic(V.String name); V.Basic(V.String old_owner); V.Basic(V.String new_owner)] } ->
 
-                  let owner = if new_owner = "" then None else Some new_owner in
-
-                  if OBus_name.is_unique name && owner = None then
+                  if OBus_name.is_unique name && new_owner = "" then
                     (* If the resovler was monitoring a unique name
                        and it is not owned anymore, this means that
                        the peer with this name has exited. We remember
@@ -171,12 +169,10 @@ let dispatch_message connection running message = match message with
                         lwt () =
                           Lwt_log.debug_f ~section "updating internal name resolver: %S -> %S"
                             name
-                            (match owner with
-                               | Some n -> n
-                               | None -> "")
+                            new_owner
                         in
 
-                        resolver.nr_set owner;
+                        resolver.nr_set new_owner;
 
                         begin
                           match resolver.nr_state with
@@ -226,7 +222,7 @@ let dispatch_message connection running message = match message with
             in
 
             (* Only handle signals broadcasted or destined to us *)
-            if message.destination = None || message.destination = running.rc_name then
+            if message.destination = "" || message.destination = running.rc_name then
               match try Some(Signal_map.find (path, interface, member) running.rc_receiver_groups) with Not_found -> None with
                 | Some receiver_group ->
                     Lwt_sequence.fold_l
@@ -250,7 +246,7 @@ let dispatch_message connection running message = match message with
     end
 
   (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
-  | { typ = Method_call(_, Some "org.freedesktop.DBus.Peer", member); body = body } -> begin
+  | { typ = Method_call(_, "org.freedesktop.DBus.Peer", member); body = body } -> begin
       let context = make_context_with_reply connection message in
       match member, body with
         | "Ping", [] ->
@@ -267,7 +263,7 @@ let dispatch_message connection running message = match message with
             send_error context (OBus_error.Unknown_method (unknown_method_message message))
     end
 
-  | { typ = Method_call(path, interface_opt, member); body = body } ->
+  | { typ = Method_call(path, interface, member); body = body } ->
       let context = make_context_with_reply connection message in
       (* Look in static objects *)
       begin
@@ -316,14 +312,14 @@ let dispatch_message connection running message = match message with
               | `Failure exn ->
                   lwt () =
                     if OBus_error.name exn = OBus_error.ocaml then
-                      match interface_opt with
-                        | Some interface ->
+                      match interface with
+                        | "" ->
+                            Lwt_log.error_f ~section ~exn
+                              "method call handler for method %S failed with" member
+                        | _ ->
                             Lwt_log.error_f ~section ~exn
                               "method call handler for method %S on interface %S failed with"
                               member interface
-                        | None ->
-                            Lwt_log.error_f ~section ~exn
-                              "method call handler for method %S failed with" member
                     else
                       return ()
                   in
@@ -343,9 +339,8 @@ let dispatch_message connection running message = match message with
                path "/a/b/c", we need to add introspection support for
                virtual objects with path "/", "/a", "/a/b",
                "/a/b/c". *)
-            match interface_opt, member, body with
-              | None, "Introspect", []
-              | Some "org.freedesktop.DBus.Introspectable", "Introspect", [] ->
+            match interface, member, body with
+              | ("" | "org.freedesktop.DBus.Introspectable"), "Introspect", [] ->
                   send_reply context [V.basic_string (introspection (children running path))]
               | _ ->
                   send_error context (OBus_error.Failed (Printf.sprintf "No such object: %S" (OBus_path.to_string path)))
@@ -491,7 +486,7 @@ let of_transport ?guid ?(up=true) transport =
     and acquired_names, set_acquired_names = React.S.create ~eq:Name_set.equal Name_set.empty in
     let state = React.S.map (function None -> `Up | Some _ -> `Down) down in
     let running = {
-      rc_name = None;
+      rc_name = "";
       rc_acquired_names = acquired_names;
       rc_set_acquired_names = set_acquired_names;
       rc_transport = transport;

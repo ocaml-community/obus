@@ -151,8 +151,7 @@ let init_callbacks = lazy(
 
   (* Create an anymous proxy for connecting signals, so we will
      receive signals comming from any daemon *)
-  let anonymous_proxy = { OBus_proxy.peer = { OBus_peer.connection = bus;
-                                              OBus_peer.name = None };
+  let anonymous_proxy = { OBus_proxy.peer = OBus_peer.anonymous bus;
                           OBus_proxy.path = server_path } in
 
   (* Handle signals for closed notifications *)

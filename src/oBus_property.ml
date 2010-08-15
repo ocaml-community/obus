@@ -129,11 +129,11 @@ let rec monitor property =
     | None ->
         lwt resolver, owner =
           match property_group.pg_owner with
-            | Some name ->
+            | "" ->
+                return (None, React.S.const "")
+            | name ->
                 lwt resolver = OBus_resolver.make property_group.pg_connection name in
                 return (Some resolver, OBus_resolver.owner resolver)
-            | None ->
-                return (None, React.S.const None)
         in
         property_group.pg_watcher <- Some(
           let signal = OBus_signal.connect s_PropertiesChanged property.p_proxy in
@@ -158,8 +158,8 @@ let rec monitor property =
                   action;
                   React.E.fmap
                     (function
-                       | Some _ -> Some Invalidate
-                       | None -> None)
+                       | "" -> None
+                       | _ -> Some Invalidate)
                     (React.S.changes owner)])
           in
           { pgw_cache = properties_signal;

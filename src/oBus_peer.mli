@@ -18,7 +18,7 @@ type t = {
   connection : OBus_connection.t;
   (** Connection used to reach the peer. *)
 
-  name : OBus_name.bus option;
+  name : OBus_name.bus;
   (** Name of the peer. This only make sense if the connection is a
       connection to a message bus. *)
 }
@@ -30,7 +30,7 @@ val compare : t -> t -> int
 val connection : t -> OBus_connection.t
   (** [connection] projection *)
 
-val name : t -> OBus_name.bus option
+val name : t -> OBus_name.bus
   (** [name] projection *)
 
 (** Note that it is possible to use either a unique connection name or

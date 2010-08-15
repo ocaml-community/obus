@@ -31,12 +31,8 @@ lwt () =
 
   Lwt_event.always_notify_p
     (fun (name, old_owner, new_owner) ->
-       let opt = function
-         | Some s -> s
-         | None -> ""
-       in
        printlf "from D-Bus: the owner of the name %S changed: %S -> %S"
-         name (opt old_owner) (opt new_owner))
+         name old_owner new_owner)
     (OBus_signal.event (OBus_bus.name_owner_changed session));
 
   Lwt_event.always_notify_p

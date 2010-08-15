@@ -24,7 +24,7 @@ let rec run_tests con = function
   | n ->
       lwt () = OBus_connection.send_message con {
         Gen_random.message () with
-          destination = Some name;
+          destination = name;
           typ = Signal(["obus"; "test"], "obus.test", "test");
       } in
       run_tests con (n - 1)

@@ -11,7 +11,7 @@ open Lwt
 
 type t = {
   connection : OBus_connection.t;
-  name : OBus_name.bus option;
+  name : OBus_name.bus;
 }
 
 let compare = Pervasives.compare
@@ -19,14 +19,14 @@ let compare = Pervasives.compare
 let connection p = p.connection
 let name p = p.name
 
-let make ~connection ~name = { connection = connection; name = Some name }
-let anonymous c = { connection = c; name = None }
+let make ~connection ~name = { connection = connection; name = name }
+let anonymous c = { connection = c; name = "" }
 
 let ping peer =
   lwt context, () =
     OBus_private_method.call_with_context
       ~connection:peer.connection
-      ?destination:peer.name
+      ~destination:peer.name
       ~path:[]
       ~interface:"org.freedesktop.DBus.Peer"
       ~member:"Ping"
@@ -40,7 +40,7 @@ let ping peer =
 let get_machine_id peer =
   OBus_private_method.call
     ~connection:peer.connection
-    ?destination:peer.name
+    ~destination:peer.name
     ~path:[]
     ~interface:"org.freedesktop.DBus.Peer"
     ~member:"GetMachineId"
@@ -51,21 +51,20 @@ let get_machine_id peer =
 
 let wait_for_exit peer =
   match peer.name with
-    | Some name ->
+    | "" ->
+        fail (Invalid_argument "OBus_peer.wait_for_exit: peer has no name")
+    | name ->
         let waiter, wakener = Lwt.wait () in
         lwt resolver = OBus_resolver.make peer.connection name in
         let ev = React.S.map (function
-                                | None ->
+                                | "" ->
                                     if Lwt.state waiter = Sleep then Lwt.wakeup wakener ()
-                                | Some _ ->
+                                | _ ->
                                     ()) (OBus_resolver.owner resolver) in
         lwt () = waiter in
         (* Just to make the compiler happy: *)
         ignore ev;
         OBus_resolver.disable resolver
-
-    | None ->
-        fail (Invalid_argument "OBus_peer.wait_for_exit: peer has no name")
 
 (* +-----------------------------------------------------------------+
    | Private peers                                                   |

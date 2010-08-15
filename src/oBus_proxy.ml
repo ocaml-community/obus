@@ -49,7 +49,7 @@ end
 let call proxy ~interface ~member ~i_args ~o_args args =
   OBus_private_method.call
     ~connection:proxy.peer.connection
-    ?destination:proxy.peer.name
+    ~destination:proxy.peer.name
     ~path:proxy.path
     ~interface
     ~member
@@ -60,7 +60,7 @@ let call proxy ~interface ~member ~i_args ~o_args args =
 let call_with_context proxy ~interface ~member ~i_args ~o_args args =
   OBus_private_method.call_with_context
     ~connection:proxy.peer.connection
-    ?destination:proxy.peer.name
+    ~destination:proxy.peer.name
     ~path:proxy.path
     ~interface
     ~member
@@ -71,7 +71,7 @@ let call_with_context proxy ~interface ~member ~i_args ~o_args args =
 let call_no_reply proxy ~interface ~member ~i_args args =
   OBus_private_method.call_no_reply
     ~connection:proxy.peer.connection
-    ?destination:proxy.peer.name
+    ~destination:proxy.peer.name
     ~path:proxy.path
     ~interface
     ~member

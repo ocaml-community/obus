@@ -36,7 +36,7 @@ type signal_descriptor = {
   sd_group : signal_receiver_group;
   sd_node : signal_receiver Lwt_sequence.node;
 
-  sd_sender : OBus_name.bus option;
+  sd_sender : OBus_name.bus;
 
   (* Thread which is wake up when the signal is disconnected: *)
   sd_done_waiter : unit Lwt.t;
@@ -129,7 +129,7 @@ let commit_rules descr =
 let init_signal descr =
   let connection = descr.sd_group.srg_connection in
   try_lwt
-    if OBus_connection.name connection = None then begin
+    if OBus_connection.name connection = "" then begin
       (* If the connection is a peer-to-peer connection, there is
          nothing else to do. *)
       descr.sd_receiver.sr_active <- true;
@@ -137,9 +137,9 @@ let init_signal descr =
     end else begin
       lwt resolver =
         match descr.sd_sender with
-          | None ->
+          | "" ->
               return None
-          | Some name ->
+          | name ->
               (* If we are interested on signals coming from a
                  particular peer, we need a name resolver: *)
               lwt resolver = OBus_resolver.make connection name in
@@ -192,7 +192,7 @@ let cast info (context, message) =
   with OBus_value.C.Signature_mismatch ->
     ignore (
       Lwt_log.error_f ~section "failed to cast signal from %S, interface %S, member %S with signature %S to %S"
-        (match OBus_message.sender message with None -> "" | Some n -> n)
+        (OBus_message.sender message)
         (OBus_member.Signal.interface info)
         (OBus_member.Signal.member info)
         (OBus_value.string_of_signature
@@ -250,7 +250,7 @@ let connect info proxy =
     sr_rule = (
       Some(OBus_match.rule
              ~typ:`Signal
-             ?sender:(OBus_proxy.name proxy)
+             ~sender:(OBus_proxy.name proxy)
              ~path:(OBus_proxy.path proxy)
              ~interface:(OBus_member.Signal.interface info)
              ~member:(OBus_member.Signal.member info)
@@ -300,7 +300,7 @@ let set_auto_match_rule signal auto_match_rule  =
       let rule =
         OBus_match.rule
           ~typ:`Signal
-          ?sender:descr.sd_sender
+          ~sender:descr.sd_sender
           ~path:descr.sd_group.srg_path
           ~interface:descr.sd_group.srg_interface
           ~member:descr.sd_group.srg_member
@@ -329,7 +329,7 @@ let set_filters signal filters =
     let rule =
       OBus_match.rule
         ~typ:`Signal
-        ?sender:descr.sd_sender
+        ~sender:descr.sd_sender
         ~path:descr.sd_group.srg_path
         ~interface:descr.sd_group.srg_interface
         ~member:descr.sd_group.srg_member

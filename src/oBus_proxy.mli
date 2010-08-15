@@ -39,7 +39,7 @@ val path : t -> OBus_path.t
 val connection : t -> OBus_connection.t
   (** [connection proxy = OBus_peer.connection (peer proxy)] *)
 
-val name : t -> OBus_name.bus option
+val name : t -> OBus_name.bus
   (** [connection proxy = OBus_peer.name (peer proxy)] *)
 
 val introspect : t -> OBus_introspect.document Lwt.t

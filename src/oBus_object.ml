@@ -177,19 +177,7 @@ let unknown_method context message =
 
 let handle_call obj context message =
   match message with
-    | { typ = Method_call(path, Some interface, member) } -> begin
-        match binary_search compare_interface interface obj.interfaces with
-          | -1 ->
-              unknown_method context message
-          | index ->
-              let interface = obj.interfaces.(index) in
-              match binary_search compare_method member interface.interface_methods with
-                | -1 ->
-                    unknown_method context message
-                | index ->
-                    interface.interface_methods.(index).mi_handler context obj message
-      end
-    | { typ = Method_call(path, None, member) } ->
+    | { typ = Method_call(path, "", member) } ->
         let rec loop i =
           if i = Array.length obj.interfaces then
             unknown_method context message
@@ -201,6 +189,18 @@ let handle_call obj context message =
                   obj.interfaces.(i).interface_methods.(index).mi_handler context obj message
         in
         loop 0
+    | { typ = Method_call(path, interface, member) } -> begin
+        match binary_search compare_interface interface obj.interfaces with
+          | -1 ->
+              unknown_method context message
+          | index ->
+              let interface = obj.interfaces.(index) in
+              match binary_search compare_method member interface.interface_methods with
+                | -1 ->
+                    unknown_method context message
+                | index ->
+                    interface.interface_methods.(index).mi_handler context obj message
+      end
     | _ ->
         invalid_arg "OBus_object.Make.handle_call"
 
@@ -284,7 +284,7 @@ let emit obj ~interface ~member ?peer typ x =
           serial = 0l;
           typ = OBus_message.Signal(obj.path, interface, member);
           destination = destination;
-          sender = None;
+          sender = "";
           body = body;
         }
     | None, None ->
@@ -292,8 +292,8 @@ let emit obj ~interface ~member ?peer typ x =
           flags = { no_reply_expected = true; no_auto_start = true };
           serial = 0l;
           typ = OBus_message.Signal(obj.path, interface, member);
-          destination = None;
-          sender = None;
+          destination = "";
+          sender = "";
           body = body;
         } in
         join (Connection_set.fold

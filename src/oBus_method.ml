@@ -21,7 +21,7 @@ exception Invalid_reply = OBus_private_method.Invalid_reply
 let call info proxy args =
   OBus_private_method.call
     ~connection:(OBus_proxy.connection proxy)
-    ?destination:(OBus_proxy.name proxy)
+    ~destination:(OBus_proxy.name proxy)
     ~path:(OBus_proxy.path proxy)
     ~interface:(OBus_member.Method.interface info)
     ~member:(OBus_member.Method.member info)
@@ -32,7 +32,7 @@ let call info proxy args =
 let call_with_context info proxy args =
   OBus_private_method.call_with_context
     ~connection:(OBus_proxy.connection proxy)
-    ?destination:(OBus_proxy.name proxy)
+    ~destination:(OBus_proxy.name proxy)
     ~path:(OBus_proxy.path proxy)
     ~interface:(OBus_member.Method.interface info)
     ~member:(OBus_member.Method.member info)
@@ -43,7 +43,7 @@ let call_with_context info proxy args =
 let call_no_reply info proxy args =
   OBus_private_method.call_no_reply
     ~connection:(OBus_proxy.connection proxy)
-    ?destination:(OBus_proxy.name proxy)
+    ~destination:(OBus_proxy.name proxy)
     ~path:(OBus_proxy.path proxy)
     ~interface:(OBus_member.Method.interface info)
     ~member:(OBus_member.Method.member info)

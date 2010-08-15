@@ -17,7 +17,7 @@ type body = OBus_value.V.sequence
     (** The body is a sequence of dynamically typed values *)
 
 type typ =
-  | Method_call of OBus_path.t * OBus_name.interface option * OBus_name.member
+  | Method_call of OBus_path.t * OBus_name.interface * OBus_name.member
   | Method_return of serial
       (** Contains the serial for which this message is a reply *)
   | Error of serial * OBus_name.error
@@ -46,18 +46,18 @@ type t = {
   flags : flags;
   serial : serial;
   typ : typ;
-  destination : OBus_name.bus option;
-  sender : OBus_name.bus option;
+  destination : OBus_name.bus;
+  sender : OBus_name.bus;
   body : body;
 }
 
-(** {8 Message projections} *)
+(** {8 Projections} *)
 
 val flags : t -> flags
 val serial : t -> serial
 val typ : t -> typ
-val destination : t -> OBus_name.bus option
-val sender : t -> OBus_name.bus option
+val destination : t -> OBus_name.bus
+val sender : t -> OBus_name.bus
 val body : t -> body
 
 (** {6 Creation of header} *)

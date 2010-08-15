@@ -12,7 +12,7 @@ open OBus_private_connection
 
 type t = {
   name : OBus_name.bus;
-  owner : OBus_name.bus option React.signal;
+  owner : OBus_name.bus React.signal;
   disable : unit Lwt.t Lazy.t;
 }
 
@@ -27,13 +27,13 @@ let make connection name =
   let running = connection#get in
   (* If the connection is a peer-to-peer connection, act as if there
      is no owner *)
-  if (running.rc_name = None ||
+  if (running.rc_name = "" ||
       (* If it is a unique name and the peer has already exited, then
          there is nothing to do *)
       (OBus_name.is_unique name && OBus_cache.mem running.rc_exited_peers name)) then
     return {
       name = name;
-      owner = React.S.const None;
+      owner = React.S.const "";
       disable = lazy(return ());
     }
   else
@@ -61,7 +61,7 @@ let make connection name =
                    ~path:["org"; "freedesktop"; "DBus"]
                    ~arguments:(OBus_match.make_arguments [(0, OBus_match.AF_string name)]) ()) in
 
-            let init_waiter, init_wakener = Lwt.wait () and owner, set = React.S.create None in
+            let init_waiter, init_wakener = Lwt.wait () and owner, set = React.S.create "" in
             let name_resolver = {
               nr_owner = owner;
               nr_set = set;

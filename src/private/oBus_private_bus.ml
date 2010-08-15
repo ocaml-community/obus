@@ -36,17 +36,14 @@ let remove_match connection match_rule =
 
 let get_name_owner connection name =
   try_lwt
-    lwt name =
-      OBus_private_method.call
-        ~connection
-        ~destination
-        ~path
-        ~interface
-        ~member:"GetNameOwner"
-        ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
-        ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
-        name
-    in
-    return (Some name)
+    OBus_private_method.call
+      ~connection
+      ~destination
+      ~path
+      ~interface
+      ~member:"GetNameOwner"
+      ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+      ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+      name
   with _ ->
-    return None
+    return ""

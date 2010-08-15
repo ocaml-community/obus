@@ -40,9 +40,9 @@ val make : OBus_connection.t -> OBus_name.bus -> t Lwt.t
 val name : t -> OBus_name.bus
   (** Returns the name monitored by the givne resolver *)
 
-val owner : t -> OBus_name.bus option React.signal
+val owner : t -> OBus_name.bus React.signal
   (** [owner resolver] returns a signal holding the current owner of
-      the name *)
+      the name. It holds [""] when there is no owner. *)
 
 val disable : t -> unit Lwt.t
   (** Disable a resolver. Note that a resolver is disabled when its

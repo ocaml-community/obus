@@ -14,8 +14,4 @@ open Lwt
 
 lwt () =
   lwt bus = OBus_bus.session () in
-  lwt () = Lwt_io.printlf "My unique connection name is: %s"
-    (match OBus_connection.name bus with
-       | Some x -> x
-       | None -> "") in
-  return ()
+  Lwt_io.printlf "My unique connection name is: %s" (OBus_connection.name bus)

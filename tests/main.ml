@@ -44,7 +44,7 @@ let rec run_tests failures total = function
               if tty then
                 Lwt_io.print "\n\027[32;1mTest passed.\n\027[0m\n"
               else
-                Lwt_io.print "\nTest failed.\n\n"
+                Lwt_io.print "\nTest passed.\n\n"
             in
             run_tests failures (total + 1) rest
         | false ->

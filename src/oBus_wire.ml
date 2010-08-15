@@ -56,48 +56,48 @@ let invalid_byte_order ch = sprintf "invalid byte order(%C)" ch
 
 type raw_fields = {
   mutable rf_path : OBus_path.t option;
-  mutable rf_member : OBus_name.member option;
-  mutable rf_interface : OBus_name.interface option;
-  mutable rf_error_name : OBus_name.error option;
+  mutable rf_member : OBus_name.member;
+  mutable rf_interface : OBus_name.interface;
+  mutable rf_error_name : OBus_name.error;
   mutable rf_reply_serial : serial option;
-  mutable rf_destination : OBus_name.bus option;
-  mutable rf_sender : OBus_name.bus option;
+  mutable rf_destination : OBus_name.bus;
+  mutable rf_sender : OBus_name.bus;
   mutable rf_signature : signature;
   mutable rf_unix_fds : int;
 }
 
-let path = ("path", fun x -> x.rf_path)
-let member = ("member", fun x -> x.rf_member)
-let interface = ("interface", fun x -> x.rf_interface)
-let error_name = ("error_name", fun x -> x.rf_error_name)
-let reply_serial = ("reply_serial", fun x -> x.rf_reply_serial)
+let missing_field message_type_name field_name =
+  raise (Protocol_error(sprintf "invalid header, field '%s' is required for '%s'"
+                          field_name message_type_name))
 
-let get_required message_type_name (field_name, get_field) fields =
-  match get_field fields with
-    | Some v -> v
-    | None -> raise (Protocol_error(sprintf "invalid header, field '%s' is required for '%s'"
-                                      field_name message_type_name))
+let get_required_string message_type_name field_name = function
+  | "" ->
+      missing_field message_type_name field_name
+  | string ->
+      string
+
+let get_required_option message_type_name field_name = function
+  | None ->
+      missing_field message_type_name field_name
+  | Some value ->
+      value
 
 let method_call_of_raw fields =
-  let req x = get_required "method_call" x in
-  Method_call(req path fields,
+  Method_call(get_required_option "method-call" "path" fields.rf_path,
               fields.rf_interface,
-              req member fields)
+              get_required_string "method-call" "member" fields.rf_member)
 
 let method_return_of_raw fields =
-  let req x = get_required "method_return" x in
-  Method_return(req reply_serial fields)
+  Method_return(get_required_option "method-return" "reply-serial" fields.rf_reply_serial)
 
 let error_of_raw fields =
-  let req x = get_required "error" x in
-  Error(req reply_serial fields,
-        req error_name fields)
+  Error(get_required_option "error" "reply-serial" fields.rf_reply_serial,
+        get_required_string "error" "error-name" fields.rf_error_name)
 
 let signal_of_raw fields =
-  let req x = get_required "signal" x in
-  Signal(req path fields,
-         req interface fields,
-         req member fields)
+  Signal(get_required_option "signal" "path" fields.rf_path,
+         get_required_string "signal" "interface" fields.rf_interface,
+         get_required_string "signal" "member" fields.rf_member)
 
 (* +-----------------------------------------------------------------+
    | Error mapping                                                   |
@@ -238,7 +238,7 @@ struct
   let message msg =
     let c = { ofs = 16; fds = FD_set.empty } in
     begin match msg.typ with
-      | Method_call(path, None, member) ->
+      | Method_call(path, "", member) ->
           (* +9 for:
              - the code (1)
              - the signature of one basic type code (3)
@@ -246,7 +246,7 @@ struct
              - the null byte (1) *)
           c.ofs <- pad8 c.ofs + 9 + path_length path;
           c.ofs <- pad8 c.ofs + 9 + String.length member
-      | Method_call(path, Some interface, member)
+      | Method_call(path, interface, member)
       | Signal(path, interface, member) ->
           c.ofs <- pad8 c.ofs + 9 + path_length path;
           c.ofs <- pad8 c.ofs + 9 + String.length interface;
@@ -257,18 +257,10 @@ struct
           c.ofs <- pad8 c.ofs + 9 + String.length name;
           c.ofs <- pad8 c.ofs + 8
     end;
-    begin match msg.destination with
-      | None ->
-          ()
-      | Some destination ->
-          c.ofs <- pad8 c.ofs + 9 + String.length destination
-    end;
-    begin match msg.sender with
-      | None ->
-          ()
-      | Some sender ->
-          c.ofs <- pad8 c.ofs + 9 + String.length sender
-    end;
+    if msg.destination <> "" then
+      c.ofs <- pad8 c.ofs + 9 + String.length msg.destination;
+    if msg.sender <> "" then
+      c.ofs <- pad8 c.ofs + 9 + String.length msg.sender;
     (* The signature *)
     c.ofs <- pad8 c.ofs + 6;
     tsequence_of_sequence c msg.body;
@@ -698,10 +690,10 @@ struct
         write_field_real ptr code typ writer value
 
   (* Validate and write a field if defined *)
-  let write_name_field ptr code test field = match field with
-    | None ->
+  let write_name_field ptr code test = function
+    | "" ->
         ()
-    | Some string ->
+    | string ->
         match test string with
           | Some error ->
               raise (Data_error(OBus_string.error_message error))
@@ -725,11 +717,12 @@ struct
     (* Compute ``raw'' headers *)
     let code, fields = match msg.typ with
       | Method_call(path, interface, member) ->
+          if member = "" then raise (Data_error "invalid method-call message: field 'member' is empty");
           (1,
            { rf_path = Some path;
              rf_interface = interface;
-             rf_member = Some member;
-             rf_error_name = None;
+             rf_member = member;
+             rf_error_name = "";
              rf_reply_serial = None;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
@@ -738,31 +731,34 @@ struct
       | Method_return reply_serial ->
           (2,
            { rf_path = None;
-             rf_interface = None;
-             rf_member = None;
-             rf_error_name = None;
+             rf_interface = "";
+             rf_member = "";
+             rf_error_name = "";
              rf_reply_serial = Some reply_serial;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
              rf_signature = V.type_of_sequence msg.body;
              rf_unix_fds = fd_count })
       | Error(reply_serial, error_name) ->
+          if error_name = "" then raise (Data_error "invalid error message: field 'error-name' is empty");
           (3,
            { rf_path = None;
-             rf_interface = None;
-             rf_member = None;
-             rf_error_name = Some error_name;
+             rf_interface = "";
+             rf_member = "";
+             rf_error_name = error_name;
              rf_reply_serial = Some reply_serial;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
              rf_signature = V.type_of_sequence msg.body;
              rf_unix_fds = fd_count })
       | Signal(path, interface, member) ->
+          if interface = "" then raise (Data_error "invalid signal message, field 'interface' is empty");
+          if member = "" then raise (Data_error "invalid signal message, field 'member' is empty");
           (4,
            { rf_path = Some path;
-             rf_interface = Some interface;
-             rf_member = Some member;
-             rf_error_name = None;
+             rf_interface = interface;
+             rf_member = member;
+             rf_error_name = "";
              rf_reply_serial = None;
              rf_destination = msg.destination;
              rf_sender = msg.sender;
@@ -1125,12 +1121,12 @@ struct
     get_message total_length begin fun ptr pending_fds cont ->
       let fields = {
         rf_path = None;
-        rf_member = None;
-        rf_interface = None;
-        rf_error_name = None;
+        rf_member = "";
+        rf_interface = "";
+        rf_error_name = "";
         rf_reply_serial = None;
-        rf_destination = None;
-        rf_sender = None;
+        rf_destination = "";
+        rf_sender = "";
         rf_signature = [];
         rf_unix_fds = 0;
       } in
@@ -1140,12 +1136,12 @@ struct
         read_padding8 ptr;
         match read_uint8 ptr with
           | 1 -> fields.rf_path <- Some(read_field 1 T.Object_path read_object_path ptr)
-          | 2 -> fields.rf_interface <- Some(read_name_field 2 OBus_name.validate_interface ptr)
-          | 3 -> fields.rf_member <- Some(read_name_field 3 OBus_name.validate_member ptr)
-          | 4 -> fields.rf_error_name <- Some(read_name_field 4 OBus_name.validate_error ptr)
+          | 2 -> fields.rf_interface <- read_name_field 2 OBus_name.validate_interface ptr
+          | 3 -> fields.rf_member <- read_name_field 3 OBus_name.validate_member ptr
+          | 4 -> fields.rf_error_name <- read_name_field 4 OBus_name.validate_error ptr
           | 5 -> fields.rf_reply_serial <- Some(read_field 5 T.Uint32 (read4 get_uint32) ptr)
-          | 6 -> fields.rf_destination <- Some(read_name_field 6 OBus_name.validate_bus ptr)
-          | 7 -> fields.rf_sender <- Some(read_name_field 7 OBus_name.validate_bus ptr)
+          | 6 -> fields.rf_destination <- read_name_field 6 OBus_name.validate_bus ptr
+          | 7 -> fields.rf_sender <- read_name_field 7 OBus_name.validate_bus ptr
           | 8 -> fields.rf_signature <- read_field 8 T.Signature read_signature ptr
           | 9 -> fields.rf_unix_fds <- read_field 9 T.Uint32 (read4 get_uint) ptr
           | _ -> ignore (read_variant ptr) (* Unsupported header field *)

@@ -40,14 +40,13 @@ let error_handler = function
 let register_connection ?(set_on_disconnect=true) connection =
   let running = connection#get in
   match running.rc_name with
-    | Some _ ->
-        (* Do not call two times the Hello method *)
-        return ()
-
-    | None ->
+    | "" ->
         if set_on_disconnect then running.rc_on_disconnect := error_handler;
         lwt name = OBus_method.call m_Hello (proxy connection) () in
-        running.rc_name <- Some name;
+        running.rc_name <- name;
+        return ()
+    | _ ->
+        (* Do not call two times the Hello method *)
         return ()
 
 let of_addresses addresses =
@@ -174,15 +173,8 @@ let reload_config bus =
 let get_id bus =
   OBus_method.call m_GetId (proxy bus) () >|= OBus_uuid.of_string
 
-let opt_string = function
-  | "" -> None
-  | s -> Some s
-
 let name_owner_changed bus =
-  OBus_signal.map
-    (fun (name, old_owner, new_owner) ->
-       (name, opt_string old_owner, opt_string new_owner))
-    (OBus_signal.connect s_NameOwnerChanged (proxy bus))
+  OBus_signal.connect s_NameOwnerChanged (proxy bus)
 
 let name_lost bus =
   OBus_signal.connect s_NameLost (proxy bus)

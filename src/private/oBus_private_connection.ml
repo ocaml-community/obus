@@ -35,7 +35,7 @@ module Signal_map = Map.Make
 
 module Property_map = Map.Make
   (struct
-     type t = OBus_name.bus option * OBus_path.t * OBus_name.interface
+     type t = OBus_name.bus * OBus_path.t * OBus_name.interface
      let compare = Pervasives.compare
    end)
 
@@ -86,10 +86,10 @@ and dynamic_object = OBus_value.V.sequence message_context -> OBus_path.t -> [ `
    can destroy all resources using this name
 *)
 and name_resolver = {
-  nr_owner : OBus_name.bus option React.signal;
+  nr_owner : OBus_name.bus React.signal;
   (* The owner of the name *)
 
-  nr_set : OBus_name.bus option -> unit;
+  nr_set : OBus_name.bus -> unit;
   (* Setter for the name owner. *)
 
   mutable nr_ref_count : int;
@@ -130,7 +130,7 @@ and signal_receiver = {
      immediatly active. Otherwise they are not active until the
      associated name resolver gets ready. *)
 
-  mutable sr_sender : OBus_name.bus option React.signal option;
+  mutable sr_sender : OBus_name.bus React.signal option;
   (* The sender of signals we are interested in *)
 
   mutable sr_rule : OBus_match.rule option;
@@ -187,7 +187,7 @@ and property_group = {
   mutable pg_watcher : property_group_watcher option;
 
   pg_connection : t;
-  pg_owner : OBus_name.bus option;
+  pg_owner : OBus_name.bus;
   pg_path : OBus_path.t;
   pg_interface : OBus_name.interface;
   (* Property parameters *)
@@ -213,8 +213,8 @@ and property_group_watcher = {
 and 'a message_context = {
   mc_connection : t;
   mc_flags : OBus_message.flags;
-  mc_sender : OBus_name.bus option;
-  mc_destination : OBus_name.bus option;
+  mc_sender : OBus_name.bus;
+  mc_destination : OBus_name.bus;
   mc_serial : OBus_message.serial;
   mc_make_body : 'a -> OBus_value.V.sequence;
 }
@@ -233,9 +233,9 @@ and filter = OBus_message.t -> OBus_message.t option
 
 (* Type of running connections *)
 and running_connection = {
-  mutable rc_name : OBus_name.bus option;
-  (* Unique name of the connection. If set this means that the other
-     side is a message bus. *)
+  mutable rc_name : OBus_name.bus;
+  (* Unique name of the connection. If set to a value different from
+     [""], this means that the other side is a message bus. *)
 
   rc_acquired_names : Name_set.t React.signal;
   rc_set_acquired_names : Name_set.t -> unit;
@@ -315,7 +315,7 @@ and connection_state =
 
 (* Connections are packed into objects to make them comparable *)
 and t = <
-  state : connection_state;
+    state : connection_state;
   (* Get the connection state *)
 
   get : running_connection;
@@ -327,25 +327,25 @@ and t = <
 
   running : bool React.signal;
   (* Signal holding the current connection state. *)
->
+  >
 
-(* +-----------------------------------------------------------------+
-   | Misc                                                            |
-   +-----------------------------------------------------------------+ *)
+    (* +-----------------------------------------------------------------+
+       | Misc                                                            |
+       +-----------------------------------------------------------------+ *)
 
-(* The exception that must be raised when a method is unknown *)
-let unknown_method_message message = match message with
-  | { OBus_message.typ = OBus_message.Method_call(path, Some interface, member); OBus_message.body = body } ->
-      Printf.sprintf "Method %S with siganture %S on interface %S doesn't exist"
-        member
-        (OBus_value.string_of_signature (OBus_value.V.type_of_sequence body))
-        interface
-  | { OBus_message.typ = OBus_message.Method_call(path, None, member); OBus_message.body = body } ->
-      Printf.sprintf "Method %S with signature %S doesn't exist"
-        member
-        (OBus_value.string_of_signature (OBus_value.V.type_of_sequence body))
-  | _ ->
-      invalid_arg "OBus_private_connection.unknown_mehtod_exn"
+    (* The exception that must be raised when a method is unknown *)
+    let unknown_method_message message = match message with
+      | { OBus_message.typ = OBus_message.Method_call(path, "", member); OBus_message.body = body } ->
+          Printf.sprintf "Method %S with signature %S doesn't exist"
+            member
+            (OBus_value.string_of_signature (OBus_value.V.type_of_sequence body))
+      | { OBus_message.typ = OBus_message.Method_call(path, interface, member); OBus_message.body = body } ->
+          Printf.sprintf "Method %S with siganture %S on interface %S doesn't exist"
+            member
+            (OBus_value.string_of_signature (OBus_value.V.type_of_sequence body))
+            interface
+      | _ ->
+          invalid_arg "OBus_private_connection.unknown_mehtod_exn"
 
 (* Returns the list of children of a node *)
 let children running prefix =
@@ -492,7 +492,7 @@ let make_context_with_reply ~connection ~message = {
 let send_reply context x =
   send_message context.mc_connection {
     destination = context.mc_sender;
-    sender = None;
+    sender = "";
     flags = { no_reply_expected = true; no_auto_start = true };
     serial = 0l;
     typ = Method_return context.mc_serial;
@@ -503,7 +503,7 @@ let send_error context exn =
   let name, error_message = OBus_error.cast exn in
   send_message context.mc_connection {
     destination = context.mc_sender;
-    sender = None;
+    sender = "";
     flags = { no_reply_expected = true; no_auto_start = true };
     serial = 0l;
     typ = Error(context.mc_serial, name);

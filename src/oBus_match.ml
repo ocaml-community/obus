@@ -231,7 +231,7 @@ let match_message mr msg =
   (match OBus_message.typ msg, mr.typ with
      | OBus_message.Method_call(path, interface, member), (Some `Method_call | None) ->
          (match_key mr.path path) &&
-           (mr.interface = None || mr.interface = interface) &&
+           (match_key mr.interface interface) &&
            (match_key mr.member member)
      | OBus_message.Method_return serial, (Some `Method_return | None)->
          true
@@ -243,8 +243,8 @@ let match_message mr msg =
          true
      | _ ->
          false) &&
-    (mr.sender = None || mr.sender = OBus_message.sender msg) &&
-    (mr.destination = None || mr.destination = OBus_message.destination msg) &&
+    (match_key mr.sender (OBus_message.sender msg)) &&
+    (match_key mr.destination (OBus_message.destination msg)) &&
     (match_arguments 0 mr.arguments (OBus_message.body msg))
 
 type comparison_result =
