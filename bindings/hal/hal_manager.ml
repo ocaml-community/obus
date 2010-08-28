@@ -71,28 +71,28 @@ let singleton_addon_is_ready proxy command_line =
 let device_added proxy =
   OBus_signal.map_with_context
     make_device
-    (OBus_signal.connect s_DeviceAdded proxy)
+    (OBus_signal.make s_DeviceAdded proxy)
 
 let device_removed proxy =
   OBus_signal.map_with_context
     make_device
-    (OBus_signal.connect s_DeviceRemoved proxy)
+    (OBus_signal.make s_DeviceRemoved proxy)
 
 let new_capability proxy =
   OBus_signal.map_with_context
     (fun context (udi, cap) -> (make_device context udi, cap))
-    (OBus_signal.connect s_NewCapability proxy)
+    (OBus_signal.make s_NewCapability proxy)
 
 let global_interface_lock_acquired proxy =
   OBus_signal.map
     (fun (interface_name, lock_holder, num_locks) ->
        let num_locks = Int32.to_int num_locks in
        (interface_name, lock_holder, num_locks))
-    (OBus_signal.connect s_GlobalInterfaceLockAcquired proxy)
+    (OBus_signal.make s_GlobalInterfaceLockAcquired proxy)
 
 let global_interface_lock_released proxy =
   OBus_signal.map
     (fun (interface_name, lock_holder, num_locks) ->
        let num_locks = Int32.to_int num_locks in
        (interface_name, lock_holder, num_locks))
-    (OBus_signal.connect s_GlobalInterfaceLockReleased proxy)
+    (OBus_signal.make s_GlobalInterfaceLockReleased proxy)

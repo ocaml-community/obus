@@ -7,6 +7,11 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+interface org.freedesktop.DBus.Peer {
+  method Ping : () -> ()
+  method GetMachineId : () -> (machine_id : string)
+}
+
 interface org.freedesktop.DBus.Introspectable {
   method Introspect : () -> (result : string)
 }

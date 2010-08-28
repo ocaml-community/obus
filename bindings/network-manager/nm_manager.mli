@@ -59,13 +59,4 @@ val wwan_hardware_enabled : t -> bool OBus_property.r
 val active_connections : t -> Nm_connection.t list OBus_property.r
 val state : t -> state OBus_property.r
 
-type properties = {
-  wireless_enabled : bool ;
-  wireless_hardware_enabled : bool;
-  wwan_enabled : bool ;
-  wwan_hardware_enabled : bool;
-  active_connections : Nm_connection.t list;
-  state : state;
-}
-
-val properties : t -> properties OBus_property.r
+val properties : t -> OBus_property.group

@@ -166,21 +166,7 @@ val ip6_config : t -> Nm_ip6_config.t OBus_property.r
 val managed : t -> bool OBus_property.r
 val device_type : t -> typ OBus_property.r
 
-type properties = {
-  udi : string;
-  interface : string;
-  driver : string;
-  capabilities : capability list;
-  ip4_address : int32;
-  state : state;
-  ip4_config : Nm_ip4_config.t;
-  dhcp4_config : Nm_dhcp4_config.t;
-  ip6_config : Nm_ip6_config.t;
-  managed : bool;
-  device_type : typ;
-}
-
-val properties : t -> properties OBus_property.r
+val properties : t -> OBus_property.group
 
 (** {6 Specific device interfaces} *)
 
@@ -191,13 +177,7 @@ module Bluetooth : sig
   val name : t -> string OBus_property.r
   val bt_capabilities : t -> int OBus_property.r
 
-  type properties = {
-    hw_address : string;
-    name : string;
-    bt_capabilities : int;
-  }
-
-  val properties : t -> properties OBus_property.r
+  val properties : t -> OBus_property.group
 end
 
 module Cdma : sig
@@ -215,13 +195,7 @@ module Olpc_mesh : sig
   val companion : OBus_proxy.t -> (OBus_proxy.t, [ `readable ]) OBus_property.t
   val active_channel : OBus_proxy.t -> (int, [ `readable ]) OBus_property.t
 
-  type properties = {
-    hw_address : string;
-    companion : OBus_proxy.t;
-    active_channel : int;
-  }
-
-  val properties : t -> properties OBus_property.r
+  val properties : t -> OBus_property.group
 end
 
 module Serial : sig
@@ -235,13 +209,7 @@ module Wired : sig
   val speed : t -> int OBus_property.r
   val carrier : t -> bool OBus_property.r
 
-  type properties = {
-    hw_address : string;
-    speed : int;
-    carrier : bool;
-  }
-
-  val properties : t -> properties OBus_property.r
+  val properties : t -> OBus_property.group
 end
 
 module Wireless : sig
@@ -279,13 +247,5 @@ module Wireless : sig
   val active_access_point : t -> OBus_proxy.t OBus_property.r
   val wireless_capabilities : t -> int OBus_property.r
 
-  type properties = {
-    hw_address : string;
-    mode : int;
-    bitrate : int;
-    active_access_point : OBus_proxy.t;
-    wireless_capabilities : int;
-  }
-
-  val properties : t -> properties OBus_property.r
+  val properties : t -> OBus_property.group
 end

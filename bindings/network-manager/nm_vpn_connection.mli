@@ -17,9 +17,4 @@ val properties_changed : t -> (string * OBus_value.V.single) list OBus_signal.t
 val vpn_state : t -> int OBus_property.r
 val banner : t -> string OBus_property.r
 
-type properties = {
-  vpn_state : int;
-  banner : string;
-}
-
-val properties : t -> properties OBus_property.r
+val properties : t -> OBus_property.group

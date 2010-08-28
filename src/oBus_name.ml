@@ -59,7 +59,7 @@ let validate_unique_connection str =
           fail i "invalid character"
   in
 
-  if len > OBus_constant.max_name_length then
+  if len > OBus_protocol.max_name_length then
     fail (-1) "name too long"
   else if len = 1 then
     fail 1 "premature end of name"
@@ -109,7 +109,7 @@ let validate_bus_other str =
           fail i "invalid character"
   in
 
-  if len > OBus_constant.max_name_length then
+  if len > OBus_protocol.max_name_length then
     fail (-1) "name too long"
   else match unsafe_get str 1 with
     | 'A' .. 'Z' | 'a' .. 'z' | '_' | '-' | '0' .. '9'->
@@ -171,7 +171,7 @@ let validate_interface str =
           fail i "invalid character"
   in
 
-  if len > OBus_constant.max_name_length then
+  if len > OBus_protocol.max_name_length then
     fail (-1) "name too long"
   else if len = 0 then
     fail (-1) "empty name"
@@ -201,7 +201,7 @@ let validate_member str =
           fail i "invalid character"
   in
 
-  if len > OBus_constant.max_name_length then
+  if len > OBus_protocol.max_name_length then
     fail (-1) "name too long"
   else if len = 0 then
     fail (-1) "empty name"

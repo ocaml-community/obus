@@ -14,8 +14,8 @@ open Lwt
 let version = OBus_version.version
 
 let protocol_version = 1
-let max_name_length = OBus_constant.max_name_length
-let max_message_size = OBus_constant.max_message_size
+let max_name_length = OBus_protocol.max_name_length
+let max_message_size = OBus_protocol.max_message_size
 
 let machine_uuid = lazy(
   try_lwt

@@ -15,7 +15,10 @@ type t = OBus_connection.t
 
 val session : unit -> t Lwt.t
   (** [session ()] returns a connection to the user session message
-      bus. Subsequent calls to {!session} will return the same bus. *)
+      bus. Subsequent calls to {!session} will return the same bus.
+      OBus will automatically exits the program when an error happen
+      on the session bus. You can change this behavior by calling
+      {!OBus_connection.set_on_disconnect}. *)
 
 val system : unit -> t Lwt.t
   (** [system ()] returns a connection to the system message bus. As
@@ -29,36 +32,27 @@ val of_addresses : OBus_address.t list -> t Lwt.t
   (** Establish a connection with a message bus. The bus must be
       accessible with at least one of the given addresses *)
 
-val register_connection : ?set_on_disconnect : bool -> OBus_connection.t -> unit Lwt.t
+val register_connection : OBus_connection.t -> unit Lwt.t
   (** Register the given connection to a message bus. It has the side
       effect of requesting a name to the message bus if not already
       done.
 
-      If [set_on_disconnect] is [true] (the default) then the
-      {!OBus_connection.on_disconnect} function of the connection is
-      replaced (see notes bellow).
-
       If the connection is a connection to a message bus, created with
       one of the function of {!OBus_connection} then
       {!register_connection} must be called on it before any other
-      function.
+      functions. *)
 
-      If this is not the case, it will (probably) raise an
-      {!OBus_error.Unknown_method} *)
+val exit_on_disconnect : exn -> 'a
+  (** Function which exit the program as follow:
 
-(** Notes:
+      - if [exn] is {!OBus_connection.Connection_lost}, it exits
+      program with a return code of 0
 
-    - when the connection to a message bus is lost
-    {!OBus_connection.Connection_lost}, the program is exited with a
-    return code of 0
+      - if [exn] is a fatal error, it prints a message on stderr and
+      exits the program with an exit code of 1
+  *)
 
-    - when a fatal error happen, a message is printed on stderr and
-    the program is exited with an exit code of 1
-
-    This can be changed by overriding
-    {!OBus_connection.on_disconnect} *)
-
-(** {6 Peer/proxy} *)
+(** {6 Peer/proxy helpers} *)
 
 val get_peer : t -> OBus_name.bus -> OBus_peer.t Lwt.t
   (** [get_peer bus name] return the peer owning the bus name
@@ -70,12 +64,23 @@ val get_proxy : t -> OBus_name.bus -> OBus_path.t -> OBus_proxy.t Lwt.t
       return a proxy for the object with path [path] on this
       service *)
 
-(** {6 Bus names acquiring} *)
+(** {6 Bus names} *)
 
-val acquired_names : t -> Set.Make(String).t React.signal
-  (** Returns the list of names we currently own *)
+val name : t -> OBus_name.bus
+  (** Same as {!OBus_connection.name}. *)
 
-exception Access_denied of OBus_error.message
+val names : t -> Set.Make(String).t React.signal
+  (** [names bus] is the signal holding the set of all names we
+      currently own. It raises [Invalid_argument] if the connection is
+      not a connection to a message bus. *)
+
+val hello : t -> OBus_name.bus Lwt.t
+  (** [hello connection] sends an hello message to the message bus,
+      which returns the unique connection name of the connection. Note
+      that if the hello message has already been sent, it will
+      fail. *)
+
+exception Access_denied of string
   (** Exception raised when a name cannot be owned due to security
       policies *)
 
@@ -114,7 +119,7 @@ val release_name : t -> OBus_name.bus -> release_name_result Lwt.t
 
 (** {6 Service starting/discovering} *)
 
-exception Service_unknown of OBus_error.message
+exception Service_unknown of string
   (** Exception raised when a service is not present on a message bus
       and can not be started automatically *)
 
@@ -137,7 +142,7 @@ val list_activatable_names : t -> OBus_name.bus list Lwt.t
       activated when you call one of its method or when you use
       [start_service_by_name] *)
 
-exception Name_has_no_owner of OBus_error.message
+exception Name_has_no_owner of string
 
 val get_name_owner : t -> OBus_name.bus -> OBus_name.bus Lwt.t
   (** Return the connection unique name of the given service. Raise a
@@ -147,14 +152,18 @@ val list_queued_owners : t -> OBus_name.bus -> OBus_name.bus list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
-exception Service_unknown of OBus_error.message
+exception Service_unknown of string
   (** Raised when we try to contact a service which is not available
       and the bus do not known how to start it *)
 
 (** {6 Messages routing} *)
 
-exception Match_rule_invalid of OBus_error.message
-  (** Exception raised when the program trey to send an invalid match
+(** Note that you should prefer using {!OBus_match.export} and
+    {!OBus_match.remove} since they do not add duplicated rules
+    several times. *)
+
+exception Match_rule_invalid of string
+  (** Exception raised when the program try to send an invalid match
       rule. This should never happen since values of type
       {!OBus_match.rule} are always valid. *)
 
@@ -163,20 +172,21 @@ val add_match : t -> OBus_match.rule -> unit Lwt.t
       message routed on the message bus matching this rule will be
       sent to us.
 
-      It can raise an [Out_of_memory]. *)
+      It can raise {!OBus_error.No_memory}.
+  *)
 
-exception Match_rule_not_found of OBus_error.message
+exception Match_rule_not_found of string
 
 val remove_match : t -> OBus_match.rule -> unit Lwt.t
-  (** Remove a match rule from the message bus. It raise a
-      [OBus_match_not_found] if the rule does not exists *)
+  (** Remove a match rule from the message bus. It raises
+      {!Match_rule_not_found} if the rule does not exists *)
 
 (** {6 Other} *)
 
 (** These functions are also offered by the message bus *)
 
-exception Adt_audit_data_unknown of OBus_error.message
-exception Selinux_security_context_unknown of OBus_error.message
+exception Adt_audit_data_unknown of string
+exception Selinux_security_context_unknown of string
 
 val update_activation_environment : t -> (string * string) list -> unit Lwt.t
 val get_connection_unix_user : t -> OBus_name.bus -> int Lwt.t

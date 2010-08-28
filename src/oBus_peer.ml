@@ -23,48 +23,51 @@ let make ~connection ~name = { connection = connection; name = name }
 let anonymous c = { connection = c; name = "" }
 
 let ping peer =
-  lwt context, () =
-    OBus_private_method.call_with_context
+  lwt reply, () =
+    OBus_connection.method_call_with_message
       ~connection:peer.connection
-      ~destination:peer.name
+      ~destination:OBus_protocol.bus_name
       ~path:[]
       ~interface:"org.freedesktop.DBus.Peer"
-      ~member:"Ping"
+      ~member:"Peer"
       ~i_args:OBus_value.C.seq0
       ~o_args:OBus_value.C.seq0
       ()
   in
-  return { connection = peer.connection;
-           name = context.OBus_private_connection.mc_sender }
+  return { peer with name = OBus_message.sender reply }
 
 let get_machine_id peer =
-  OBus_private_method.call
-    ~connection:peer.connection
-    ~destination:peer.name
-    ~path:[]
-    ~interface:"org.freedesktop.DBus.Peer"
-    ~member:"GetMachineId"
-    ~i_args:OBus_value.C.seq0
-    ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
-    ()
-  >|= OBus_uuid.of_string
+  lwt mid =
+    OBus_connection.method_call
+      ~connection:peer.connection
+      ~destination:OBus_protocol.bus_name
+      ~path:[]
+      ~interface:"org.freedesktop.DBus.Peer"
+      ~member:"GetMachineId"
+      ~i_args:OBus_value.C.seq0
+      ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+      ()
+  in
+  try
+    return (OBus_uuid.of_string mid)
+  with exn ->
+    fail exn
 
 let wait_for_exit peer =
   match peer.name with
     | "" ->
         fail (Invalid_argument "OBus_peer.wait_for_exit: peer has no name")
     | name ->
-        let waiter, wakener = Lwt.wait () in
-        lwt resolver = OBus_resolver.make peer.connection name in
-        let ev = React.S.map (function
-                                | "" ->
-                                    if Lwt.state waiter = Sleep then Lwt.wakeup wakener ()
-                                | _ ->
-                                    ()) (OBus_resolver.owner resolver) in
-        lwt () = waiter in
-        (* Just to make the compiler happy: *)
-        ignore ev;
-        OBus_resolver.disable resolver
+        let switch = Lwt_switch.create () in
+        lwt owner = OBus_resolver.make ~switch peer.connection name in
+        if React.S.value owner = "" then
+          Lwt_switch.turn_off switch
+        else
+          try_lwt
+            lwt _ = Lwt_event.next (React.E.filter ((=) "") (React.S.changes owner)) in
+            return ()
+          finally
+            Lwt_switch.turn_off switch
 
 (* +-----------------------------------------------------------------+
    | Private peers                                                   |

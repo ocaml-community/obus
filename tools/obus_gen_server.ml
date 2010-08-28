@@ -114,7 +114,7 @@ let print_impl oc name members symbols annotations =
                 | Some(name, f) -> fprintf oc "          let %s = %s %s in\n" name f name
                 | None -> ())
              i_convertors;
-           fprintf oc "          lwt %a = %s obj" print_names o_names (OBus_name.ocaml_lid name);
+           fprintf oc "          lwt %a = %s (OBus_object.get obj)" print_names o_names (OBus_name.ocaml_lid name);
            List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
            output_string oc " in\n";
            List.iter
@@ -122,7 +122,7 @@ let print_impl oc name members symbols annotations =
                 | Some(name, f) -> fprintf oc "          let %s = %s %s in\n" name f name
                 | None -> ())
              o_convertors;
-           fprintf oc "          OBus_method.return ctx %a\n\
+           fprintf oc "          return %a\n\
                       \      );\n"
              print_names o_names
        | Property(name, typ, access, annotations) ->

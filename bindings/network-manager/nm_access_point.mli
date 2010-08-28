@@ -56,16 +56,4 @@ val mode : t -> int OBus_property.r
 val max_bitrate : t -> int OBus_property.r
 val strength : t -> int OBus_property.r
 
-type properties = {
-  flags : ap_flag list;
-  wpa_flags : ap_security_flag list;
-  rsn_flags : ap_security_flag list;
-  ssid : string;
-  frequency : int;
-  hw_address : string;
-  mode : int;
-  max_bitrate : int;
-  strength : int;
-}
-
-val properties : t -> properties OBus_property.r
+val properties : t -> OBus_property.group

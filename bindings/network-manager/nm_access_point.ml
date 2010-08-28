@@ -89,33 +89,7 @@ let strength proxy =
     (OBus_property.make p_Strength proxy)
 
 let properties_changed proxy =
-  OBus_signal.connect s_PropertiesChanged proxy
-
-type properties = {
-  flags : ap_flag list;
-  wpa_flags : ap_security_flag list;
-  rsn_flags : ap_security_flag list;
-  ssid : string;
-  frequency : int;
-  hw_address : string;
-  mode : int;
-  max_bitrate : int;
-  strength : int;
-}
+  OBus_signal.make s_PropertiesChanged proxy
 
 let properties proxy =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f proxy) context properties in
-       {
-         flags = find flags;
-         wpa_flags = find wpa_flags;
-         rsn_flags = find rsn_flags;
-         ssid = find ssid;
-         frequency = find frequency;
-         hw_address = find hw_address;
-         mode = find mode;
-         max_bitrate = find max_bitrate;
-         strength = find strength;
-       })
-    (OBus_property.make_group proxy interface)
+  OBus_property.group proxy interface

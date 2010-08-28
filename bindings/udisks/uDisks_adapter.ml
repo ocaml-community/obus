@@ -12,7 +12,7 @@ include OBus_proxy.Private
 open UDisks_interfaces.Org_freedesktop_UDisks_Adapter
 
 let changed proxy =
-  OBus_signal.connect s_Changed proxy
+  OBus_signal.make s_Changed proxy
 
 let native_path proxy =
   OBus_property.make p_NativePath proxy
@@ -34,25 +34,5 @@ let num_ports proxy =
 let fabric proxy =
   OBus_property.make p_Fabric proxy
 
-type properties = {
-  fabric : string;
-  num_ports : int;
-  driver : string;
-  model : string;
-  vendor : string;
-  native_path : string;
-}
-
 let properties proxy =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f proxy) context properties in
-       {
-         fabric = find fabric;
-         num_ports = find num_ports;
-         driver = find driver;
-         model = find model;
-         vendor = find vendor;
-         native_path = find native_path;
-       })
-    (OBus_property.make_group proxy interface)
+  OBus_property.group proxy interface

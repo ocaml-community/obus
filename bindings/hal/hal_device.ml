@@ -165,24 +165,24 @@ let property_modified proxy =
     (fun (num_updates, updates) ->
        let num_updates = Int32.to_int num_updates in
        (num_updates, updates))
-    (OBus_signal.connect s_PropertyModified proxy)
+    (OBus_signal.make s_PropertyModified proxy)
 
 let condition proxy =
-  OBus_signal.connect s_Condition proxy
+  OBus_signal.make s_Condition proxy
 
 let interface_lock_acquired proxy =
   OBus_signal.map
     (fun (interface_name, lock_holder, num_locks) ->
        let num_locks = Int32.to_int num_locks in
        (interface_name, lock_holder, num_locks))
-    (OBus_signal.connect s_InterfaceLockAcquired proxy)
+    (OBus_signal.make s_InterfaceLockAcquired proxy)
 
 let interface_lock_released proxy =
   OBus_signal.map
     (fun (interface_name, lock_holder, num_locks) ->
        let num_locks = Int32.to_int num_locks in
        (interface_name, lock_holder, num_locks))
-    (OBus_signal.connect s_InterfaceLockReleased proxy)
+    (OBus_signal.make s_InterfaceLockReleased proxy)
 
 module Volume = struct
   open Org_freedesktop_Hal_Device_Volume

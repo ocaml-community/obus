@@ -10,351 +10,241 @@
 let section = Lwt_log.Section.make "obus(signal)"
 
 open Lwt
-open OBus_private_connection
 
 (* +-----------------------------------------------------------------+
-   | Types                                                           |
+   | Signal descriptors                                              |
    +-----------------------------------------------------------------+ *)
-
-(* State of a signal receiver *)
-type signal_state =
-  | Sig_init
-      (* Still initialising *)
-  | Sig_disconnected
-      (* The receiver has been disconnected *)
-  | Sig_connected
-      (* Initialisation is done, the signal receiver is up and
-         running *)
-
-(* A signal description *)
-type signal_descriptor = {
-  mutable sd_state : signal_state;
-  mutable sd_auto_match_rule : bool;
-  mutable sd_filters : (int * OBus_match.argument_filter) list;
-
-  sd_receiver : signal_receiver;
-  sd_group : signal_receiver_group;
-  sd_node : signal_receiver Lwt_sequence.node;
-
-  sd_sender : OBus_name.bus;
-
-  (* Thread which is wake up when the signal is disconnected: *)
-  sd_done_waiter : unit Lwt.t;
-  sd_done_wakener : unit Lwt.u;
-}
 
 type 'a t = {
-  s_event : (OBus_context.void OBus_context.t * 'a) React.event;
-  (* The event that is passed to the user *)
+  interface : OBus_name.interface;
+  (* The interface of the signal. *)
 
-  s_descr : signal_descriptor;
-  (* Description which is shared by all mapped version of the
-     signal *)
+  member : OBus_name.member;
+  (* The name of the signal. *)
+
+  proxy : OBus_proxy.t;
+  (* The proxy emitting the signal. *)
+
+  map : (OBus_context.t * OBus_value.V.sequence) React.event -> (OBus_context.t * 'a) React.event;
+  (* The function which maps the event into an event holding values of
+     type ['a]. *)
+
+  filters : OBus_match.arguments;
+  (* Argument filters. *)
+
+  match_rule : bool;
+  (* Whether the managed mode for the match rule is enabled *)
 }
 
-(* +-----------------------------------------------------------------+
-   | Signal transformations                                          |
-   +-----------------------------------------------------------------+ *)
+let empty_filters = OBus_match.make_arguments []
 
-let map f signal = {
-  signal with
-    s_event = React.E.map (fun (context, x) -> (context, f x)) signal.s_event
-}
-
-let map_with_context f signal = {
-  signal with
-    s_event = React.E.map (fun (context, x) -> (context, f context x)) signal.s_event
-}
-
-(* +-----------------------------------------------------------------+
-   | Rules computing and setting                                     |
-   +-----------------------------------------------------------------+ *)
-
-(* Add a matching rule to a list of incomparable most general rules *)
-let rec add_rule rule rules = match rules with
-  | [] ->
-      [rule]
-  | rule' :: rest ->
-      match OBus_match.compare_rules rule rule' with
-        | OBus_match.Incomparable ->
-            rule' :: add_rule rule rest
-        | OBus_match.Equal
-        | OBus_match.Less_general ->
-            rules
-        | OBus_match.More_general ->
-            rule :: rest
-
-(* Commit rules changes on the message bus *)
-let commit_rules descr =
-  let group = descr.sd_group in
-  let rules =
-    (* Computes the set of more general rules: *)
-    Lwt_sequence.fold_l
-      (fun receiver rules ->
-         if receiver.sr_active then
-           match receiver.sr_rule with
-             | None -> rules
-             | Some rule -> add_rule rule rules
-         else
-           rules)
-      group.srg_receivers []
-  in
-  let rules =
-    List.fold_left
-      (fun set rule ->
-         String_set.add (OBus_match.string_of_rule rule) set)
-      String_set.empty
-      rules
-  in
-
-  (* If rules have changed, compute the minimal set of changes to make
-     with the message bus and do them: *)
-  if not (String_set.equal rules group.srg_rules) then
-   Lwt_mutex.with_lock group.srg_mutex
-     (fun () ->
-        let new_rules = String_set.diff rules group.srg_rules
-        and old_rules = String_set.diff group.srg_rules rules in
-        group.srg_rules <- new_rules;
-        let connection = descr.sd_group.srg_connection in
-        lwt () = String_set.fold (fun rule thread -> thread <&> OBus_private_bus.add_match connection rule) new_rules (return ())
-        and () = String_set.fold (fun rule thread -> thread <&> OBus_private_bus.remove_match connection rule) old_rules (return ()) in
-        return ())
- else
-   return ()
-
-(* +-----------------------------------------------------------------+
-   | Signal initialisation                                           |
-   +-----------------------------------------------------------------+ *)
-
-let init_signal descr =
-  let connection = descr.sd_group.srg_connection in
-  try_lwt
-    if OBus_connection.name connection = "" then begin
-      (* If the connection is a peer-to-peer connection, there is
-         nothing else to do. *)
-      descr.sd_receiver.sr_active <- true;
-      descr.sd_done_waiter
-    end else begin
-      lwt resolver =
-        match descr.sd_sender with
-          | "" ->
-              return None
-          | name ->
-              (* If we are interested on signals coming from a
-                 particular peer, we need a name resolver: *)
-              lwt resolver = OBus_resolver.make connection name in
-              descr.sd_receiver.sr_sender <- Some (OBus_resolver.owner resolver);
-              return (Some resolver)
-      in
-      try_lwt
-        (* Yield to let the user add argument filters: *)
-        lwt () = pause () in
-        (* Since we yielded, check the connection again: *)
-        check_connection connection;
-        if descr.sd_state = Sig_disconnected then
-          return ()
-        else begin
-          descr.sd_receiver.sr_active <- true;
-          lwt () = commit_rules descr in
-          descr.sd_done_waiter
-        end
-      finally
-        match resolver with
-          | None -> return ()
-          | Some resolver -> OBus_resolver.disable resolver
-    end
-  finally
-    Lwt_sequence.remove descr.sd_node;
-    lwt () = commit_rules descr in
-    if Lwt_sequence.is_empty descr.sd_group.srg_receivers then begin
-      let running = connection#get in
-      running.rc_receiver_groups <- (
-        Signal_map.remove
-          (descr.sd_group.srg_path,
-           descr.sd_group.srg_interface,
-           descr.sd_group.srg_member)
-          running.rc_receiver_groups;
-      )
-    end;
-    return ()
-
-(* +-----------------------------------------------------------------+
-   | Signal creation                                                 |
-   +-----------------------------------------------------------------+ *)
-
-let cast info (context, message) =
+(* Cast a message body into an ocaml value: *)
+let cast signal (context, body) =
   try
     Some(context,
          OBus_value.C.cast_sequence
            (OBus_value.arg_types
-              (OBus_member.Signal.args info))
-           (OBus_message.body message))
+              (OBus_member.Signal.args signal))
+           body)
   with OBus_value.C.Signature_mismatch ->
     ignore (
       Lwt_log.error_f ~section "failed to cast signal from %S, interface %S, member %S with signature %S to %S"
-        (OBus_message.sender message)
-        (OBus_member.Signal.interface info)
-        (OBus_member.Signal.member info)
+        (OBus_peer.name (OBus_context.sender context))
+        (OBus_member.Signal.interface signal)
+        (OBus_member.Signal.member signal)
         (OBus_value.string_of_signature
-           (OBus_value.V.type_of_sequence
-              (OBus_message.body message)))
+           (OBus_value.V.type_of_sequence body))
         (OBus_value.string_of_signature
            (OBus_value.C.type_sequence
               (OBus_value.arg_types
-                 (OBus_member.Signal.args info))))
+                 (OBus_member.Signal.args signal))))
     );
     None
 
-let disconnect signal =
-  let descr = signal.s_descr in
-   if descr.sd_state <> Sig_disconnected then begin
-     descr.sd_state <- Sig_disconnected;
-     wakeup descr.sd_done_wakener ()
-   end
-
-let stop descr () =
-  if descr.sd_state <> Sig_disconnected then begin
-    descr.sd_state <- Sig_disconnected;
-    wakeup descr.sd_done_wakener ()
-  end
-
-let connect info proxy =
-  let connection = OBus_proxy.connection proxy in
-  let running = connection#get in
-  (* Signal groups are indexed by tuples [(path, interface, member)]: *)
-  let key = (OBus_proxy.path proxy,
-             OBus_member.Signal.interface info,
-             OBus_member.Signal.member info) in
-  let group =
-    match try Some(Signal_map.find key running.rc_receiver_groups) with Not_found -> None with
-      | Some group ->
-          group
-      | None ->
-          (* If the group do not exists, create a new one *)
-          let group = {
-            srg_rules = String_set.empty;
-            srg_mutex = Lwt_mutex.create ();
-            srg_receivers = Lwt_sequence.create ();
-            srg_connection = connection;
-            srg_path = OBus_proxy.path proxy;
-            srg_interface = OBus_member.Signal.interface info;
-            srg_member = OBus_member.Signal.member info;
-          } in
-          running.rc_receiver_groups <- Signal_map.add key group running.rc_receiver_groups;
-          group
-  in
-  let event, push = React.E.create () in
-  let receiver = {
-    sr_active = false;
-    sr_sender = None;
-    sr_rule = (
-      Some(OBus_match.rule
-             ~typ:`Signal
-             ~sender:(OBus_proxy.name proxy)
-             ~path:(OBus_proxy.path proxy)
-             ~interface:(OBus_member.Signal.interface info)
-             ~member:(OBus_member.Signal.member info)
-             ())
-    );
-    sr_filter = (fun _ -> true);
-    sr_push = push;
-  } in
-  (* Immediatly add the recevier to avoid race condition *)
-  let node = Lwt_sequence.add_r receiver group.srg_receivers in
-
-  (* Thread which is wake up when the signal is disconnected *)
-  let done_waiter, done_wakener = Lwt.wait () in
-
-  let descr = {
-    sd_state = Sig_init;
-    sd_auto_match_rule = true;
-    sd_filters = [];
-    sd_done_waiter = done_waiter;
-    sd_done_wakener = done_wakener;
-    sd_receiver = receiver;
-    sd_group = group;
-    sd_node = node;
-    sd_sender = OBus_proxy.name proxy;
-  } in
-  let signal = {
-    s_event = Lwt_event.with_finaliser (stop descr) (React.E.fmap (cast info) event);
-    s_descr = descr;
-  } in
-  ignore (init_signal descr);
-  signal
-
-let event signal = React.E.map snd signal.s_event
-let event_with_context signal = signal.s_event
+let make signal proxy = {
+  interface = OBus_member.Signal.interface signal;
+  member = OBus_member.Signal.member signal;
+  proxy = proxy;
+  map = React.E.fmap (cast signal);
+  filters = empty_filters;
+  match_rule = OBus_connection.name (OBus_proxy.connection proxy) <> "";
+}
 
 (* +-----------------------------------------------------------------+
-   | Signal settings                                                 |
+   | Signals transformations and parameters                          |
    +-----------------------------------------------------------------+ *)
 
-let auto_match_rule signal = signal.s_descr.sd_auto_match_rule
+let map_event f sd =
+  { sd with map = fun event -> f (sd.map event) }
 
-let set_auto_match_rule signal auto_match_rule  =
-  let descr = signal.s_descr in
-  if auto_match_rule <> descr.sd_auto_match_rule then begin
-    descr.sd_auto_match_rule <- auto_match_rule;
-    if auto_match_rule then begin
-      let rule =
-        OBus_match.rule
-          ~typ:`Signal
-          ~sender:descr.sd_sender
-          ~path:descr.sd_group.srg_path
-          ~interface:descr.sd_group.srg_interface
-          ~member:descr.sd_group.srg_member
-          ~arguments:(OBus_match.make_arguments descr.sd_filters)
-          ()
-      in
-      (* Use the sorted list of argument filters: *)
-      let filters = OBus_match.arguments rule in
-      descr.sd_receiver.sr_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
-      descr.sd_receiver.sr_rule <- Some rule
-    end else
-      descr.sd_receiver.sr_rule <- None;
-    match descr.sd_state with
-      | Sig_init ->
-          ()
-      | Sig_disconnected ->
-          invalid_arg "OBus_signal.set_auto_match_rule: disconnected signal"
-      | Sig_connected ->
-          ignore (commit_rules descr)
-  end
+let map f sd =
+  { sd with map = fun event -> React.E.map (fun (context, value) -> (context, f value)) (sd.map event) }
 
-let set_filters signal filters =
-  let descr = signal.s_descr in
-  descr.sd_filters <- filters;
-  if descr.sd_auto_match_rule then begin
-    let rule =
-      OBus_match.rule
-        ~typ:`Signal
-        ~sender:descr.sd_sender
-        ~path:descr.sd_group.srg_path
-        ~interface:descr.sd_group.srg_interface
-        ~member:descr.sd_group.srg_member
-        ~arguments:(OBus_match.make_arguments descr.sd_filters)
-        ()
+let map_with_context f sd =
+  { sd with map = fun event -> React.E.map (fun (context, value) -> (context, f context value)) (sd.map event) }
+
+let with_context sd =
+  { sd with map = fun event -> React.E.map (fun (context, value) -> (context, (context, value))) (sd.map event) }
+
+let with_filters filters sd =
+  { sd with filters }
+
+let with_match_rule match_rule sd =
+  { sd with match_rule }
+
+(* +-----------------------------------------------------------------+
+   | Signals dispatching                                             |
+   +-----------------------------------------------------------------+ *)
+
+module Signal_map = Map.Make
+  (struct
+     type t = OBus_path.t * OBus_name.interface * OBus_name.member
+     let compare = Pervasives.compare
+   end)
+
+type info = {
+  mutable senders : (OBus_context.t * OBus_value.V.sequence -> unit) Lwt_sequence.t Signal_map.t;
+  (* Signal senders *)
+}
+
+let dispatch connection info message =
+  match OBus_message.typ message with
+    | OBus_message.Signal(path, interface, member) -> begin
+        match try Some(Signal_map.find (path, interface, member) info.senders) with Not_found -> None with
+          | Some senders ->
+              Lwt_sequence.iter_l
+                (fun send ->
+                   try
+                     send (OBus_context.make connection message, OBus_message.body message)
+                   with exn ->
+                     ignore (Lwt_log.error ~section ~exn "signal event failed with"))
+                senders;
+              Some message
+          | None ->
+              Some message
+      end
+    | _ ->
+        Some message
+
+(* +-----------------------------------------------------------------+
+   | Signals connection                                              |
+   +-----------------------------------------------------------------+ *)
+
+let finalise disconnect _ =
+  ignore (Lazy.force disconnect)
+
+let key = OBus_connection.new_key ()
+
+let connect ?switch sd =
+  let connection = OBus_proxy.connection sd.proxy
+  and name = OBus_proxy.name sd.proxy
+  and path = OBus_proxy.path sd.proxy in
+
+  (* Switch freeing resources allocated for this signal: *)
+  let resources_switch = Lwt_switch.create () in
+
+  try_lwt
+    (* Add the match rule if requested: *)
+    lwt () =
+      if sd.match_rule then
+        OBus_match.export
+          ~switch:resources_switch
+          connection
+          (OBus_match.rule
+             ~typ:`Signal
+             ~sender:name
+             ~path
+             ~interface:sd.interface
+             ~member:sd.member
+             ())
+      else
+        return ()
+
+    (* Plus the resolver if needed: *)
+    and owner_option =
+      if OBus_connection.name connection <> "" && name <> "" then
+        if OBus_name.is_unique name then
+          return (Some (React.S.const name))
+        else
+          lwt owner = OBus_resolver.make ~switch:resources_switch connection name in
+          return (Some owner)
+      else
+        return None
     in
-    let filters = OBus_match.arguments rule in
-    descr.sd_receiver.sr_filter <- (fun message -> OBus_match.match_values filters (OBus_message.body message));
-    descr.sd_receiver.sr_rule <- Some rule;
-    match descr.sd_state with
-      | Sig_init ->
-          ()
-      | Sig_disconnected ->
-          invalid_arg "OBus_signal.set_filters: disconnected signal"
-      | Sig_connected ->
-          ignore (commit_rules descr)
-  end
 
-let init ?(filters=[]) ?(auto_match_rule=true) signal =
-  let descr = signal.s_descr in
-  descr.sd_filters <- filters;
-  (* Force a refresh of the match rule if necessary: *)
-  descr.sd_auto_match_rule <- not auto_match_rule;
-  set_auto_match_rule signal auto_match_rule;
-  event signal
+    let info =
+      match OBus_connection.get connection key with
+        | Some info ->
+            info
+        | None ->
+            let info = {
+              senders = Signal_map.empty;
+            } in
+            OBus_connection.set connection key (Some info);
+            let _ = Lwt_sequence.add_l (dispatch connection info) (OBus_connection.incoming_filters connection) in
+            info
+    in
+
+    let senders =
+      match try Some(Signal_map.find (path, sd.interface, sd.member) info.senders) with Not_found -> None with
+        | Some senders ->
+            senders
+        | None ->
+            let senders = Lwt_sequence.create () in
+            info.senders <- Signal_map.add (path, sd.interface, sd.member) senders info.senders;
+            senders
+    in
+
+    let event, send = React.E.create () in
+    let node = Lwt_sequence.add_r send senders in
+
+    let event =
+      React.E.filter
+        (fun (context, body) ->
+           match owner_option with
+             | Some owner when React.S.value owner <> OBus_peer.name (OBus_context.sender context) ->
+                 false
+             | _ ->
+                 OBus_match.match_values sd.filters body)
+        event
+    in
+
+    let disconnect = lazy(
+      try_lwt
+        Lwt_sequence.remove node;
+        if Lwt_sequence.is_empty senders then
+          info.senders <- Signal_map.remove (path, sd.interface, sd.member) info.senders;
+        Lwt_switch.turn_off resources_switch
+      with exn ->
+        lwt () =
+          Lwt_log.warning_f
+            ~section
+            ~exn
+            "failed to disconnect signal \"%s.%s\" of object \"%s\" from \"%s\""
+            sd.interface
+            sd.member
+            (OBus_path.to_string (OBus_proxy.path sd.proxy))
+            (OBus_proxy.name sd.proxy)
+        in
+        fail exn
+    ) in
+
+    (* Trick to know when the event will be garbage collected: *)
+    let f () = () in
+    let _ = React.E.retain event f in
+    Gc.finalise (finalise disconnect) f;
+
+    lwt () =
+      match switch with
+        | Some switch ->
+            Lwt_switch.add_hook switch (fun () -> Lazy.force disconnect)
+        | None ->
+            return ()
+    in
+    return (React.E.map snd (sd.map event))
+  with exn ->
+    lwt () = Lwt_switch.turn_off resources_switch in
+    fail exn
 
 (* +-----------------------------------------------------------------+
    | Emitting signals                                                |

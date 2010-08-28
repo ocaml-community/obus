@@ -14,7 +14,7 @@
     implement the D-Bus protocol. It is used to exchange D-Bus
     messages. *)
 
-type t = OBus_private_connection.t
+type t
     (** Type of D-Bus connections *)
 
 val compare : t -> t -> int
@@ -31,7 +31,7 @@ val compare : t -> t -> int
     Otherwise you should use [OBus_bus] or immediatly call
     [OBus_bus.register_connection] after the creation. *)
 
-val of_addresses : ?shared:bool -> OBus_address.t list -> t Lwt.t
+val of_addresses : ?shared : bool -> OBus_address.t list -> t Lwt.t
   (** [of_addresses shared addresses] try to get a working D-Bus
       connection from a list of addresses. The server must be
       accessible from at least one of these addresses.
@@ -51,24 +51,15 @@ val close : t -> unit Lwt.t
 
       Notes:
       - when a connection is closed, the transport it use is
-      closed too
+        closed too
       - if the connection is already closed, it does nothing
   *)
 
-val running : t -> bool React.signal
-  (** Returns whether a connection is running. *)
-
-val watch : t -> unit Lwt.t
-  (** Return a waiting thread which is wakeup when the connection is
-      closed.
-
-      If the connection is closed using {!close} then it returns [()].
-
-      If the connection is closed for an external reason it fail with
-      the exception which make the connection to crash. *)
+val active : t -> bool React.signal
+  (** Returns whether a connection is active. *)
 
 exception Connection_closed
-  (** Raise when trying to use a normally closed connection *)
+  (** Raise when trying to use a closed connection *)
 
 exception Connection_lost
   (** Raised when a connection has been lost *)
@@ -79,18 +70,18 @@ exception Transport_error of exn
 
 (** {6 Informations} *)
 
+val name : t -> OBus_name.bus
+  (** Returns the unique name of the connection. This is only
+      meaning-full is the other endpoint of the connection is a
+      message bus. If it is not the case it returns [""]. *)
+
+(**/**)
+val set_name : t -> OBus_name.bus -> unit
+(**/**)
+
 val transport : t -> OBus_transport.t
   (** [transport connection] get the transport associated with a
       connection *)
-
-val name : t -> OBus_name.bus
-  (** Unique name of the connection. This is only relevant if the
-      other side of the connection is a message bus.
-
-      In this case this is the unique name assigned by the message bus
-      for the lifetime of the connection.
-
-      In other cases it is [""]. *)
 
 val support_unix_fd_passing : t -> bool
   (** Tell whether the underlying transport support file descriptors
@@ -110,13 +101,49 @@ val send_message_with_reply : t -> OBus_message.t -> OBus_message.t Lwt.t
       return a thread which wait for the reply (which is a method
       return or an error) *)
 
-(** {6 Filters} *)
+(** {6 Helpers for calling methods} *)
+
+val method_call :
+  connection : t ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  i_args : 'a OBus_value.C.sequence ->
+  o_args : 'b OBus_value.C.sequence ->
+  'a -> 'b Lwt.t
+  (** Calls a method using the given parameters, and waits for its
+      reply. *)
+
+val method_call_with_message :
+  connection : t ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  i_args : 'a OBus_value.C.sequence ->
+  o_args : 'b OBus_value.C.sequence ->
+  'a -> (OBus_message.t * 'b) Lwt.t
+  (** Same as {!method_call}, but also returns the reply message so
+      you can extract informations from it. *)
+
+val method_call_no_reply :
+  connection : t ->
+  ?destination : OBus_name.bus ->
+  path : OBus_path.t ->
+  ?interface : OBus_name.interface ->
+  member : OBus_name.member ->
+  i_args : 'a OBus_value.C.sequence ->
+  'a -> unit Lwt.t
+  (** Same as {!method_call} but do not expect a reply *)
+
+(** {6 General purpose filters} *)
 
 (** Filters are functions whose are applied on all incoming and
     outgoing messages.
 
     For incoming messages they are called before dispatching, for
-    outgoing, they are called just before being sent.
+    outgoing ones, they are called just before being sent.
 *)
 
 type filter = OBus_message.t -> OBus_message.t option
@@ -130,7 +157,31 @@ type filter = OBus_message.t -> OBus_message.t option
       dispatched or not sent *)
 
 val incoming_filters : t -> filter Lwt_sequence.t
+  (** Filters applied on incomming messages *)
+
 val outgoing_filters : t -> filter Lwt_sequence.t
+  (** Filters appllied on outgoing messages *)
+
+(** {6 Connection's local Storage} *)
+
+(** Connection's local storage allow to attach values to a
+    connection. It is internally used by modules of obus. *)
+
+type 'a key
+  (** Type of keys. Keys are used to identify a resource attached to a
+      connection. *)
+
+val new_key : unit -> 'a key
+  (** [new_key ()] generates a new key. *)
+
+val get : t -> 'a key -> 'a option
+  (** [get connection key] returns the data associated to [key] in
+      connection, if any. *)
+
+val set : t -> 'a key -> 'a option -> unit
+  (** [set connection key value] attach [value] to [connection] under
+      the key [key]. [set connection key None] will remove any
+      occurence of [key] from [connection]. *)
 
 (** {6 Errors handling} *)
 
@@ -138,16 +189,15 @@ val outgoing_filters : t -> filter Lwt_sequence.t
     exception, it is just dropped. If {!OBus_info.debug} is set then a
     message is printed on [stderr] *)
 
-val on_disconnect : t -> (exn -> unit) ref
-  (** Function called when a fatal error happen or when the conection
-      is lost.
+val set_on_disconnect : t -> (exn -> unit Lwt.t) -> unit
+  (** Sets the function called when a fatal error happen or when the
+      conection is lost.
 
       Notes:
-      - the default function do nothing
-      - it is not called when the connection is closed using
-      {!close}
-      - for connection to a message bus, the behaviour is different,
-      see {!OBus_bus} for explanation *)
+      - the default function does nothing
+      - it is not called when the connection is closed using {!close}
+      - if the connection is closed, it does nothing
+  *)
 
 (** {6 Low-level} *)
 

@@ -10,7 +10,7 @@ include OBus_proxy.Private
 open Nm_interfaces.Org_freedesktop_NetworkManager_VPN_Connection
 
 let properties_changed proxy =
-  OBus_signal.connect s_PropertiesChanged proxy
+  OBus_signal.make s_PropertiesChanged proxy
 
 let vpn_state proxy =
   OBus_property.map_r
@@ -26,19 +26,7 @@ let vpn_state_changed proxy =
        let state = Int32.to_int state in
        let reason = Int32.to_int reason in
        (state, reason))
-    (OBus_signal.connect s_VpnStateChanged proxy)
-
-type properties = {
-  vpn_state : int;
-  banner : string;
-}
+    (OBus_signal.make s_VpnStateChanged proxy)
 
 let properties proxy =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f proxy) context properties in
-       {
-         vpn_state = find vpn_state;
-         banner = find banner;
-       })
-    (OBus_property.make_group proxy interface)
+  OBus_property.group proxy interface

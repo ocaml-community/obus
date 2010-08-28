@@ -13,4 +13,4 @@ let options proxy =
   OBus_property.make p_Options proxy
 
 let properties_changed proxy =
-  OBus_signal.connect s_PropertiesChanged proxy
+  OBus_signal.make s_PropertiesChanged proxy

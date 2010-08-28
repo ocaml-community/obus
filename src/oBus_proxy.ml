@@ -47,7 +47,7 @@ end
    +-----------------------------------------------------------------+ *)
 
 let call proxy ~interface ~member ~i_args ~o_args args =
-  OBus_private_method.call
+  OBus_connection.method_call
     ~connection:proxy.peer.connection
     ~destination:proxy.peer.name
     ~path:proxy.path
@@ -58,18 +58,21 @@ let call proxy ~interface ~member ~i_args ~o_args args =
     args
 
 let call_with_context proxy ~interface ~member ~i_args ~o_args args =
-  OBus_private_method.call_with_context
-    ~connection:proxy.peer.connection
-    ~destination:proxy.peer.name
-    ~path:proxy.path
-    ~interface
-    ~member
-    ~i_args
-    ~o_args
-    args
+  lwt msg, result =
+    OBus_connection.method_call_with_message
+      ~connection:proxy.peer.connection
+      ~destination:proxy.peer.name
+      ~path:proxy.path
+      ~interface
+      ~member
+      ~i_args
+      ~o_args
+      args
+  in
+  return (OBus_context.make proxy.peer.connection msg, result)
 
 let call_no_reply proxy ~interface ~member ~i_args args =
-  OBus_private_method.call_no_reply
+  OBus_connection.method_call_no_reply
     ~connection:proxy.peer.connection
     ~destination:proxy.peer.name
     ~path:proxy.path

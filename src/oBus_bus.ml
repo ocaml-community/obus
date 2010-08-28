@@ -10,20 +10,39 @@
 let section = Lwt_log.Section.make "obus(bus)"
 
 open Lwt
-open OBus_private_connection
+open OBus_interfaces.Org_freedesktop_DBus
+
+type t = OBus_connection.t
+
+(* +-----------------------------------------------------------------+
+   | Local properties                                                |
+   +-----------------------------------------------------------------+ *)
+
+module String_set = Set.Make(String)
+
+type info = {
+  names : String_set.t React.signal;
+  set_names : String_set.t -> unit;
+  connection : OBus_connection.t;
+}
+
+let key = OBus_connection.new_key ()
+
+let name = OBus_connection.name
+
+let names connection =
+  match OBus_connection.get connection key with
+    | Some info -> info.names
+    | None -> invalid_arg "OBus_bus.names: not connected to a message bus"
 
 (* +-----------------------------------------------------------------+
    | Message bus creation                                            |
    +-----------------------------------------------------------------+ *)
 
-type t = OBus_connection.t
-
-open OBus_interfaces.Org_freedesktop_DBus
-
 let proxy bus =
-  OBus_proxy.make (OBus_peer.make bus  "org.freedesktop.DBus") ["org"; "freedesktop"; "DBus"]
+  OBus_proxy.make (OBus_peer.make bus  OBus_protocol.bus_name) OBus_protocol.bus_path
 
-let error_handler = function
+let exit_on_disconnect = function
   | OBus_wire.Protocol_error msg ->
       ignore (Lwt_log.error_f ~section "the D-Bus connection with the message bus has been closed due to a protocol error: %s" msg);
       exit 1
@@ -37,16 +56,38 @@ let error_handler = function
       ignore (Lwt_log.error ~section ~exn "the D-Bus connection with the message bus has been closed due to this uncaught exception");
       exit 1
 
-let register_connection ?(set_on_disconnect=true) connection =
-  let running = connection#get in
-  match running.rc_name with
-    | "" ->
-        if set_on_disconnect then running.rc_on_disconnect := error_handler;
+(* Handle name lost/acquired events *)
+let update_names info message =
+  let open OBus_message in
+  let name = OBus_connection.name info.connection in
+  if name <> "" && message.destination = name then
+    match message with
+      | { sender = "org.freedesktop.DBus";
+          typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
+          body = [OBus_value.V.Basic(OBus_value.V.String name)] } ->
+          info.set_names (String_set.add name (React.S.value info.names));
+          Some message
+      | { sender = "org.freedesktop.DBus";
+          typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameLost");
+          body = [OBus_value.V.Basic(OBus_value.V.String name)] } ->
+          info.set_names (String_set.remove name (React.S.value info.names));
+          Some message
+      | _ ->
+          Some message
+  else
+    Some message
+
+let register_connection connection =
+  match OBus_connection.get connection key with
+    | None ->
+        let names, set_names = React.S.create String_set.empty in
+        let info = { names; set_names; connection } in
+        OBus_connection.set connection key (Some info);
+        let _ = Lwt_sequence.add_l (update_names info) (OBus_connection.incoming_filters connection) in
         lwt name = OBus_method.call m_Hello (proxy connection) () in
-        running.rc_name <- name;
+        OBus_connection.set_name connection name;
         return ()
-    | _ ->
-        (* Do not call two times the Hello method *)
+    | Some _ ->
         return ()
 
 let of_addresses addresses =
@@ -56,7 +97,9 @@ let of_addresses addresses =
 
 let session_bus = lazy(
   try_lwt
-    Lazy.force OBus_address.session >>= of_addresses
+    lwt bus = Lazy.force OBus_address.session >>= of_addresses in
+    OBus_connection.set_on_disconnect bus exit_on_disconnect;
+    return bus
   with exn ->
     lwt () = Lwt_log.warning ~exn ~section "Failed to open a connection to the session bus" in
     fail exn
@@ -71,7 +114,7 @@ let system () =
   Lwt_mutex.with_lock system_bus_mutex
     (fun () ->
        match !system_bus_state with
-         | Some bus when React.S.value (OBus_connection.running bus) ->
+         | Some bus when React.S.value (OBus_connection.active bus) ->
              return bus
          | _ ->
              try_lwt
@@ -110,7 +153,8 @@ exception Adt_audit_data_unknown of string
 exception Selinux_security_context_unknown of string
  with obus("org.freedesktop.DBus.Error.SELinuxSecurityContextUnknown")
 
-let acquired_names bus = bus#get.rc_acquired_names
+let hello bus =
+  OBus_method.call m_Hello (proxy bus) ()
 
 type request_name_result = type_request_name_result
 
@@ -174,13 +218,13 @@ let get_id bus =
   OBus_method.call m_GetId (proxy bus) () >|= OBus_uuid.of_string
 
 let name_owner_changed bus =
-  OBus_signal.connect s_NameOwnerChanged (proxy bus)
+  OBus_signal.make s_NameOwnerChanged (proxy bus)
 
 let name_lost bus =
-  OBus_signal.connect s_NameLost (proxy bus)
+  OBus_signal.make s_NameLost (proxy bus)
 
 let name_acquired bus =
-  OBus_signal.connect s_NameAcquired (proxy bus)
+  OBus_signal.make s_NameAcquired (proxy bus)
 
 let get_peer bus name =
   try_lwt

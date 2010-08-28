@@ -44,14 +44,4 @@ val can_hibernate : t -> bool OBus_property.r
 val can_suspend : t -> bool OBus_property.r
 val daemon_version : t -> string OBus_property.r
 
-type properties = {
-  lid_is_present : bool;
-  lid_is_closed : bool;
-  on_low_battery : bool;
-  on_battery : bool;
-  can_hibernate : bool;
-  can_suspend : bool;
-  daemon_version : string;
-}
-
-val properties : t -> properties OBus_property.r
+val properties : t -> OBus_property.group

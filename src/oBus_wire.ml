@@ -11,9 +11,13 @@ let section = Lwt_log.Section.make "obus(wire)"
 
 open Printf
 open Lwt
-open OBus_constant
 open OBus_value
 open OBus_message
+open OBus_protocol
+
+(* +-----------------------------------------------------------------+
+   | Errors                                                          |
+   +-----------------------------------------------------------------+ *)
 
 exception Data_error of string
 exception Protocol_error of string
@@ -27,6 +31,17 @@ let () =
            Some(sprintf "D-Bus protocol error: %s" msg)
        | _ ->
            None)
+
+(* Common error message *)
+let array_too_big len = sprintf "array size exceed the limit: %d" len
+let message_too_big len = sprintf "message size exceed the limit: %d" len
+let signature_too_long s len = sprintf "too long signature: '%s', with len %d" (string_of_signature s) len
+let invalid_protocol_version ver = sprintf "invalid protocol version: %d (obus implement protocol version %d)" ver OBus_info.protocol_version
+let invalid_byte_order ch = sprintf "invalid byte order(%C)" ch
+
+(* +-----------------------------------------------------------------+
+   | Padding                                                         |
+   +-----------------------------------------------------------------+ *)
 
 let padding2 i = i land 1
 let padding4 i = (4 - i) land 3
@@ -42,13 +57,6 @@ let pad8_p = function
   | T.Basic T.Uint64
   | T.Basic T.Double -> true
   | _ -> false
-
-(* Common error message *)
-let array_too_big len = sprintf "array size exceed the limit: %d" len
-let message_too_big len = sprintf "message size exceed the limit: %d" len
-let signature_too_long s len = sprintf "too long signature: '%s', with len %d" (string_of_signature s) len
-let invalid_protocol_version ver = sprintf "invalid protocol version: %d (obus implement protocol version %d)" ver OBus_info.protocol_version
-let invalid_byte_order ch = sprintf "invalid byte order(%C)" ch
 
 (* +-----------------------------------------------------------------+
    | Raw description of header fields                                |

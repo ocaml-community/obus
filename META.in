@@ -7,6 +7,8 @@ archive(byte) = "obus.cma"
 archive(native) = "obus.cmxa"
 archive(plugin,byte) = "obus.cma"
 archive(plugin,native) = "obus.cmxs"
+archive(byte,toploop) = "obus.cma oBus_top.cmo"
+archive(byte,create_toploop) = "obus.cma oBus_top.cmo"
 
 package "syntax" (
   version = "[distrubuted with OBus]"

@@ -37,14 +37,4 @@ val state : t -> state OBus_property.r
 val default : t -> bool OBus_property.r
 val vpn : t -> bool OBus_property.r
 
-type properties = {
-  service_name : string;
-  connection : Nm_settings.Connection.t;
-  specific_object : OBus_proxy.t;
-  devices : Nm_device.t list;
-  state : state;
-  default : bool;
-  vpn : bool;
-}
-
-val properties : t -> properties OBus_property.r
+val properties : t -> OBus_property.group

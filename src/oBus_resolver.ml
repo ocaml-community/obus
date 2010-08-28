@@ -7,119 +7,189 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open Lwt
-open OBus_private_connection
+let section = Lwt_log.Section.make "obus(resolver)"
 
-type t = {
-  name : OBus_name.bus;
+open Lwt
+
+module String_map = Map.Make(String)
+
+(* We keep track on each connection of the last [cache_size] peers
+   that have already exited: *)
+let cache_size  = 100
+
+type resolver = {
+  mutable count : int;
+  (* Number of instances of this resolver. The resolver is
+     automatically disabled when this number reach 0. *)
+
   owner : OBus_name.bus React.signal;
-  disable : unit Lwt.t Lazy.t;
+  (* The owner of the name that is being monitored. *)
+
+  set_owner : OBus_name.bus -> unit;
+  (* Sets the owner. *)
 }
 
-let name resolver = resolver.name
-let owner resolver = resolver.owner
-let disable resolver = Lazy.force resolver.disable
+(* Informations stored in connections *)
+and info = {
+  mutable resolvers : (resolver * Lwt_switch.t) Lwt.t String_map.t;
+  (* Mapping from names to active resolvers. The maps hold thread
+     instead of resolver directly to avoid the following problem:
 
-let finalise stop () =
-  ignore_result (Lazy.force stop)
+     1 - a resolver for a certain name is being created,
+     2 - the creation yields,
+     3 - another resolver for the same name is requested before the
+         creation of the previous one terminates,
+     4 - the second to register in this map wwill erase the first one.
+  *)
 
-let make connection name =
-  let running = connection#get in
-  (* If the connection is a peer-to-peer connection, act as if there
-     is no owner *)
-  if (running.rc_name = "" ||
-      (* If it is a unique name and the peer has already exited, then
-         there is nothing to do *)
-      (OBus_name.is_unique name && OBus_cache.mem running.rc_exited_peers name)) then
-    return {
-      name = name;
-      owner = React.S.const "";
-      disable = lazy(return ());
-    }
-  else
-    lwt name_resolver =
-      match try Some(Name_map.find name running.rc_resolvers) with Not_found -> None with
-        | Some name_resolver ->
-            (* add a reference to the resolver *)
-            name_resolver.nr_ref_count <- name_resolver.nr_ref_count + 1;
-            begin
-              match name_resolver.nr_state with
-                | Resolver_init(waiter, wakener) ->
-                    waiter
-                | Resolver_running ->
-                    return name_resolver
-            end;
+  mutable exited : OBus_name.bus array;
+  (* Array holding the last [cache_size] peers that have already
+     exited *)
 
+  mutable exited_index : int;
+  (* Position where to store the next exited peers in [exited]. *)
+}
+
+let finalise remove _ =
+  ignore (Lazy.force remove)
+
+let has_exited peer_name info =
+  let rec loop index =
+    if index = cache_size then
+      false
+    else if info.exited.(index) = peer_name then
+      true
+    else
+      loop (index + 1)
+  in
+  loop 0
+
+let key = OBus_connection.new_key ()
+
+let get_name_owner connection name =
+  OBus_connection.method_call
+    ~connection
+    ~destination:OBus_protocol.bus_name
+    ~path:OBus_protocol.bus_path
+    ~interface:OBus_protocol.bus_interface
+    ~member:"RemoveMatch"
+    ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+    ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+    name
+
+(* Handle NameOwnerChanged events *)
+let update_mapping info message =
+  let open OBus_message in
+  let open OBus_value in
+  match message with
+    | { sender = "org.freedesktop.DBus";
+        typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
+        body = [V.Basic(V.String name); V.Basic(V.String old_owner); V.Basic(V.String new_owner)] } ->
+
+        if OBus_name.is_unique name && new_owner = "" && not (has_exited name info) then begin
+          (* Remember that the peer has exited: *)
+          info.exited.(info.exited_index) <- name;
+          info.exited_index <- (info.exited_index + 1) mod cache_size
+        end;
+
+        begin
+          match try state (String_map.find name info.resolvers) with Not_found -> Sleep with
+            | Return(resolver, switch) ->
+                resolver.set_owner new_owner
+            | Fail _ | Sleep ->
+                (* Discards events arriving before GetNameOwner has returned *)
+                ()
+        end;
+
+        Some message
+    | _ ->
+        Some message
+
+let make ?switch connection name =
+  OBus_string.assert_validate OBus_name.validate_bus name;
+  let info =
+    match OBus_connection.get connection key with
+      | Some info ->
+          info
+      | None ->
+          let info = {
+            resolvers = String_map.empty;
+            exited = Array.make cache_size "";
+            exited_index = 0;
+          } in
+          OBus_connection.set connection key (Some info);
+          let _ = Lwt_sequence.add_l (update_mapping info) (OBus_connection.incoming_filters connection) in
+          info
+  in
+
+  (* If [name] is a unique name and the peer has already exited, then
+     there is nothing to do: *)
+  if OBus_name.is_unique name && has_exited name info then
+    return (React.S.const "")
+  else begin
+    lwt resolver, export_switch =
+      match try Some(String_map.find name info.resolvers) with Not_found -> None with
+        | Some thread ->
+            thread
         | None ->
-            let match_rule =
-              OBus_match.string_of_rule
-                (OBus_match.rule
-                   ~typ:`Signal
-                   ~sender:"org.freedesktop.DBus"
-                   ~interface:"org.freedesktop.DBus"
-                   ~member:"NameOwnerChanged"
-                   ~path:["org"; "freedesktop"; "DBus"]
-                   ~arguments:(OBus_match.make_arguments [(0, OBus_match.AF_string name)]) ()) in
-
-            let init_waiter, init_wakener = Lwt.wait () and owner, set = React.S.create "" in
-            let name_resolver = {
-              nr_owner = owner;
-              nr_set = set;
-              nr_ref_count = 1;
-              nr_match_rule = match_rule;
-              nr_state = Resolver_init(init_waiter, init_wakener);
-            } in
-
-            (* Immediatly add the resolver to be sure no other thread
-               will do it: *)
-            running.rc_resolvers <- Name_map.add name name_resolver running.rc_resolvers;
-
-            (* Initialization *)
+            let waiter, wakener = wait () in
+            info.resolvers <- String_map.add name waiter info.resolvers;
+            let export_switch = Lwt_switch.create () in
             try_lwt
-              (* Add the rule for monitoring the name + ask for the
-                 current name owner. The calling order is important to
-                 avoid race conditions. *)
-              lwt () = OBus_private_bus.add_match connection match_rule in
-              lwt owner = OBus_private_bus.get_name_owner connection name in
-              name_resolver.nr_set owner;
-              match name_resolver.nr_state with
-                | Resolver_init(waiter, wakener) ->
-                    name_resolver.nr_state <- Resolver_running;
-                    wakeup wakener name_resolver;
-                    return name_resolver
-                | Resolver_running ->
-                    return name_resolver
+              lwt () =
+                OBus_match.export
+                  ~switch:export_switch
+                  connection
+                  (OBus_match.rule
+                     ~typ:`Signal
+                     ~sender:OBus_protocol.bus_name
+                     ~interface:OBus_protocol.bus_interface
+                     ~member:"NameOwnerChanged"
+                     ~path:OBus_protocol.bus_path
+                     ~arguments:(OBus_match.make_arguments [(0, OBus_match.AF_string name)]) ())
+              in
+              lwt current_owner = get_name_owner connection name in
+              let owner, set_owner = React.S.create current_owner in
+              let resolver = { count = 0; owner; set_owner } in
+              wakeup wakener (resolver, export_switch);
+              return (resolver, export_switch)
             with exn ->
-              match name_resolver.nr_state with
-                | Resolver_init(waiter, wakener) ->
-                    running.rc_resolvers <- Name_map.remove name running.rc_resolvers;
-                    wakeup_exn wakener exn;
-                    fail exn
-                | Resolver_running ->
-                    (* If we go here, this means that a
-                       NameOwnerChanged signals have been received by
-                       the connection.
-
-                       We consider that the resolver is OK. *)
-                    return name_resolver
+              info.resolvers <- String_map.remove name info.resolvers;
+              wakeup_exn wakener exn;
+              lwt () = Lwt_switch.turn_off export_switch in
+              fail exn
     in
 
-    let disable = lazy(
-      name_resolver.nr_ref_count <- name_resolver.nr_ref_count - 1;
-      if name_resolver.nr_ref_count = 0 then
-        match connection#state with
-          | Running running ->
-              running.rc_resolvers <- Name_map.remove name running.rc_resolvers;
-              React.S.stop name_resolver.nr_owner;
-              OBus_private_bus.remove_match connection name_resolver.nr_match_rule
-          | Crashed _ ->
-              return ()
-      else
-        return ()
+    resolver.count <- resolver.count + 1;
+
+    (* We map the owner signal because we want to monitor it for
+       garbage collection: *)
+    let owner = React.S.map (fun x -> x) resolver.owner in
+
+    let remove = lazy(
+      try_lwt
+        React.S.stop owner;
+        resolver.count <- resolver.count - 1;
+        if resolver.count = 0 then begin
+          (* The resolver is no more used, so we disable it: *)
+          info.resolvers <- String_map.remove name info.resolvers;
+          Lwt_switch.turn_off export_switch
+        end else
+          return ()
+      with exn ->
+        lwt () = Lwt_log.warning_f ~section ~exn "failed to disable resolver for name %S" name in
+        fail exn
     ) in
 
-    return {
-      name = name;
-      owner = Lwt_signal.with_finaliser (finalise disable) name_resolver.nr_owner;
-      disable = disable;
-    }
+    (* Trick to know when the signal will be garbage collected: *)
+    let f () = () in
+    let _ = React.S.retain owner f in
+    Gc.finalise (finalise remove) f;
+
+    match switch with
+      | Some switch ->
+          lwt () = Lwt_switch.add_hook switch (fun () -> Lazy.force remove) in
+          return owner
+      | None ->
+          return owner
+  end

@@ -117,7 +117,7 @@ let _ =
             (fun env _ -> ln_s (Filename.basename (env "%.byte")) (env "%.best"));
 
         let libs_byte =
-          "syntax/pa_obus.cmo" :: "obus.cma" :: "obus_idl.cma" :: List.map (fun name -> "bindings" / name / name ^ ".cma") bindings
+          "syntax/pa_obus.cmo" :: "src/oBus_top.cmo" :: "obus.cma" :: "obus_idl.cma" :: List.map (fun name -> "bindings" / name / name ^ ".cma") bindings
         and libs_native = List.concat [
           "obus.cmxa" :: "obus_idl.cmxa" :: List.map (fun name -> "bindings" / name / name ^ ".cmxa") bindings;
           "obus.cmxs" :: "obus_idl.cmxs" :: List.map (fun name -> "bindings" / name / name ^ ".cmxs") bindings;
@@ -213,7 +213,7 @@ let _ =
           ~prods:["%.ml"; "%.mli"]
           ~deps:["%.obus"; "tools/obus_gen_interface.best"]
           (fun env _ -> Cmd(S[P"tools/obus_gen_interface.best";
-                              A"-keep-common"; A"-mode"; A"client";
+                              A"-keep-common";
                               A"-o"; A(env "%");
                               A(env "%.obus")]));
 

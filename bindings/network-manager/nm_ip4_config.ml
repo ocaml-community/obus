@@ -32,23 +32,5 @@ let routes proxy =
     (fun x -> List.map (List.map Int32.to_int) x)
     (OBus_property.make p_Routes proxy)
 
-type properties = {
-  addresses : int list list;
-  nameservers : int list;
-  wins_servers : int list;
-  domains : string list;
-  routes : int list list;
-}
-
 let properties proxy =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f proxy) context properties in
-       {
-         addresses = find addresses;
-         nameservers = find nameservers;
-         wins_servers = find wins_servers;
-         domains = find domains;
-         routes = find routes;
-       })
-    (OBus_property.make_group proxy interface)
+  OBus_property.group proxy interface

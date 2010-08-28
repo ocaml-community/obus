@@ -217,41 +217,10 @@ let state_changed proxy =
        (state_of_int32 new_state,
         state_of_int32 old_state,
         state_reason_of_int32 reason))
-    (OBus_signal.connect s_StateChanged proxy)
-
-type properties = {
-  udi : string;
-  interface : string;
-  driver : string;
-  capabilities : capability list;
-  ip4_address : int32;
-  state : state;
-  ip4_config : Nm_ip4_config.t;
-  dhcp4_config : Nm_dhcp4_config.t;
-  ip6_config : Nm_ip6_config.t;
-  managed : bool;
-  device_type : typ;
-}
+    (OBus_signal.make s_StateChanged proxy)
 
 let properties proxy =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f proxy) context properties in
-       {
-         udi = find udi;
-         interface = find interface;
-         driver = find driver;
-         capabilities = find capabilities;
-         ip4_address = find ip4_address;
-         state = find state;
-         ip4_config = find ip4_config;
-         dhcp4_config = find dhcp4_config;
-         ip6_config = find ip6_config;
-         managed = find managed;
-         device_type = find device_type;
-       })
-    (OBus_property.make_group proxy
-       Nm_interfaces.Org_freedesktop_NetworkManager_Device.interface)
+  OBus_property.group proxy Nm_interfaces.Org_freedesktop_NetworkManager_Device.interface
 
 module Bluetooth =
 struct
@@ -269,38 +238,24 @@ struct
       (OBus_property.make p_BtCapabilities proxy)
 
   let properties_changed proxy =
-    OBus_signal.connect s_PropertiesChanged proxy
-
-  type properties = {
-    hw_address : string;
-    name : string;
-    bt_capabilities : int;
-  }
+    OBus_signal.make s_PropertiesChanged proxy
 
   let properties proxy =
-    OBus_property.map_r_with_context
-      (fun context properties ->
-         let find f = OBus_property.find (f proxy) context properties in
-         {
-           hw_address = find hw_address;
-           name = find name;
-           bt_capabilities = find bt_capabilities;
-         })
-      (OBus_property.make_group proxy interface)
+    OBus_property.group proxy interface
 end
 
 module Cdma =
 struct
   open Nm_interfaces.Org_freedesktop_NetworkManager_Device_Cdma
   let properties_changed proxy =
-    OBus_signal.connect s_PropertiesChanged proxy
+    OBus_signal.make s_PropertiesChanged proxy
 end
 
 module Gsm =
 struct
   open Nm_interfaces.Org_freedesktop_NetworkManager_Device_Gsm
   let properties_changed proxy =
-    OBus_signal.connect s_PropertiesChanged proxy
+    OBus_signal.make s_PropertiesChanged proxy
 end
 
 module Olpc_mesh =
@@ -321,24 +276,10 @@ struct
       (OBus_property.make p_ActiveChannel proxy)
 
   let properties_changed proxy =
-    OBus_signal.connect s_PropertiesChanged proxy
-
-  type properties = {
-    hw_address : string;
-    companion : OBus_proxy.t;
-    active_channel : int;
-  }
+    OBus_signal.make s_PropertiesChanged proxy
 
   let properties proxy =
-    OBus_property.map_r_with_context
-      (fun context properties ->
-         let find f = OBus_property.find (f proxy) context properties in
-         {
-           hw_address = find hw_address;
-           companion = find companion;
-           active_channel = find active_channel;
-         })
-      (OBus_property.make_group proxy interface)
+    OBus_property.group proxy interface
 end
 
 module Serial =
@@ -351,7 +292,7 @@ struct
          let in_bytes = Int32.to_int in_bytes in
          let out_bytes = Int32.to_int out_bytes in
          (in_bytes, out_bytes))
-      (OBus_signal.connect s_PppStats proxy)
+      (OBus_signal.make s_PppStats proxy)
 end
 
 module Wired =
@@ -370,24 +311,10 @@ struct
     OBus_property.make p_Carrier proxy
 
   let properties_changed proxy =
-    OBus_signal.connect s_PropertiesChanged proxy
-
-  type properties = {
-    hw_address : string;
-    speed : int;
-    carrier : bool;
-  }
+    OBus_signal.make s_PropertiesChanged proxy
 
   let properties proxy =
-    OBus_property.map_r_with_context
-      (fun context properties ->
-         let find f = OBus_property.find (f proxy) context properties in
-         {
-           hw_address = find hw_address;
-           speed = find speed;
-           carrier = find carrier;
-         })
-      (OBus_property.make_group proxy interface)
+    OBus_property.group proxy interface
 end
 
 module Wireless =
@@ -441,40 +368,22 @@ struct
       (OBus_property.make p_WirelessCapabilities proxy)
 
   let properties_changed proxy =
-    OBus_signal.connect s_PropertiesChanged proxy
+    OBus_signal.make s_PropertiesChanged proxy
 
   let access_point_added proxy =
     OBus_signal.map_with_context
       (fun context access_point ->
          Nm_access_point.of_proxy
            (OBus_proxy.make (OBus_context.sender context) access_point))
-      (OBus_signal.connect s_AccessPointAdded proxy)
+      (OBus_signal.make s_AccessPointAdded proxy)
 
   let access_point_removed proxy =
     OBus_signal.map_with_context
       (fun context access_point ->
          Nm_access_point.of_proxy
            (OBus_proxy.make (OBus_context.sender context) access_point))
-      (OBus_signal.connect s_AccessPointRemoved proxy)
-
-  type properties = {
-    hw_address : string;
-    mode : int;
-    bitrate : int;
-    active_access_point : OBus_proxy.t;
-    wireless_capabilities : int;
-  }
+      (OBus_signal.make s_AccessPointRemoved proxy)
 
   let properties proxy =
-    OBus_property.map_r_with_context
-      (fun context properties ->
-         let find f = OBus_property.find (f proxy) context properties in
-         {
-           hw_address = find hw_address;
-           mode = find mode;
-           bitrate = find bitrate;
-           active_access_point = find active_access_point;
-           wireless_capabilities = find wireless_capabilities;
-         })
-      (OBus_property.make_group proxy interface)
+    OBus_property.group proxy interface
 end

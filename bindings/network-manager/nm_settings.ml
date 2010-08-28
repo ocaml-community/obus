@@ -39,10 +39,10 @@ struct
     OBus_method.call m_GetSettings proxy ()
 
   let updated proxy =
-    OBus_signal.connect s_Updated proxy
+    OBus_signal.make s_Updated proxy
 
   let removed proxy =
-    OBus_signal.connect s_Removed proxy
+    OBus_signal.make s_Removed proxy
 
   module Secrets =
   struct
@@ -67,10 +67,10 @@ struct
     OBus_property.make p_CanModify proxy
 
   let properties_changed proxy =
-    OBus_signal.connect s_PropertiesChanged proxy
+    OBus_signal.make s_PropertiesChanged proxy
 
   let check_permissions proxy =
-    OBus_signal.connect s_CheckPermissions proxy
+    OBus_signal.make s_CheckPermissions proxy
 
   let get_permissions proxy =
     lwt permissions = OBus_method.call m_GetPermissions proxy () in
@@ -95,4 +95,4 @@ let new_connection proxy =
   OBus_signal.map_with_context
     (fun context connection ->
        Connection.of_proxy (OBus_proxy.make (OBus_context.sender context) connection))
-    (OBus_signal.connect s_NewConnection proxy)
+    (OBus_signal.make s_NewConnection proxy)

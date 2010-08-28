@@ -34,7 +34,7 @@ let total_changed daemon =
     (fun value ->
        let value = Int32.to_int value in
        value)
-    (OBus_signal.connect s_TotalChanged (proxy daemon))
+    (OBus_signal.make s_TotalChanged (proxy daemon))
 
 let get_data daemon =
   lwt data = OBus_method.call m_GetData (proxy daemon) () in
@@ -50,4 +50,4 @@ let get_data daemon =
        data)
 
 let data_changed daemon =
-  OBus_signal.connect s_DataChanged (proxy daemon)
+  OBus_signal.make s_DataChanged (proxy daemon)

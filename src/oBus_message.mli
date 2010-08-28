@@ -19,7 +19,6 @@ type body = OBus_value.V.sequence
 type typ =
   | Method_call of OBus_path.t * OBus_name.interface * OBus_name.member
   | Method_return of serial
-      (** Contains the serial for which this message is a reply *)
   | Error of serial * OBus_name.error
   | Signal of OBus_path.t * OBus_name.interface * OBus_name.member
 
@@ -60,10 +59,11 @@ val destination : t -> OBus_name.bus
 val sender : t -> OBus_name.bus
 val body : t -> body
 
-(** {6 Creation of header} *)
+(** {6 Helpers for creating messages} *)
 
-(** Note that when creating an header the serial field is not
-    relevant, it is overridden at sending-time *)
+(** Note that when creating an message the serial field is not
+    relevant, it is overridden by {!OBus_connection} at
+    sending-time *)
 
 val make :
   ?flags : flags ->
@@ -109,6 +109,22 @@ val signal :
   interface : OBus_name.interface ->
   member : OBus_name.member ->
   body -> t
+
+(** {6 Errors} *)
+
+exception Invalid_reply of string
+  (** Exception raised when the signature of the reply to a method
+      call does not match the expected signature. The argument is an
+      error message. *)
+
+val invalid_reply : method_call : t -> expected_signature : OBus_value.signature -> method_return : t -> exn
+  (** [invalid_reply ~method_call ~expected_signature ~method_return]
+      returns an {!Invalid_reply} exception with a informative
+      description of the error.
+
+      It raises [Invalid_argument] if [method_call] is not a method
+      call message or [method_return] is not a method return
+      message *)
 
 (** {6 Pretty-printing} *)
 

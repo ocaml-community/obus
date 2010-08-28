@@ -10,13 +10,14 @@
 let section = Lwt_log.Section.make "obus(connection)"
 
 open Lwt
-open OBus_message
-open OBus_private_connection
-open OBus_value
 
-exception Connection_closed = OBus_private_connection.Connection_closed
-exception Connection_lost = OBus_private_connection.Connection_lost
-exception Transport_error = OBus_private_connection.Transport_error
+(* +-----------------------------------------------------------------+
+   | Exceptions                                                      |
+   +-----------------------------------------------------------------+ *)
+
+exception Connection_closed
+exception Connection_lost
+exception Transport_error of exn
 
 let () =
   Printexc.register_printer
@@ -30,498 +31,499 @@ let () =
        | _ ->
            None)
 
-type t = OBus_private_connection.t
+(* +-----------------------------------------------------------------+
+   | Types                                                           |
+   +-----------------------------------------------------------------+ *)
 
-let compare = Pervasives.compare
+module Serial_map = Map.Make
+  (struct
+     type t = OBus_message.serial
+     let compare : int32 -> int32 -> int = compare
+   end)
 
-type filter = OBus_private_connection.filter
+module Int_map = Map.Make
+  (struct
+     type t = int
+     let compare : int -> int -> int = compare
+   end)
+
+type filter = OBus_message.t -> OBus_message.t option
+  (* Type of message filters *)
+
+(* Connection are wrapped into object in order to make them
+   comparable. In the code, wrapped connection are simply referred has
+   "connection" and internal connection details are referred as
+   "active". *)
+
+(* Type of active connections *)
+type active_connection = {
+  mutable name : OBus_name.bus;
+  (* The name of the connection in case the endpoint is a message bus,
+     or [""] if not. *)
+
+  transport : OBus_transport.t;
+  (* The transport used for messages *)
+
+  mutable on_disconnect : exn -> unit Lwt.t;
+  (* [on_disconnect] is called the connection is closed
+     prematurely. This happen on transport errors. *)
+
+  guid : OBus_address.guid option;
+  (* Guid of the connection. It may is [Some guid] if this is the
+     client-side part of a peer-to-peer connection and the connection
+     is shared. *)
+
+  down : (unit Lwt.t * unit Lwt.u) option React.signal;
+  set_down : (unit Lwt.t * unit Lwt.u) option -> unit;
+  (* Waiting thread used to make the connection to stop dispatching
+     messages. *)
+
+  state : [ `Up | `Down ] React.signal;
+
+  abort_recv_wakener : OBus_message.t Lwt.u;
+  abort_send_wakener : unit Lwt.u;
+  abort_recv_waiter : OBus_message.t Lwt.t;
+  abort_send_waiter : unit Lwt.t;
+  (* Waiting threads wakeup when the connection is closed or
+     aborted. It is used to make the dispatcher/writer to exit. *)
+
+  mutable next_serial : OBus_message.serial;
+  (* The first available serial, incremented for each message *)
+
+  mutable outgoing_mutex : Lwt_mutex.t;
+  (* Mutex used to serialise message sending *)
+
+  incoming_filters : filter Lwt_sequence.t;
+  outgoing_filters : filter Lwt_sequence.t;
+
+  mutable reply_waiters : OBus_message.t Lwt.u Serial_map.t;
+  (* Mapping serial -> thread waiting for a reply *)
+
+  mutable data : exn Int_map.t;
+  (* Set of locally stored values *)
+
+  wrapper : t;
+  (* The wrapper containing the connection *)
+}
+
+(* State of a connection *)
+and connection_state =
+  | Active of active_connection
+      (* The connection is currently active *)
+  | Closed
+      (* The connection has been closed gracefully *)
+  | Killed
+      (* The connection has been killed after an error happened *)
+
+(* Connections are packed into objects to make them comparable *)
+and t = <
+  state : connection_state;
+  (* Get the connection state *)
+
+  set_state : connection_state -> unit;
+  (* Sets the state of the connection *)
+
+  get : active_connection;
+  (* Returns the connection if it is active, and fail otherwise *)
+
+  active : bool React.signal;
+  (* Signal holding the current connection state. *)
+>
+
+let compare : t -> t -> int = Pervasives.compare
+
+(* +-----------------------------------------------------------------+
+   | Guids                                                           |
+   +-----------------------------------------------------------------+ *)
 
 (* Mapping from server guid to connection. *)
 module Guid_map = Map.Make(struct
                             type t = OBus_address.guid
                             let compare = Pervasives.compare
                           end)
+
 let guid_connection_map = ref Guid_map.empty
 
-let send_message = OBus_private_connection.send_message
-let send_message_with_reply = OBus_private_connection.send_message_with_reply
-
 (* +-----------------------------------------------------------------+
-   | Signal matching                                                 |
+   | Filters                                                         |
    +-----------------------------------------------------------------+ *)
 
-let match_sender receiver message =
-  match receiver.sr_sender, message.sender with
-    | None, _ ->
-        true
+(* Apply a list of filter on a message, logging failure *)
+let apply_filters typ message filters =
+  try
+    Lwt_sequence.fold_l
+      (fun filter message -> match message with
+         | Some message -> filter message
+         | None -> None)
+      filters (Some message)
+  with exn ->
+    ignore (Lwt_log.error_f ~section ~exn "an %s filter failed with" typ);
+    None
 
-    | Some _, "" ->
-        (* this normally never happen because with a message bus, all
-           messages have a sender field *)
-        false
+(* +-----------------------------------------------------------------+
+   | Connection closing                                              |
+   +-----------------------------------------------------------------+ *)
 
-    | Some name, sender ->
-        match React.S.value name with
-          | "" ->
-              (* This case is when the name the rule filter on do not
-                 currently have an owner *)
-              false
+let cleanup active ~is_crash =
+  begin
+    match active.guid with
+      | Some guid ->
+          guid_connection_map := Guid_map.remove guid !guid_connection_map
+      | None ->
+          ()
+  end;
 
-          | owner ->
-              owner = sender
+  (* This make the dispatcher to exit if it is waiting on
+     [get_message] *)
+  wakeup_exn active.abort_recv_wakener Connection_closed;
+  begin
+    match React.S.value active.down with
+      | Some(waiter, wakener) ->
+          wakeup_exn wakener Connection_closed
+      | None ->
+          ()
+  end;
+
+  (* Wakeup all reply handlers so they will not wait forever *)
+  Serial_map.iter (fun _ wakener -> wakeup_exn wakener Connection_closed) active.reply_waiters;
+
+  (* If the connection is closed normally, flush it *)
+  lwt () =
+    if not is_crash then
+      Lwt_mutex.with_lock active.outgoing_mutex return
+    else begin
+      wakeup_exn active.abort_send_wakener Connection_closed;
+      return ()
+    end
+  in
+
+  (* Shutdown the transport *)
+  try_lwt
+    OBus_transport.shutdown active.transport
+  with exn ->
+    Lwt_log.error ~section ~exn "failed to abort/shutdown the transport"
+
+let close connection =
+  match connection#state with
+    | Killed | Closed ->
+        return ()
+    | Active active ->
+        connection#set_state Closed;
+        cleanup active ~is_crash:false
+
+let kill connection exn =
+  match connection#state with
+    | Killed | Closed ->
+        return ()
+    | Active active ->
+        connection#set_state Killed;
+        lwt () = cleanup active ~is_crash:true in
+        try_lwt
+          active.on_disconnect exn
+        with exn ->
+          Lwt_log.error ~section ~exn "the error handler failed with"
+
+(* +-----------------------------------------------------------------+
+   | Sending messages                                                 |
+   +-----------------------------------------------------------------+ *)
+
+(* Send a message, maybe adding a reply waiter and return
+   [return_thread] *)
+let send_message_backend connection reply_waiter_opt message =
+  let active = connection#get in
+  Lwt_mutex.with_lock active.outgoing_mutex
+    (fun () ->
+       let send_it, closed = match connection#state with
+         | Active _ ->
+             (true, false)
+         | Closed ->
+             (* Flush the connection if closed gracefully *)
+             (true, true)
+         | Killed ->
+             (false, true)
+       in
+       if send_it then begin
+         let message = { message with OBus_message.serial = active.next_serial } in
+         match apply_filters "outgoing" message active.outgoing_filters with
+           | None ->
+               lwt () = Lwt_log.debug ~section "outgoing message dropped by filters" in
+               fail (Failure "message dropped by filters")
+
+           | Some message ->
+               if not closed then begin
+                 match reply_waiter_opt with
+                   | Some(waiter, wakener) ->
+                       active.reply_waiters <- Serial_map.add (OBus_message.serial message) wakener active.reply_waiters;
+                       on_cancel waiter (fun () ->
+                                           match connection#state with
+                                             | Killed | Closed ->
+                                                 ()
+                                             | Active active ->
+                                                 active.reply_waiters <- Serial_map.remove (OBus_message.serial message) active.reply_waiters)
+                   | None ->
+                       ()
+               end;
+
+               try_lwt
+                 lwt () = choose [active.abort_send_waiter;
+                                  (* Do not cancel a thread while it is marshaling message: *)
+                                  protected (OBus_transport.send active.transport message)] in
+                 (* Everything went OK, continue with a new serial *)
+                 active.next_serial <- Int32.succ active.next_serial;
+                 return ()
+               with
+                 | OBus_wire.Data_error _ as exn ->
+                     (* The message can not be marshaled for some
+                        reason. This is not a fatal error. *)
+                     fail exn
+
+                 | Canceled ->
+                     (* Message sending have been canceled by the
+                        user. This is not a fatal error either. *)
+                     fail Canceled
+
+                 | exn ->
+                     (* All other errors are considered as fatal. They
+                        are fatal because it is possible that a
+                        message has been partially sent on the
+                        connection, so the message stream is broken *)
+                     lwt () = kill connection exn in
+                     fail exn
+       end else
+         match connection#state with
+           | Killed | Closed ->
+               fail Connection_closed
+           | Active _ ->
+               return ())
+
+let send_message connection message =
+  send_message_backend connection None message
+
+let send_message_with_reply connection message =
+  let (waiter, wakener) as v = task () in
+  lwt () = send_message_backend connection (Some v) message in
+  waiter
+
+(* +-----------------------------------------------------------------+
+   | Helpers for calling methods                                     |
+   +-----------------------------------------------------------------+ *)
+
+let method_call_with_message ~connection ?destination ~path ?interface ~member ~i_args ~o_args args =
+  let i_msg =
+    OBus_message.method_call
+      ?destination
+      ~path
+      ?interface
+      ~member
+      (OBus_value.C.make_sequence i_args args)
+  in
+  lwt o_msg = send_message_with_reply connection i_msg in
+  match o_msg with
+    | { OBus_message.typ = OBus_message.Method_return _; body } -> begin
+        try
+          return (o_msg, OBus_value.C.cast_sequence o_args body)
+        with OBus_value.C.Signature_mismatch ->
+          fail (OBus_message.invalid_reply i_msg (OBus_value.C.type_sequence o_args) o_msg)
+      end
+    | { OBus_message.typ = OBus_message.Error(_, error_name);
+        OBus_message.body = OBus_value.V.Basic(OBus_value.V.String message) :: _  } ->
+        fail (OBus_error.make error_name message)
+    | { OBus_message.typ = OBus_message.Error(_, error_name) } ->
+        fail (OBus_error.make error_name "")
+    | _ ->
+        assert false
+
+let method_call ~connection ?destination ~path ?interface ~member ~i_args ~o_args args =
+  method_call_with_message ~connection ?destination ~path ?interface ~member ~i_args ~o_args args >|= snd
+
+let method_call_no_reply ~connection ?destination ~path ?interface ~member ~i_args args =
+  send_message connection
+    (OBus_message.method_call
+       ~flags:{ OBus_message.default_flags with OBus_message.no_reply_expected = true }
+       ?destination
+       ~path
+       ?interface
+       ~member
+       (OBus_value.C.make_sequence i_args args))
 
 (* +-----------------------------------------------------------------+
    | Reading/dispatching                                             |
    +-----------------------------------------------------------------+ *)
 
-let introspection children =
-  let buffer = Buffer.create 42 in
-  Buffer.add_string buffer "<node>\n";
-  List.iter
-    (fun child ->
-       Buffer.add_string buffer "  <node name=\"";
-       Buffer.add_string buffer child;
-       Buffer.add_string buffer "\"/>\n")
-    children;
-  Buffer.add_string buffer "</node>\n";
-  Buffer.contents buffer
+let dispatch_message active message =
+  let open OBus_message in
+  match message with
 
-let reply_expected message =
-  match message .typ with
-    | Method_call(path, interface, member) ->
-        Lwt_log.error_f ~section "no reply sent by %S on interface %S, but one was expected"
-          member interface
+    (* For method return and errors, we lookup at the reply waiters. If
+       one is find then it get the reply, if none, then the reply is
+       dropped. *)
+    | { typ = Method_return(reply_serial) }
+    | { typ = Error(reply_serial, _) } -> begin
+        match try Some(Serial_map.find reply_serial active.reply_waiters) with Not_found -> None with
+          | Some w ->
+              active.reply_waiters <- Serial_map.remove reply_serial active.reply_waiters;
+              wakeup w message;
+              return ()
+          | None ->
+              Lwt_log.debug_f ~section "reply to message with serial %ld dropped%s"
+                reply_serial
+                (match message with
+                   | { typ = Error(_, error_name) } ->
+                       Printf.sprintf ", the reply is the error: %S: %S"
+                         error_name
+                         (match message.body with
+                            | OBus_value.V.Basic(OBus_value.V.String x) :: _ -> x
+                            | _ -> "")
+                   | _ ->
+                       "")
+      end
+
+    (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
+    | { typ = Method_call(_, "org.freedesktop.DBus.Peer", member); body; sender; serial } -> begin
+        try_lwt
+          lwt body =
+            match member, body with
+              | "Ping", [] ->
+                  return []
+              | "GetMachineId", [] -> begin
+                  try_lwt
+                    lwt uuid = Lazy.force OBus_info.machine_uuid in
+                    return [OBus_value.V.basic_string (OBus_uuid.to_string uuid)]
+                  with exn ->
+                    if OBus_error.name exn = OBus_error.ocaml then
+                      fail
+                        (OBus_error.Failed
+                           (Printf.sprintf
+                              "Cannot read the machine uuid file (%s)"
+                              OBus_config.machine_uuid_file))
+                    else
+                      fail exn
+                end
+              | _ ->
+                  fail
+                    (OBus_error.Unknown_method
+                       (Printf.sprintf
+                          "Method %S with signature %S on interface \"org.freedesktop.DBus.Peer\" does not exist"
+                          member
+                          (OBus_value.string_of_signature (OBus_value.V.type_of_sequence body))))
+          in
+          send_message active.wrapper {
+            flags = { no_reply_expected = true; no_auto_start = true };
+            serial = 0l;
+            typ = Method_return serial;
+            destination = sender;
+            sender = "";
+            body = body;
+          }
+        with exn ->
+          let name, msg = OBus_error.cast exn in
+          send_message active.wrapper {
+            flags = { no_reply_expected = true; no_auto_start = true };
+            serial = 0l;
+            typ = Error(serial, name);
+            destination = sender;
+            sender = "";
+            body = [OBus_value.V.basic_string msg];
+          }
+      end
+
     | _ ->
+        (* Other messages are handled by specifics modules *)
         return ()
 
-let dispatch_message connection running message = match message with
-
-  (* For method return and errors, we lookup at the reply waiters. If
-     one is find then it get the reply, if none, then the reply is
-     dropped. *)
-  | { typ = Method_return(reply_serial) }
-  | { typ = Error(reply_serial, _) } -> begin
-      match try Some(Serial_map.find reply_serial running.rc_reply_waiters) with Not_found -> None with
-        | Some w ->
-            running.rc_reply_waiters <- Serial_map.remove reply_serial running.rc_reply_waiters;
-            wakeup w message;
+let rec dispatch_forever active =
+  lwt () =
+    (* Wait for the connection to become up *)
+    match React.S.value active.down with
+      | Some(waiter, wakener) ->
+          waiter
+      | None ->
+          return ()
+  in
+  lwt message =
+    try_lwt
+      choose [OBus_transport.recv active.transport; active.abort_recv_waiter]
+    with exn ->
+      lwt () = kill active.wrapper (Transport_error exn) in
+      fail exn
+  in
+  match apply_filters "incoming" message active.incoming_filters with
+    | None ->
+        lwt () = Lwt_log.debug ~section "incoming message dropped by filters" in
+        dispatch_forever active
+    | Some message ->
+        (* The internal dispatcher accepts only messages destined to
+           the current connection: *)
+        if active.name = "" || OBus_message.destination message = active.name then ignore (
+          try_lwt
+            dispatch_message active message
+          with exn ->
+            Lwt_log.error ~section ~exn "message dispatching failed with"
+          finally
+            OBus_value.V.sequence_close (OBus_message.body message);
             return ()
-        | None ->
-            Lwt_log.debug_f ~section "reply to message with serial %ld dropped%s"
-              reply_serial (match message with
-                              | { typ = Error(_, error_name) } ->
-                                  Printf.sprintf ", the reply is the error: %S: %S"
-                                    error_name
-                                    (match message.body with
-                                       | V.Basic (V.String x) :: _ -> x
-                                       | _ -> "")
-                              | _ ->
-                                  "")
-    end
-
-  | { typ = Signal(path, interface, member) } -> begin
-      let context = make_context connection message in
-      match running.rc_name, message.sender with
-        | "", _ -> begin
-            (* If this is a peer-to-peer connection, we do not match
-               on the sender *)
-            match try Some(Signal_map.find (path, interface, member) running.rc_receiver_groups) with Not_found -> None with
-              | Some receiver_group ->
-                  Lwt_sequence.fold_l
-                    (fun receiver thread ->
-                       join [
-                         thread;
-                         if receiver.sr_active && receiver.sr_filter message then
-                           try_lwt
-                             receiver.sr_push (context, message);
-                             return ()
-                           with exn ->
-                             Lwt_log.error ~section ~exn "signal event failed with"
-                         else
-                           return ()
-                       ])
-                    receiver_group.srg_receivers (return ())
-              | None ->
-                  return ()
-          end
-
-        | _, "" ->
-            Lwt_log.error_f ~section "signal without sender received from message bus"
-
-        | _, sender ->
-            lwt () = match sender, message with
-
-              (* Internal handling of "NameOwnerChange" messages for
-                 name resolving. *)
-              | "org.freedesktop.DBus",
-                { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameOwnerChanged");
-                  body = [V.Basic(V.String name); V.Basic(V.String old_owner); V.Basic(V.String new_owner)] } ->
-
-                  if OBus_name.is_unique name && new_owner = "" then
-                    (* If the resovler was monitoring a unique name
-                       and it is not owned anymore, this means that
-                       the peer with this name has exited. We remember
-                       this information here. *)
-                    OBus_cache.add running.rc_exited_peers name;
-
-                  begin match try Some(Name_map.find name running.rc_resolvers) with Not_found -> None with
-                    | Some resolver ->
-                        lwt () =
-                          Lwt_log.debug_f ~section "updating internal name resolver: %S -> %S"
-                            name
-                            new_owner
-                        in
-
-                        resolver.nr_set new_owner;
-
-                        begin
-                          match resolver.nr_state with
-                            | Resolver_init(waiter, wakener) ->
-                                (* The resolver has not yet been
-                                   initialized; this means that the
-                                   reply to GetNameOwner (done by
-                                   [OBus_resolver.make]) has not yet
-                                   been received. We consider that
-                                   this first signal has precedence
-                                   and terminate initialization. *)
-                                resolver.nr_state <- Resolver_running;
-                                Lwt.wakeup wakener resolver
-                            | Resolver_running ->
-                                ()
-                        end;
-                        return ()
-
-                    | None ->
-                        return ()
-                  end
-
-              (* Internal handling of "NameAcquired" signals *)
-              | ("org.freedesktop.DBus",
-                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
-                   body = [V.Basic(V.String name)] })
-
-                  (* Only handle signals destined to us *)
-                  when message.destination = running.rc_name ->
-
-                  running.rc_set_acquired_names (Name_set.add name (React.S.value running.rc_acquired_names));
-                    return ()
-
-              (* Internal handling of "NameLost" signals *)
-              | ("org.freedesktop.DBus",
-                 { typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameLost");
-                   body = [V.Basic(V.String name)] })
-
-                  (* Only handle signals destined to us *)
-                  when message.destination = running.rc_name ->
-
-                  running.rc_set_acquired_names (Name_set.remove name (React.S.value running.rc_acquired_names));
-                    return ()
-
-              | _ ->
-                  return ()
-            in
-
-            (* Only handle signals broadcasted or destined to us *)
-            if message.destination = "" || message.destination = running.rc_name then
-              match try Some(Signal_map.find (path, interface, member) running.rc_receiver_groups) with Not_found -> None with
-                | Some receiver_group ->
-                    Lwt_sequence.fold_l
-                      (fun receiver thread ->
-                         join [
-                           thread;
-                           if receiver.sr_active && match_sender receiver message && receiver.sr_filter message then
-                             try_lwt
-                               receiver.sr_push (context, message);
-                               return ()
-                             with exn ->
-                               Lwt_log.error ~section ~exn "signal event failed with"
-                           else
-                             return ()
-                         ])
-                      receiver_group.srg_receivers (return ())
-                | None ->
-                    return ()
-            else
-              return ()
-    end
-
-  (* Handling of the special "org.freedesktop.DBus.Peer" interface *)
-  | { typ = Method_call(_, "org.freedesktop.DBus.Peer", member); body = body } -> begin
-      let context = make_context_with_reply connection message in
-      match member, body with
-        | "Ping", [] ->
-            send_reply context []
-        | "GetMachineId", [] ->
-            try_bind
-              (fun () ->
-                 Lazy.force OBus_info.machine_uuid)
-              (fun machine_uuid ->
-                 send_reply context [V.basic_string (OBus_uuid.to_string machine_uuid)])
-              (fun exn ->
-                 send_error context (OBus_error.Failed "cannot get machine uuuid"))
-        | _ ->
-            send_error context (OBus_error.Unknown_method (unknown_method_message message))
-    end
-
-  | { typ = Method_call(path, interface, member); body = body } ->
-      let context = make_context_with_reply connection message in
-      (* Look in static objects *)
-      begin
-        try
-          return (`Object(Object_map.find path running.rc_static_objects))
-        with Not_found ->
-          (* Look in dynamic objects *)
-          match
-            Object_map.fold
-              (fun prefix dynamic_object acc ->
-                 match acc with
-                   | Some _ ->
-                       acc
-                   | None ->
-                       match OBus_path.after prefix path with
-                         | Some path ->
-                             Some(path, dynamic_object)
-                         | None ->
-                             None)
-              running.rc_dynamic_objects None
-          with
-            | None ->
-                return `Not_found
-            | Some(path, dynamic_object) ->
-                try_lwt
-                  dynamic_object context path
-                with exn ->
-                  lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
-                  return `Not_found
-      end >>= function
-        | `Object static_object -> begin
-            lwt result =
-              try_lwt
-                (static_object.so_handle context message :> [ `Replied | `No_reply | `Failure of exn ] Lwt.t)
-              with exn ->
-                return (`Failure exn)
-            in
-            match result with
-              | `Replied ->
-                  return ()
-              | `No_reply ->
-                  if OBus_message.no_reply_expected context.mc_flags then
-                    return ()
-                  else
-                    reply_expected message
-              | `Failure exn ->
-                  lwt () =
-                    if OBus_error.name exn = OBus_error.ocaml then
-                      match interface with
-                        | "" ->
-                            Lwt_log.error_f ~section ~exn
-                              "method call handler for method %S failed with" member
-                        | _ ->
-                            Lwt_log.error_f ~section ~exn
-                              "method call handler for method %S on interface %S failed with"
-                              member interface
-                    else
-                      return ()
-                  in
-                  send_error context exn
-          end
-        | `Replied ->
-            return ()
-        | `No_reply ->
-            if OBus_message.no_reply_expected context.mc_flags then
-              return ()
-            else
-              reply_expected message
-        | `Not_found ->
-            (* Handle introspection for missing intermediate object:
-
-               for example if we have only one exported object with
-               path "/a/b/c", we need to add introspection support for
-               virtual objects with path "/", "/a", "/a/b",
-               "/a/b/c". *)
-            match interface, member, body with
-              | ("" | "org.freedesktop.DBus.Introspectable"), "Introspect", [] ->
-                  send_reply context [V.basic_string (introspection (children running path))]
-              | _ ->
-                  send_error context (OBus_error.Failed (Printf.sprintf "No such object: %S" (OBus_path.to_string path)))
-
-let rec dispatch_forever connection running =
-  try_bind
-    (fun () ->
-       lwt () =
-         match React.S.value running.rc_down with
-           | Some(waiter, wakener) ->
-               waiter
-           | None ->
-               return ()
-       in
-       lwt message =
-         try_lwt
-           choose [OBus_transport.recv running.rc_transport;
-                   running.rc_abort_recv]
-         with exn ->
-           fail =<< (connection#set_crash
-                       (match exn with
-                          | End_of_file -> Connection_lost
-                          | OBus_wire.Protocol_error _ as exn -> exn
-                          | exn -> Transport_error exn))
-       in
-       match apply_filters "incoming" message running.rc_incoming_filters with
-         | None ->
-             lwt () = Lwt_log.debug ~section "incoming message dropped by filters" in
-             return ()
-         | Some message ->
-             ignore (
-               try_lwt
-                 dispatch_message connection running message
-               with exn ->
-                 Lwt_log.error ~section ~exn "message dispatching failed with"
-               finally
-                 OBus_value.V.sequence_close message.body;
-                 return ()
-             );
-             return ())
-    (fun () ->
-       dispatch_forever connection running)
-    (function
-       | Connection_closed ->
-           return ()
-       | exn ->
-           (* At this state of the program the connection state should
-              have been already set to [Crashed].
-
-              The only possible error maybe an [Out_of_memory].
-           *)
-           lwt exn = connection#set_crash exn in
-           try
-             !(running.rc_on_disconnect) exn;
-             return ()
-           with exn ->
-             Lwt_log.error ~section ~exn "the error handler (OBus_connection.on_disconnect) failed with")
-
-(* +-----------------------------------------------------------------+
-   | ``Packed'' connection                                           |
-   +-----------------------------------------------------------------+ *)
-
-class connection =
-  let running, set_running = React.S.create true in
-object(self)
-
-  method running = running
-
-  val mutable state = Crashed Exit (* Fake initial state *)
-
-  (* Set the initial running state *)
-  method set_running running =
-    state <- Running running
-
-  method get =
-    match state with
-      | Crashed exn -> raise exn
-      | Running running -> running
-
-  method state = state
-
-  (* Put the connection in a "crashed" state. This means that all
-     subsequent call using the connection will fail. *)
-  method set_crash exn = match state with
-    | Crashed exn ->
-        return exn
-    | Running running ->
-        state <- Crashed exn;
-        set_running false;
-
-        begin match running.rc_guid with
-          | Some guid -> guid_connection_map := Guid_map.remove guid !guid_connection_map
-          | None -> ()
-        end;
-
-        (* This make the dispatcher to exit if it is waiting on
-           [get_message] *)
-        wakeup_exn running.rc_abort_recv_wakener exn;
-        begin match React.S.value running.rc_down with
-          | Some(waiter, wakener) -> wakeup_exn wakener exn
-          | None -> ()
-        end;
-
-        (* Wakeup all reply handlers so they will not wait forever *)
-        Serial_map.iter (fun _ w -> wakeup_exn w exn) running.rc_reply_waiters;
-
-        (* Remove all objects *)
-        Object_map.iter
-          (fun path static_object ->
-             static_object.so_connection_closed running.rc_wrapper)
-          running.rc_static_objects;
-
-        (* If the connection is closed normally, flush it *)
-        lwt () =
-          if exn = Connection_closed then
-            Lwt_mutex.with_lock running.rc_outgoing_m return
-          else begin
-            wakeup_exn running.rc_abort_send_wakener exn;
-            return ()
-          end
-        in
-
-        (* Shutdown the transport *)
-        lwt () =
-            try_lwt
-              OBus_transport.shutdown running.rc_transport
-            with exn ->
-              Lwt_log.error ~section ~exn "failed to abort/shutdown the transport"
-        in
-        return exn
-end
+        );
+        dispatch_forever active
 
 (* +-----------------------------------------------------------------+
    | Connection creation                                             |
    +-----------------------------------------------------------------+ *)
 
+class connection =
+  let active, set_active = React.S.create false in
+object(self)
+
+  method active = active
+
+  val mutable state = Closed
+
+  method state = state
+
+  method set_state new_state =
+    state <- new_state;
+    match state with
+      | Closed | Killed ->
+          set_active false
+      | Active _ ->
+          set_active true
+
+  method get =
+    match state with
+      | Closed | Killed -> raise Connection_closed
+      | Active active -> active
+end
+
 let of_transport ?guid ?(up=true) transport =
   let make () =
-    let abort_recv, abort_recv_wakener = Lwt.wait ()
-    and abort_send, abort_send_wakener = Lwt.wait ()
+    let abort_recv_waiter, abort_recv_wakener = Lwt.wait ()
+    and abort_send_waiter, abort_send_wakener = Lwt.wait ()
     and connection = new connection
-    and down, set_down = React.S.create (if up then None else Some(wait ()))
-    and acquired_names, set_acquired_names = React.S.create ~eq:Name_set.equal Name_set.empty in
+    and down, set_down = React.S.create (if up then None else Some(wait ())) in
     let state = React.S.map (function None -> `Up | Some _ -> `Down) down in
-    let running = {
-      rc_name = "";
-      rc_acquired_names = acquired_names;
-      rc_set_acquired_names = set_acquired_names;
-      rc_transport = transport;
-      rc_on_disconnect = ref (fun _ -> ());
-      rc_guid = guid;
-      rc_down = down;
-      rc_set_down = set_down;
-      rc_state = state;
-      rc_abort_recv = abort_recv;
-      rc_abort_send = abort_send;
-      rc_abort_recv_wakener = abort_recv_wakener;
-      rc_abort_send_wakener = abort_send_wakener;
-      rc_watch = (try_lwt
-                         lwt _ = abort_recv in
-                         return ()
-                       with
-                         | Connection_closed -> return ()
-                         | exn -> fail exn);
-      rc_resolvers = Name_map.empty;
-      rc_exited_peers = OBus_cache.create 100;
-      rc_outgoing_m = Lwt_mutex.create ();
-      rc_next_serial = 1l;
-      rc_static_objects = Object_map.empty;
-      rc_dynamic_objects = Object_map.empty;
-      rc_incoming_filters = Lwt_sequence.create ();
-      rc_outgoing_filters = Lwt_sequence.create ();
-      rc_reply_waiters = Serial_map.empty;
-      rc_receiver_groups = Signal_map.empty;
-      rc_properties = Property_map.empty;
-      rc_wrapper = (connection :> t);
+    let active = {
+      name = "";
+      transport;
+      on_disconnect = (fun exn -> return ());
+      guid;
+      down;
+      set_down;
+      state;
+      abort_recv_waiter;
+      abort_send_waiter;
+      abort_recv_wakener = abort_recv_wakener;
+      abort_send_wakener = abort_send_wakener;
+      outgoing_mutex = Lwt_mutex.create ();
+      next_serial = 1l;
+      incoming_filters = Lwt_sequence.create ();
+      outgoing_filters = Lwt_sequence.create ();
+      reply_waiters = Serial_map.empty;
+      data = Int_map.empty;
+      wrapper = connection;
     } in
-    connection#set_running running;
+    connection#set_state (Active active);
     (* Start the dispatcher *)
-    ignore (dispatch_forever (connection :> t) running);
-    (connection :> t)
+    ignore (dispatch_forever active);
+    connection
   in
   match guid with
     | None ->
@@ -559,45 +561,82 @@ let of_addresses ?(shared=true) addresses = match shared with
 let loopback () = of_transport (OBus_transport.loopback ())
 
 (* +-----------------------------------------------------------------+
+   | Local storage                                                   |
+   +-----------------------------------------------------------------+ *)
+
+type 'a key = {
+  key_id : int;
+  key_make : 'a -> exn;
+  key_cast : exn -> 'a;
+}
+
+let next_key_id = ref 0
+
+let new_key (type t) () =
+  let key_id = !next_key_id in
+  next_key_id := key_id + 1;
+  let module M = struct exception E of t end in
+  {
+    key_id = key_id;
+    key_make = (fun x -> M.E x);
+    key_cast = (function M.E x -> x | _ -> assert false);
+  }
+
+let get connection key =
+  let active = connection#get in
+  try
+    let cell = Int_map.find key.key_id active.data in
+    Some(key.key_cast cell)
+  with Not_found ->
+    None
+
+let set connection key value =
+  let active = connection#get in
+  match value with
+    | Some x ->
+        active.data <- Int_map.add key.key_id (key.key_make x) active.data
+    | None ->
+        active.data <- Int_map.remove key.key_id active.data
+
+(* +-----------------------------------------------------------------+
    | Other                                                           |
    +-----------------------------------------------------------------+ *)
 
-let running connection = connection#running
+let name connection = connection#get.name
+let set_name connection name = connection#get.name <- name
 
-let watch connection = connection#get.rc_watch
+let active connection = connection#active
 
-let guid connection = connection#get.rc_guid
-let transport connection = connection#get.rc_transport
-let name connection = connection#get.rc_name
+let guid connection = connection#get.guid
+let transport connection = connection#get.transport
 let support_unix_fd_passing connection =
-  List.mem `Unix_fd (OBus_transport.capabilities connection#get.rc_transport)
-let on_disconnect connection = connection#get.rc_on_disconnect
-let close connection = match connection#state with
-  | Crashed _ ->
-      return ()
-  | Running _ ->
-      lwt _ = connection#set_crash Connection_closed in
-      return ()
+  List.mem `Unix_fd (OBus_transport.capabilities connection#get.transport)
 
-let state connection = connection#get.rc_state
+let set_on_disconnect connection f =
+  match connection#state with
+    | Closed | Killed ->
+        ()
+    | Active active ->
+        active.on_disconnect <- f
+
+let state connection = connection#get.state
 
 let set_up connection =
-  let running = connection#get in
-  match React.S.value running.rc_down with
+  let active = connection#get in
+  match React.S.value active.down with
     | None ->
         ()
     | Some(waiter, wakener) ->
-        running.rc_set_down None;
+        active.set_down None;
         wakeup wakener ()
 
 let set_down connection =
-  let running = connection#get in
-  match React.S.value running.rc_down with
+  let active = connection#get in
+  match React.S.value active.down with
     | Some _ ->
         ()
     | None ->
-        running.rc_set_down (Some(wait ()))
+        active.set_down (Some(wait ()))
 
-let incoming_filters connection = connection#get.rc_incoming_filters
-let outgoing_filters connection = connection#get.rc_outgoing_filters
-
+let incoming_filters connection = connection#get.incoming_filters
+let outgoing_filters connection = connection#get.outgoing_filters

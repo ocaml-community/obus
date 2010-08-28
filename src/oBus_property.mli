@@ -24,57 +24,88 @@ type 'a w = ('a, [ `writable ]) t
 type 'a rw = ('a, [ `readable | `writable ]) t
     (** Type of read and write properties *)
 
-type properties = OBus_value.V.single Map.Make(String).t
-    (** Mapping from property names to their value *)
+type map = (OBus_context.t * OBus_value.V.single) Map.Make(String).t
+  (** Type of all properties of an interface. *)
+
+type group
+  (** Type of a group of property. Property groups are used to
+      read/monitor all the property of an interface. *)
+
+type monitor = OBus_proxy.t -> OBus_name.interface -> Lwt_switch.t -> map React.signal Lwt.t
+  (** Type of a function creating a signal holding the contents of all
+      the properties of an interface. The default monitor uses the
+      [org.freedesktop.DBus.Properties.PropertiesChanged] signal. *)
 
 (** {6 Properties creation} *)
 
-val make : ('a, 'access) OBus_member.Property.t -> OBus_proxy.t -> ('a, 'access) t
-  (** [make property proxy] returns the property object for this
-      proxy. *)
+val make : ?monitor : monitor -> ('a, 'access) OBus_member.Property.t -> OBus_proxy.t -> ('a, 'access) t
+  (** [make ?monitor property proxy] returns the property object for
+      this proxy. *)
 
-val make_group : OBus_proxy.t -> OBus_name.interface -> properties r
-  (** [make_group proxy interface] creates a group of all properties
-      of the given interface. *)
+val group : ?monitor : monitor -> OBus_proxy.t -> OBus_name.interface -> group
+  (** [group ?monitor proxy interface] creates a group for all
+      readable properties of the given interface. Note that it is
+      faster to read a group of property rather than reading each
+      properties individually. *)
 
 (** {6 Properties transformation} *)
 
 val map_rw : ('a -> 'b) -> ('b -> 'a) -> 'a rw -> 'b rw
   (** [map property f g] maps [property] with [f] and [g] *)
 
-val map_rw_with_context : (OBus_context.void OBus_context.t -> 'a -> 'b) -> ('b -> 'a) -> 'a rw -> 'b rw
+val map_rw_with_context : (OBus_context.t -> 'a -> 'b) -> ('b -> 'a) -> 'a rw -> 'b rw
   (** Same as {!map} except that the context is also passed to mapping
       functions. *)
 
 val map_r : ('a -> 'b) -> ('a, [> `readable ]) t -> 'b r
-  (** Maps a read-only properties *)
+  (** Maps a read-only property. *)
 
-val map_r_with_context :  (OBus_context.void OBus_context.t -> 'a -> 'b) -> ('a, [> `readable ]) t -> 'b r
-  (** Maps a read-only properties, passing the conntext to the mapping
+val map_r_with_context :  (OBus_context.t -> 'a -> 'b) -> ('a, [> `readable ]) t -> 'b r
+  (** Maps a read-only property, passing the conntext to the mapping
       function *)
 
 val map_w : ('b -> 'a) -> ('a, [> `writable ]) t -> 'b w
-  (** Maps a write-only properties *)
+  (** Maps a write-only property. *)
 
-(** {6 Operation on properties} *)
+(** {6 Operations on properties} *)
 
 val get : ('a, [> `readable ]) t -> 'a Lwt.t
   (** Read the contents of a property. *)
 
-val get_with_context : ('a, [> `readable ]) t -> (OBus_context.void OBus_context.t * 'a) Lwt.t
+val get_with_context : ('a, [> `readable ]) t -> (OBus_context.t * 'a) Lwt.t
   (** Same as {!get} but also returns the context *)
-
-val find : ('a, [> `readable ]) t -> OBus_context.void OBus_context.t -> properties -> 'a
-  (** [find property context properties] looks up for the given
-      property in [properties]. It raises [Not_found] if the
-      [property] does not belong to [properties] *)
 
 val set : ('a, [> `writable ]) t -> 'a -> unit Lwt.t
   (** Write the contents of a property *)
 
-val invalidate : ('a, [> `readable ]) t -> unit
-  (** Invalidates the cached value of a property. This make obus to
-      refetch the value of the property. *)
+val get_group : group -> map Lwt.t
+  (** Returns the set of all properties that belong to the given
+      group. *)
+
+(** {6 Operations on property maps} *)
+
+val find_value : OBus_name.member -> map -> OBus_value.V.single
+  (** [find_value name map] returns the value associated to [name] in
+      [set]. It raises [Not_found] if [name] is not in [map]. *)
+
+val find_value_with_context : OBus_name.member -> map -> OBus_context.t * OBus_value.V.single
+  (** Same as {!find_value} but also returns the context in which the
+      property was received. *)
+
+val find : ('a, [> `readable ]) t -> map -> 'a
+  (** [find property map] looks up for the given property in [set] and
+      maps it to a value of type ['a]. It raises [Not_found] if
+      [property] does not belong to [map]. *)
+
+val find_with_context : ('a, [> `readable ]) t -> map -> OBus_context.t * 'a
+  (** Same as {!find} but also returns the context in which the
+      property was received. *)
+
+val print_map : Format.formatter -> map -> unit
+  (** [print_set pp map] prints all the properties of [map]. *)
+
+val string_of_map : map -> string
+  (** [string_of_set set] prints [set] into a string and returns it. *)
 
 (** {6 Monitoring} *)
 
@@ -87,43 +118,28 @@ val invalidate : ('a, [> `readable ]) t -> unit
     interface.
 *)
 
-val monitor : ('a, [> `readable ]) t -> 'a React.signal Lwt.t
-  (** [monitor property] returns the signal holding the current
-      contents of [property]. Raises [Failure] if the property is not
-      monitorable.
+val monitor : ?switch : Lwt_switch.t -> ('a, [> `readable ]) t -> 'a React.signal Lwt.t
+  (** [monitor ?switch property] returns the signal holding the
+      current contents of [property]. Raises [Failure] if the property
+      is not monitorable.
 
       Resources allocated to monitor the property are automatically
       freed when the signal is garbage collected *)
 
-val monitor_with_stopper : ('a, [> `readable ]) t -> ('a React.signal * (unit -> unit Lwt.t)) Lwt.t
-  (** Same as {!monitor} but also returns a function that can be used
-      to explicitly free resources *)
+val monitor_group : ?switch : Lwt_switch.t -> group -> map React.signal Lwt.t
+  (** [monitor_group ?switch group] monitors all properties of the
+      given group. *)
 
-val monitor_custom : ('a, [> `readable ]) t -> event : 'b React.event -> stop : (unit -> unit Lwt.t) -> 'a React.signal Lwt.t
-  (** [monitor_custom property ~event ~stop] uses [event]'s
-      occurrences to update [property]. By default obus use the
-      [org.freedesktop.DBus.Properties.PropertiesChanged] signal to
-      monitor a proeprty. But e not all services use this signal.
-      [monitor_custom] allow you to monitor a property using another
-      notification mechanism. Each time [event] occurs, obus will
-      refresh the property cache. *)
+(** {6 Helpers for custom monitors} *)
 
-val monitor_custom_with_stopper : ('a, [> `readable ]) t -> event : 'b React.event -> stop : (unit -> unit Lwt.t) -> ('a React.signal * (unit -> unit Lwt.t)) Lwt.t
-  (** Same as {!monitor_custom} but also returns a function that can
-      be used to explicitly free resources *)
+val get_all_no_cache : OBus_proxy.t -> OBus_name.interface -> (OBus_context.t * (OBus_name.member * OBus_value.V.single) list) Lwt.t
+  (** [get_all_no_cache proxy interface] reads the value of all
+      properties without using the cache. *)
 
-(** {6 Receving all properties} *)
+val update_map : OBus_context.t -> (OBus_name.member * OBus_value.V.single) list -> map -> map
+  (** [update_map context values map] add all properties with their
+      context and value to [map]. *)
 
-val get_all : OBus_proxy.t -> interface : OBus_name.interface -> properties Lwt.t
-  (** [get_all proxy ~interface ()] returns all
-      properties of the givne object with their values.
-
-      Note that {!get_all} always uses the cache if it is not empty,
-      or fills it if it is. *)
-
-val get_all_with_context : OBus_proxy.t -> interface : OBus_name.interface -> (OBus_context.void OBus_context.t * properties) Lwt.t
-  (** Same as {!get_all} but also returns the context *)
-
-val invalidate_all : OBus_proxy.t -> interface : OBus_name.interface -> unit
-  (** Invalidates the cached values of all properties of the given
-      interface *)
+val map_of_list : OBus_context.t -> (OBus_name.member * OBus_value.V.single) list -> map
+  (** [map_of_list context values] returns the map corresponding to
+      the given values and context. *)

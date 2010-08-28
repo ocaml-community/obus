@@ -40,9 +40,8 @@ val attach : 'a t -> 'a -> unit
   (** [attach obus_object custom_obejct] attaches [custom_object] to
       [obus_object]. [custom_object] will be the value received by
       method call handlers. Note that you need to attach the object
-      before you can export it on a coneection.
-
-      Note that you can not attach an object multiple times. *)
+      before you can export it on a coneection and you can not attach
+      an object multiple times. *)
 
 val get : 'a t -> 'a
   (** [get obj] returns the data attached to the given object *)
@@ -70,9 +69,9 @@ val path : 'a t -> OBus_path.t
 val owner : 'a t -> OBus_peer.t option
   (** [owner obj] returns the owner of the object, if any *)
 
-val exports : 'a t -> Set.Make(OBus_connection).t
-  (** [exports obj] returns the set of connnections on which the
-      object is exproted *)
+val exports : 'a t -> Set.Make(OBus_connection).t React.signal
+  (** [exports obj] is a signal holding the list of connnections on
+      which the object is exproted. *)
 
 val introspect : 'a t -> OBus_introspect.interface list
   (** [introspect obj] returns the introspection of all interfaces
@@ -90,15 +89,17 @@ val on_properties_changed : 'a t -> (OBus_name.interface -> (OBus_name.member * 
 (** {6 Exports} *)
 
 val export : OBus_connection.t -> 'a t -> unit
-  (** [export connection obj] exports [obj] on [connection] *)
+  (** [export connection obj] exports [obj] on [connection]. It raises
+      {!OBus_connection.Connection_closed} if the connection is closed. *)
 
 val remove : OBus_connection.t -> 'a t -> unit
-  (** [remove connection obj] removes [obj] from [connection] *)
+  (** [remove connection obj] removes [obj] from [connection]. It does
+      nothing if the connection is closed. *)
 
 val remove_by_path : OBus_connection.t -> OBus_path.t -> unit
   (** [remove_by_path connection path] removes the object with path
-      [path] on [connection]. Works for normal objects and dynamic
-      nodes. *)
+      [path] on [connection]. It works for normal objects and dynamic
+      nodes. It does nothing if the connection is closed. *)
 
 val destroy : 'a t -> unit
   (** [destroy obj] removes [obj] from all connection it is exported
@@ -107,20 +108,15 @@ val destroy : 'a t -> unit
 val dynamic :
   connection : OBus_connection.t ->
   prefix : OBus_path.t ->
-  handler : (OBus_value.V.sequence OBus_context.t -> OBus_path.t -> [ `Replied | `No_reply | `Object of 'a t | `Not_found ] Lwt.t) -> unit
+  handler : (OBus_context.t -> OBus_path.t -> 'a t Lwt.t) -> unit
   (** [dynamic ~connection ~prefix ~handler] defines a dynamic node in
       the tree of object. This means that objects with a path prefixed
       by [prefix], will be created on the fly by [handler] when a
       process try to access them.
 
       [handler] receive the context and rest of path after the
-      prefix, and musts return:
-
-      - [`Replied] if the reply to the call has been sent
-      - [`No_reply] if the call has been handled, the caller does not
-        except a reply and none has been sent
-      - [`Object obj] to let [obj] handle the method call
-      - [`Not_found] if the object does not exists
+      prefix. It may raises [Not_found] to indicates that there is no
+      object under the given path.
 
       Note: if you manually export an object with a path prefixed by
       [prefix], it will have precedence over the one created by
@@ -171,31 +167,25 @@ val properties : unit -> 'a interface
 
 (** {6 Members} *)
 
-val method_info : ('a, 'b) OBus_member.Method.t -> ('b OBus_context.t -> 'c -> 'a -> [ `Replied | `No_reply ] Lwt.t) -> 'c method_info
-  (** [method_info desc handler] creates a method-call member. The
-      reply must be sent by [handler] by using the given context.
-
-      [handler] should return:
-
-      - [`Replied] if the reply to the call has been sent
-      - [`No_reply] if the caller does not except a reply and none has
-        been sent
-  *)
+val method_info : ('a, 'b) OBus_member.Method.t -> (OBus_context.t -> 'c t -> 'a -> 'b Lwt.t) -> 'c method_info
+  (** [method_info desc handler] creates a method-call
+      member. [handler] receive the context, the destination object of
+      the method call and the arguments of the method call. *)
 
 val signal_info : 'a OBus_member.Signal.t -> 'b signal_info
   (** Defines a signal. It is only used for introspection *)
 
-val property_r_info : ('a, [ `readable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> 'b property_info
+val property_r_info : ('a, [ `readable ]) OBus_member.Property.t -> ('b t -> 'a React.signal) -> 'b property_info
   (** [property_r_info desc get] defines a read-only property. [get]
       is called once when data is attached to an object with
       {!attach}. It must returns a signal holding the current value of
       the property. *)
 
-val property_w_info : ('a, [ `writable ]) OBus_member.Property.t -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b property_info
+val property_w_info : ('a, [ `writable ]) OBus_member.Property.t -> (OBus_context.t -> 'b t -> 'a -> unit Lwt.t) -> 'b property_info
   (** [property_w_info desc set] defines a write-only property. [set]
       is used to set the propertry contents. *)
 
-val property_rw_info : ('a, [ `readable | `writable ]) OBus_member.Property.t -> ('b -> 'a React.signal) -> (unit OBus_context.t -> 'b -> 'a -> unit Lwt.t) -> 'b property_info
+val property_rw_info : ('a, [ `readable | `writable ]) OBus_member.Property.t -> ('b t -> 'a React.signal) -> (OBus_context.t -> 'b t -> 'a -> unit Lwt.t) -> 'b property_info
   (** [property_rw_info desc get set] defines a readable and writable
       property. [get] and [set] have the same semantic as for
       {!property_r_info} and {!property_w_info}. *)

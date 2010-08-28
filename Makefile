@@ -104,6 +104,7 @@ dot:
 install-libs:
 	$(OF) install obus _build/META \
 	 _build/syntax/pa_obus.cmo \
+	 _build/src/oBus_top.cmo \
 	 src/*.mli \
 	 bindings/*/*.mli \
 	 $(wildcard _build/src/*.cmi) \

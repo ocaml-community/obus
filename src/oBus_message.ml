@@ -70,6 +70,21 @@ let error ?flags ?serial ?sender ?destination ~reply_serial ~error_name body =
 let signal ?flags ?serial ?sender ?destination ~path ~interface ~member body =
   make ?flags ?serial ?sender ?destination ~typ:(Signal(path, interface, member)) body
 
+exception Invalid_reply of string
+
+let invalid_reply ~method_call ~expected_signature ~method_return =
+  match method_call, method_return with
+    | { typ = Method_call(path, interface, member) }, { typ = Method_return _; body } ->
+        Invalid_reply
+          (Printf.sprintf
+             "unexpected signature for the reply to the method %S on interface %S, expected: %S, got: %S"
+             member
+             interface
+             (OBus_value.string_of_signature expected_signature)
+             (OBus_value.string_of_signature (OBus_value.V.type_of_sequence body)))
+    | _ ->
+        invalid_arg "OBus_message.invalid_reply"
+
 open Format
 open OBus_value
 

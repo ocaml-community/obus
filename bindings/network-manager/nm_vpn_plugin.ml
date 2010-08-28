@@ -34,17 +34,17 @@ let state_changed proxy =
     (fun state ->
        let state = Int32.to_int state in
        state)
-    (OBus_signal.connect s_StateChanged proxy)
+    (OBus_signal.make s_StateChanged proxy)
 
 let ip4_config proxy =
-  OBus_signal.connect s_Ip4Config proxy
+  OBus_signal.make s_Ip4Config proxy
 
 let login_banner proxy =
-  OBus_signal.connect s_LoginBanner proxy
+  OBus_signal.make s_LoginBanner proxy
 
 let failure proxy =
   OBus_signal.map
     (fun reason ->
        let reason = Int32.to_int reason in
        reason)
-    (OBus_signal.connect s_Failure proxy)
+    (OBus_signal.make s_Failure proxy)

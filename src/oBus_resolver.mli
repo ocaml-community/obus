@@ -27,23 +27,8 @@
     Note that with a peer-to-peer connection, resolver will always act
     as if they is no owner. *)
 
-type t
-  (** Type fo a resolver *)
-
-val make : OBus_connection.t -> OBus_name.bus -> t Lwt.t
-  (** [make bus name] creates a resolver which will monitor the name
-      [name] on [bus].
-
-      Note that in case [bus] is not a message bus but a one-to-one
-      connection, the resolver act as if the name has no owner. *)
-
-val name : t -> OBus_name.bus
-  (** Returns the name monitored by the givne resolver *)
-
-val owner : t -> OBus_name.bus React.signal
-  (** [owner resolver] returns a signal holding the current owner of
-      the name. It holds [""] when there is no owner. *)
-
-val disable : t -> unit Lwt.t
-  (** Disable a resolver. Note that a resolver is disabled when its
-      owner signal is garbage collected. *)
+val make : ?switch : Lwt_switch.t -> OBus_connection.t -> OBus_name.bus -> OBus_name.bus React.signal Lwt.t
+  (** [make ?switch bus name] creates a resolver which will monitor
+      the name [name] on [bus]. It returns a signal holding the
+      current owner of the name. It holds [""] when there is no
+      owner. *)

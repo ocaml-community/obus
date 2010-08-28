@@ -124,7 +124,7 @@ let print_impl oc name members symbols annotations =
            let convertors = make_convertors Utils.convertor_recv names args in
            fprintf oc "\n  let %s proxy =\n" (OBus_name.ocaml_lid name);
            if List.for_all (fun x -> x = None) convertors then
-             fprintf oc "    OBus_signal.connect s_%s proxy\n" name
+             fprintf oc "    OBus_signal.make s_%s proxy\n" name
            else begin
              if List.exists (fun (_, typ) -> contains_path typ) args then
                output_string oc "    OBus_signal.map_with_context\n\
@@ -177,10 +177,10 @@ let rec term_intf = function
   | Term("byte", []) -> term "char" []
   | Term("boolean", []) -> term "bool" []
   | Term("int16", []) -> term "int" []
-  | Term("int32", []) -> term "int32" []
+  | Term("int32", []) -> term "int" []
   | Term("int64", []) -> term "int64" []
   | Term("uint16", []) -> term "int" []
-  | Term("uint32", []) -> term "int32" []
+  | Term("uint32", []) -> term "int" []
   | Term("uint64", []) -> term "int64" []
   | Term("double", []) -> term "float" []
   | Term("string", []) -> term "string" []

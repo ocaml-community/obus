@@ -184,17 +184,17 @@ let uninhibit daemon ~cookie =
 let device_added daemon =
   OBus_signal.map_with_context
     make_device
-    (OBus_signal.connect s_DeviceAdded (proxy daemon))
+    (OBus_signal.make s_DeviceAdded (proxy daemon))
 
 let device_removed daemon =
   OBus_signal.map_with_context
     make_device
-    (OBus_signal.connect s_DeviceRemoved (proxy daemon))
+    (OBus_signal.make s_DeviceRemoved (proxy daemon))
 
 let device_changed daemon =
   OBus_signal.map_with_context
     make_device
-    (OBus_signal.connect s_DeviceChanged (proxy daemon))
+    (OBus_signal.make s_DeviceChanged (proxy daemon))
 
 let device_job_changed daemon =
   OBus_signal.map_with_context
@@ -208,52 +208,52 @@ let device_job_changed daemon =
        job_cur_task_id = job_cur_task_id;
        job_cur_task_percentage = job_cur_task_percentage;
      })
-    (OBus_signal.connect s_DeviceJobChanged (proxy daemon))
+    (OBus_signal.make s_DeviceJobChanged (proxy daemon))
 
 let adapter_added daemon =
   OBus_signal.map_with_context
     make_adapter
-    (OBus_signal.connect s_AdapterAdded (proxy daemon))
+    (OBus_signal.make s_AdapterAdded (proxy daemon))
 
 let adapter_removed daemon =
   OBus_signal.map_with_context
     make_adapter
-    (OBus_signal.connect s_AdapterRemoved (proxy daemon))
+    (OBus_signal.make s_AdapterRemoved (proxy daemon))
 
 let adapter_changed daemon =
   OBus_signal.map_with_context
     make_adapter
-    (OBus_signal.connect s_AdapterChanged (proxy daemon))
+    (OBus_signal.make s_AdapterChanged (proxy daemon))
 
 let expander_added daemon =
   OBus_signal.map_with_context
     make_expander
-    (OBus_signal.connect s_ExpanderAdded (proxy daemon))
+    (OBus_signal.make s_ExpanderAdded (proxy daemon))
 
 let expander_removed daemon =
   OBus_signal.map_with_context
     make_expander
-    (OBus_signal.connect s_ExpanderRemoved (proxy daemon))
+    (OBus_signal.make s_ExpanderRemoved (proxy daemon))
 
 let expander_changed daemon =
   OBus_signal.map_with_context
     make_expander
-    (OBus_signal.connect s_ExpanderChanged (proxy daemon))
+    (OBus_signal.make s_ExpanderChanged (proxy daemon))
 
 let port_added daemon =
   OBus_signal.map_with_context
     make_port
-    (OBus_signal.connect s_PortAdded (proxy daemon))
+    (OBus_signal.make s_PortAdded (proxy daemon))
 
 let port_removed daemon =
   OBus_signal.map_with_context
     make_port
-    (OBus_signal.connect s_PortRemoved (proxy daemon))
+    (OBus_signal.make s_PortRemoved (proxy daemon))
 
 let port_changed daemon =
   OBus_signal.map_with_context
     make_port
-    (OBus_signal.connect s_PortChanged (proxy daemon))
+    (OBus_signal.make s_PortChanged (proxy daemon))
 
 let daemon_version daemon =
   OBus_property.make p_DaemonVersion (proxy daemon)
@@ -295,13 +295,4 @@ type properties = {
 }
 
 let properties daemon =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f daemon) context properties in
-       {
-         known_filesystems = find known_filesystems;
-         supports_luks_devices = find supports_luks_devices;
-         daemon_is_inhibited = find daemon_is_inhibited;
-         daemon_version = find daemon_version;
-       })
-    (OBus_property.make_group (proxy daemon) interface)
+  OBus_property.group (proxy daemon) interface

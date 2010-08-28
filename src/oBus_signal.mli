@@ -12,74 +12,62 @@
 (** {6 Emitting signals} *)
 
 val emit : 'a OBus_member.Signal.t -> 'b OBus_object.t -> ?peer : OBus_peer.t -> 'a -> unit Lwt.t
-  (** [emit signal obj args] emit [signal] from [obj]. The
+  (** [emit signal obj ?peer args] emit [signal] from [obj]. The
       destinations of the signal are selected as follow:
 
-      {ol
-        {- if [peer] is provided, then the message is sent only to it,}
-        {- otherwise, if the the object has an owner, it is sent to the owner,}
-        {- otherwise, the message is boradcasted on all the connection [obj] is exported.}
-      }
+      - if [peer] is provided, then the message is sent only to it
+      - otherwise, if the the object has an owner, it is sent to the owner,
+      - otherwise, the message is broadcasted on all the connection [obj] is exported.
   *)
 
 (** {6 Receving signals} *)
 
 type 'a t
-  (** Type of a signal receiver, which occurs with values of type ['a] *)
+  (** Type of a signal descriptor. A signal descriptor represent the
+      source of a signal and describe how the value should be
+      transformed. *)
+
+val make : 'a OBus_member.Signal.t -> OBus_proxy.t -> 'a t
+  (** [make signal proxy] creates a signal descriptor. *)
+
+val connect : ?switch : Lwt_switch.t -> 'a t -> 'a React.event Lwt.t
+  (** [connect ?switch sd] connects the signal descriptor [sd] and
+      returns the event which occurs when the given D-Bus signal is
+      received. *)
+
+(** {6 Signals transformations and parameters} *)
+
+val map_event : ((OBus_context.t * 'a) React.event -> (OBus_context.t * 'b) React.event) -> 'a t -> 'b t
+  (** [map_event f sd] transforms with [f] the event that is created
+      when [sd] is connected. *)
 
 val map : ('a -> 'b) -> 'a t -> 'b t
-  (** [map f signal] maps the values returned by [signal] with [f] *)
+  (** Simplified version of {!map_event}. *)
 
-val map_with_context : (OBus_context.void OBus_context.t -> 'a -> 'b) -> 'a t -> 'b t
-  (** [map_with_context f signal] maps the values returned by [signal]
-      with [f], and also pass to [f] the context. *)
+val map_with_context : (OBus_context.t -> 'a -> 'b) -> 'a t -> 'b t
+  (** Same as {!map} but the mapping function also receive the
+      context. *)
 
-val event : 'a t -> 'a React.event
-  (** The event which occurs each time the signal is received. *)
+val with_context : 'a t -> (OBus_context.t * 'a) t
+  (** Returns a signal descriptor that returns contexts in which
+      signals are received. *)
 
-val event_with_context : 'a t -> (OBus_context.void OBus_context.t * 'a) React.event
-  (** Same as {!event} but adds the context to events *)
-
-val connect : 'a OBus_member.Signal.t -> OBus_proxy.t -> 'a t
-  (** [connect signal proxy] connects to signals emited by [proxy]. *)
-
-val disconnect : 'a t -> unit
-  (** [disconnect signal] stops receiving the given signal.
-
-      Note that [disconnect] is automatically called when [event
-      signal] is garbage collected *)
-
-(** {8 Signals configuration} *)
-
-val set_filters : 'a t -> (int * OBus_match.argument_filter) list -> unit
-  (** Sets the list of argument filters for the given signal. This
-      means that the message bus will filter signals that must be
-      delivered to the current running program.
+val with_filters : OBus_match.arguments -> 'a t -> 'a t
+  (** [with_filters filters sd] is the signal descriptor [sd] with the
+      given list of argument filters. When connected, obus will add
+      this filters to the matching rule send to the message bus, so
+      the bus can use them to drop messages that do not match these
+      filters.
 
       The goal of argument filters is to reduce the number of messages
       received, and so to reduce the number of wakeup of the
-      program. *)
+      program.
 
-val auto_match_rule : 'a t -> bool
-  (** Returns whether automatic match rules management is enabled for
-      this signal. It is always activated by default. *)
+      Note that match rule management must be activated for filters to
+      take effect (see {!with_match_rule}).  *)
 
-val set_auto_match_rule : 'a t -> bool -> unit
-  (** Enable/disable the automatic management of matching rules. If
-      you disable it, it is then up to you to add the correct rule on
-      the bus by using {!OBus_bus.add_match}. *)
-
-val init : ?filters : (int * OBus_match.argument_filter) list -> ?auto_match_rule : bool -> 'a t -> 'a React.event
-  (** [init ?filters ?auto_match_rule ()] is an helper to sets
-      signals parameters. Instead of
-      {[
-        let signal = Foo.bar proxy in
-        OBus_signal.set_auto_match_rule signal false;
-        OBus_signal.set_filters signal filters;
-        let x = React.E.map (...) (OBus_signal.event signal)
-      ]}
-      you can write:
-      {[
-        let x = React.E.map (...) (OBus_signal.init ~filters ~auto_match_rule:false  (Foo.bar proxy))
-      ]}
-  *)
+val with_match_rule : bool -> 'a t -> 'a t
+  (** [with_match_rule state sd] enables or disables the automatic
+      management of matching rules. If the endpoint of the underlying
+      connection is a message bus it defaults to [true], otherwise it
+      default to [false]. *)

@@ -61,29 +61,7 @@ let vpn proxy =
   OBus_property.make p_Vpn proxy
 
 let properties_changed proxy =
-  OBus_signal.connect s_PropertiesChanged proxy
-
-type properties = {
-  service_name : string;
-  connection : Nm_settings.Connection.t;
-  specific_object : OBus_proxy.t;
-  devices : Nm_device.t list;
-  state : state;
-  default : bool;
-  vpn : bool;
-}
+  OBus_signal.make s_PropertiesChanged proxy
 
 let properties proxy =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f proxy) context properties in
-       {
-         service_name = find service_name;
-         connection = find connection;
-         specific_object = find specific_object;
-         devices = find devices;
-         state = find state;
-         default = find default;
-         vpn = find vpn;
-       })
-    (OBus_property.make_group proxy interface)
+  OBus_property.group proxy interface

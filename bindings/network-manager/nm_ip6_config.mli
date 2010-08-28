@@ -16,11 +16,4 @@ val nameservers : t -> string list OBus_property.r
 val domains : t -> string list OBus_property.r
 val routes : t -> (string * int * string * int) list OBus_property.r
 
-type properties = {
-  addresses : (string * int) list;
-  nameservers : string list;
-  domains : string list;
-  routes : (string * int * string * int) list;
-}
-
-val properties : t -> properties OBus_property.r
+val properties : t -> OBus_property.group

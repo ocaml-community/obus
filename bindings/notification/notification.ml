@@ -113,7 +113,7 @@ let s_NotificationClosed =
     ~annotations:[]
 
 let notification_closed proxy =
-  OBus_signal.connect s_NotificationClosed proxy
+  OBus_signal.make s_NotificationClosed proxy
 
 let s_ActionInvoked =
   OBus_member.Signal.make
@@ -125,7 +125,7 @@ let s_ActionInvoked =
     ~annotations:[]
 
 let action_invoked proxy =
-  OBus_signal.connect s_ActionInvoked proxy
+  OBus_signal.make s_ActionInvoked proxy
 
 (* +-----------------------------------------------------------------+
    | Notifications monitoring                                        |
@@ -154,6 +154,13 @@ let init_callbacks = lazy(
   let anonymous_proxy = { OBus_proxy.peer = OBus_peer.anonymous bus;
                           OBus_proxy.path = server_path } in
 
+  lwt event =
+    OBus_signal.connect
+      (OBus_signal.map_with_context
+         (fun context (id, reason) -> (OBus_context.sender context, id, reason))
+         (notification_closed anonymous_proxy))
+  in
+
   (* Handle signals for closed notifications *)
   Lwt_event.always_notify_p
     (fun (peer, id, reason) ->
@@ -168,10 +175,14 @@ let init_callbacks = lazy(
                    remove_notification peer id notif;
                    notif.notif_closed ();
                    return ())
-    (OBus_signal.event
-       (OBus_signal.map_with_context
-          (fun context (id, reason) -> (OBus_context.sender context, id, reason))
-          (notification_closed anonymous_proxy)));
+    event;
+
+  lwt event =
+    OBus_signal.connect
+      (OBus_signal.map_with_context
+         (fun context (id, action) -> (OBus_context.sender context, id, action))
+         (action_invoked anonymous_proxy))
+  in
 
   (* Handle signals for actions *)
   Lwt_event.always_notify_p
@@ -187,10 +198,7 @@ let init_callbacks = lazy(
                    remove_notification peer id notif;
                    notif.notif_action action;
                    return ())
-    (OBus_signal.event
-       (OBus_signal.map_with_context
-          (fun context (id, action) -> (OBus_context.sender context, id, action))
-          (action_invoked anonymous_proxy)));
+    event;
 
   return ()
 )

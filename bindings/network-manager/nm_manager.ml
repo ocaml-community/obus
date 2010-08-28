@@ -107,42 +107,22 @@ let state daemon =
 let state_changed daemon =
   OBus_signal.map
     state_of_int32
-    (OBus_signal.connect s_StateChanged (proxy daemon))
+    (OBus_signal.make s_StateChanged (proxy daemon))
 
 let properties_changed daemon =
-  OBus_signal.connect s_PropertiesChanged (proxy daemon)
+  OBus_signal.make s_PropertiesChanged (proxy daemon)
 
 let device_added daemon =
   OBus_signal.map_with_context
     (fun context state ->
        Nm_device.of_proxy (OBus_proxy.make (OBus_context.sender context) state))
-    (OBus_signal.connect s_DeviceAdded (proxy daemon))
+    (OBus_signal.make s_DeviceAdded (proxy daemon))
 
 let device_removed daemon =
   OBus_signal.map_with_context
     (fun context state ->
        Nm_device.of_proxy (OBus_proxy.make (OBus_context.sender context) state))
-    (OBus_signal.connect s_DeviceRemoved (proxy daemon))
-
-type properties = {
-  wireless_enabled : bool ;
-  wireless_hardware_enabled : bool;
-  wwan_enabled : bool ;
-  wwan_hardware_enabled : bool;
-  active_connections : Nm_connection.t list;
-  state : state;
-}
+    (OBus_signal.make s_DeviceRemoved (proxy daemon))
 
 let properties daemon =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f daemon) context properties in
-       {
-         wireless_enabled = find wireless_enabled;
-         wireless_hardware_enabled = find wireless_hardware_enabled;
-         wwan_enabled = find wwan_enabled;
-         wwan_hardware_enabled = find wwan_hardware_enabled;
-         active_connections = find active_connections;
-         state = find state;
-       })
-    (OBus_property.make_group (proxy daemon) interface)
+  OBus_property.group (proxy daemon) interface

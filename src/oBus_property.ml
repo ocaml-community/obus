@@ -10,28 +10,127 @@
 let section = Lwt_log.Section.make "obus(property)"
 
 open Lwt
-open OBus_private_connection
 open OBus_interfaces.Org_freedesktop_DBus_Properties
 
 (* +-----------------------------------------------------------------+
    | Types                                                           |
    +-----------------------------------------------------------------+ *)
 
-type properties = OBus_value.V.single String_map.t
+module String_map = Map.Make(String)
+
+type map = (OBus_context.t * OBus_value.V.single) String_map.t
+
+type monitor = OBus_proxy.t -> OBus_name.interface -> Lwt_switch.t -> map React.signal Lwt.t
 
 type ('a, 'access) t = {
-  p_cast : void message_context -> properties -> 'a;
-  p_make : 'a -> OBus_value.V.single;
+  p_interface : OBus_name.interface;
+  (* The interface of the property. *)
+
   p_member : OBus_name.member;
-  (* If [member = ""] then this a property group, otherwisse it is a
-     single property *)
+  (* The name of the property. *)
+
   p_proxy : OBus_proxy.t;
-  p_group : OBus_private_connection.property_group Lazy.t;
+  (* The object owning the property. *)
+
+  p_monitor : monitor;
+  (* Monitor for this property. *)
+
+  p_cast : OBus_context.t -> OBus_value.V.single -> 'a;
+  p_make : 'a -> OBus_value.V.single;
 }
 
 type 'a r = ('a, [ `readable ]) t
 type 'a w = ('a, [ `writable ]) t
 type 'a rw = ('a, [ `readable | `writable ]) t
+
+type group = {
+  g_interface : OBus_name.interface;
+  (* The interface of the group *)
+
+  g_proxy : OBus_proxy.t;
+  (* The object owning the group of properties *)
+
+  g_monitor : monitor;
+  (* Monitor for this group. *)
+}
+
+module Group_map = Map.Make
+  (struct
+     type t = OBus_name.bus * OBus_path.t * OBus_name.interface
+         (* Groups are indexed by:
+            - name of the owner of the property
+            - path of the object owning the property
+            - interfaec of the property *)
+     let compare = Pervasives.compare
+   end)
+
+(* Type of a cache for a group *)
+type cache = {
+  mutable c_count : int;
+  (* Numbers of monitored properties using this group. *)
+
+  c_map : map React.signal;
+  (* The signal holding the current state of properties. *)
+
+  c_switch : Lwt_switch.t;
+  (* Switch for the signal used to monitor the group. *)
+}
+
+type info = {
+  mutable cache : cache Lwt.t Group_map.t;
+  (* Cache of all monitored properties. *)
+}
+
+(* +-----------------------------------------------------------------+
+   | Default monitor                                                 |
+   +-----------------------------------------------------------------+ *)
+
+let update_map context dict map =
+  List.fold_left (fun map (name, value) -> String_map.add name (context, value) map) map dict
+
+let map_of_list context dict =
+  update_map context dict String_map.empty
+
+let get_all_no_cache proxy interface =
+  OBus_method.call_with_context m_GetAll proxy interface
+
+let default_monitor proxy interface switch =
+  lwt event =
+    OBus_signal.connect ~switch
+      (OBus_signal.with_filters
+         (OBus_match.make_arguments [(0, OBus_match.AF_string interface)])
+         (OBus_signal.with_context
+            (OBus_signal.make s_PropertiesChanged proxy)))
+  and context, dict = get_all_no_cache proxy interface in
+  return (React.S.map snd
+            (Lwt_signal.fold_s ~eq:(fun (_, a) (_, b) -> String_map.equal (=) a b)
+               (fun (_, map) (sig_context, (interface, updates, invalidates)) ->
+                  if invalidates = [] then
+                    return (sig_context, update_map sig_context updates map)
+                  else
+                    lwt context, dict = get_all_no_cache proxy interface in
+                    return (sig_context, map_of_list context dict))
+               (context, map_of_list context dict)
+               event))
+
+(* +-----------------------------------------------------------------+
+   | Property creation                                               |
+   +-----------------------------------------------------------------+ *)
+
+let make ?(monitor=default_monitor) desc proxy = {
+  p_interface = OBus_member.Property.interface desc;
+  p_member = OBus_member.Property.member desc;
+  p_proxy = proxy;
+  p_monitor = monitor;
+  p_cast = (fun context value -> OBus_value.C.cast_single (OBus_member.Property.typ desc) value);
+  p_make = (OBus_value.C.make_single (OBus_member.Property.typ desc));
+}
+
+let group ?(monitor=default_monitor) proxy interface = {
+  g_proxy = proxy;
+  g_interface = interface;
+  g_monitor = monitor;
+}
 
 (* +-----------------------------------------------------------------+
    | Transformations                                                 |
@@ -68,288 +167,197 @@ let map_w g property = {
 }
 
 (* +-----------------------------------------------------------------+
-   | Reading all properties with their contexts                      |
+   | Operations on maps                                              |
    +-----------------------------------------------------------------+ *)
 
-let get_all_no_cache proxy interface =
-  lwt context, dict = OBus_method.call_with_context m_GetAll proxy interface in
-  return (context,
-          List.fold_left
-            (fun acc (name, variant) -> String_map.add name variant acc)
-            String_map.empty
-            dict)
+let find property map =
+  let context, value = String_map.find property.p_member map in
+  property.p_cast context value
+
+let find_with_context property map =
+  let context, value = String_map.find property.p_member map in
+  (context, property.p_cast context value)
+
+let find_value name map =
+  let context, value = String_map.find name map in
+  value
+
+let find_value_with_context name map =
+  String_map.find name map
+
+let print_map pp map =
+  let open Format in
+  pp_open_box pp 2;
+  pp_print_string pp "{";
+  pp_print_cut pp ();
+  pp_open_hvbox pp 0;
+  String_map.iter
+    (fun name (context, value) ->
+       pp_open_box pp 0;
+       pp_print_string pp name;
+       pp_print_space pp ();
+       pp_print_string pp "=";
+       pp_print_space pp ();
+       OBus_value.V.print_single pp value;
+       pp_print_string pp ";";
+       pp_close_box pp ();
+       pp_print_cut pp ())
+    map;
+  pp_close_box pp ();
+  pp_print_cut pp ();
+  pp_print_string pp "}";
+  pp_close_box pp ()
+
+let string_of_map map =
+  let open Format in
+  let buf = Buffer.create 42 in
+  let pp = formatter_of_buffer buf in
+  pp_set_margin pp max_int;
+  print_map pp map;
+  pp_print_flush pp ();
+  Buffer.contents buf
 
 (* +-----------------------------------------------------------------+
-   | Clean up                                                        |
+   | Properties reading/writing                                      |
    +-----------------------------------------------------------------+ *)
 
-let unmonitor_property_group property_group =
-  match property_group.pg_watcher with
-    | None ->
-        return ()
-    | Some pgw ->
-        property_group.pg_watcher <- None;
-        cancel (React.S.value pgw.pgw_cache);
-        pgw.pgw_stop ()
+let key = OBus_connection.new_key ()
 
-let cleanup_property_group property_group =
-  property_group.pg_ref_count <- property_group.pg_ref_count - 1;
-  if property_group.pg_ref_count = 0 then begin
-    let running = property_group.pg_connection#get in
-    running.rc_properties <- (
-      Property_map.remove
-        (property_group.pg_owner,
-         property_group.pg_path,
-         property_group.pg_interface)
-        running.rc_properties
-    );
-    unmonitor_property_group property_group
-  end else
-    return ()
+let get_with_context prop =
+  match OBus_connection.get (OBus_proxy.connection prop.p_proxy) key with
+    | Some info -> begin
+        match
+          try
+            Some(Group_map.find (OBus_proxy.name prop.p_proxy,
+                                 OBus_proxy.path prop.p_proxy,
+                                 prop.p_interface) info.cache)
+          with Not_found ->
+            None
+        with
+          | Some cache_thread ->
+              lwt cache = cache_thread in
+              return (find_with_context prop (React.S.value cache.c_map))
+          | None ->
+              lwt context, value = OBus_method.call_with_context m_Get prop.p_proxy (prop.p_interface, prop.p_member) in
+              return (context, prop.p_cast context value)
+      end
+    | None ->
+        lwt context, value = OBus_method.call_with_context m_Get prop.p_proxy (prop.p_interface, prop.p_member) in
+        return (context, prop.p_cast context value)
+
+let get prop =
+  get_with_context prop >|= snd
+
+let set prop value =
+  OBus_method.call m_Set prop.p_proxy (prop.p_interface, prop.p_member, prop.p_make value)
+
+let get_group group =
+  match OBus_connection.get (OBus_proxy.connection group.g_proxy) key with
+    | Some info -> begin
+        match
+          try
+            Some(Group_map.find (OBus_proxy.name group.g_proxy,
+                                 OBus_proxy.path group.g_proxy,
+                                 group.g_interface) info.cache)
+          with Not_found ->
+            None
+        with
+          | Some cache_thread ->
+              lwt cache = cache_thread in
+              return (React.S.value cache.c_map)
+          | None ->
+              lwt context, dict = get_all_no_cache group.g_proxy group.g_interface in
+              return (map_of_list context dict)
+      end
+    | None ->
+        lwt context, dict = get_all_no_cache group.g_proxy group.g_interface in
+        return (map_of_list context dict)
 
 (* +-----------------------------------------------------------------+
    | Monitoring                                                      |
    +-----------------------------------------------------------------+ *)
 
-let properties_equal (context1, values1) (context2, values2) =
-  context1 == context2 && String_map.equal (=) values1 values2
+let finalise disable _ =
+  ignore (Lazy.force disable)
 
-let rec monitor property =
-  let lazy property_group = property.p_group in
-  match property_group.pg_watcher with
-    | Some pgw ->
-        lwt context, properties = React.S.value pgw.pgw_cache in
-        return
-          (Lwt_signal.map_s
-             (fun thread ->
-                lwt context, properties = thread in
-                return (property.p_cast context properties))
-             (property.p_cast context properties)
-             pgw.pgw_cache)
-    | None ->
-        lwt resolver, owner =
-          match property_group.pg_owner with
-            | "" ->
-                return (None, React.S.const "")
-            | name ->
-                lwt resolver = OBus_resolver.make property_group.pg_connection name in
-                return (Some resolver, OBus_resolver.owner resolver)
-        in
-        property_group.pg_watcher <- Some(
-          let signal = OBus_signal.connect s_PropertiesChanged property.p_proxy in
-          (* Monitor only properties of the given interface *)
-          OBus_signal.set_filters signal [(0, OBus_match.AF_string property_group.pg_interface)];
-          let action, send_action = React.E.create () in
-          let properties_signal =
-            React.S.fold ~eq:(==)
-              (fun acc action ->
-                 lwt old_context, properties = acc in
-                 match action with
-                   | Update(context, (interface, updates, invalidates)) ->
-                       if invalidates <> [] then
-                         get_all_no_cache property.p_proxy property_group.pg_interface
-                       else
-                         return (context, List.fold_left (fun map (member, value) -> String_map.add member value map) properties updates)
-                   | Invalidate ->
-                       get_all_no_cache property.p_proxy property_group.pg_interface)
-              (get_all_no_cache property.p_proxy property_group.pg_interface)
-              (React.E.select
-                 [React.E.map (fun (ctx, props) -> Update(ctx, props)) (OBus_signal.event_with_context signal);
-                  action;
-                  React.E.fmap
-                    (function
-                       | "" -> None
-                       | _ -> Some Invalidate)
-                    (React.S.changes owner)])
-          in
-          { pgw_cache = properties_signal;
-            pgw_send = send_action;
-            pgw_stop = (
-              fun () ->
-                OBus_signal.disconnect signal;
-                match resolver with
-                  | Some resolver ->
-                      OBus_resolver.disable resolver
-                  | None ->
-                      return ()
-            ) }
-        );
-        monitor property
-
-let monitor_with_stopper property =
-  lwt signal = monitor property in
-  let stop = lazy(
-    React.S.stop signal;
-    cleanup_property_group (Lazy.force property.p_group)
-  ) in
-  return (signal, fun () -> Lazy.force stop)
-
-let monitor_custom property ~event ~stop =
-  let lazy property_group = property.p_group in
-  match property_group.pg_watcher with
-    | Some _ ->
-        monitor property
-    | None ->
-        property_group.pg_watcher <- Some(
-          let action, send_action = React.E.create () in
-          let properties_signal =
-            React.S.fold ~eq:(==)
-              (fun acc action -> acc >> get_all_no_cache property.p_proxy property_group.pg_interface)
-              (get_all_no_cache property.p_proxy property_group.pg_interface)
-              (React.E.select [React.E.map (fun _ -> Invalidate) event; action])
-          in
-          { pgw_cache = properties_signal;
-            pgw_send = send_action;
-            pgw_stop = stop }
-        );
-        monitor property
-
-let monitor_custom_with_stopper property ~event ~stop =
-  lwt signal = monitor_custom property ~event ~stop in
-  let stop = lazy(
-    React.S.stop signal;
-    cleanup_property_group (Lazy.force property.p_group)
-  ) in
-  return (signal, fun () -> Lazy.force stop)
-
-let invalidate property =
-  let lazy property_group = property.p_group in
-  match property_group.pg_watcher with
-    | Some pgw ->
-        pgw.pgw_send Invalidate
-    | None ->
-        ()
-
-(* +-----------------------------------------------------------------+
-   | Property reading/writing                                        |
-   +-----------------------------------------------------------------+ *)
-
-let get_with_context property =
-  let lazy property_group = property.p_group in
-  match property_group.pg_watcher with
-    | None ->
-        if property.p_member <> "" then begin
-          lwt context, value =
-            OBus_method.call_with_context m_Get
-              property.p_proxy
-              (property_group.pg_interface, property.p_member)
-          in
-          return (context, property.p_cast context (String_map.add property.p_member value String_map.empty))
-        end else begin
-          lwt context, properties = get_all_no_cache property.p_proxy property_group.pg_interface in
-          return (context, property.p_cast context properties)
-        end
-    | Some pgw ->
-        lwt context, properties = React.S.value pgw.pgw_cache in
-        return (context, property.p_cast context properties)
-
-let get property =
-  get_with_context property >|= snd
-
-let set property value =
-  let lazy property_group = property.p_group in
-  OBus_method.call m_Set
-    property.p_proxy
-    (property_group.pg_interface, property.p_member, property.p_make value)
-
-(* +-----------------------------------------------------------------+
-   | Property creation                                               |
-   +-----------------------------------------------------------------+ *)
-
-let make_property_group proxy interface =
-  let connection = OBus_proxy.connection proxy in
-  let running = connection#get in
-  let key = (OBus_proxy.name proxy, OBus_proxy.path proxy, interface) in
-  let property_group =
-  match try Some(Property_map.find key running.rc_properties) with Not_found -> None with
-    | Some property_group ->
-        property_group.pg_ref_count <- property_group.pg_ref_count + 1;
-        property_group
-    | None ->
-        let property_group = {
-          pg_ref_count = 1;
-          pg_watcher = None;
-          pg_connection = connection;
-          pg_owner = OBus_proxy.name proxy;
-          pg_path = OBus_proxy.path proxy;
-          pg_interface = interface;
-        } in
-        running.rc_properties <- Property_map.add key property_group running.rc_properties;
-        property_group
+let monitor_group ?switch group =
+  let cache_key = (OBus_proxy.name group.g_proxy, OBus_proxy.path group.g_proxy, group.g_interface) in
+  let info =
+    match OBus_connection.get (OBus_proxy.connection group.g_proxy) key with
+      | Some info ->
+          info
+      | None ->
+          let info = { cache = Group_map.empty } in
+          OBus_connection.set (OBus_proxy.connection group.g_proxy) key (Some info);
+          info
   in
-  Lwt_gc.finalise cleanup_property_group property_group;
-  property_group
+  lwt cache =
+    match
+      try
+        Some(Group_map.find cache_key info.cache)
+      with Not_found ->
+        None
+    with
+      | Some cache_thread ->
+          cache_thread
+      | None ->
+          let waiter, wakener = wait () in
+          info.cache <- Group_map.add cache_key waiter info.cache;
+          let switch = Lwt_switch.create () in
+          try_lwt
+            lwt signal = group.g_monitor group.g_proxy group.g_interface switch in
+            let cache = {
+              c_count = 0;
+              c_map = signal;
+              c_switch = switch;
+            } in
+            wakeup wakener cache;
+            return cache
+          with exn ->
+            info.cache <- Group_map.remove cache_key info.cache;
+            wakeup_exn wakener exn;
+            lwt () = Lwt_switch.turn_off switch in
+            fail exn
+  in
 
-let make info proxy =
-  let typ = OBus_member.Property.typ info and member = OBus_member.Property.member info in
-  {
-    p_cast = (fun context properties -> OBus_value.C.cast_single typ (String_map.find member properties));
-    p_make = (fun value -> OBus_value.C.make_single typ value);
-    p_member = member;
-    p_proxy = proxy;
-    p_group = (let interface = OBus_member.Property.interface info in
-               lazy(make_property_group proxy interface));
-  }
+  cache.c_count <- cache.c_count + 1;
+  let signal = React.S.map (fun x -> x) cache.c_map in
 
-let make_group proxy interface =
-  {
-    p_cast = (fun context properties -> properties);
-    p_make = (fun value -> assert false);
-    p_member = "";
-    p_proxy = proxy;
-    p_group = lazy(make_property_group proxy interface);
-  }
+  let disable = lazy(
+    try_lwt
+      React.S.stop signal;
+      cache.c_count <- cache.c_count - 1;
+      if cache.c_count = 0 then begin
+        info.cache <- Group_map.remove cache_key info.cache;
+        Lwt_switch.turn_off cache.c_switch
+      end else
+        return ()
+    with exn ->
+      lwt () =
+        Lwt_log.warning_f
+          ~section
+          ~exn
+          "failed to disable monitoring of properties for interface %S on object %S from %S"
+          group.g_interface
+          (OBus_path.to_string (OBus_proxy.path group.g_proxy))
+          (OBus_proxy.name group.g_proxy)
+      in
+      fail exn
+  ) in
 
-(* +-----------------------------------------------------------------+
-   | Reading all properties                                          |
-   +-----------------------------------------------------------------+ *)
+  let f () = () in
+  let _ = React.S.retain signal f in
+  Gc.finalise (finalise disable) f;
 
-let get_all_with_context proxy ~interface =
-  let connection = OBus_proxy.connection proxy in
-  let running = connection#get in
-  match
-    try
-      Some(Property_map.find
-             (OBus_proxy.name proxy,
-              OBus_proxy.path proxy,
-              interface)
-             running.rc_properties)
-    with Not_found ->
-      None
-  with
-    | None | Some{ pg_watcher = None } ->
-        get_all_no_cache proxy interface
-    | Some{ pg_watcher = Some{ pgw_cache = signal;
-                               pgw_send = send;
-                               pgw_stop = stop } } ->
-        React.S.value signal
+  match switch with
+    | Some switch ->
+        lwt () = Lwt_switch.add_hook switch (fun () -> Lazy.force disable) in
+        return signal
+    | None ->
+        return signal
 
-let get_all proxy ~interface =
-  get_all_with_context proxy interface >|= snd
-
-let invalidate_all proxy ~interface =
-  let connection = OBus_proxy.connection proxy in
-  let running = connection#get in
-  match
-    try
-      Some(Property_map.find
-             (OBus_proxy.name proxy,
-              OBus_proxy.path proxy,
-              interface)
-             running.rc_properties)
-    with Not_found ->
-      None
-  with
-    | None | Some{ pg_watcher = None } ->
-        ()
-    | Some{ pg_watcher = Some{ pgw_cache = thread;
-                               pgw_send = send;
-                               pgw_stop = stop } } ->
-        send Invalidate
-
-(* +-----------------------------------------------------------------+
-   | Reading properties from a set of properties                     |
-   +-----------------------------------------------------------------+ *)
-
-let find property context properties =
-  property.p_cast context properties
+let monitor ?switch prop =
+  lwt signal = monitor_group ?switch { g_interface = prop.p_interface;
+                                       g_proxy = prop.p_proxy;
+                                       g_monitor = prop.p_monitor } in
+  return (React.S.map (find prop) signal)

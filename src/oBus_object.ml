@@ -8,73 +8,71 @@
  *)
 
 open Lwt
-open OBus_private_connection
-open OBus_message
+
+let section = Lwt_log.Section.make "obus(obejct)"
 
 (* +-----------------------------------------------------------------+
    | Types                                                           |
    +-----------------------------------------------------------------+ *)
 
 module Connection_set = Set.Make(OBus_connection)
-module Member_map = String_map
+module String_set = Set.Make(String)
+module String_map = Map.Make(String)
+module Path_map = Map.Make(OBus_path)
 
-(* Notification mode for a property *)
-type emits_signal_changed =
-  | Esc_default
-      (* Use the default value, which may be defined in the
-         interface *)
-  | Esc_false
-      (* Do not notify property changes *)
-  | Esc_true
-      (* Notify property changes, and send the new contents in the
-         notification *)
-  | Esc_invalidates
-      (* Only send the property name in changes' notifications *)
+module type Method_info = sig
+  type obj
+  type i_type
+  type o_type
+  val info : (i_type, o_type) OBus_member.Method.t
+  val handler : OBus_context.t -> obj -> i_type -> o_type Lwt.t
+end
 
-type 'a method_info = {
-  mi_name : OBus_name.member;
-  mi_handler : OBus_value.V.sequence OBus_context.t -> 'a t -> OBus_message.t -> [ `Replied | `No_reply ] Lwt.t;
-  mi_introspect : unit -> OBus_introspect.member;
-}
+module type Signal_info = sig
+  type obj
+  type typ
+  val info : typ OBus_member.Signal.t
+end
 
-and 'a signal_info = {
-  si_name : OBus_name.member;
-  si_introspect : unit -> OBus_introspect.member;
-}
+module type Property_info = sig
+  type obj
+  type typ
+  type access
+  val info : (typ, access) OBus_member.Property.t
+  val set : (OBus_context.t -> obj -> typ -> unit Lwt.t) option
+  val signal : (obj -> typ React.signal) option
+end
 
-and 'a property_info = {
-  pi_name : OBus_name.member;
-  pi_signal : ('a -> OBus_value.V.single React.signal) option;
-  pi_setter : (unit OBus_context.t -> 'a -> OBus_value.V.single -> unit Lwt.t) option;
-  pi_emits_changed_signal : emits_signal_changed;
-  pi_introspect : unit -> OBus_introspect.member;
-}
+module type Property_instance = sig
+  type typ
+  type access
+  val info : (typ, access) OBus_member.Property.t
 
-and 'a property_signal = {
-  ps_signal : OBus_value.V.single React.signal;
-  ps_monitor : unit React.event;
-  (* Event which send notifications when the contents of the property
-     changes *)
-}
+  val signal : typ React.signal
+    (* The signal holding the current value of the property *)
+
+  val monitor : unit React.event
+    (* Event which send notifications when the contents of the
+       property changes *)
+end
+
+type property_instance = (module Property_instance)
 
 (* An interface descriptor *)
-and 'a interface = {
-  interface_name : OBus_name.interface;
+type 'a interface = {
+  i_name : OBus_name.interface;
   (* The name of the interface *)
 
-  interface_methods : 'a method_info array;
+  i_methods : 'a method_info array;
   (* Array of methods, for dispatching method calls and introspection *)
 
-  interface_signals : 'a signal_info array;
+  i_signals : 'a signal_info array;
   (* Array of signals, for introspection *)
 
-  interface_properties : 'a property_info array;
+  i_properties : 'a property_info array;
   (* Array of for properties, for reading/writing properties and introspection *)
 
-  interface_emits_changed_signal : emits_signal_changed;
-  (* Default mode for sending notification of properties changes *)
-
-  interface_annotations : OBus_introspect.annotation list;
+  i_annotations : OBus_introspect.annotation list;
   (* List of annotations of the interfaces. They are used for
      introspection *)
 }
@@ -87,7 +85,8 @@ and 'a t = {
   mutable data : 'a option;
   (* Data attached to the object *)
 
-  mutable exports : Connection_set.t;
+  exports : Connection_set.t React.signal;
+  set_exports : Connection_set.t -> unit;
   (* Set of connection on which the object is exported *)
 
   owner : OBus_peer.t option;
@@ -96,10 +95,10 @@ and 'a t = {
   mutable interfaces : 'a interface array;
   (* Interfaces implemented by this object *)
 
-  mutable properties : 'a property_signal option array array;
+  mutable properties : property_instance option array array;
   (* All property instances of the object *)
 
-  mutable changed : OBus_value.V.single option Member_map.t array;
+  mutable changed : OBus_value.V.single option String_map.t array;
   (* Properties that changed since the last upadte, organised by
      interface *)
 
@@ -107,6 +106,43 @@ and 'a t = {
   (* Function called when proeprties change. It may emit a
      notification signal. The default one use
      [org.freedesktop.DBus.Properties.PropertiesChanged] *)
+}
+
+and 'a method_info = (module Method_info with type obj = 'a t)
+and 'a signal_info = (module Signal_info with type obj = 'a t)
+and 'a property_info = (module Property_info with type obj = 'a t)
+
+(* Signature for static objects *)
+module type Static = sig
+  type data
+    (* Type of data attached to the obejct *)
+
+  val obj : data t
+    (* The object itself *)
+end
+
+type static = (module Static)
+
+(* Signature for dynamic object *)
+module type Dynamic = sig
+  type data
+    (* Type of data attached to obejcts *)
+
+  val get : OBus_context.t -> OBus_path.t -> data t Lwt.t
+end
+
+type dynamic = (module Dynamic)
+
+(* Informations stored in connections *)
+type info = {
+  mutable statics : static Path_map.t;
+  (* Static objects exported on the connection *)
+
+  mutable dynamics : dynamic Path_map.t;
+  (* Dynamic objects exported on the connection *)
+
+  mutable watcher : unit React.event;
+  (* Event which cleanup things when the connection goes down *)
 }
 
 (* +-----------------------------------------------------------------+
@@ -117,21 +153,32 @@ let path obj = obj.path
 let owner obj = obj.owner
 let exports obj = obj.exports
 
+let introspect_args args =
+  List.map2
+    (fun name_opt typ -> (name_opt, typ))
+    (OBus_value.arg_names args)
+    (OBus_value.C.type_sequence (OBus_value.arg_types args))
+
+let introspect_method (type d) info =
+  let module M = (val info : Method_info with type obj = d t) in
+  OBus_member.Method.introspect M.info
+
+let introspect_signal (type d) info =
+  let module S = (val info : Signal_info with type obj = d t) in
+  OBus_member.Signal.introspect S.info
+
+let introspect_property (type d) info =
+  let module P = (val info : Property_info with type obj = d t) in
+  OBus_member.Property.introspect P.info
+
 let introspect obj =
   Array.fold_right
     (fun interface acc ->
-       (interface.interface_name,
-        Array.fold_right
-          (fun method_ acc -> method_.mi_introspect () :: acc)
-          interface.interface_methods
-          (Array.fold_right
-             (fun signal acc -> signal.si_introspect () :: acc)
-             interface.interface_signals
-             (Array.fold_right
-                (fun property acc -> property.pi_introspect () :: acc)
-                interface.interface_properties
-                [])),
-        interface.interface_annotations) :: acc)
+       let members = [] in
+       let members = Array.fold_right (fun member acc -> introspect_property member :: acc) interface.i_properties members in
+       let members = Array.fold_right (fun member acc -> introspect_signal member :: acc) interface.i_signals members in
+       let members = Array.fold_right (fun member acc -> introspect_method member :: acc) interface.i_methods members in
+       (interface.i_name, members, interface.i_annotations) :: acc)
     obj.interfaces []
 
 let on_properties_changed obj = obj.properties_changed
@@ -158,216 +205,441 @@ let binary_search compare key array =
   loop 0 (Array.length array)
 
 let compare_interface name interface =
-  String.compare name interface.interface_name
+  String.compare name interface.i_name
 
-let compare_property name property =
-  String.compare name property.pi_name
+let compare_property (type d) name property =
+  let module P = (val property : Property_info with type obj = d t) in
+  String.compare name P.info.OBus_member.Property.member
 
-let compare_method name method_ =
-  String.compare name method_.mi_name
+let compare_method (type d) name method_ =
+  let module M = (val method_ : Method_info with type obj = d t) in
+  String.compare name M.info.OBus_member.Method.member
+
+(* +-----------------------------------------------------------------+
+   | Dispatching                                                     |
+   +-----------------------------------------------------------------+ *)
+
+let unknown_method interface member arguments =
+  fail
+    (OBus_error.Unknown_method
+       (Printf.sprintf
+          "Method %S with signature %S on interface %S does not exist"
+          member
+          (OBus_value.string_of_signature (OBus_value.V.type_of_sequence arguments))
+          interface))
+
+(* Executes a method *)
+let execute (type d) method_info context obj arguments =
+  let module M = (val method_info : Method_info with type obj = d t) in
+  let arguments =
+    try
+      OBus_value.C.cast_sequence
+        (OBus_value.arg_types (OBus_member.Method.i_args M.info))
+        arguments
+    with OBus_value.C.Signature_mismatch ->
+      raise
+        (OBus_error.Failed
+           (Printf.sprintf
+              "invalid signature(%S) for method %S on interface %S, must be %S"
+              (OBus_value.string_of_signature
+                 (OBus_value.V.type_of_sequence arguments))
+              (OBus_member.Method.member M.info)
+              (OBus_member.Method.interface M.info)
+              (OBus_value.string_of_signature
+                 (OBus_value.C.type_sequence
+                    (OBus_value.arg_types
+                       (OBus_member.Method.i_args M.info))))))
+  in
+  lwt reply = M.handler context obj arguments in
+  return (OBus_value.C.make_sequence (OBus_value.arg_types (OBus_member.Method.o_args M.info)) reply)
+
+(* Dispatch a method call to the implementation of the method *)
+let dispatch context obj interface member arguments =
+  if interface = "" then
+    let rec loop i =
+      if i = Array.length obj.interfaces then
+        unknown_method interface member arguments
+      else
+        match binary_search compare_method member obj.interfaces.(i).i_methods with
+          | -1 ->
+              loop (i + 1)
+          | index ->
+              execute obj.interfaces.(i).i_methods.(index) context obj arguments
+    in
+    loop 0
+  else
+    match binary_search compare_interface interface obj.interfaces with
+      | -1 ->
+          unknown_method interface member arguments
+      | index ->
+          let interface = obj.interfaces.(index) in
+          match binary_search compare_method member interface.i_methods with
+            | -1 ->
+                unknown_method interface.i_name member arguments
+            | index ->
+                execute interface.i_methods.(index) context obj arguments
+
+(* Search a dynamic node prefix of [path] in [map]: *)
+let search_dynamic path map =
+  Path_map.fold
+    (fun prefix dynamic acc ->
+       match acc with
+         | Some _ ->
+             acc
+         | None ->
+             match OBus_path.after prefix path with
+               | Some path ->
+                   Some(path, dynamic)
+               | None ->
+                   None)
+    map None
+
+let send_reply context value =
+  try_lwt
+    let open OBus_message in
+    OBus_connection.send_message (OBus_context.connection context) {
+      flags = { no_reply_expected = true; no_auto_start = true };
+      serial = 0l;
+      typ = Method_return(OBus_context.serial context);
+      destination = OBus_peer.name (OBus_context.sender context);
+      sender = "";
+      body = value;
+    }
+  with exn ->
+    Lwt_log.warning ~section ~exn "failed to send reply to method call"
+
+let send_error context exn =
+  let name, message = OBus_error.cast exn in
+  try_lwt
+    let open OBus_message in
+    OBus_connection.send_message (OBus_context.connection context) {
+      flags = { no_reply_expected = true; no_auto_start = true };
+      serial = 0l;
+      typ = Error(OBus_context.serial context, name);
+      destination = OBus_peer.name (OBus_context.sender context);
+      sender = "";
+      body = [OBus_value.V.basic_string message];
+    }
+  with exn ->
+    Lwt_log.warning ~section ~exn "failed to send error in reply to method call"
+
+(* Returns the list of children of a node *)
+let children info prefix =
+  String_set.elements
+    (Path_map.fold
+       (fun path obj acc -> match OBus_path.after prefix path with
+          | Some(element :: _) -> String_set.add element acc
+          | _ -> acc)
+       info.statics
+       String_set.empty)
+
+exception No_such_object
+
+(* Handle method call messages *)
+let handle_message connection info message =
+  match message with
+    | { OBus_message.typ = OBus_message.Method_call(path, interface, member) } ->
+        ignore begin
+          let context = OBus_context.make connection message in
+          try_lwt
+            lwt reply =
+              (* First, we search the object in static objects *)
+              match try Some(Path_map.find path info.statics) with Not_found -> None with
+                | Some static ->
+                    let module M = (val static : Static) in
+                    dispatch context M.obj interface member (OBus_message.body message)
+                | None ->
+                    (* Then we search in dynamic objects *)
+                    match search_dynamic path info.dynamics with
+                      | None ->
+                          fail No_such_object
+                      | Some(path, dynamic) ->
+                          let module M = (val dynamic : Dynamic) in
+                          lwt result =
+                            try_lwt
+                              lwt obj = M.get context path in
+                              return (`Success obj)
+                            with exn ->
+                              return (`Failure exn)
+                          in
+                          match result with
+                            | `Success obj ->
+                                dispatch context obj interface member (OBus_message.body message)
+                            | `Failure Not_found ->
+                                fail No_such_object
+                            | `Failure exn ->
+                                lwt () = Lwt_log.error ~section ~exn "dynamic object handler failed with" in
+                                fail No_such_object
+            in
+            send_reply context reply
+          with
+            | No_such_object -> begin
+                (* Handle introspection for missing intermediate object:
+
+                   for example if we have only one exported object
+                   with path "/a/b/c", we need to add introspection
+                   support for virtual objects with path "/", "/a",
+                   "/a/b", "/a/b/c". *)
+                match interface, member, OBus_message.body message with
+                  | ("" | "org.freedesktop.DBus.Introspectable"), "Introspect", [] ->
+                      let buffer = Buffer.create 1024 in
+                      OBus_introspect.output
+                        (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Buffer buffer))
+                        ([], children info path);
+                      send_reply context [OBus_value.V.basic_string (Buffer.contents buffer)]
+                  | _ ->
+                      send_error context (OBus_error.Failed (Printf.sprintf "No such object: %S" (OBus_path.to_string path)))
+              end
+            | exn ->
+                lwt () =
+                  if OBus_error.name exn = OBus_error.ocaml then
+                    (* It is a bad thing to raise an error that is not
+                       mapped to a D-Bus error, so we alert the
+                       user: *)
+                    Lwt_log.error_f ~section ~exn
+                      "method call handler for method %S on interface %S failed with"
+                      member interface
+                  else
+                    return ()
+                in
+                send_error context exn
+        end;
+        Some message
+
+    | _ ->
+        Some message
 
 (* +-----------------------------------------------------------------+
    | Exportation                                                     |
    +-----------------------------------------------------------------+ *)
 
-let unknown_method context message =
-  OBus_method.fail
-    context
-    (OBus_error.Unknown_method (unknown_method_message message))
+let key = OBus_connection.new_key ()
 
-let handle_call obj context message =
-  match message with
-    | { typ = Method_call(path, "", member) } ->
-        let rec loop i =
-          if i = Array.length obj.interfaces then
-            unknown_method context message
-          else
-            match binary_search compare_method member obj.interfaces.(i).interface_methods with
-              | -1 ->
-                  loop (i + 1)
-              | index ->
-                  obj.interfaces.(i).interface_methods.(index).mi_handler context obj message
-        in
-        loop 0
-    | { typ = Method_call(path, interface, member) } -> begin
-        match binary_search compare_interface interface obj.interfaces with
-          | -1 ->
-              unknown_method context message
-          | index ->
-              let interface = obj.interfaces.(index) in
-              match binary_search compare_method member interface.interface_methods with
-                | -1 ->
-                    unknown_method context message
-                | index ->
-                    interface.interface_methods.(index).mi_handler context obj message
-      end
-    | _ ->
-        invalid_arg "OBus_object.Make.handle_call"
+let cleanup connection info =
+  React.E.stop info.watcher;
+  Path_map.iter
+    (fun path static ->
+       let module M = (val static : Static) in
+       M.obj.set_exports (Connection_set.remove connection (React.S.value M.obj.exports)))
+    info.statics
 
-let export connection obj =
-  if obj.data = None then
-    failwith "OBus_object.export: cannot export an object without data attahed"
-  else begin
-    let running = connection#get in
-    if not (Connection_set.mem connection obj.exports) then begin
-      running.rc_static_objects <- Object_map.add obj.path {
-        so_handle = handle_call obj;
-        so_connection_closed = (fun connection -> obj.exports <- Connection_set.remove connection obj.exports);
-      } running.rc_static_objects;
-      obj.exports <- Connection_set.add connection obj.exports
-    end
+let get_info connection =
+  match OBus_connection.get connection key with
+    | Some info ->
+        info
+    | None ->
+        let info = {
+          statics = Path_map.empty;
+          dynamics = Path_map.empty;
+          watcher = React.E.never;
+        } in
+        OBus_connection.set connection key (Some info);
+        let _ = Lwt_sequence.add_r (handle_message connection info) (OBus_connection.incoming_filters connection) in
+        info.watcher <- (
+          React.E.map
+            (fun state -> cleanup connection info)
+            (React.E.once
+               (React.S.changes
+                  (OBus_connection.active connection)))
+        );
+        info
+
+let remove connection obj =
+  let exports = React.S.value obj.exports in
+  if Connection_set.mem connection exports then begin
+    if React.S.value (OBus_connection.active connection) then begin
+      match OBus_connection.get connection key with
+        | Some info ->
+            info.statics <- Path_map.remove obj.path info.statics
+        | None ->
+            ()
+    end;
+    obj.set_exports (Connection_set.remove connection exports);
   end
 
 let remove_by_path connection path =
-  match connection#state with
-    | Crashed _ ->
-        ()
-    | Running running ->
-        running.rc_dynamic_objects <- Object_map.remove path running.rc_dynamic_objects;
-        match try Some(Object_map.find path running.rc_static_objects) with Not_found -> None with
-          | Some static_object ->
-              running.rc_static_objects <- Object_map.remove path running.rc_static_objects;
-              static_object.so_connection_closed connection
+  if React.S.value (OBus_connection.active connection) then
+    match OBus_connection.get connection key with
+      | None ->
+          ()
+      | Some info ->
+          info.dynamics <- Path_map.remove path info.dynamics;
+          match try Some(Path_map.find path info.statics) with Not_found -> None with
+            | Some static ->
+                let module M = (val static : Static) in
+                remove connection M.obj
+            | None ->
+                ()
+
+let export (type d) connection obj =
+  if obj.data = None then
+    failwith "OBus_object.export: cannot export an object without data attached"
+  else
+    let exports = React.S.value obj.exports in
+    if not (Connection_set.mem connection exports) then begin
+      let info = get_info connection in
+      let () =
+        (* Remove any object registered under the same path: *)
+        match try Some(Path_map.find obj.path info.statics) with Not_found -> None with
+          | Some static ->
+              let module M = (val static : Static) in
+              remove connection M.obj
           | None ->
               ()
-
-let remove connection obj =
-  if Connection_set.mem connection obj.exports then begin
-    obj.exports <- Connection_set.remove connection obj.exports;
-    match connection#state with
-      | Crashed _ ->
-          ()
-      | Running running ->
-          running.rc_static_objects <- Object_map.remove obj.path running.rc_static_objects
-  end
+      in
+      let module M = struct
+        type data = d
+        let obj = obj
+      end in
+      info.statics <- Path_map.add obj.path (module M : Static) info.statics;
+      obj.set_exports (Connection_set.add connection exports)
+    end
 
 let destroy obj =
-  Connection_set.iter
-    (fun connection -> match connection#state with
-       | Crashed exn ->
-           ()
-       | Running running ->
-           running.rc_static_objects <- Object_map.remove obj.path running.rc_static_objects)
-    obj.exports;
-  obj.exports <- Connection_set.empty
+  Connection_set.iter (fun connection -> remove connection obj) (React.S.value obj.exports)
 
-let dynamic ~connection ~prefix ~handler =
-  let running = connection#get in
-  (* Remove any dynamic node declared with the same prefix: *)
-  let create context path =
-    handler context path >>= function
-      | `Object obj ->
-          return (`Object{
-                    so_handle = handle_call obj;
-                    so_connection_closed = ignore;
-                  })
-      | `Replied ->
-          return `Replied
-      | `No_reply ->
-          return `No_reply
-      | `Not_found ->
-          return `Not_found
-  in
-  running.rc_dynamic_objects <- Object_map.add prefix create running.rc_dynamic_objects
+let dynamic (type d) ~connection ~prefix ~handler =
+  let info = get_info connection in
+  let module M = struct
+    type data = d
+    let get = handler
+  end in
+  info.dynamics <- Path_map.add prefix (module M : Dynamic) info.dynamics
 
 (* +-----------------------------------------------------------------+
    | Signals                                                         |
    +-----------------------------------------------------------------+ *)
 
 let emit obj ~interface ~member ?peer typ x =
+  let module M = OBus_message in
   let body = OBus_value.C.make_sequence typ x in
   match peer, obj.owner with
-    | Some { OBus_peer.connection = connection; OBus_peer.name = destination }, _
-    | _, Some { OBus_peer.connection = connection; OBus_peer.name = destination } ->
+    | Some { OBus_peer.connection; OBus_peer.name }, _
+    | _, Some { OBus_peer.connection; OBus_peer.name } ->
         OBus_connection.send_message connection {
-          flags = { no_reply_expected = true; no_auto_start = true };
-          serial = 0l;
-          typ = OBus_message.Signal(obj.path, interface, member);
-          destination = destination;
-          sender = "";
-          body = body;
+          M.flags = { M.no_reply_expected = true; M.no_auto_start = true };
+          M.serial = 0l;
+          M.typ = OBus_message.Signal(obj.path, interface, member);
+          M.destination = name;
+          M.sender = "";
+          M.body = body;
         }
     | None, None ->
         let signal = {
-          flags = { no_reply_expected = true; no_auto_start = true };
-          serial = 0l;
-          typ = OBus_message.Signal(obj.path, interface, member);
-          destination = "";
-          sender = "";
-          body = body;
+          M.flags = { M.no_reply_expected = true; M.no_auto_start = true };
+          M.serial = 0l;
+          M.typ = OBus_message.Signal(obj.path, interface, member);
+          M.destination = "";
+          M.sender = "";
+          M.body = body;
         } in
         join (Connection_set.fold
                 (fun connection l -> OBus_connection.send_message connection signal :: l)
-                obj.exports [])
+                (React.S.value obj.exports) [])
 
 (* +-----------------------------------------------------------------+
    | Property change notifications                                   |
    +-----------------------------------------------------------------+ *)
 
-let notify_properties_change obj interface_name changed index =
+let notify_properties_change (type d) obj interface_name changed index =
   (* Sleep a bit, so multiple changes are sent only one time. *)
   lwt () = pause () in
   let members = changed.(index) in
-  changed.(index) <- Member_map.empty;
+  changed.(index) <- String_map.empty;
   try_lwt
     !(obj.properties_changed)
       interface_name
-      (Member_map.fold (fun name value_opt acc -> (name, value_opt) :: acc) members [])
+      (String_map.fold (fun name value_opt acc -> (name, value_opt) :: acc) members [])
   with exn ->
     Lwt_log.error ~exn ~section "properties_changed callback failed with"
 
-let handle_property_change obj index member value_opt =
-  let empty = Member_map.is_empty obj.changed.(index) in
-  obj.changed.(index) <- Member_map.add member value_opt obj.changed.(index);
-  if empty then ignore (notify_properties_change obj obj.interfaces.(index).interface_name obj.changed index)
+let handle_property_change obj index info value_opt =
+  let empty = String_map.is_empty obj.changed.(index) in
+  obj.changed.(index) <- String_map.add (OBus_member.Property.member info) value_opt obj.changed.(index);
+  if empty then ignore (notify_properties_change obj (OBus_member.Property.interface info) obj.changed index)
 
-let handle_property_change_true obj interface_index member value =
-  handle_property_change obj interface_index member (Some value)
+let handle_property_change_true (type d) (type v) obj interface_index prop value =
+  let module P = (val prop : Property_info with type obj = d t and type typ = v) in
+  let value = OBus_value.C.make_single (OBus_member.Property.typ P.info) value in
+  handle_property_change obj interface_index P.info (Some value)
 
-let handle_property_change_invalidates obj interface_index member value =
-  handle_property_change obj interface_index member None
+let handle_property_change_invalidates (type d) (type v) obj interface_index prop value =
+  let module P = (val prop : Property_info with type obj = d t and type typ = v) in
+  handle_property_change obj interface_index P.info None
 
 (* +-----------------------------------------------------------------+
-   | Property maps geenration                                        |
+   | Property maps genrations                                        |
    +-----------------------------------------------------------------+ *)
 
-(* Generate the [properties] and the [methods] fields from the
-   [interfaces] field: *)
-let generate obj =
+(* Notification mode for a property *)
+type emits_signal_changed =
+  | Esc_default
+      (* Use the default value, which may be defined in the
+         interface *)
+  | Esc_false
+      (* Do not notify property changes *)
+  | Esc_true
+      (* Notify property changes, and send the new contents in the
+         notification *)
+  | Esc_invalidates
+      (* Only send the property name in changes' notifications *)
+
+let get_emits_changed_signal annotations =
+  try
+    match List.assoc OBus_introspect.emits_changed_signal annotations with
+      | "true" -> Esc_true
+      | "false" -> Esc_false
+      | "invalidates" -> Esc_invalidates
+      | value ->
+          ignore (Lwt_log.warning_f "invalid value(%S) for annotation %S. Using default(\"true\")" value OBus_introspect.emits_changed_signal);
+          Esc_true
+  with Not_found ->
+    Esc_default
+
+(* Generate the [properties] field from the [interfaces] field: *)
+let generate (type d) obj =
   (* Stop monitoring of previous properties *)
   Array.iter
     (fun instances ->
        Array.iter
          (function
-            | Some instance -> React.E.stop instance.ps_monitor
+            | Some instance ->
+                let module M = (val instance : Property_instance) in
+                React.S.stop M.signal;
+                React.E.stop M.monitor
             | None -> ())
          instances)
     obj.properties;
   let count = Array.length obj.interfaces in
   obj.properties <- Array.make count [||];
-  obj.changed <- Array.make count Member_map.empty;
+  obj.changed <- Array.make count String_map.empty;
   for i = 0 to count - 1 do
-    let properties = obj.interfaces.(i).interface_properties in
+    let properties = obj.interfaces.(i).i_properties in
     let count' = Array.length properties in
     let instances = Array.make count' None in
     obj.properties.(i) <- instances;
     for j = 0 to count' - 1 do
-      match properties.(j).pi_signal with
+      let module P = (val properties.(j) : Property_info with type obj = d t) in
+      match P.signal with
         | Some make ->
-            let signal = make (match obj.data with Some data -> data | None -> assert false) in
-            instances.(j) <- (
-              Some({
-                     ps_signal = signal;
-                     ps_monitor =
-                       (match properties.(j).pi_emits_changed_signal, obj.interfaces.(i).interface_emits_changed_signal with
-                          | Esc_false, _ | Esc_default, Esc_false ->
-                              React.E.never
-                          | Esc_true, _ | Esc_default, (Esc_default | Esc_true) ->
-                              React.E.map (handle_property_change_true obj i properties.(j).pi_name) (React.S.changes signal)
-                          | Esc_invalidates, _ | Esc_default, Esc_invalidates ->
-                              React.E.map (handle_property_change_invalidates obj i properties.(j).pi_name) (React.S.changes signal))
-                   })
-            )
+            let module I = struct
+              type typ = P.typ
+              type access = P.access
+              let info = P.info
+              let signal = make obj
+              let monitor =
+                let esc_prop = get_emits_changed_signal (OBus_member.Property.annotations P.info)
+                and esc_intf = get_emits_changed_signal obj.interfaces.(i).i_annotations in
+                let info = (module P : Property_info with type obj = d t and type typ = P.typ) in
+                match esc_prop, esc_intf with
+                  | Esc_false, _ | Esc_default, Esc_false ->
+                      React.E.never
+                  | Esc_true, _ | Esc_default, (Esc_default | Esc_true) ->
+                      React.E.map (handle_property_change_true obj i info) (React.S.changes signal)
+                  | Esc_invalidates, _ | Esc_default, Esc_invalidates ->
+                      React.E.map (handle_property_change_invalidates obj i info) (React.S.changes signal)
+            end in
+            instances.(j) <- (Some(module I : Property_instance))
         | None ->
             ()
     done
@@ -377,116 +649,83 @@ let generate obj =
    | Member informations                                             |
    +-----------------------------------------------------------------+ *)
 
-let _method_info info f =
-  let handler context obj message =
-    let context =
-      OBus_context.map
-        (fun x ->
-           OBus_value.C.make_sequence
-             (OBus_value.arg_types
-                (OBus_member.Method.o_args info))
-             x)
-        context
-    in
-    let args =
-      try
-        OBus_value.C.cast_sequence
-          (OBus_value.arg_types (OBus_member.Method.i_args info))
-          (OBus_message.body message)
-      with OBus_value.C.Signature_mismatch ->
-        raise
-          (OBus_error.Failed
-             (Printf.sprintf
-                "invalid signature(%S) for method %S on interface %S, must be %S"
-                (OBus_value.string_of_signature
-                   (OBus_value.V.type_of_sequence
-                      (OBus_message.body message)))
-                (OBus_member.Method.member info)
-                (OBus_member.Method.interface info)
-                (OBus_value.string_of_signature
-                   (OBus_value.C.type_sequence
-                      (OBus_value.arg_types
-                         (OBus_member.Method.i_args info))))))
-    in
-    f context obj args
-  in
-  {
-    mi_name = OBus_member.Method.member info;
-    mi_handler = handler;
-    mi_introspect = (fun () -> OBus_member.Method.introspect info);
-  }
+let method_info (type d) (type i) (type o) info f =
+  let module M = struct
+    type obj = d t
+    type i_type = i
+    type o_type = o
+    let info = info
+    let handler = f
+  end in
+  (module M : Method_info with type obj = d t)
 
-let method_info info f =
-  _method_info info
-    (fun context obj ->
-       match obj.data with
-         | Some data -> f context data
-         | None -> assert false)
+let signal_info (type d) (type i) info =
+  let module M = struct
+    type obj = d t
+    type typ = i
+    let info = info
+  end in
+  (module M : Signal_info with type obj = d t)
 
-let signal_info info = {
-  si_name = OBus_member.Signal.member info;
-  si_introspect = (fun () -> OBus_member.Signal.introspect info);
-}
+let property_r_info (type d) (type i) (type a) info signal =
+  let module M = struct
+    type obj = d t
+    type typ = i
+    type access = a
+    let info = info
+    let set = None
+    let signal = Some signal
+  end in
+  (module M : Property_info with type obj = d t)
 
-let get_emits_changed_signal annotations =
-  try
-    match List.assoc OBus_introspect.emits_changed_signal annotations with
-      | "true" -> Esc_true
-      | "false" -> Esc_false
-      | "invalidates" -> Esc_invalidates
-      | value ->
-          ignore (Lwt_log.warning_f "invalid value(%S) for annotation %S, using default(\"true\")" value OBus_introspect.emits_changed_signal);
-          Esc_true
-  with Not_found ->
-    Esc_default
+let property_w_info (type d) (type i) (type a) info set =
+  let module M = struct
+    type obj = d t
+    type typ = i
+    type access = a
+    let info = info
+    let set = Some set
+    let signal = None
+  end in
+  (module M : Property_info with type obj = d t)
 
-let property_info info signal setter =
-  let typ = OBus_member.Property.typ info in
-  let signal = match signal with
-    | None ->
-        None
-    | Some f ->
-        Some(fun data -> React.S.map (OBus_value.C.make_single typ) (f data))
-  in
-  let setter = match setter with
-    | None ->
-        None
-    | Some f ->
-        Some(fun context data value -> f context data (OBus_value.C.cast_single typ value))
-  in
-  {
-    pi_name = OBus_member.Property.member info;
-    pi_signal = signal;
-    pi_setter = setter;
-    pi_emits_changed_signal = get_emits_changed_signal (OBus_member.Property.annotations info);
-    pi_introspect = (fun () -> OBus_member.Property.introspect info);
-  }
-
-let property_r_info info signal = property_info info (Some signal) None
-let property_w_info info setter = property_info info None (Some setter)
-let property_rw_info info signal setter = property_info info (Some signal) (Some setter)
+let property_rw_info (type d) (type i) (type a) info signal set =
+  let module M = struct
+    type obj = d t
+    type typ = i
+    type access = a
+    let info = info
+    let set = Some set
+    let signal = Some signal
+  end in
+  (module M : Property_info with type obj = d t)
 
 (* +-----------------------------------------------------------------+
    | Interfaces creation                                             |
    +-----------------------------------------------------------------+ *)
 
 let make_interface_unsafe name annotations methods signals properties = {
-  interface_name = name;
-  interface_emits_changed_signal = get_emits_changed_signal annotations;
-  interface_methods = methods;
-  interface_signals = signals;
-  interface_properties = properties;
-  interface_annotations = annotations;
+  i_name = name;
+  i_methods = methods;
+  i_signals = signals;
+  i_properties = properties;
+  i_annotations = annotations;
 }
 
-let compare_methods m1 m2 =
-  String.compare m1.mi_name m2.mi_name
+let compare_methods (type d) m1 m2 =
+  let module M1 = (val m1 : Method_info with type obj = d t) in
+  let module M2 = (val m2 : Method_info with type obj = d t) in
+  String.compare (OBus_member.Method.member M1.info) (OBus_member.Method.member M2.info)
 
-let compare_signals m1 m2 =
-  String.compare m1.si_name m2.si_name
+let compare_signals (type d) s1 s2 =
+  let module S1 = (val s1 : Signal_info with type obj = d t) in
+  let module S2 = (val s2 : Signal_info with type obj = d t) in
+  String.compare (OBus_member.Signal.member S1.info) (OBus_member.Signal.member S2.info)
 
-let compare_properties p1 p2 =
-  String.compare p1.pi_name p2.pi_name
+let compare_properties (type d) p1 p2 =
+  let module P1 = (val p1 : Property_info with type obj = d t) in
+  let module P2 = (val p2 : Property_info with type obj = d t) in
+  String.compare (OBus_member.Property.member P1.info) (OBus_member.Property.member P2.info)
 
 let make_interface ~name ?(annotations=[]) ?(methods=[]) ?(signals=[]) ?(properties=[]) () =
   let methods = Array.of_list methods
@@ -499,14 +738,14 @@ let make_interface ~name ?(annotations=[]) ?(methods=[]) ?(signals=[]) ?(propert
 
 let process_interfaces interfaces =
   let rec uniq = function
-    | iface :: iface' :: rest when iface.interface_name = iface'.interface_name ->
+    | iface :: iface' :: rest when iface.i_name = iface'.i_name ->
         uniq (iface :: rest)
     | iface :: rest ->
         iface :: uniq rest
     | [] ->
         []
   and compare i1 i2 =
-    String.compare i1.interface_name i2.interface_name
+    String.compare i1.i_name i2.i_name
   in
   Array.of_list (uniq (List.stable_sort compare interfaces))
 
@@ -515,96 +754,198 @@ let add_interfaces obj interfaces =
   generate obj
 
 let remove_interfaces_by_names obj names =
-  obj.interfaces <- Array.of_list (List.filter (fun iface -> not (List.mem iface.interface_name names)) (Array.to_list obj.interfaces));
+  obj.interfaces <- Array.of_list (List.filter (fun iface -> not (List.mem iface.i_name names)) (Array.to_list obj.interfaces));
   generate obj
 
 let remove_interfaces obj interfaces =
-  remove_interfaces_by_names obj (List.map (fun iface -> iface.interface_name) interfaces)
+  remove_interfaces_by_names obj (List.map (fun iface -> iface.i_name) interfaces)
 
 (* +-----------------------------------------------------------------+
    | Common interfaces                                               |
    +-----------------------------------------------------------------+ *)
 
-open OBus_interfaces.Org_freedesktop_DBus_Introspectable
+open OBus_member
 
-let introspectable () =
-  make_interface_unsafe interface [] [|
-    _method_info m_Introspect
-      (fun context obj () ->
-         let document =
-           (introspect obj,
-            match context.mc_connection#state with
-              | Crashed _ ->
-                  []
-              | Running running ->
-                  children running obj.path)
-         in
-         let buf = Buffer.create 42 in
-         OBus_introspect.output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Buffer buf)) document;
-         OBus_method.return context (Buffer.contents buf))
-  |] [||] [||]
+let introspectable (type d) () =
+  let interface = "org.freedesktop.DBus.Introspectable" in
+  make_interface_unsafe interface []
+    [|
+      (let module M = struct
+         type obj = d t
+         type i_type = unit
+         type o_type = string
 
-open OBus_interfaces.Org_freedesktop_DBus_Properties
+         let info = {
+           Method.interface = interface;
+           Method.member = "Introspect";
+           Method.i_args = OBus_value.arg0;
+           Method.o_args = OBus_value.arg1 (Some "result", OBus_value.C.basic_string);
+           Method.annotations = [];
+         }
 
-let properties () =
-  make_interface_unsafe interface [] [|
-    _method_info m_Get
-      (fun context obj (interface, member) ->
-         match binary_search compare_interface interface obj.interfaces with
-           | -1 ->
-               OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
-           | i ->
-               match binary_search compare_property member obj.interfaces.(i).interface_properties with
-                 | -1 ->
-                     OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
-                 | j ->
+         let handler context obj () =
+           let info = get_info (OBus_context.connection context) in
+           let buf = Buffer.create 42 in
+           OBus_introspect.output
+             (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Buffer buf))
+             (introspect obj, children info obj.path);
+           return (Buffer.contents buf)
+       end in
+       (module M : Method_info with type obj = d t));
+    |]
+    [||]
+    [||]
+
+let properties (type d) () =
+  let interface = "org.freedesktop.DBus.Properties" in
+  make_interface_unsafe interface []
+    [|
+      (let module M = struct
+         type obj = d t
+         type i_type = string * string
+         type o_type = OBus_value.V.single
+
+         let info = {
+           Method.interface = interface;
+           Method.member = "Get";
+           Method.i_args =
+             OBus_value.arg2
+               (Some "interface", OBus_value.C.basic_string)
+               (Some "member", OBus_value.C.basic_string);
+           Method.o_args =
+             OBus_value.arg1
+               (Some "value", OBus_value.C.variant);
+           Method.annotations = [];
+         }
+
+         let handler context obj (interface, member) =
+           match binary_search compare_interface interface obj.interfaces with
+             | -1 ->
+                 fail (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
+             | i ->
+                 match binary_search compare_property member obj.interfaces.(i).i_properties with
+                   | -1 ->
+                       fail (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
+                   | j ->
+                       match obj.properties.(i).(j) with
+                         | Some instance ->
+                             let module I = (val instance : Property_instance) in
+                             return (OBus_value.C.make_single (Property.typ I.info) (React.S.value I.signal))
+                         | None ->
+                             fail (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not readable" member interface))
+       end in
+       (module M : Method_info with type obj = d t));
+
+      (let module M = struct
+         type obj = d t
+         type i_type = string
+         type o_type = (string * OBus_value.V.single) list
+
+         let info = {
+           Method.interface = interface;
+           Method.member = "GetAll";
+           Method.i_args =
+             OBus_value.arg1
+               (Some "interface", OBus_value.C.basic_string);
+           Method.o_args =
+             OBus_value.arg1
+               (Some "values", OBus_value.C.dict OBus_value.C.string OBus_value.C.variant);
+           Method.annotations = [];
+         }
+
+         let handler context obj interface =
+           match binary_search compare_interface interface obj.interfaces with
+             | -1 ->
+                 fail (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
+             | i ->
+                 let count = Array.length obj.properties.(i) in
+                 let rec loop j acc =
+                   if j = count then
+                     acc
+                   else
                      match obj.properties.(i).(j) with
-                       | Some{ ps_signal = signal } ->
-                           OBus_method.return context (React.S.value signal)
+                       | Some instance ->
+                           let module I = (val instance : Property_instance) in
+                           loop (j + 1)
+                             ((Property.member I.info,
+                               OBus_value.C.make_single (Property.typ I.info) (React.S.value I.signal)) :: acc)
                        | None ->
-                           OBus_method.fail context (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not readable" member interface)));
-    _method_info m_GetAll
-      (fun context obj interface ->
-         match binary_search compare_interface interface obj.interfaces with
-           | -1 ->
-               OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
-           | i ->
-               let count = Array.length obj.properties.(i) in
-               let rec loop j acc =
-                 if j = count then
-                   acc
-                 else
-                   match obj.properties.(i).(j) with
-                     | Some{ ps_signal = signal } ->
-                         loop (j + 1) ((obj.interfaces.(i).interface_properties.(j).pi_name,
-                                        React.S.value signal) :: acc)
-                     | None ->
-                         loop (j + 1) acc
-               in
-               OBus_method.return context (loop 0 []));
-    _method_info m_Set
-      (fun context obj (interface, member, value) ->
-         match binary_search compare_interface interface obj.interfaces with
-           | -1 ->
-               OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
-           | i ->
-               match binary_search compare_property member obj.interfaces.(i).interface_properties with
-                 | -1 ->
-                     OBus_method.fail context (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
-                 | j ->
-                     match obj.interfaces.(i).interface_properties.(j).pi_setter with
-                       | Some f -> begin
-                           match obj.data with
-                             | Some data ->
-                                 lwt () = f context data value in
-                                 OBus_method.return context ()
-                             | None ->
-                                 assert false
-                         end
-                       | None ->
-                           OBus_method.fail context (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not writable" member interface)));
-  |]
-    [|signal_info s_PropertiesChanged|]
+                           loop (j + 1) acc
+                 in
+                 return (loop 0 [])
+       end in
+       (module M : Method_info with type obj = d t));
+
+      (let module M = struct
+         type obj = d t
+         type i_type = string * string * OBus_value.V.single
+         type o_type = unit
+
+         let info = {
+           Method.interface = interface;
+           Method.member = "Set";
+           Method.i_args =
+             OBus_value.arg3
+               (Some "interface", OBus_value.C.basic_string)
+               (Some "member", OBus_value.C.basic_string)
+               (Some "value", OBus_value.C.variant);
+           Method.o_args =
+             OBus_value.arg0;
+           Method.annotations = [];
+         }
+
+         let handler context obj (interface, member, value) =
+           match binary_search compare_interface interface obj.interfaces with
+             | -1 ->
+                 fail (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
+             | i ->
+                 match binary_search compare_property member obj.interfaces.(i).i_properties with
+                   | -1 ->
+                       fail (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
+                   | j ->
+                       let module P = (val obj.interfaces.(i).i_properties.(j) : Property_info with type obj = d t) in
+                       match P.set with
+                         | Some f -> begin
+                             match try `Success(OBus_value.C.cast_single (Property.typ P.info) value) with exn -> `Failure exn with
+                               | `Success value ->
+                                   f context obj value
+                               | `Failure OBus_value.C.Signature_mismatch ->
+                                   fail
+                                     (OBus_error.Failed
+                                        (Printf.sprintf
+                                           "invalid type(%S) for property %S on interface %S, should be %S"
+                                           (OBus_value.string_of_signature
+                                              [OBus_value.V.type_of_single value])
+                                           member
+                                           interface
+                                           (OBus_value.string_of_signature
+                                              [OBus_value.C.type_single
+                                                 (Property.typ P.info)])))
+                               | `Failure exn ->
+                                   fail exn
+                           end
+                         | None ->
+                             fail (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not writable" member interface))
+       end in
+       (module M : Method_info with type obj = d t));
+    |]
+    [|
+      (let module S = struct
+         type obj = d t
+         type typ = string * (string * OBus_value.V.single) list * string list
+         let info = {
+           Signal.interface = interface;
+           Signal.member = "PropertiesChanged";
+           Signal.args =
+             OBus_value.arg3
+               (Some "interface", OBus_value.C.basic_string)
+               (Some "updates", OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)
+               (Some "invalidates", OBus_value.C.array OBus_value.C.basic_string);
+           Signal.annotations = [];
+         }
+       end in
+       (module S : Signal_info with type obj = d t));
+    |]
     [||]
 
 (* +-----------------------------------------------------------------+
@@ -613,9 +954,12 @@ let properties () =
 
 let properties_changed obj interface values =
   emit obj
-    ~interface:s_PropertiesChanged.OBus_member.Signal.interface
-    ~member:s_PropertiesChanged.OBus_member.Signal.member
-    (OBus_value.arg_types s_PropertiesChanged.OBus_member.Signal.args)
+    ~interface:"org.freedesktop.DBus.Properties"
+    ~member:"PropertiesChanged"
+    (OBus_value.C.seq3
+       OBus_value.C.basic_string
+       (OBus_value.C.dict OBus_value.C.string OBus_value.C.variant)
+       (OBus_value.C.array OBus_value.C.basic_string))
     (interface,
      OBus_util.filter_map
        (function
@@ -630,9 +974,11 @@ let properties_changed obj interface values =
 
 let make ?owner ?(common=true) ?(interfaces=[]) path =
   let interfaces = if common then introspectable () :: properties () :: interfaces else interfaces in
+  let exports, set_exports = React.S.create ~eq:Connection_set.equal Connection_set.empty in
   let obj = {
     path = path;
-    exports = Connection_set.empty;
+    exports = exports;
+    set_exports = set_exports;
     owner = owner;
     data = None;
     properties = [||];

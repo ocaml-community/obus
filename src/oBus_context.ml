@@ -7,32 +7,24 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-open OBus_private_connection
-
-type 'a t = 'a OBus_private_connection.message_context
-type void = OBus_private_connection.void
-
-let make = OBus_private_connection.make_context
-let make_with_reply = OBus_private_connection.make_context_with_reply
-
-let connection ctx = ctx.mc_connection
-let flags ctx = ctx.mc_flags
-let serial ctx = ctx.mc_serial
-
-let sender ctx = {
-  OBus_peer.connection = ctx.mc_connection;
-  OBus_peer.name = ctx.mc_sender;
+type t = {
+  connection : OBus_connection.t;
+  flags : OBus_message.flags;
+  sender : OBus_peer.t;
+  destination : OBus_peer.t;
+  serial : OBus_message.serial;
 }
 
-let destination ctx = {
-  OBus_peer.connection = ctx.mc_connection;
-  OBus_peer.name = ctx.mc_destination;
+let make ~connection ~message = {
+  connection = connection;
+  flags = OBus_message.flags message;
+  sender = OBus_peer.make connection (OBus_message.sender message);
+  destination = OBus_peer.make connection (OBus_message.destination message);
+  serial = OBus_message.serial message;
 }
 
-let map f ctx = {
-  ctx with
-    mc_make_body = (fun x -> ctx.mc_make_body (f x));
-}
-
-let make_body ctx x =
-  ctx.mc_make_body x
+let connection ctx = ctx.connection
+let flags ctx = ctx.flags
+let serial ctx = ctx.serial
+let sender ctx = ctx.sender
+let destination ctx = ctx.destination

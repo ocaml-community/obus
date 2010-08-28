@@ -48,7 +48,7 @@ let refresh proxy =
   OBus_method.call m_Refresh proxy ()
 
 let changed proxy =
-  OBus_signal.connect s_Changed proxy
+  OBus_signal.make s_Changed proxy
 
 let get_history proxy ~typ ~timespan ~resolution =
   let timespan = Int32.of_int timespan in
@@ -173,67 +173,5 @@ let recall_vendor proxy =
 let recall_url proxy =
   OBus_property.make p_RecallUrl proxy
 
-type properties = {
-  recall_url : string;
-  recall_vendor : string;
-  recall_notice : bool;
-  technology : technology;
-  capacity : float;
-  is_rechargeable : bool;
-  state : state;
-  is_present : bool;
-  percentage : float;
-  time_to_full : int64;
-  time_to_empty : int64;
-  voltage : float;
-  energy_rate : float;
-  energy_full_design : float;
-  energy_full : float;
-  energy_empty : float;
-  energy : float;
-  online : bool;
-  has_statistics : bool;
-  has_history : bool;
-  power_supply : bool;
-  typ : typ;
-  update_time : int64;
-  serial : string;
-  model : string;
-  vendor : string;
-  native_path : string;
-}
-
 let properties proxy =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f proxy) context properties in
-       {
-         recall_url = find recall_url;
-         recall_vendor = find recall_vendor;
-         recall_notice = find recall_notice;
-         technology = find technology;
-         capacity = find capacity;
-         is_rechargeable = find is_rechargeable;
-         state = find state;
-         is_present = find is_present;
-         percentage = find percentage;
-         time_to_full = find time_to_full;
-         time_to_empty = find time_to_empty;
-         voltage = find voltage;
-         energy_rate = find energy_rate;
-         energy_full_design = find energy_full_design;
-         energy_full = find energy_full;
-         energy_empty = find energy_empty;
-         energy = find energy;
-         online = find online;
-         has_statistics = find has_statistics;
-         has_history = find has_history;
-         power_supply = find power_supply;
-         typ = find typ;
-         update_time = find update_time;
-         serial = find serial;
-         model = find model;
-         vendor = find vendor;
-         native_path = find native_path;
-       })
-    (OBus_property.make_group proxy interface)
+  OBus_property.group proxy interface

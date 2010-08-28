@@ -12,7 +12,7 @@ include OBus_proxy.Private
 open UDisks_interfaces.Org_freedesktop_UDisks_Expander
 
 let changed proxy =
-  OBus_signal.connect s_Changed proxy
+  OBus_signal.make s_Changed proxy
 
 let native_path proxy =
   OBus_property.make p_NativePath proxy
@@ -41,27 +41,5 @@ let adapter proxy =
     (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
     (OBus_property.make p_Adapter proxy)
 
-type properties = {
-  native_path : string;
-  vendor : string;
-  model : string;
-  revision : string;
-  num_ports : int;
-  upstream_ports : UDisks_port.t list;
-  adapter : UDisks_adapter.t;
-}
-
 let properties proxy =
-  OBus_property.map_r_with_context
-    (fun context properties ->
-       let find f = OBus_property.find (f proxy) context properties in
-       {
-         native_path = find native_path;
-         vendor = find vendor;
-         model = find model;
-         revision = find revision;
-         num_ports = find num_ports;
-         upstream_ports = find upstream_ports;
-         adapter = find adapter;
-       })
-    (OBus_property.make_group proxy interface)
+  OBus_property.group proxy interface

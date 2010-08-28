@@ -15,7 +15,6 @@ Ocaml.packs := ["lwt.syntax"; "obus.syntax"; "obus"]
    commands *)
 
 open Lwt
-open OBus_value
 
 (* Configuration *)
 let commands = [
@@ -23,7 +22,7 @@ let commands = [
   ("volume-down", "amixer -q set Master 5%-");
 ]
 
-let () = Lwt_main.run begin
+lwt () =
   lwt bus = Lazy.force OBus_bus.system in
 
   (* Tell the message bus we want to receive ButtonPressed events from
@@ -40,17 +39,14 @@ let () = Lwt_main.run begin
   ignore (Lwt_sequence.add_l
             (function
                | { OBus_message.typ = OBus_message.Signal(_, "org.freedesktop.Hal.Device", "Condition");
-                   OBus_message.body = [Basic(String "ButtonPressed"); Basic(String button)] } ->
-
-                   begin
-                     try
-                       ignore_result (Lwt_unix.system (List.assoc button commands))
-                     with _ -> ()
+                   OBus_message.body = OBus_value.V.([Basic(String "ButtonPressed"); Basic(String button)]) } ->
+                   begin match try Some(List.assoc button commands) with Not_found -> None with
+                     | Some command ->
+                         ignore_result (Lwt_unix.system command)
+                     | None ->
+                         ()
                    end;
-
-                   (* Drop the message *)
-                   None
-
+                   Some msg
                | msg ->
                    Some msg)
             (OBus_connection.incoming_filters bus));
@@ -58,4 +54,3 @@ let () = Lwt_main.run begin
   (* Wait forever, the program will exit when the connection is
      closed *)
   fst (wait ())
-end

@@ -156,21 +156,21 @@ let length_validate_signature l =
     | T.Basic _ | T.Variant ->
         length + 1
     | T.Array t ->
-        if depth_array > OBus_constant.max_type_recursion_depth then
+        if depth_array > OBus_protocol.max_type_recursion_depth then
           failwith "too many nested arrays"
         else
           aux_single (length + 1) depth_struct (depth_array + 1) depth_dict_entry t
     | T.Dict(tk, tv) ->
-        if depth_array > OBus_constant.max_type_recursion_depth then
+        if depth_array > OBus_protocol.max_type_recursion_depth then
           failwith "too many nested arrays"
-        else if depth_dict_entry > OBus_constant.max_type_recursion_depth then
+        else if depth_dict_entry > OBus_protocol.max_type_recursion_depth then
           failwith "too many nested dict-entries"
         else
           aux_single (length + 4) depth_struct (depth_array + 1) (depth_dict_entry + 1) tv
     | T.Structure [] ->
         failwith "empty struct"
     | T.Structure tl ->
-        if depth_struct > OBus_constant.max_type_recursion_depth then
+        if depth_struct > OBus_protocol.max_type_recursion_depth then
           failwith "too many nested structs"
         else
           aux_sequence (length + 2) (depth_struct + 1) depth_array depth_dict_entry tl

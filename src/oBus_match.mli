@@ -41,22 +41,22 @@ external cast_arguments : arguments -> (int * argument_filter) list = "%identity
 (** Type of a rule used to match a message *)
 type rule = {
   typ : [ `Signal | `Error | `Method_call | `Method_return ] option;
-  sender : OBus_name.bus option;
-  interface : OBus_name.interface option;
-  member : OBus_name.member option;
+  sender : OBus_name.bus;
+  interface : OBus_name.interface;
+  member : OBus_name.member;
   path : OBus_path.t option;
-  destination : OBus_name.bus option;
+  destination : OBus_name.bus;
   arguments : arguments;
 }
 
 (** {8 Rule projections} *)
 
 val typ : rule -> [ `Signal | `Error | `Method_call | `Method_return ] option
-val sender : rule -> OBus_name.bus option
-val interface : rule -> OBus_name.interface option
-val member : rule -> OBus_name.member option
+val sender : rule -> OBus_name.bus
+val interface : rule -> OBus_name.interface
+val member : rule -> OBus_name.member
 val path : rule -> OBus_path.t option
-val destination : rule -> OBus_name.bus option
+val destination : rule -> OBus_name.bus
 val arguments : rule -> arguments
 
 (** {8 Rule construction} *)
@@ -120,3 +120,12 @@ val rule_of_string : string -> rule
 
       @raise Failure if the given string does not contain a valid
       matching rule. *)
+
+(** {6 Rules and message buses} *)
+
+val export : ?switch : Lwt_switch.t -> OBus_connection.t -> rule -> unit Lwt.t
+  (** [export ?switch connection rule] registers [rule] on the message
+      bus. If another rule more general than [rule] is already
+      exported, then it does nothihng.
+
+      You can provide a switch to manually disable the export. *)

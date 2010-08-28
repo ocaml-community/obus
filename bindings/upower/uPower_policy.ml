@@ -60,7 +60,7 @@ let latency_changed daemon =
   OBus_signal.map
     (fun (latency, value) ->
        (latency_of_string latency, Int32.to_int value))
-    (OBus_signal.connect s_LatencyChanged (proxy daemon))
+    (OBus_signal.make s_LatencyChanged (proxy daemon))
 
 let get_latency_requests daemon =
   lwt requests = OBus_method.call m_GetLatencyRequests (proxy daemon) () in
@@ -80,4 +80,4 @@ let get_latency_requests daemon =
        requests)
 
 let requests_changed daemon =
-  OBus_signal.connect s_RequestsChanged (proxy daemon)
+  OBus_signal.make s_RequestsChanged (proxy daemon)
