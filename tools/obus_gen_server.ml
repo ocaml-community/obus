@@ -150,38 +150,38 @@ let print_impl oc name members symbols annotations =
    +-----------------------------------------------------------------+ *)
 
 let usage_message =
-  Printf.sprintf "Usage: %s <options> <files>\n\
+  Printf.sprintf "Usage: %s <options> <file>\n\
                   Generate OCaml server code for D-Bus interfaces.\n\
                   options are:"
     prog_name
 
 let keep_common = ref false
-let prefix = ref "obus_server"
+let prefix = ref None
 
 let args = [
   "-keep-common", Arg.Set keep_common, "do not ignore common interfaces";
-  "-o", Arg.Set_string prefix, "<prefix> output file prefix";
+  "-o", Arg.String(fun str -> prefix := Some str), "<prefix> output file prefix";
 ]
 
 let () =
   let sources = ref [] in
   Arg.parse args (fun s -> sources := s :: !sources) usage_message;
 
-  if !sources = [] then begin
-    Arg.usage args usage_message;
-    exit 1
-  end;
-
-  (* Parse source files *)
-  let interfaces =
-    List.fold_left
-      (fun acc file_name ->
-         Utils.IFSet.union acc (Utils.parse_file file_name))
-      Utils.IFSet.empty
-      !sources
+  let source =
+    match !sources with
+      | [s] -> s
+      | _ -> Arg.usage args usage_message; exit 1
   in
 
-  let oc = open_out (!prefix ^ ".ml") in
+  let prefix =
+    match !prefix with
+      | Some str -> str
+      | None -> (try Filename.chop_extension source with Invalid_argument _ -> source) ^ "_server"
+  in
+
+  let interfaces = Utils.parse_file source in
+
+  let oc = open_out (prefix ^ ".ml") in
 
   output_string oc "open Lwt\n";
 
@@ -197,4 +197,4 @@ let () =
 
   close_out oc;
 
-  printf "file \"%s.ml\" written\n" !prefix
+  printf "file \"%s.ml\" written\n" prefix

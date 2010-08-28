@@ -15,12 +15,12 @@ obus-gen-interface \- convert D-Bus introspection files to ocaml code
 [
 .I options
 ]
-.I input-files
+.I input-file
 
 .SH DESCRIPTION
 
 .B obus-gen-interface
-generates an OCaml module from D-Bus introspection files. The
+generates an OCaml module from a D-Bus introspection file. The
 generated module contains methods, signals and properties
 definitions. It is required for by both client-side and server-side
 code.
@@ -32,7 +32,11 @@ are not meant to be edited.
 .SH OPTIONS
 
 .IP "-o output-prefix"
-Use this name as output prefix. it defaults to "obus_interface".
+Use this name as output prefix. It defaults to the input file name
+without its extension and extended with "_interfaces". For example, if
+the input file name is "foo.xml" (or "foo.obus"), then
+"obus-gen-interface" will generate "foo_interfaces.ml" and
+"foo_interfaces.mli".
 
 .IP "-keep-common"
 Keeps common interfaces, i.e. all interfaces starting with

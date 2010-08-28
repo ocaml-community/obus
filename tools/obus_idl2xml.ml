@@ -13,10 +13,10 @@ let usage_message =
                   options are:"
     (Filename.basename Sys.argv.(0))
 
-let output = ref ""
+let output = ref None
 
 let args = [
-  "-o", Arg.Set_string output, "<file-name> output file name";
+  "-o", Arg.String(fun str -> output := Some str), "<file-name> output file name";
 ]
 
 let () =
@@ -30,12 +30,12 @@ let () =
   in
   let destination =
     match !output with
-      | "" ->
+      | None ->
           (try
              Filename.chop_extension source
            with Invalid_argument _ ->
              source) ^ ".xml"
-      | name ->
+      | Some name ->
           name
   in
 

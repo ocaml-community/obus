@@ -14,7 +14,7 @@ obus-gen-client \- generate client-side ocaml bindings from D-Bus introspection 
 [
 .I options
 ]
-.I input-files
+.I input-file
 
 .SH DESCRIPTION
 
@@ -32,7 +32,10 @@ it is meant to be edited.
 .SH OPTIONS
 
 .IP "-o output-prefix"
-Use this name as output prefix. it defaults to "obus_client".
+Use this name as output prefix. It defaults to the input file name
+without its extension and extended with "_client". For example, if the
+input file name is "foo.xml" (or "foo.obus"), then "obus-gen-client"
+will generate "foo_client.ml" and "foo_client.mli".
 
 .IP "-keep-common"
 Keeps common interfaces, i.e. all interfaces starting with

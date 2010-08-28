@@ -32,7 +32,10 @@ it is meant to be edited.
 .SH OPTIONS
 
 .IP "-o output-prefix"
-Use this name as output prefix. it defaults to "obus_client".
+Use this name as output prefix. It defaults to the input file name
+without its extension and extended with "_server". For example, if the
+input file name is "foo.xml" (or "foo.obus"), then "obus-gen-server"
+will generate "foo_server.ml" and "foo_server.mli".
 
 .IP "-keep-common"
 Keeps common interfaces, i.e. all interfaces starting with
