@@ -72,7 +72,7 @@ let get_name_owner connection name =
     ~destination:OBus_protocol.bus_name
     ~path:OBus_protocol.bus_path
     ~interface:OBus_protocol.bus_interface
-    ~member:"RemoveMatch"
+    ~member:"GetNameOwner"
     ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
     ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
     name
