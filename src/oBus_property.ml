@@ -281,6 +281,7 @@ let finalise disable _ =
   ignore (Lazy.force disable)
 
 let monitor_group ?switch group =
+  Lwt_switch.check switch;
   let cache_key = (OBus_proxy.name group.g_proxy, OBus_proxy.path group.g_proxy, group.g_interface) in
   let info =
     match OBus_connection.get (OBus_proxy.connection group.g_proxy) key with
@@ -349,12 +350,8 @@ let monitor_group ?switch group =
   let _ = React.S.retain signal f in
   Gc.finalise (finalise disable) f;
 
-  match switch with
-    | Some switch ->
-        lwt () = Lwt_switch.add_hook switch (fun () -> Lazy.force disable) in
-        return signal
-    | None ->
-        return signal
+  Lwt_switch.add_hook switch (fun () -> Lazy.force disable);
+  return signal
 
 let monitor ?switch prop =
   lwt signal = monitor_group ?switch { g_interface = prop.p_interface;

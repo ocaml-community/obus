@@ -443,6 +443,7 @@ let rec remove_first x l =
     | x' :: l -> x' :: remove_first x l
 
 let export ?switch connection rule =
+  Lwt_switch.check switch;
   let info =
     match OBus_connection.get connection key with
       | Some info ->
@@ -459,11 +460,8 @@ let export ?switch connection rule =
   in
   info.rules <- rule :: info.rules;
   lwt () = commit info in
-  match switch with
-    | Some switch ->
-        Lwt_switch.add_hook switch
-          (fun () ->
-             info.rules <- remove_first rule info.rules;
-             commit info)
-    | None ->
-        return ()
+  Lwt_switch.add_hook switch
+    (fun () ->
+       info.rules <- remove_first rule info.rules;
+       commit info);
+  return ()

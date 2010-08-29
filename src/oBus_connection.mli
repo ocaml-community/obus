@@ -32,8 +32,8 @@ val compare : t -> t -> int
     [OBus_bus.register_connection] after the creation. *)
 
 val of_addresses : ?shared : bool -> OBus_address.t list -> t Lwt.t
-  (** [of_addresses shared addresses] try to get a working D-Bus
-      connection from a list of addresses. The server must be
+  (** [of_addresses ?shared addresses] try to get a working
+      D-Bus connection from a list of addresses. The server must be
       accessible from at least one of these addresses.
 
       If [shared] is true and a connection to the same server is

@@ -106,6 +106,7 @@ let update_mapping info message =
         Some message
 
 let make ?switch connection name =
+  Lwt_switch.check switch;
   OBus_string.assert_validate OBus_name.validate_bus name;
   let info =
     match OBus_connection.get connection key with
@@ -186,10 +187,6 @@ let make ?switch connection name =
     let _ = React.S.retain owner f in
     Gc.finalise (finalise remove) f;
 
-    match switch with
-      | Some switch ->
-          lwt () = Lwt_switch.add_hook switch (fun () -> Lazy.force remove) in
-          return owner
-      | None ->
-          return owner
+    Lwt_switch.add_hook switch (fun () -> Lazy.force remove);
+    return owner
   end

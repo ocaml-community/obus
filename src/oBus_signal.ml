@@ -136,6 +136,7 @@ let finalise disconnect _ =
 let key = OBus_connection.new_key ()
 
 let connect ?switch sd =
+  Lwt_switch.check switch;
   let connection = OBus_proxy.connection sd.proxy
   and name = OBus_proxy.name sd.proxy
   and path = OBus_proxy.path sd.proxy in
@@ -234,13 +235,7 @@ let connect ?switch sd =
     let _ = React.E.retain event f in
     Gc.finalise (finalise disconnect) f;
 
-    lwt () =
-      match switch with
-        | Some switch ->
-            Lwt_switch.add_hook switch (fun () -> Lazy.force disconnect)
-        | None ->
-            return ()
-    in
+    Lwt_switch.add_hook switch (fun () -> Lazy.force disconnect);
     return (React.E.map snd (sd.map event))
   with exn ->
     lwt () = Lwt_switch.turn_off resources_switch in
