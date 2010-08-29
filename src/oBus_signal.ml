@@ -209,7 +209,7 @@ let connect ?switch sd =
                  OBus_match.match_values sd.filters body)
         event
     in
-
+(*
     let disconnect = lazy(
       try_lwt
         Lwt_sequence.remove node;
@@ -229,14 +229,18 @@ let connect ?switch sd =
         in
         fail exn
     ) in
-
-    (* Trick to know when the event will be garbage collected: *)
-    let f () = () in
-    let _ = React.E.retain event f in
-    Gc.finalise (finalise disconnect) f;
-
-    lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> Lazy.force disconnect) in
-    return (React.E.map snd (sd.map event))
+*)
+    let event = (*Lwt_event.with_finaliser (finalise disconnect)*) (React.E.map snd (sd.map event)) in
+(*
+    lwt () =
+      Lwt_switch.add_hook_or_exec
+        switch
+        (fun () ->
+           React.E.stop event;
+           Lazy.force disconnect)
+    in
+*)
+    return event
   with exn ->
     lwt () = Lwt_switch.turn_off resources_switch in
     fail exn

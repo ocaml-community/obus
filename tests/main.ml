@@ -62,5 +62,6 @@ lwt () =
     "string validation", Test_validation.test;
     "authentication", Test_auth.test;
     "communication", Test_communication.test;
+    "garbage collection", Test_gc.test;
   ]
 

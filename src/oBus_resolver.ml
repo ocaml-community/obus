@@ -163,13 +163,8 @@ let make ?switch connection name =
 
     resolver.count <- resolver.count + 1;
 
-    (* We map the owner signal because we want to monitor it for
-       garbage collection: *)
-    let owner = React.S.map (fun x -> x) resolver.owner in
-
     let remove = lazy(
       try_lwt
-        React.S.stop owner;
         resolver.count <- resolver.count - 1;
         if resolver.count = 0 then begin
           (* The resolver is no more used, so we disable it: *)
@@ -182,11 +177,15 @@ let make ?switch connection name =
         fail exn
     ) in
 
-    (* Trick to know when the signal will be garbage collected: *)
-    let f () = () in
-    let _ = React.S.retain owner f in
-    Gc.finalise (finalise remove) f;
+    let owner = Lwt_signal.with_finaliser (finalise remove) resolver.owner in
 
-    lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> Lazy.force remove) in
+    lwt () =
+      Lwt_switch.add_hook_or_exec
+        switch
+        (fun () ->
+           React.S.stop owner;
+           Lazy.force remove)
+    in
+
     return owner
   end

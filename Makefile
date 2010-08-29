@@ -76,7 +76,7 @@ list-deps:
 
 .PHONY: tests
 tests:
-	$(OC) tests/main.d.byte
+	$(OC) tests/main.native
 
 .PHONY: test-syntax
 test-syntax:

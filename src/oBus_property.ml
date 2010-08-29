@@ -322,11 +322,9 @@ let monitor_group ?switch group =
   in
 
   cache.c_count <- cache.c_count + 1;
-  let signal = React.S.map (fun x -> x) cache.c_map in
 
   let disable = lazy(
     try_lwt
-      React.S.stop signal;
       cache.c_count <- cache.c_count - 1;
       if cache.c_count = 0 then begin
         info.cache <- Group_map.remove cache_key info.cache;
@@ -346,11 +344,16 @@ let monitor_group ?switch group =
       fail exn
   ) in
 
-  let f () = () in
-  let _ = React.S.retain signal f in
-  Gc.finalise (finalise disable) f;
+  let signal = Lwt_signal.with_finaliser (finalise disable) cache.c_map in
 
-  lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> Lazy.force disable) in
+  lwt () =
+    Lwt_switch.add_hook_or_exec
+      switch
+      (fun () ->
+         React.S.stop signal;
+         Lazy.force disable)
+  in
+
   return signal
 
 let monitor ?switch prop =
