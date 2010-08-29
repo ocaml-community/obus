@@ -235,7 +235,7 @@ let connect ?switch sd =
     let _ = React.E.retain event f in
     Gc.finalise (finalise disconnect) f;
 
-    Lwt_switch.add_hook switch (fun () -> Lazy.force disconnect);
+    lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> Lazy.force disconnect) in
     return (React.E.map snd (sd.map event))
   with exn ->
     lwt () = Lwt_switch.turn_off resources_switch in

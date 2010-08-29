@@ -25,13 +25,14 @@ val shutdown : t -> unit Lwt.t
   (** [shutdown tr] free resources allocated by the given transport *)
 
 val make :
+  ?switch : Lwt_switch.t ->
   recv : (unit -> OBus_message.t Lwt.t) ->
   send : (OBus_message.t -> unit Lwt.t) ->
   ?capabilities : OBus_auth.capability list ->
   shutdown : (unit -> unit Lwt.t) -> unit -> t
-  (** [make ~recv ~send ~support_unxi_fd ~shutdown ()] creates a new
-      transport from the given functions. @param capabilities defaults
-      to [[]].
+  (** [make ?switch ~recv ~send ~support_unxi_fd ~shutdown ()] creates
+      a new transport from the given functions. @param capabilities
+      defaults to [[]].
 
       Notes:
       - message reading/writing are serialized by obus, so there is no
@@ -42,18 +43,20 @@ val loopback : unit -> t
   (** Loopback transport, each message sent is received on the same
       transport *)
 
-val socket : ?capabilities : OBus_auth.capability list ->  Lwt_unix.file_descr -> t
-  (** [socket ?capabilities socket] creates a socket transport.
+val socket : ?switch : Lwt_switch.t -> ?capabilities : OBus_auth.capability list ->  Lwt_unix.file_descr -> t
+  (** [socket ?switch ?capabilities socket] creates a socket
+      transport.
 
       @param capabilities defaults to [[]]. For unix socket, the
       [`Unix_fd] capability is accepted. *)
 
 val of_addresses :
+  ?switch : Lwt_switch.t ->
   ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Client.mechanism list ->
   OBus_address.t list ->
   (OBus_address.guid * t) Lwt.t
-    (** [of_addresses ?capabilities ?mechanisms addresses] tries to:
+    (** [of_addresses ?switch ?capabilities ?mechanisms addresses] tries to:
 
         - connects to the server using one of the given given addresses,
         - authenticates ourself to the server using [mechanisms], which

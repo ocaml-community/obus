@@ -25,12 +25,15 @@ type t = {
   shutdown : unit -> unit Lwt.t;
 }
 
-let make ~recv ~send ?(capabilities=[]) ~shutdown () = {
-  recv = recv;
-  send = send;
-  capabilities = capabilities;
-  shutdown = shutdown;
-}
+let make ?switch ~recv ~send ?(capabilities=[]) ~shutdown () =
+  let transport = {
+    recv = recv;
+    send = send;
+    capabilities = capabilities;
+    shutdown = shutdown;
+  } in
+  Lwt_switch.add_hook switch transport.shutdown;
+  transport
 
 let recv t = t.recv ()
 let send t message = t.send message
@@ -41,29 +44,33 @@ let shutdown t = t.shutdown ()
    | Socket transport                                                |
    +-----------------------------------------------------------------+ *)
 
-let socket ?(capabilities=[]) fd =
-  if List.mem `Unix_fd capabilities then
-    let reader = OBus_wire.reader fd
-    and writer = OBus_wire.writer fd in
-    { recv = (fun _ -> OBus_wire.read_message_with_fds reader);
-      send = (fun msg -> OBus_wire.write_message_with_fds writer msg);
-      capabilities = capabilities;
-      shutdown = (fun _ ->
-                    lwt () = OBus_wire.close_reader reader <&> OBus_wire.close_writer writer in
-                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                    Lwt_unix.close fd;
-                    return ()) }
-  else
-    let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_unix.read fd)
-    and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_unix.write fd) in
-    { recv = (fun _ -> OBus_wire.read_message ic);
-      send = (fun msg -> OBus_wire.write_message oc msg);
-      capabilities = capabilities;
-      shutdown = (fun _ ->
-                    lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
-                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                    Lwt_unix.close fd;
-                    return ()) }
+let socket ?switch ?(capabilities=[]) fd =
+  let transport =
+    if List.mem `Unix_fd capabilities then
+      let reader = OBus_wire.reader fd
+      and writer = OBus_wire.writer fd in
+      { recv = (fun _ -> OBus_wire.read_message_with_fds reader);
+        send = (fun msg -> OBus_wire.write_message_with_fds writer msg);
+        capabilities = capabilities;
+        shutdown = (fun _ ->
+                      lwt () = OBus_wire.close_reader reader <&> OBus_wire.close_writer writer in
+                      Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                      Lwt_unix.close fd;
+                      return ()) }
+    else
+      let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_unix.read fd)
+      and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_unix.write fd) in
+      { recv = (fun _ -> OBus_wire.read_message ic);
+        send = (fun msg -> OBus_wire.write_message oc msg);
+        capabilities = capabilities;
+        shutdown = (fun _ ->
+                      lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
+                      Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                      Lwt_unix.close fd;
+                      return ()) }
+  in
+  Lwt_switch.add_hook switch transport.shutdown;
+  transport
 
 (* +-----------------------------------------------------------------+
    | Loopback transport                                              |
@@ -226,40 +233,44 @@ let rec connect address =
     | name ->
         fail (Failure ("unknown transport type: " ^ name))
 
-let of_addresses ?(capabilities=OBus_auth.capabilities) ?mechanisms = function
-  | [] ->
-      fail (Invalid_argument "OBus_transport.of_addresses: no address given")
-  | addr :: rest ->
-      (* Search an address for which connection succeed: *)
-      lwt fd, domain =
-        try_lwt
-          connect addr
-        with exn ->
-          (* If the first try fails, try with the others: *)
-          let rec find = function
-            | [] ->
-                (* If they all fail, raise the first exception: *)
-                fail exn
-            | addr :: rest ->
-                try_lwt
-                  connect addr
-                with exn ->
-                  find rest
-          in
-          find rest
-      in
-      (* Do authentication only once: *)
-      Lwt_unix.write fd "\x00" 0 1 >>= function
-        | 0 ->
-            fail (OBus_auth.Auth_failure "failed to send the initial null byte")
-        | 1 ->
-            lwt guid, capabilities =
-              OBus_auth.Client.authenticate
-                ~capabilities:(List.filter (function `Unix_fd -> domain = PF_UNIX) capabilities)
-                ?mechanisms
-                ~stream:(OBus_auth.stream_of_fd fd)
-                ()
+let of_addresses ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms addresses =
+  Lwt_switch.check switch;
+  match addresses with
+    | [] ->
+        fail (Invalid_argument "OBus_transport.of_addresses: no address given")
+    | addr :: rest ->
+        (* Search an address for which connection succeed: *)
+        lwt fd, domain =
+          try_lwt
+            connect addr
+          with exn ->
+            (* If the first try fails, try with the others: *)
+            let rec find = function
+              | [] ->
+                  (* If they all fail, raise the first exception: *)
+                  fail exn
+              | addr :: rest ->
+                  try_lwt
+                    connect addr
+                  with exn ->
+                    find rest
             in
-            return (guid, socket ~capabilities fd)
-        | n ->
-            assert false
+            find rest
+        in
+        (* Do authentication only once: *)
+        Lwt_unix.write fd "\x00" 0 1 >>= function
+          | 0 ->
+              fail (OBus_auth.Auth_failure "failed to send the initial null byte")
+          | 1 ->
+              lwt guid, capabilities =
+                OBus_auth.Client.authenticate
+                  ~capabilities:(List.filter (function `Unix_fd -> domain = PF_UNIX) capabilities)
+                  ?mechanisms
+                  ~stream:(OBus_auth.stream_of_fd fd)
+                  ()
+              in
+              let transport = socket ~capabilities fd in
+              lwt () = Lwt_switch.add_hook_or_exec switch transport.shutdown in
+              return (guid, transport)
+          | n ->
+              assert false

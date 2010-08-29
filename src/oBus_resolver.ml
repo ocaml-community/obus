@@ -187,6 +187,6 @@ let make ?switch connection name =
     let _ = React.S.retain owner f in
     Gc.finalise (finalise remove) f;
 
-    Lwt_switch.add_hook switch (fun () -> Lazy.force remove);
+    lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> Lazy.force remove) in
     return owner
   end

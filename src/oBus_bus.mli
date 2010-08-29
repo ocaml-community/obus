@@ -13,22 +13,22 @@ type t = OBus_connection.t
 
 (** {6 Well-known instances} *)
 
-val session : unit -> t Lwt.t
-  (** [session ()] returns a connection to the user session message
-      bus. Subsequent calls to {!session} will return the same bus.
-      OBus will automatically exits the program when an error happen
-      on the session bus. You can change this behavior by calling
-      {!OBus_connection.set_on_disconnect}. *)
+val session : ?switch : Lwt_switch.t -> unit -> t Lwt.t
+  (** [session ?switch ()] returns a connection to the user session
+      message bus. Subsequent calls to {!session} will return the same
+      bus.  OBus will automatically exits the program when an error
+      happen on the session bus. You can change this behavior by
+      calling {!OBus_connection.set_on_disconnect}. *)
 
-val system : unit -> t Lwt.t
-  (** [system ()] returns a connection to the system message bus. As
-      for {!session}, subsequent calls to {!system} will return the
-      same bus. However, if the connection is closed or it crashes,
-      {!system} will try to reopen it. *)
+val system : ?switch : Lwt_switch.t -> unit -> t Lwt.t
+  (** [system ?switch ()] returns a connection to the system message
+      bus. As for {!session}, subsequent calls to {!system} will
+      return the same bus. However, if the connection is closed or it
+      crashes, {!system} will try to reopen it. *)
 
 (** {6 Creation} *)
 
-val of_addresses : OBus_address.t list -> t Lwt.t
+val of_addresses : ?switch : Lwt_switch.t -> OBus_address.t list -> t Lwt.t
   (** Establish a connection with a message bus. The bus must be
       accessible with at least one of the given addresses *)
 

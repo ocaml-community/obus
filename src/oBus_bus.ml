@@ -90,8 +90,8 @@ let register_connection connection =
     | Some _ ->
         return ()
 
-let of_addresses addresses =
-  lwt bus = OBus_connection.of_addresses addresses ~shared:true in
+let of_addresses ?switch addresses =
+  lwt bus = OBus_connection.of_addresses ?switch addresses ~shared:true in
   lwt () = register_connection bus in
   return bus
 
@@ -105,25 +105,34 @@ let session_bus = lazy(
     fail exn
 )
 
-let session () = Lazy.force session_bus
+let session ?switch () =
+  Lwt_switch.check switch;
+  lwt bus = Lazy.force session_bus in
+  lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> OBus_connection.close bus) in
+  return bus
 
 let system_bus_state = ref None
 let system_bus_mutex = Lwt_mutex.create ()
 
-let system () =
-  Lwt_mutex.with_lock system_bus_mutex
-    (fun () ->
-       match !system_bus_state with
-         | Some bus when React.S.value (OBus_connection.active bus) ->
-             return bus
-         | _ ->
-             try_lwt
-               lwt bus = Lazy.force OBus_address.system >>= of_addresses in
-               system_bus_state := Some bus;
+let system ?switch () =
+  Lwt_switch.check switch;
+  lwt bus =
+    Lwt_mutex.with_lock system_bus_mutex
+      (fun () ->
+         match !system_bus_state with
+           | Some bus when React.S.value (OBus_connection.active bus) ->
                return bus
-             with exn ->
-               lwt () = Lwt_log.warning ~exn ~section "Failed to open a connection to the system bus" in
-               fail exn)
+           | _ ->
+               try_lwt
+                 lwt bus = Lazy.force OBus_address.system >>= of_addresses in
+                 system_bus_state := Some bus;
+                 return bus
+               with exn ->
+                 lwt () = Lwt_log.warning ~exn ~section "Failed to open a connection to the system bus" in
+                 fail exn)
+  in
+  lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> OBus_connection.close bus) in
+  return bus
 
 (* +-----------------------------------------------------------------+
    | Bindings to functions of the message bus                        |

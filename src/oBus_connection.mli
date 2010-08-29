@@ -31,8 +31,8 @@ val compare : t -> t -> int
     Otherwise you should use [OBus_bus] or immediatly call
     [OBus_bus.register_connection] after the creation. *)
 
-val of_addresses : ?shared : bool -> OBus_address.t list -> t Lwt.t
-  (** [of_addresses ?shared addresses] try to get a working
+val of_addresses : ?switch : Lwt_switch.t -> ?shared : bool -> OBus_address.t list -> t Lwt.t
+  (** [of_addresses ?switch ?shared addresses] try to get a working
       D-Bus connection from a list of addresses. The server must be
       accessible from at least one of these addresses.
 
@@ -203,7 +203,7 @@ val set_on_disconnect : t -> (exn -> unit Lwt.t) -> unit
 
 (** {6 Low-level} *)
 
-val of_transport : ?guid : OBus_address.guid -> ?up : bool -> OBus_transport.t -> t
+val of_transport : ?switch : Lwt_switch.t -> ?guid : OBus_address.guid -> ?up : bool -> OBus_transport.t -> t
   (** Create a D-Bus connection on the given transport. If [guid] is
       provided the connection will be shared.
 

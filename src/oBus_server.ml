@@ -505,7 +505,7 @@ let make_lowlevel ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(a
               } in
               server.srv_loops <- join (List.map (fun listener -> lst_loop server listener) listeners);
 
-              Lwt_switch.add_hook switch (fun () -> shutdown server);
+              lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> shutdown server) in
               return server
 
 let make ?switch ?capabilities ?mechanisms ?addresses ?allow_anonymous callback =

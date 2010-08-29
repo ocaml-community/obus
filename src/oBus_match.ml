@@ -460,8 +460,10 @@ let export ?switch connection rule =
   in
   info.rules <- rule :: info.rules;
   lwt () = commit info in
-  Lwt_switch.add_hook switch
-    (fun () ->
-       info.rules <- remove_first rule info.rules;
-       commit info);
+  lwt () =
+    Lwt_switch.add_hook_or_exec switch
+      (fun () ->
+         info.rules <- remove_first rule info.rules;
+         commit info)
+  in
   return ()

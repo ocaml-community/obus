@@ -350,7 +350,7 @@ let monitor_group ?switch group =
   let _ = React.S.retain signal f in
   Gc.finalise (finalise disable) f;
 
-  Lwt_switch.add_hook switch (fun () -> Lazy.force disable);
+  lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> Lazy.force disable) in
   return signal
 
 let monitor ?switch prop =

@@ -493,7 +493,8 @@ object(self)
       | Active active -> active
 end
 
-let of_transport ?guid ?(up=true) transport =
+let of_transport ?switch ?guid ?(up=true) transport =
+  Lwt_switch.check switch;
   let make () =
     let abort_recv_waiter, abort_recv_wakener = Lwt.wait ()
     and abort_send_waiter, abort_send_wakener = Lwt.wait ()
@@ -523,6 +524,7 @@ let of_transport ?guid ?(up=true) transport =
     connection#set_state (Active active);
     (* Start the dispatcher *)
     ignore (dispatch_forever active);
+    Lwt_switch.add_hook switch (fun () -> close connection);
     connection
   in
   match guid with
@@ -531,6 +533,7 @@ let of_transport ?guid ?(up=true) transport =
     | Some guid ->
         match try Some(Guid_map.find guid !guid_connection_map) with Not_found -> None with
           | Some connection ->
+              Lwt_switch.add_hook switch (fun () -> close connection);
               connection
           | None ->
               let connection = make () in
@@ -540,23 +543,26 @@ let of_transport ?guid ?(up=true) transport =
 (* Capabilities turned on by default: *)
 let capabilities = [`Unix_fd]
 
-let of_addresses ?(shared=true) addresses = match shared with
-  | false ->
-      lwt guid, transport = OBus_transport.of_addresses ~capabilities addresses in
-      return (of_transport transport)
-  | true ->
-      (* Try to find a guid that we already have *)
-      let guids = OBus_util.filter_map OBus_address.guid addresses in
-      match OBus_util.find_map (fun guid -> try Some(Guid_map.find guid !guid_connection_map) with Not_found -> None) guids with
-        | Some packed ->
-            return packed
-        | None ->
-            (* We ask again a shared connection even if we know that
-               there is no other connection to a server with the same
-               guid, because during the authentication another
-               thread can add a new connection. *)
-            lwt guid, transport = OBus_transport.of_addresses ~capabilities addresses in
-            return (of_transport ~guid transport)
+let of_addresses ?switch ?(shared=true) addresses =
+  Lwt_switch.check switch;
+  match shared with
+    | false ->
+        lwt guid, transport = OBus_transport.of_addresses ~capabilities addresses in
+        return (of_transport ?switch transport)
+    | true ->
+        (* Try to find a guid that we already have *)
+        let guids = OBus_util.filter_map OBus_address.guid addresses in
+        match OBus_util.find_map (fun guid -> try Some(Guid_map.find guid !guid_connection_map) with Not_found -> None) guids with
+          | Some connection ->
+              Lwt_switch.add_hook switch (fun () -> close connection);
+              return connection
+          | None ->
+              (* We ask again a shared connection even if we know that
+                 there is no other connection to a server with the same
+                 guid, because during the authentication another
+                 thread can add a new connection. *)
+              lwt guid, transport = OBus_transport.of_addresses ~capabilities addresses in
+              return (of_transport ?switch ~guid transport)
 
 let loopback () = of_transport (OBus_transport.loopback ())
 
