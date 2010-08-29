@@ -609,8 +609,19 @@ let active connection = connection#active
 
 let guid connection = connection#get.guid
 let transport connection = connection#get.transport
-let support_unix_fd_passing connection =
-  List.mem `Unix_fd (OBus_transport.capabilities connection#get.transport)
+
+let can_send_basic_type connection = function
+  | OBus_value.T.Unix_fd -> List.mem `Unix_fd (OBus_transport.capabilities connection#get.transport)
+  | _ -> true
+
+let rec can_send_single_type connection = function
+  | OBus_value.T.Basic t -> can_send_basic_type connection t
+  | OBus_value.T.Array t -> can_send_single_type connection t
+  | OBus_value.T.Dict(tk, tv) -> can_send_basic_type connection tk && can_send_single_type connection tv
+  | OBus_value.T.Structure tl -> List.for_all (can_send_single_type connection) tl
+  | OBus_value.T.Variant -> true
+
+let can_send_sequence_type connection tl = List.for_all (can_send_single_type connection) tl
 
 let set_on_disconnect connection f =
   match connection#state with

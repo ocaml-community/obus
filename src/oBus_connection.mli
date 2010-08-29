@@ -83,9 +83,11 @@ val transport : t -> OBus_transport.t
   (** [transport connection] get the transport associated with a
       connection *)
 
-val support_unix_fd_passing : t -> bool
-  (** Tell whether the underlying transport support file descriptors
-      passing. *)
+val can_send_basic_type : t -> OBus_value.T.basic -> bool
+val can_send_single_type : t -> OBus_value.T.single -> bool
+val can_send_sequence_type : t -> OBus_value.T.sequence -> bool
+  (** [can_send_*_type connection typ] returns whether values of the
+      given type can be sent through the given connection. *)
 
 (** {6 Sending messages} *)
 
