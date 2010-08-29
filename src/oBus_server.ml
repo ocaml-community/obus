@@ -384,7 +384,7 @@ let shutdown server =
 
 let default_address = OBus_address.make ~name:"unix" ~args:[("tmpdir", Filename.temp_dir_name)]
 
-let make_lowlevel ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[default_address]) ?(allow_anonymous=false) callback =
+let make_lowlevel ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses=[default_address]) ?(allow_anonymous=false) callback =
   match addresses with
     | [] ->
         fail (Invalid_argument "OBus_server.make: no addresses given")
@@ -503,8 +503,14 @@ let make_lowlevel ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(addresses
                 srv_loops = return ();
               } in
               server.srv_loops <- join (List.map (fun listener -> lst_loop server listener) listeners);
-              return server
 
-let make ?capabilities ?mechanisms ?addresses ?allow_anonymous callback =
-  make_lowlevel ?capabilities ?mechanisms ?addresses ?allow_anonymous
+              match switch with
+                | Some switch ->
+                    lwt () = Lwt_switch.add_hook switch (fun () -> shutdown server) in
+                    return server
+                | None ->
+                    return server
+
+let make ?switch ?capabilities ?mechanisms ?addresses ?allow_anonymous callback =
+  make_lowlevel ?switch ?capabilities ?mechanisms ?addresses ?allow_anonymous
     (fun server transport -> callback server (OBus_connection.of_transport ~up:false transport))

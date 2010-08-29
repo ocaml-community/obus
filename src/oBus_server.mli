@@ -24,12 +24,13 @@ val shutdown : t -> unit Lwt.t
       nothing. *)
 
 val make :
+  ?switch : Lwt_switch.t ->
   ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Server.mechanism list ->
   ?addresses : OBus_address.t list ->
   ?allow_anonymous : bool ->
   (t -> OBus_connection.t -> unit) -> t Lwt.t
-  (** [make ?capabilities ?mechanisms ?addresses ?allow_anonymous f]
+  (** [make ?switch ?capabilities ?mechanisms ?addresses ?allow_anonymous f]
       Creates a server which will listen on all of the given addresses.
 
       @param capabilites is the set of the server's capabilities,
@@ -60,6 +61,7 @@ val make :
       to the user to set them up with {!OBus_connection.set_up}. *)
 
 val make_lowlevel :
+  ?switch : Lwt_switch.t ->
   ?capabilities : OBus_auth.capability list ->
   ?mechanisms : OBus_auth.Server.mechanism list ->
   ?addresses : OBus_address.t list ->
