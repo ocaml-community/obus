@@ -17,7 +17,7 @@ open Ping_pong.Org_foo_bar
 let ping proxy msg =
   OBus_method.call m_Ping proxy msg
 
-let _ = Lwt_main.run begin
+lwt _ =
   lwt bus = OBus_bus.session () in
 
   (* Create a proxy for the remote object *)
@@ -35,4 +35,3 @@ let _ = Lwt_main.run begin
         exit 1
     | exn ->
         fail exn
-end

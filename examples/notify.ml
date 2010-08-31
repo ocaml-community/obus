@@ -8,24 +8,24 @@
  *)
 
 open Lwt
+open Lwt_io
 
-let _ = Lwt_main.run begin
+lwt () =
+  (* Open a first notification: *)
   lwt _ = Notification.notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" () in
+
   lwt () = Lwt_unix.sleep 0.5 in
 
-  lwt notif = Notification.notify ~summary:"Actions test" ~body:"click on something!"
-    ~category:"network"
-    ~actions:[("coucou", `Coucou);
-              ("plop", `Plop)] ()
+  (* Open another one, with buttons on it: *)
+  lwt handle =
+    Notification.notify ~summary:"Actions test" ~body:"click on something!"
+      ~category:"network"
+      ~actions:[("coucou", `Coucou); ("plop", `Plop)] ()
   in
 
-  lwt result = Notification.result notif in
-
-  begin match result with
-    | `Coucou -> print_endline "You pressed coucou!"
-    | `Plop -> print_endline "You pressed plop!"
-    | `Default -> print_endline "default action invoked"
-    | `Closed -> print_endline "notification closed"
-  end;
-  return ()
-end
+  (* Then wait for the result: *)
+  Notification.result handle >>= function
+    | `Coucou -> eprintl "You pressed coucou!"
+    | `Plop -> eprintl "You pressed plop!"
+    | `Default -> eprintl "default action invoked"
+    | `Closed -> eprintl "notification closed"

@@ -209,7 +209,7 @@ let connect ?switch sd =
                  OBus_match.match_values sd.filters body)
         event
     in
-(*
+
     let disconnect = lazy(
       try_lwt
         Lwt_sequence.remove node;
@@ -229,9 +229,9 @@ let connect ?switch sd =
         in
         fail exn
     ) in
-*)
-    let event = (*Lwt_event.with_finaliser (finalise disconnect)*) (React.E.map snd (sd.map event)) in
-(*
+
+    let event = Lwt_event.with_finaliser (finalise disconnect) (React.E.map snd (sd.map event)) in
+
     lwt () =
       Lwt_switch.add_hook_or_exec
         switch
@@ -239,7 +239,7 @@ let connect ?switch sd =
            React.E.stop event;
            Lazy.force disconnect)
     in
-*)
+
     return event
   with exn ->
     lwt () = Lwt_switch.turn_off resources_switch in
