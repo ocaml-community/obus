@@ -13,22 +13,25 @@ let abstract body = command \"abstract\" [(T, body)] T
 
 let doc = "
 {abstract "
+
   {dbus} is an inter-processes communication protocol, or IPC for
-  short, which is becomming a standard on desktop oriented
+  short, which has recently become a standard on desktop oriented
   computers. It is now possible to talk to a lot application using
-  {dbus} Moreover, it has many bindings/implementations for differents
+  {dbus}. Moreover, it has many bindings/implementations for differents
   languages, which make it easily accessible. {obus} is a pure OCaml
-  implementation of it. What makes it different from other
+  implementation of this protocol. What makes it different from other
   bindings/implementations is that it is the only one using
   cooperative threads, which make it very simple to fully exploit the
-  asynchronous nature of the protocol.
+  asynchronous nature of D-Bus.
 
   {textbf "Note:"} it is advised to have some knowledge about the
   {texttt "Lwt"} library before reading this manual.
+
 "}
 
 {tableofcontents}
 
+(*****************************************************************************)
 {section "Introduction"}
 
 {subsection "Overview of {obus}"}
@@ -41,35 +44,75 @@ let doc = "
    ["{texttt "obus"}, which is the core library";
     "{texttt "obus.hal"}, which is a binding to the Freedesktop Hal service";
     "{texttt "obus.notification"}, which is a binding to the
-     Freedesktop pop-up notifications service"]}
+              Freedesktop pop-up notifications service"]}
 
 {subsubsection "Modules"}
 
-OBus contains 26 public modules. But do not be scared, most of the
-time you will use a very small subset of them. The modules can be
-divided in two categories:
+  OBus contains about 30 public modules. But do not be scared, most of the
+  time you will use a very small subset of them. These modules can be
+  divided in two categories:
 
-{itemize
-  ["the high-level API";
-   "the low-level API"]}
+  {itemize ["the high-level API"; "the low-level API"]}
 
+(*****************************************************************************)
 {section "Basis"}
 
 {subsection "Connections and message buses"}
 
-There is two way to talk to another application speaking the D-Bus
-protocol: via a direct connection to the application or via a special
-application called a message bus. A message bus act as a router
-between several applications. On a desktop computer, there are two
-well-known instances: the system message bus, and the user session
-message bus.
+  There is two way to talk to another application speaking the D-Bus
+  protocol: via a direct connection to the application or via a special
+  application called a message bus. A message bus act as a router
+  between several applications. On a desktop computer, there are two
+  well-known instances: the system message bus, and the user session
+  message bus.
 
-The first one is unique given a computer, and use security
-policies. The second is unique given a user session. Its goal is to
-allow programs running in the session to talk to each other.
+  The first one is unique given a computer, and use security
+  policies. The second is unique given a user session. Its goal is to
+  allow programs running in the session to talk to each other.
 
-OBus offers have predefined connections for connecting to these
-message buses:
+  OBus offers two function for connecting to these message buses:
+  {texttt "<<OBus_bus.session>>"} and {texttt "<<OBus_bus.system>>"}.
+
+{subsection "Peers and proxies"}
+
+{subsection "Methods, signals and properties"}
+
+(*****************************************************************************)
+{section "Using D-Bus services"}
+
+{subsection "Defining members"}
+
+{subsection "Using members"}
+
+{subsection "Using tools to generate member definitions"}
+
+{subsection "The {obus} IDL language"}
+
+{subsection "Name tracking"}
+
+(*****************************************************************************)
+{section "Writing D-Bus services"}
+
+{subsection "Defining interfaces"}
+
+{subsection "Objects management"}
+
+(*****************************************************************************)
+{section "One-to-one communication"}
+
+{subsection "Starting a  server"}
+
+(*****************************************************************************)
+{section "Low-level use of D-Bus"}
+
+{subsection "Message filters"}
+
+{subsection "Matching rules"}
+
+{subsection "Defining new transports"}
+
+{subsection "Defining new authentication mechanisms"}
+
 "
 
 let () = emit (document

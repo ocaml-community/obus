@@ -10,6 +10,8 @@ url: https://forge.ocamlcore.org/projects/obus/
   type-conv:  http://www.ocaml.info/home/ocaml_sources.html#type-conv
   xmlm:       http://erratique.ch/software/xmlm
 
+  You requires at least ocaml version 3.12.
+
 * Installation:
 
   To compile and install OBus just type:
