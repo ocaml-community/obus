@@ -5,8 +5,19 @@
 #
 # This file is a part of obus, an ocaml implementation of D-Bus.
 
-all:
-	melt -no-link -pdf manual.mlt
+PDF_FILES := ${subst .ml,.pdf,${wildcard *.ml}}
+
+all: ${PDF_FILES}
+	melt -no-link -pdf ${PDF_FILES} manual.mlt
+
+%.pdf: %.html
+	wkhtmltopdf $< $@
+	pdfcrop $@ $@
+
+%.html: %.ml
+	chmod +x htmlize.sh
+	./htmlize.sh $< $@
 
 clean:
 	melt -clean
+	rm -f ${wildcard *.pdf} ${wildcard *.html}

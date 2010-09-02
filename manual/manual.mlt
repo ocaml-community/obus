@@ -11,6 +11,17 @@ let obus = texttt "OBus"
 let dbus = texttt "D-Bus"
 let abstract body = command \"abstract\" [(T, body)] T
 
+let include_code filename =
+  command
+    ~packages:[(\"graphicx\", \"pdftex\")]
+    \"includegraphics\"
+    [(A, filename)]
+    ~opt:(A, "trim=0cm 0cm 5.7cm 0cm,clip,width=10cm")
+    T
+
+let code file =
+  figure ~center:true (include_code "{file}.pdf")
+
 let doc = "
 {abstract "
 
@@ -38,13 +49,22 @@ let doc = "
 
 {subsubsection "Packages"}
 
-{obus} provides the folliwing packages (via {texttt "findlib"}):
+The main packages of the {obus} distribution is the {texttt "obus"} package,
+available via findlib. It contains the core library. Moveover, {obus} although
+provides packages for using a bunch of services of the Freedesktop project:
 
 {itemize
-   ["{texttt "obus"}, which is the core library";
-    "{texttt "obus.hal"}, which is a binding to the Freedesktop Hal service";
-    "{texttt "obus.notification"}, which is a binding to the
-              Freedesktop pop-up notifications service"]}
+   [texttt "obus.hal";
+    texttt "obus.notification";
+    texttt "obus.network-manager";
+    texttt "obus.policykit";
+    texttt "obus.udisks";
+    texttt "obus.upower"]}
+
+The use of this package is straightforward and you need to know almost nothing
+about {dbus} or {obus}. For example, here is a program which open a popup notification:
+
+{code "notification"}
 
 {subsubsection "Modules"}
 
