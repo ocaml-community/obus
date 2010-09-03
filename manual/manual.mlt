@@ -18,14 +18,17 @@ let name_tracking = label ()
 
 let use_colors = Array.length Sys.argv > 1 && Sys.argv.(1) = \"-use-colors\"
 
-let styles =
+let caml_styles, obus_styles =
   if use_colors then
-    Caml_code.default_styles
+    (Colorize.Caml.default_styles, Colorize.OBus.default_styles)
   else
-    Caml_code.bw_styles
+    (Colorize.Caml.bw_styles, Colorize.OBus.bw_styles)
 
 let caml_code name =
-  Caml_code.input_file ~styles (\"../codes/\" ^ name ^ \".ml\")
+  Colorize.Caml.input_file ~styles:caml_styles (\"../codes/\" ^ name ^ \".ml\")
+
+let obus_code name =
+  Colorize.OBus.input_file ~styles:obus_styles (\"../codes/\" ^ name ^ \".obus\")
 
 let doc = "
 {abstract "
@@ -161,9 +164,10 @@ let doc = "
 {subsection "Objects and proxies"}
 
   In order to export services, {dbus} uses the concept of {emph "objects"}. An application
-  may holds as many objects as it wants. From the inside of an application {dbus} objects are
-  generally mapped to the native notion of objects. From the outside, objects are refered by
-  {emph "object-pathes"}, which looks like \"{texttt "/org/freedesktop/DBus"}\".
+  may holds as many objects as it wants. From the inside of the application, {dbus} objects are
+  generally mapped to language native objects. From the outside, objects are refered by
+  {emph "object-pathes"}, which looks like \"{texttt "/org/freedesktop/DBus"}\". You can
+  think of an object path as a pointer.
 
   Objects may have members which are organized by interfaces (such as \"{texttt "org.freedesktop.DBus"}\").
   There are three types of members:
@@ -172,25 +176,97 @@ let doc = "
 
   Methods act like functions. Clients can call methods of objects. Signals are spontaneous
   events that may occurs at any time. Clients may register to these signals and then be notified
-  when a signal arrive. Proeprties act as variable, that can be read and/org written and sometimes
+  when a signal arrive. Properties act as variable, that can be read and/or written and sometimes
   monitored.
 
-  The next sections explains how to use these members with {obus}.
+  In order to uniquelly identify an object, we need its path and the peer that owns it. We call such
+  a thing a {emph "proxy"}. Proxies are defined in the module {texttt "OBus_proxy"}.
 
-{subsection "Methods, signals and properties"}
+  Here is a simple example on how to call a method on a proxy
+  (we will explain latter what means the {texttt "C.seq..."} things):
+
+  {caml_code \"proxy\"}
+
+(*****************************************************************************)
+{section "Interaction between the OCaml world and the D-Bus world"}
+
+{subsection "Value mapping"}
+
+  {dbus} defines its own type system, which is used to serialize and deserialize
+  messages. These types are defined in the module {texttt "OBus_value.T"} and {dbus}
+  values that are defined in the module {texttt "OBus_value.V"}. When a message is
+  received, its contents is represented as a value of type {texttt "OBus_value.V.sequence"}.
+  Simillary, when a message is sent, it is first converted into this format.
+
+  Manipulating boxed {dbus} values is not very handy. To make the interaction more
+  transparent, {obus} defines a set of type combinators which allow to easilly switch
+  between the {dbus} representation and the ocaml representation. These convertors
+  are defined in the module {texttt "OBus_value.C"}.
+
+  Here is an example of convertion (in the toplevel):
+
+  {caml_code \"values\"}
 
 {subsection "Errors mapping"}
+
+  A call to a method may fails. In this case the service sends an error to the caller.
+  {dbus} errors are mapped to ocaml exceptions by the {texttt "OBus_error"} module.
+  Basically, to defines a mapping between an exception and a {dbus} error, here is what
+  you have to do:
+
+  {caml_code \"errors\"}
+
+  Or, if you use the syntax extension:
+
+  {caml_code \"errors_syntax\"}
 
 (*****************************************************************************)
 {section "Using D-Bus services"}
 
-{subsection "Defining members"}
+  In this section we describe the canonical way of using a {dbus} service with {obus}.
 
-{subsection "Using members"}
+{subsection "Defining and using members"}
+
+  For all types of members (methods, signals and properties), {dbus} provides types
+  to defines them and functions to use these definitions. A member definition contains
+  all the information about a member. For example, here is the definition of a method call
+  named \"foo\" on interface \"org.foo.bar\" which takes a string and returns an 32-bits signed
+  integer:
+
+  {caml_code \"method\"}
+
+  Once a member is defined, it can be used by the corresponding modules:
+
+  {caml_code \"members\"}
+
+  Of course, writting definitions by hand may be very boring and error-prone. To avoid that
+  {obus} can automatically convert introspection data into ocaml definitions.
 
 {subsection "Using tools to generate member definitions"}
 
+  There are two tools that are usefull for client-side code: {texttt "obus-gen-interface"} and
+  {texttt "obus-gen-client"}. The first one converts an xml introspection document (or an idl file)
+  into an ocaml module containing all the camlized definitions. This generated file is in fact also
+  needed for server-side code. Note that fiels produced by {texttt "obus-gen-interface"} are not meant
+  to be edited.
+
+  The second tool maps members into their ocaml counterpart: methods are mapped to functions, signals to
+  value of type {texttt "OBus_signal.t"} and properties to values of type {texttt "OBus_property.t"}.
+  This generated file is meant to be edited. For example, you can edit it in order to change the type of values
+  taken/returned by methods.
+
 {subsection "The {obus} IDL language"}
+
+  Since editing XML is horrible, {obus} provides a intermediate language to write
+  {dbus} interfaces. Moreover this language allow you to automatically converts
+  integers to ocaml variants when needed.
+
+  The syntax is pretty simple. Here is an example, taken from {obus} sources (file {texttt "src/oBus_interfaces.obus"}):
+
+  {obus_code \"intf\"}
+
+  All {obus} tools that accept XML files also accept IDL files. Moreover it is possible
+  to convert them by using {texttt "obus-idl2xml"} and {texttt "obus-xml2idl"}.
 
 {subsection ~label:name_tracking "Name tracking"}
 

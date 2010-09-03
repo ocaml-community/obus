@@ -1,6 +1,6 @@
 (*
- * caml_code.ml
- * ------------
+ * colorize.ml
+ * -----------
  * Copyright : (c) 2010, Jeremie Dimino <jeremie@dimino.org>
  * Licence   : BSD3
  *
@@ -9,6 +9,8 @@
 
 open Camlp4.PreCast
 open Camlp4.Sig
+
+external filter : 'a Gram.not_filtered -> 'a = "%identity"
 
 (* +-----------------------------------------------------------------+
    | Colors                                                          |
@@ -815,10 +817,6 @@ let rgb_of_color str =
     loop 0 (Array.length colors)
   end
 
-(* +-----------------------------------------------------------------+
-   | Styles                                                          |
-   +-----------------------------------------------------------------+ *)
-
 type color = string
 
 type style = {
@@ -827,141 +825,13 @@ type style = {
   emph : bool;
 }
 
-type styles = {
-  background : color;
-  default : style;
-  keyword : style;
-  symbol : style;
-  constructor : style;
-  module_name : style;
-  number : style;
-  char : style;
-  string : style;
-  comment : style;
-  variable : style;
-}
-
 let dummy = { color = "#000000"; bold = false; emph = false }
 
-let default_styles = {
-  background = "#323232";
-  default = { color = "#5fbf77"; bold = false; emph = false };
-  keyword = { color = "Cyan1"; bold = false; emph = false };
-  symbol = { color = "Cyan1"; bold = false; emph = false };
-  constructor = { color = "#5fbf77"; bold = false; emph = false };
-  module_name = { color = "PaleGreen"; bold = false; emph = false };
-  number = { color = "#5fbf7f"; bold = false; emph = false };
-  char = { color = "LightSalmon"; bold = false; emph = false };
-  string = { color = "LightSalmon"; bold = false; emph = false };
-  comment = { color = "Chocolate1"; bold = false; emph = false };
-  variable = { color = "LightGoldenrod"; bold = false; emph = false };
-}
-
-let bw_styles = {
-  background = "#e5e5e5";
-  default = { color = "black"; bold = false; emph = false };
-  keyword = { color = "black"; bold = true; emph = false };
-  symbol = { color = "black"; bold = true; emph = false };
-  constructor = { color = "black"; bold = false; emph = false };
-  module_name = { color = "black"; bold = false; emph = false };
-  number = { color = "black"; bold = false; emph = false };
-  char = { color = "black"; bold = false; emph = false };
-  string = { color = "black"; bold = false; emph = false };
-  comment = { color = "black"; bold = false; emph = false };
-  variable = { color = "black"; bold = false; emph = false };
-}
-
 (* +-----------------------------------------------------------------+
-   | Parsing and colorization                                        |
+   | Main processing                                                 |
    +-----------------------------------------------------------------+ *)
 
-let latex_of_tokens styles tokens =
-  let rec aux = function
-    | [] ->
-        []
-    | KEYWORD "open" :: BLANKS bl :: UIDENT name :: rest ->
-        (styles.keyword, "open") :: (dummy, bl) :: (styles.module_name, name) :: aux rest
-    | KEYWORD ("let" | "lwt" as kwd) :: BLANKS bl :: LIDENT id :: rest ->
-        (styles.keyword, kwd) :: (dummy, bl) :: (styles.variable, id) :: aux rest
-    | KEYWORD kwd :: rest ->
-        (styles.keyword, kwd) :: aux rest
-    | SYMBOL "`" :: rest ->
-        (styles.constructor, "`") :: aux rest
-    | SYMBOL sym :: rest ->
-        (styles.symbol, sym) :: aux rest
-    | LIDENT lid :: rest ->
-        (styles.default, lid) :: aux rest
-    | UIDENT uid :: SYMBOL "." :: rest ->
-        (styles.module_name, uid) :: (styles.symbol, ".") :: aux rest
-    | UIDENT lid :: rest ->
-        (styles.constructor, lid) :: aux rest
-    | ESCAPED_IDENT id :: rest ->
-        (styles.symbol, "(" ^ id ^ ")") :: aux rest
-    | INT(_, s) :: rest ->
-        (styles.number, s) :: aux rest
-    | INT32(_, s) :: rest ->
-        (styles.number, s ^ "l") :: aux rest
-    | INT64(_, s) :: rest ->
-        (styles.number, s ^ "L") :: aux rest
-    | NATIVEINT(_, s) :: rest ->
-        (styles.number, s ^ "n") :: aux rest
-    | FLOAT(_, s) :: rest ->
-        (styles.number, s) :: aux rest
-    | CHAR(_, s) :: rest ->
-        (styles.char, s) :: aux rest
-    | STRING(_, s) :: rest ->
-        (styles.string, "\"" ^ s ^ "\"") :: aux rest
-    | LABEL lbl :: rest ->
-        (styles.symbol, "~") :: (styles.variable, lbl) :: (styles.symbol, ":") :: aux rest
-    | OPTLABEL lbl :: rest ->
-        (styles.symbol, "?") :: (styles.default, lbl) :: (styles.symbol, ":") :: aux rest
-    | QUOTATION quot :: rest ->
-        if quot.q_name = "" then
-          (styles.symbol, "<<") :: (styles.default, quot.q_contents) :: (styles.symbol, ">>") :: aux rest
-        else if quot.q_loc = "" then
-          (styles.symbol, "<:") :: (styles.default, quot.q_name) :: (styles.symbol, "<") :: (styles.default, quot.q_contents) :: (styles.symbol, ">>") :: aux rest
-        else
-          (styles.symbol, "<:") :: (styles.default, quot.q_name) :: (styles.symbol, "@") :: (styles.default, quot.q_loc) :: (styles.symbol, "<") :: (styles.default, quot.q_contents) :: (styles.symbol, ">>") :: aux rest
-    | ANTIQUOT(n, s) :: rest ->
-        if n = "" then
-          (styles.symbol, "$") :: (styles.default, s) :: (styles.symbol, "$") :: aux rest
-        else
-          (styles.symbol, "$") :: (styles.default, n) :: (styles.symbol, ":") :: (styles.default, s) :: (styles.symbol, "$") :: aux rest
-    | COMMENT comment :: rest ->
-        (styles.comment, comment) :: aux rest
-    | BLANKS s :: rest ->
-        (dummy, s) :: aux rest
-    | NEWLINE :: rest ->
-        (dummy, "\n") :: aux rest
-    | LINE_DIRECTIVE(name, None) :: rest ->
-        (styles.symbol, "#") :: (styles.default, string_of_int name) :: (dummy, "\n") :: aux rest
-    | LINE_DIRECTIVE(name, Some arg) :: rest ->
-        (styles.symbol, "#") :: (styles.default, string_of_int name) :: (dummy, " ") :: (styles.string, "\"" ^ arg ^ "\"") :: (dummy, "\n") :: aux rest
-    | EOI :: _ ->
-        []
-  in
-  aux tokens
-
-let keywords = [
-  "and"; "as"; "assert"; "begin"; "class"; "constraint"; "do";
-  "done"; "downto"; "else"; "end"; "exception"; "external"; "false";
-  "for"; "fun"; "function"; "functor"; "if"; "in"; "include";
-  "inherit"; "initializer"; "lazy"; "let"; "match"; "method"; "module";
-  "mutable"; "new"; "object";  "of";  "open"; "private";  "rec"; "sig";
-  "struct";  "then";  "to";  "true";  "try";  "type";  "val"; "virtual";
-  "when"; "while"; "with"; "try_lwt"; "finally"; "for_lwt"; "lwt";
-]
-
-let rec list_of_stream stream =
-  match Stream.next stream with
-    | (EOI, loc) ->
-        []
-    | (LIDENT name, loc) when List.mem name keywords ->
-        KEYWORD name :: list_of_stream stream
-    | (token, loc) ->
-        token :: list_of_stream stream
-
-let fg_color color latex =
+let with_fg_color color latex =
   let r, g, b = rgb_of_color color in
   Latex.command
     ~packages:[("xcolor", "")]
@@ -971,7 +841,7 @@ let fg_color color latex =
      (Latex.A, latex)]
     Latex.A
 
-let bg_color color latex =
+let with_bg_color color latex =
   let r, g, b = rgb_of_color color in
   Latex.command
     ~packages:[("xcolor", "")]
@@ -981,26 +851,284 @@ let bg_color color latex =
      (Latex.A, latex)]
     Latex.A
 
-external filter : 'a Gram.not_filtered -> 'a = "%identity"
-
-let input_file ?(styles=default_styles) file =
-  let ic = open_in file in
-  let result =
-    Latex.center
-      (bg_color styles.background
-         (Latex.minipage (`Cm 14.)
-            (Latex.concat
-               (List.map
-                  (fun (style, str) ->
-                     let tex = fg_color style.color (Latex.texttt (Latex.Verbatim.verbatim str)) in
-                     let tex = if style.bold then Latex.textbf tex else tex in
-                     let tex = if style.emph then Latex.emph tex else tex in
-                     tex)
-                  ((dummy, "\n") ::
-                     (latex_of_tokens styles
-                        (list_of_stream
-                           (filter
-                              (Gram.lex (Loc.mk file) (Stream.of_channel ic))))))))))
+let list_of_stream keywords stream =
+  let rec aux () =
+    match Stream.next stream with
+      | (EOI, loc) ->
+          []
+      | (LIDENT name, loc) when List.mem name keywords ->
+          KEYWORD name :: aux ()
+      | (token, loc) ->
+          token :: aux ()
   in
-  close_in ic;
-  result
+  aux ()
+
+let process_file keywords latex_of_tokens bg_color file =
+  let ic = open_in file in
+  try
+    let result =
+      Latex.center
+        (with_bg_color bg_color
+           (Latex.minipage (`Cm 14.)
+              (Latex.concat
+                 (List.map
+                    (fun (style, str) ->
+                       let tex = with_fg_color style.color (Latex.texttt (Latex.Verbatim.verbatim str)) in
+                       let tex = if style.bold then Latex.textbf tex else tex in
+                       let tex = if style.emph then Latex.emph tex else tex in
+                       tex)
+                    ((dummy, "\n") ::
+                       (latex_of_tokens
+                          (list_of_stream keywords
+                             (filter
+                                (Gram.lex (Loc.mk file) (Stream.of_channel ic))))))))))
+    in
+    close_in ic;
+    result
+  with exn ->
+    Format.eprintf "@[<v0>%a@]@." Camlp4.ErrorHandler.print exn;
+    exit 1
+
+(* +-----------------------------------------------------------------+
+   | OCaml code                                                      |
+   +-----------------------------------------------------------------+ *)
+
+module Caml = struct
+  type styles = {
+    background : color;
+    default : style;
+    keyword : style;
+    symbol : style;
+    constructor : style;
+    module_name : style;
+    number : style;
+    char : style;
+    string : style;
+    comment : style;
+    variable : style;
+  }
+
+  let default_styles = {
+    background = "#323232";
+    default = { color = "#5fbf77"; bold = false; emph = false };
+    keyword = { color = "Cyan1"; bold = false; emph = false };
+    symbol = { color = "Cyan1"; bold = false; emph = false };
+    constructor = { color = "#5fbf77"; bold = false; emph = false };
+    module_name = { color = "PaleGreen"; bold = false; emph = false };
+    number = { color = "#5fbf7f"; bold = false; emph = false };
+    char = { color = "LightSalmon"; bold = false; emph = false };
+    string = { color = "LightSalmon"; bold = false; emph = false };
+    comment = { color = "Chocolate1"; bold = false; emph = false };
+    variable = { color = "LightGoldenrod"; bold = false; emph = false };
+  }
+
+  let bw_styles = {
+    background = "#e5e5e5";
+    default = { color = "black"; bold = false; emph = false };
+    keyword = { color = "black"; bold = true; emph = false };
+    symbol = { color = "black"; bold = true; emph = false };
+    constructor = { color = "black"; bold = false; emph = false };
+    module_name = { color = "black"; bold = false; emph = false };
+    number = { color = "black"; bold = false; emph = false };
+    char = { color = "black"; bold = false; emph = false };
+    string = { color = "black"; bold = false; emph = false };
+    comment = { color = "black"; bold = false; emph = false };
+    variable = { color = "black"; bold = false; emph = false };
+  }
+
+
+  let latex_of_tokens styles tokens =
+    let rec aux = function
+      | [] ->
+          []
+      | KEYWORD "open" :: BLANKS bl :: UIDENT name :: rest ->
+          (styles.keyword, "open") :: (dummy, bl) :: (styles.module_name, name) :: aux rest
+      | KEYWORD ("let" | "lwt" as kwd) :: BLANKS bl :: LIDENT id :: rest ->
+          (styles.keyword, kwd) :: (dummy, bl) :: (styles.variable, id) :: aux rest
+      | KEYWORD kwd :: rest ->
+          (styles.keyword, kwd) :: aux rest
+      | SYMBOL "`" :: rest ->
+          (styles.constructor, "`") :: aux rest
+      | SYMBOL sym :: rest ->
+          (styles.symbol, sym) :: aux rest
+      | LIDENT lid :: rest ->
+          (styles.default, lid) :: aux rest
+      | UIDENT uid :: SYMBOL "." :: rest ->
+          (styles.module_name, uid) :: (styles.symbol, ".") :: aux rest
+      | UIDENT lid :: rest ->
+          (styles.constructor, lid) :: aux rest
+      | ESCAPED_IDENT id :: rest ->
+          (styles.symbol, "(" ^ id ^ ")") :: aux rest
+      | INT(_, s) :: rest ->
+          (styles.number, s) :: aux rest
+      | INT32(_, s) :: rest ->
+          (styles.number, s ^ "l") :: aux rest
+      | INT64(_, s) :: rest ->
+          (styles.number, s ^ "L") :: aux rest
+      | NATIVEINT(_, s) :: rest ->
+          (styles.number, s ^ "n") :: aux rest
+      | FLOAT(_, s) :: rest ->
+          (styles.number, s) :: aux rest
+      | CHAR(_, s) :: rest ->
+          (styles.char, s) :: aux rest
+      | STRING(_, s) :: rest ->
+          (styles.string, "\"" ^ s ^ "\"") :: aux rest
+      | LABEL lbl :: rest ->
+          (styles.symbol, "~") :: (styles.variable, lbl) :: (styles.symbol, ":") :: aux rest
+      | OPTLABEL lbl :: rest ->
+          (styles.symbol, "?") :: (styles.default, lbl) :: (styles.symbol, ":") :: aux rest
+      | QUOTATION quot :: rest ->
+          if quot.q_name = "" then
+            (styles.symbol, "<<") :: (styles.default, quot.q_contents) :: (styles.symbol, ">>") :: aux rest
+          else if quot.q_loc = "" then
+            (styles.symbol, "<:") :: (styles.default, quot.q_name) :: (styles.symbol, "<") :: (styles.default, quot.q_contents) :: (styles.symbol, ">>") :: aux rest
+          else
+            (styles.symbol, "<:") :: (styles.default, quot.q_name) :: (styles.symbol, "@") :: (styles.default, quot.q_loc) :: (styles.symbol, "<") :: (styles.default, quot.q_contents) :: (styles.symbol, ">>") :: aux rest
+      | ANTIQUOT(n, s) :: rest ->
+          if n = "" then
+            (styles.symbol, "$") :: (styles.default, s) :: (styles.symbol, "$") :: aux rest
+          else
+            (styles.symbol, "$") :: (styles.default, n) :: (styles.symbol, ":") :: (styles.default, s) :: (styles.symbol, "$") :: aux rest
+      | COMMENT comment :: rest ->
+          (styles.comment, comment) :: aux rest
+      | BLANKS s :: rest ->
+          (dummy, s) :: aux rest
+      | NEWLINE :: rest ->
+          (dummy, "\n") :: aux rest
+      | LINE_DIRECTIVE(name, None) :: rest ->
+          (styles.symbol, "#") :: (styles.default, string_of_int name) :: (dummy, "\n") :: aux rest
+      | LINE_DIRECTIVE(name, Some arg) :: rest ->
+          (styles.symbol, "#") :: (styles.default, string_of_int name) :: (dummy, " ") :: (styles.string, "\"" ^ arg ^ "\"") :: (dummy, "\n") :: aux rest
+      | EOI :: _ ->
+          []
+    in
+    aux tokens
+
+  let keywords = [
+    "and"; "as"; "assert"; "begin"; "class"; "constraint"; "do";
+    "done"; "downto"; "else"; "end"; "exception"; "external"; "false";
+    "for"; "fun"; "function"; "functor"; "if"; "in"; "include";
+    "inherit"; "initializer"; "lazy"; "let"; "match"; "method"; "module";
+    "mutable"; "new"; "object";  "of";  "open"; "private";  "rec"; "sig";
+    "struct";  "then";  "to";  "true";  "try";  "type";  "val"; "virtual";
+    "when"; "while"; "with"; "try_lwt"; "finally"; "for_lwt"; "lwt";
+  ]
+
+
+  let input_file ?(styles=default_styles) file =
+    process_file keywords (latex_of_tokens styles) styles.background file
+end
+
+(* +-----------------------------------------------------------------+
+   | OBus IDL code                                                   |
+   +-----------------------------------------------------------------+ *)
+
+module OBus = struct
+  type styles = {
+    background : color;
+    interface : style;
+    member : style;
+    keyword : style;
+    symbol : style;
+    variable : style;
+    type_ : style;
+    number : style;
+    comment : style;
+  }
+
+  let default_styles = {
+    background = "#323232";
+    interface = { color = "Aquamarine"; bold = false; emph = false };
+    member = { color = "LightSkyBlue"; bold = false; emph = false };
+    keyword = { color = "Cyan1"; bold = false; emph = false };
+    symbol = { color = "Cyan1"; bold = false; emph = false };
+    variable = { color = "LightGoldenrod"; bold = false; emph = false };
+    type_ = { color = "PaleGreen"; bold = false; emph = false };
+    number = { color = "Orange"; bold = false; emph = false };
+    comment = { color = "Chocolate1"; bold = false; emph = false };
+  }
+
+  let bw_styles = {
+    background = "#e5e5e5";
+    interface = { color = "black"; bold = false; emph = false };
+    member = { color = "black"; bold = false; emph = false };
+    keyword = { color = "black"; bold = true; emph = false };
+    symbol = { color = "black"; bold = false; emph = false };
+    variable = { color = "black"; bold = false; emph = false };
+    type_ = { color = "black"; bold = false; emph = false };
+    number = { color = "black"; bold = false; emph = false };
+    comment = { color = "black"; bold = false; emph = false };
+  }
+
+  let latex_of_tokens styles tokens =
+    let rec aux = function
+      | [] ->
+          []
+      | KEYWORD "interface" :: BLANKS bl :: rest ->
+          (styles.keyword, "interface") :: (dummy, bl) :: interface_name rest
+      | KEYWORD ("method" | "signal" | "property_r" | "property_w" | "property_rw" as kwd) :: BLANKS bl :: (LIDENT id | UIDENT id) :: rest ->
+          (styles.keyword, kwd) :: (dummy, bl) :: (styles.member, id) :: aux rest
+      | KEYWORD ("flag" | "enum" as kwd) :: BLANKS bl :: (LIDENT id | UIDENT id) :: BLANKS bl' :: SYMBOL ":" :: rest ->
+          (styles.keyword, kwd) :: (dummy, bl) :: (styles.type_, id) :: (dummy, bl') :: (styles.symbol, ":") :: types rest
+      | KEYWORD kwd :: rest ->
+          (styles.keyword, kwd) :: aux rest
+      | (UIDENT id | LIDENT id) :: BLANKS bl :: SYMBOL ":" :: rest ->
+          (styles.variable, id) :: (dummy, bl) :: (styles.symbol, ":") :: types rest
+      | SYMBOL sym :: rest ->
+          (styles.symbol, sym) :: aux rest
+      | LIDENT lid :: rest ->
+          (styles.variable, lid) :: aux rest
+      | UIDENT lid :: rest ->
+          (styles.variable, lid) :: aux rest
+      | ESCAPED_IDENT id :: rest ->
+          (styles.symbol, "(" ^ id ^ ")") :: aux rest
+      | INT(_, s) :: rest ->
+          (styles.number, s) :: aux rest
+      | INT32(_, s) :: rest ->
+          (styles.number, s ^ "l") :: aux rest
+      | INT64(_, s) :: rest ->
+          (styles.number, s ^ "L") :: aux rest
+      | NATIVEINT(_, s) :: rest ->
+          (styles.number, s ^ "n") :: aux rest
+      | FLOAT(_, s) :: rest ->
+          (styles.number, s) :: aux rest
+      | COMMENT comment :: rest ->
+          (styles.comment, comment) :: aux rest
+      | BLANKS s :: rest ->
+          (dummy, s) :: aux rest
+      | NEWLINE :: rest ->
+          (dummy, "\n") :: aux rest
+      | _ :: _ ->
+          failwith "invalid token"
+    and interface_name = function
+      | [] ->
+          []
+      | (LIDENT id | UIDENT id) :: rest ->
+          (styles.interface, id) :: interface_name rest
+      | SYMBOL "." :: rest ->
+          (styles.interface, ".") :: interface_name rest
+      | rest ->
+          aux rest
+    and types = function
+      | [] ->
+          []
+      | BLANKS bl :: rest ->
+          (dummy, bl) :: types rest
+      | SYMBOL "*" :: rest ->
+          (styles.symbol, "*") :: types rest
+      | (LIDENT id | UIDENT id) :: rest ->
+          (styles.type_, id) :: types rest
+      | rest ->
+          aux rest
+    in
+    aux tokens
+
+  let keywords = [
+    "interface"; "method"; "signal";
+    "property_r"; "property_w"; "property_rw";
+    "flag"; "enum";
+  ]
+
+  let input_file ?(styles=default_styles) file =
+    process_file keywords (latex_of_tokens styles) styles.background file
+end
