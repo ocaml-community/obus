@@ -14,6 +14,7 @@ let dbus = texttt "D-Bus"
 let abstract body = command \"abstract\" [(T, body)] T
 
 let lowlevel_section = label ()
+let name_tracking = label ()
 
 let use_colors = Array.length Sys.argv > 1 && Sys.argv.(1) = \"-use-colors\"
 
@@ -145,7 +146,36 @@ let doc = "
 
   {caml_code \"names\"}
 
-{subsection "Peers and proxies"}
+  Note that the {texttt "OBus_resolver"} module offer a better way of resolving names
+  and monitoring name owners. See section {ref_ name_tracking} for details.
+
+{subsection "Peers"}
+
+  A {emph "peer"} represent an application accessible through a {dbus} connection.
+  To uniquelly identify a peer one needs a connection and a name. The module
+  {texttt "OBus_peer"} defines the type type of peers. There are two requests
+  that should be available on all peers: {texttt "ping"} and {texttt "get_machine_id"}.
+  The first one just ping the peer to see if it is alive, and the second returns the id of
+  the machine the peer is currently running on.
+
+{subsection "Objects and proxies"}
+
+  In order to export services, {dbus} uses the concept of {emph "objects"}. An application
+  may holds as many objects as it wants. From the inside of an application {dbus} objects are
+  generally mapped to the native notion of objects. From the outside, objects are refered by
+  {emph "object-pathes"}, which looks like \"{texttt "/org/freedesktop/DBus"}\".
+
+  Objects may have members which are organized by interfaces (such as \"{texttt "org.freedesktop.DBus"}\").
+  There are three types of members:
+
+  {itemize ["Methods"; "Signals"; "Properties"]}
+
+  Methods act like functions. Clients can call methods of objects. Signals are spontaneous
+  events that may occurs at any time. Clients may register to these signals and then be notified
+  when a signal arrive. Proeprties act as variable, that can be read and/org written and sometimes
+  monitored.
+
+  The next sections explains how to use these members with {obus}.
 
 {subsection "Methods, signals and properties"}
 
@@ -162,7 +192,7 @@ let doc = "
 
 {subsection "The {obus} IDL language"}
 
-{subsection "Name tracking"}
+{subsection ~label:name_tracking "Name tracking"}
 
 (*****************************************************************************)
 {section "Writing D-Bus services"}
