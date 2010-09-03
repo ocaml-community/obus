@@ -5,19 +5,18 @@
 #
 # This file is a part of obus, an ocaml implementation of D-Bus.
 
-PDF_FILES := ${subst .ml,.pdf,${wildcard *.ml}}
+OC := ocamlbuild -classic-display
 
-all: ${PDF_FILES}
-	melt -no-link -pdf ${PDF_FILES} manual.mlt
+default: colored
 
-%.pdf: %.html
-	wkhtmltopdf $< $@
-	pdfcrop $@ $@
+all:
+	$(OC) manual.pdf manual-colored.pdf
 
-%.html: %.ml
-	chmod +x htmlize.sh
-	./htmlize.sh $< $@
+normal:
+	$(OC) manual.pdf
+
+colored:
+	$(OC) manual-colored.pdf
 
 clean:
-	melt -clean
-	rm -f ${wildcard *.pdf} ${wildcard *.html}
+	$(OC) -clean

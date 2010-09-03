@@ -1,0 +1,2 @@
+# -*- conf -*-
+<*>: package(str), package(mlpost), package(melt.latex), package(melt), package(camlp4.lib)

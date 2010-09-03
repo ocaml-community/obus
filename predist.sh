@@ -5,20 +5,10 @@
 
 # Build the user manual for release
 cd manual
-unset OBUS_COLORED_MANUAL
-make
-mv _melt/manual.pdf ../manual.pdf
-
-# Build also the colored version
+make all
+mv _build/manual.pdf _build/manual-colored.pdf .
 make clean
-OBUS_COLORED_MANUAL=1
-export OBUS_COLORED_MANUAL
-make
-mv _melt/manual.pdf ../manual-colored.pdf
-
-# Remove manual sources:
 cd ..
-rm -rf manual
 
 # Remove this file
 rm -f predist.sh

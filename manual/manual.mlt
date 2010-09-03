@@ -7,20 +7,24 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+open Latex
+
 let obus = texttt "OBus"
 let dbus = texttt "D-Bus"
 let abstract body = command \"abstract\" [(T, body)] T
 
-let include_code filename =
-  command
-    ~packages:[(\"graphicx\", \"pdftex\")]
-    \"includegraphics\"
-    [(A, filename)]
-    ~opt:(A, "trim=0cm 0cm 5.7cm 0cm,clip,width=10cm")
-    T
+let lowlevel_section = label ()
 
-let code file =
-  figure ~center:true (include_code "{file}.pdf")
+let use_colors = Array.length Sys.argv > 1 && Sys.argv.(1) = \"-use-colors\"
+
+let styles =
+  if use_colors then
+    Caml_code.default_styles
+  else
+    Caml_code.bw_styles
+
+let caml_code name =
+  Caml_code.input_file ~styles (\"../codes/\" ^ name ^ \".ml\")
 
 let doc = "
 {abstract "
@@ -49,53 +53,103 @@ let doc = "
 
 {subsubsection "Packages"}
 
-The main packages of the {obus} distribution is the {texttt "obus"} package,
-available via findlib. It contains the core library. Moveover, {obus} although
-provides packages for using a bunch of services of the Freedesktop project:
+  The main packages of the {obus} distribution is the {texttt "obus"} package,
+  available via findlib. It contains the core library. Moveover, {obus} although
+  provides packages for using a bunch of services of the Freedesktop project:
 
-{itemize
-   [texttt "obus.hal";
-    texttt "obus.notification";
-    texttt "obus.network-manager";
-    texttt "obus.policykit";
-    texttt "obus.udisks";
-    texttt "obus.upower"]}
+  {itemize
+     [texttt "obus.hal";
+      texttt "obus.notification";
+      texttt "obus.network-manager";
+      texttt "obus.policykit";
+      texttt "obus.udisks";
+      texttt "obus.upower"]}
 
-The use of this package is straightforward and you need to know almost nothing
-about {dbus} or {obus}. For example, here is a program which open a popup notification:
+  The use of these packages is straightforward and you need to know almost nothing
+  about {dbus} or {obus}. For example, here is a program which open a popup notification:
 
-{code "notification"}
+  {caml_code \"notification\"}
+
+  Lastly {obus} also provides a syntax extension (package {texttt "obus.syntax"})
+  and a parser/printer for the IDL language (package {texttt "obus.idl"}).
 
 {subsubsection "Modules"}
 
-  OBus contains about 30 public modules. But do not be scared, most of the
-  time you will use a very small subset of them. These modules can be
+  {obus} contains about 30 public modules. But do not be scared, most of the
+  time you will need a very small subset of them. These modules can be
   divided in two categories:
 
   {itemize ["the high-level API"; "the low-level API"]}
 
+  The low-level API is described in the section {ref_ lowlevel_section} of this
+  manual. Note that you must have a good knowledge of {dbus} to use it.
+
 (*****************************************************************************)
 {section "Basis"}
 
+  In this section we will describe the minimum you must know to use {obus} and
+  interfaces for {dbus} services written with {obus} (like the ones provided
+  in the {obus} distribution: {texttt "obus.notification"},
+  {texttt "obus.upower"}, {dots}).
+
 {subsection "Connections and message buses"}
 
-  There is two way to talk to another application speaking the D-Bus
-  protocol: via a direct connection to the application or via a special
-  application called a message bus. A message bus act as a router
-  between several applications. On a desktop computer, there are two
-  well-known instances: the system message bus, and the user session
-  message bus.
+  A {emph "connection"} is a way of exchanging messages with
+  another application speaking the {dbus} protocol. Most of the time
+  applications use connection to a special application called a
+  {emph "message bus"}. A message bus act as a router between several
+  applications. On a desktop computer, there are two well-known instances:
+  the {emph "system"} message bus, and the user {emph "session"} message bus.
 
   The first one is unique given a computer, and use security
   policies. The second is unique given a user session. Its goal is to
-  allow programs running in the session to talk to each other.
+  allow programs running in the session to talk to each other. {obus}
+  offers two function for connecting to these message buses:
+  {texttt "OBus_bus.session"} and {texttt "OBus_bus.system"}.
 
-  OBus offers two function for connecting to these message buses:
-  {texttt "<<OBus_bus.session>>"} and {texttt "<<OBus_bus.system>>"}.
+  The session bus exists for the life-time of a user session. It exits
+  when the session is closed, and any programs using it should exit to, that is
+  why {obus} will exit the program when the connection to the session bus is
+  lost. However this behavior can be changed.
+
+  On the other hand the system bus can be restarted and program using it may
+  try to reopen the connection. System-wide application should handle the lost
+  of the connection with the system bus.
+
+  Here is a small example which connects the session bus and prints its id:
+
+  {caml_code \"bus_id\"}
+
+{subsection "Names"}
+
+  On a message bus, applications are referenced using names. There is a special
+  category of names called {emph "unique names"}. Each time an application connects
+  to a bus, the bus give it a unique name. Unique name are of the form {texttt ":1.42"}
+  and cannot be changed. You can think of a unique name as an {emph "ip"} (such as
+  {texttt "192.168.1.42"}).
+
+  Once connected, the unique name can is returned by the function {texttt "OBus_bus.name"}.
+  Here is an example of a program that prints its unique name:
+
+  {caml_code \"unique_name\"}
+
+  Unique name are usefull to uniquelly identify an application. However when you want
+  to use a specific service you may prefer using a well-known name such as
+  {texttt "org.freedesktop.Notifications"}. {dbus} allows applications to own
+  as many non-unique names as they want. You can think of a non-unique name as
+  a {emph "dns"} (such as \"obus.forge.ocamlcore.org\").
+
+  Names can be requested or resolved using functions of the {texttt "OBus_bus"} module.
+
+  Here is an example:
+
+  {caml_code \"names\"}
 
 {subsection "Peers and proxies"}
 
 {subsection "Methods, signals and properties"}
+
+{subsection "Errors mapping"}
 
 (*****************************************************************************)
 {section "Using D-Bus services"}
@@ -123,7 +177,7 @@ about {dbus} or {obus}. For example, here is a program which open a popup notifi
 {subsection "Starting a  server"}
 
 (*****************************************************************************)
-{section "Low-level use of D-Bus"}
+{section ~label:lowlevel_section "Low-level use of D-Bus"}
 
 {subsection "Message filters"}
 
@@ -135,8 +189,21 @@ about {dbus} or {obus}. For example, here is a program which open a popup notifi
 
 "
 
-let () = emit (document
-                 ~title:"OBus user manual"
-                 ~author:"Jérémie Dimino"
-                 ~packages:["inputenc", "utf8"]
-                 doc)
+let set_mono_font name =
+  command
+    ~packages:[(\"xltxtra\", \"\")]
+    ~opt:(A, "Mapping=tex-text,Scale=0.8")
+    \"setmonofont\"
+    [(A, name)]
+    A
+
+let () =
+  Melt.emit
+    ~file:(if use_colors then \"manual-colored.tex\" else \"manual.tex\")
+    (document
+       ~options:[`A4paper]
+       ~title:"OBus user manual"
+       ~author:"Jérémie Dimino"
+       ~prelude:(set_mono_font "DejaVu Sans Mono")
+       ~packages:[("fullpage", "")]
+       doc)
