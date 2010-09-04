@@ -227,7 +227,7 @@ let connect ?switch sd =
             (OBus_path.to_string (OBus_proxy.path sd.proxy))
             (OBus_proxy.name sd.proxy)
         in
-        fail exn
+        raise_lwt exn
     ) in
 
     let event = Lwt_event.with_finaliser (finalise disconnect) (React.E.map snd (sd.map event)) in
@@ -243,7 +243,7 @@ let connect ?switch sd =
     return event
   with exn ->
     lwt () = Lwt_switch.turn_off resources_switch in
-    fail exn
+    raise_lwt exn
 
 (* +-----------------------------------------------------------------+
    | Emitting signals                                                |

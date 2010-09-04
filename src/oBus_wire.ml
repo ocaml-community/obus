@@ -842,7 +842,7 @@ let write_message oc ?byte_order msg =
     | str, [||] ->
         Lwt_io.write oc str
     | _ ->
-        fail (Data_error "Cannot send a message with file descriptors on a channel")
+        raise_lwt (Data_error "Cannot send a message with file descriptors on a channel")
 
 type writer = {
   channel : Lwt_io.output_channel;

@@ -247,7 +247,7 @@ let send_message_backend connection reply_waiter_opt message =
          match apply_filters "outgoing" message active.outgoing_filters with
            | None ->
                lwt () = Lwt_log.debug ~section "outgoing message dropped by filters" in
-               fail (Failure "message dropped by filters")
+               raise_lwt (Failure "message dropped by filters")
 
            | Some message ->
                if not closed then begin
@@ -275,12 +275,12 @@ let send_message_backend connection reply_waiter_opt message =
                  | OBus_wire.Data_error _ as exn ->
                      (* The message can not be marshaled for some
                         reason. This is not a fatal error. *)
-                     fail exn
+                     raise_lwt exn
 
                  | Canceled ->
                      (* Message sending have been canceled by the
                         user. This is not a fatal error either. *)
-                     fail Canceled
+                     raise_lwt Canceled
 
                  | exn ->
                      (* All other errors are considered as fatal. They
@@ -288,11 +288,11 @@ let send_message_backend connection reply_waiter_opt message =
                         message has been partially sent on the
                         connection, so the message stream is broken *)
                      lwt () = kill connection exn in
-                     fail exn
+                     raise_lwt exn
        end else
          match connection#state with
            | Killed | Closed ->
-               fail Connection_closed
+               raise_lwt Connection_closed
            | Active _ ->
                return ())
 
@@ -323,13 +323,13 @@ let method_call_with_message ~connection ?destination ~path ?interface ~member ~
         try
           return (o_msg, OBus_value.C.cast_sequence o_args body)
         with OBus_value.C.Signature_mismatch ->
-          fail (OBus_message.invalid_reply i_msg (OBus_value.C.type_sequence o_args) o_msg)
+          raise_lwt (OBus_message.invalid_reply i_msg (OBus_value.C.type_sequence o_args) o_msg)
       end
     | { OBus_message.typ = OBus_message.Error(_, error_name);
         OBus_message.body = OBus_value.V.Basic(OBus_value.V.String message) :: _  } ->
-        fail (OBus_error.make error_name message)
+        raise_lwt (OBus_error.make error_name message)
     | { OBus_message.typ = OBus_message.Error(_, error_name) } ->
-        fail (OBus_error.make error_name "")
+        raise_lwt (OBus_error.make error_name "")
     | _ ->
         assert false
 
@@ -391,16 +391,16 @@ let dispatch_message active message =
                     return [OBus_value.V.basic_string (OBus_uuid.to_string uuid)]
                   with exn ->
                     if OBus_error.name exn = OBus_error.ocaml then
-                      fail
+                      raise_lwt
                         (OBus_error.Failed
                            (Printf.sprintf
                               "Cannot read the machine uuid file (%s)"
                               OBus_config.machine_uuid_file))
                     else
-                      fail exn
+                      raise_lwt exn
                 end
               | _ ->
-                  fail
+                  raise_lwt
                     (OBus_error.Unknown_method
                        (Printf.sprintf
                           "Method %S with signature %S on interface \"org.freedesktop.DBus.Peer\" does not exist"
@@ -445,7 +445,7 @@ let rec dispatch_forever active =
       choose [OBus_transport.recv active.transport; active.abort_recv_waiter]
     with exn ->
       lwt () = kill active.wrapper (Transport_error exn) in
-      fail exn
+      raise_lwt exn
   in
   match apply_filters "incoming" message active.incoming_filters with
     | None ->

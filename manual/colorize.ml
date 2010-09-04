@@ -1053,7 +1053,7 @@ module OBus = struct
     interface = { color = "black"; bold = false; emph = false };
     member = { color = "black"; bold = false; emph = false };
     keyword = { color = "black"; bold = true; emph = false };
-    symbol = { color = "black"; bold = false; emph = false };
+    symbol = { color = "black"; bold = true; emph = false };
     variable = { color = "black"; bold = false; emph = false };
     type_ = { color = "black"; bold = false; emph = false };
     number = { color = "black"; bold = false; emph = false };

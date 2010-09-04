@@ -102,7 +102,7 @@ let session_bus = lazy(
     return bus
   with exn ->
     lwt () = Lwt_log.warning ~exn ~section "Failed to open a connection to the session bus" in
-    fail exn
+    raise_lwt exn
 )
 
 let session ?switch () =
@@ -129,7 +129,7 @@ let system ?switch () =
                  return bus
                with exn ->
                  lwt () = Lwt_log.warning ~exn ~section "Failed to open a connection to the system bus" in
-                 fail exn)
+                 raise_lwt exn)
   in
   lwt () = Lwt_switch.add_hook_or_exec switch (fun () -> OBus_connection.close bus) in
   return bus

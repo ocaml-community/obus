@@ -95,12 +95,12 @@ let make_socket domain typ addr =
     return (fd, domain)
   with exn ->
     Lwt_unix.close fd;
-    fail exn
+    raise_lwt exn
 
 let rec write_nonce fd nonce pos len =
   Lwt_unix.write fd nonce 0 16 >>= function
     | 0 ->
-        fail (Failure "OBus_transport.connect: failed to send the nonce to the server")
+        raise_lwt (Failure "OBus_transport.connect: failed to send the nonce to the server")
     | n ->
         if n = len then
           return ()
@@ -110,19 +110,19 @@ let rec write_nonce fd nonce pos len =
 let make_socket_nonce nonce_file domain typ addr =
   match nonce_file with
     | None ->
-        fail (Invalid_argument "OBus_transport.connect: missing 'noncefile' parameter")
+        raise_lwt (Invalid_argument "OBus_transport.connect: missing 'noncefile' parameter")
     | Some file_name ->
         lwt nonce =
           try_lwt
             Lwt_io.with_file ~mode:Lwt_io.input file_name (Lwt_io.read ~count:16)
           with
             | Unix.Unix_error(err, _, _) ->
-                fail (Failure(Printf.sprintf "failed to read the nonce file '%s': %s" file_name (Unix.error_message err)))
+                raise_lwt (Failure(Printf.sprintf "failed to read the nonce file '%s': %s" file_name (Unix.error_message err)))
             | End_of_file ->
-                fail (Failure(Printf.sprintf "OBus_transport.connect: '%s' is an invalid nonce-file" file_name))
+                raise_lwt (Failure(Printf.sprintf "OBus_transport.connect: '%s' is an invalid nonce-file" file_name))
         in
         if String.length nonce <> 16 then
-          fail (Failure(Printf.sprintf "OBus_transport.connect: '%s' is an invalid nonce-file" file_name))
+          raise_lwt (Failure(Printf.sprintf "OBus_transport.connect: '%s' is an invalid nonce-file" file_name))
         else begin
           lwt fd, domain = make_socket domain typ addr in
           lwt () = write_nonce fd nonce 0 16 in
@@ -140,9 +140,9 @@ let rec connect address =
           | None, Some abst, None ->
               make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ abst))
           | None, None, Some tmpd ->
-              fail (Invalid_argument "OBus_transport.connect: unix tmpdir can only be used as a listening address")
+              raise_lwt (Invalid_argument "OBus_transport.connect: unix tmpdir can only be used as a listening address")
           | _ ->
-              fail (Invalid_argument "OBus_transport.connect: invalid unix address, must supply exactly one of 'path', 'abstract', 'tmpdir'")
+              raise_lwt (Invalid_argument "OBus_transport.connect: invalid unix address, must supply exactly one of 'path', 'abstract', 'tmpdir'")
       end
     | ("tcp" | "nonce-tcp") as name -> begin
         let host = match OBus_address.arg "host" address with
@@ -184,7 +184,7 @@ let rec connect address =
                   | [] ->
                       (* If all connection failed, raise the error for
                          the first address: *)
-                      fail exn
+                      raise_lwt exn
                   | ai :: ais ->
                       try_lwt
                         make_socket ai.ai_family ai.ai_socktype ai.ai_addr
@@ -201,26 +201,26 @@ let rec connect address =
               Lwt_process.pread_line ("dbus-launch", [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
             with exn ->
               lwt () = Lwt_log.error_f ~section "autolaunch failed: %s" (Printexc.to_string exn) in
-              fail exn
+              raise_lwt exn
           in
           let line = try String.sub line 0 (String.index line '\000') with _ -> line in
           try_lwt
             return (OBus_address.of_string line)
           with OBus_address.Parse_failure(addr, pos, reason) as exn ->
             lwt () = Lwt_log.error_f ~section "autolaunch returned an invalid address %S, at position %d: %s" addr pos reason in
-            fail exn
+            raise_lwt exn
         in
         match addresses with
           | [] ->
               lwt () = Lwt_log.error_f ~section "'autolaunch' returned no addresses" in
-              fail (Failure "'autolaunch' returned no addresses")
+              raise_lwt (Failure "'autolaunch' returned no addresses")
           | address :: rest ->
               try_lwt
                 connect address
               with exn ->
                 let rec find = function
                   | [] ->
-                      fail exn
+                      raise_lwt exn
                   | address :: rest ->
                       try_lwt
                         connect address
@@ -231,13 +231,13 @@ let rec connect address =
       end
 
     | name ->
-        fail (Failure ("unknown transport type: " ^ name))
+        raise_lwt (Failure ("unknown transport type: " ^ name))
 
 let of_addresses ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms addresses =
   Lwt_switch.check switch;
   match addresses with
     | [] ->
-        fail (Invalid_argument "OBus_transport.of_addresses: no address given")
+        raise_lwt (Invalid_argument "OBus_transport.of_addresses: no address given")
     | addr :: rest ->
         (* Search an address for which connection succeed: *)
         lwt fd, domain =
@@ -248,7 +248,7 @@ let of_addresses ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms addr
             let rec find = function
               | [] ->
                   (* If they all fail, raise the first exception: *)
-                  fail exn
+                  raise_lwt exn
               | addr :: rest ->
                   try_lwt
                     connect addr
@@ -260,7 +260,7 @@ let of_addresses ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms addr
         (* Do authentication only once: *)
         Lwt_unix.write fd "\x00" 0 1 >>= function
           | 0 ->
-              fail (OBus_auth.Auth_failure "failed to send the initial null byte")
+              raise_lwt (OBus_auth.Auth_failure "failed to send the initial null byte")
           | 1 ->
               lwt guid, capabilities =
                 OBus_auth.Client.authenticate

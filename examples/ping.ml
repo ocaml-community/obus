@@ -34,4 +34,4 @@ lwt _ =
         lwt () = printl "You must run pong to try this sample!" in
         exit 1
     | exn ->
-        fail exn
+        raise_lwt exn

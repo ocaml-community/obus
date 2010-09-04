@@ -2,7 +2,7 @@ interface org.freedesktop.DBus {
   (* A method definition: *)
   method Hello : () -> (name : string)
 
-  (* Bitwise flags definition: *) *)
+  (* Bitwise flags definition: *)
   flag request_name_flags : uint32 {
     0b001: allow_replacement
     0b010: replace_existing

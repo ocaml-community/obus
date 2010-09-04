@@ -318,7 +318,7 @@ let monitor_group ?switch group =
             info.cache <- Group_map.remove cache_key info.cache;
             wakeup_exn wakener exn;
             lwt () = Lwt_switch.turn_off switch in
-            fail exn
+            raise_lwt exn
   in
 
   cache.c_count <- cache.c_count + 1;
@@ -341,7 +341,7 @@ let monitor_group ?switch group =
           (OBus_path.to_string (OBus_proxy.path group.g_proxy))
           (OBus_proxy.name group.g_proxy)
       in
-      fail exn
+      raise_lwt exn
   ) in
 
   let signal = Lwt_signal.with_finaliser (finalise disable) cache.c_map in

@@ -158,7 +158,7 @@ let make ?switch connection name =
               info.resolvers <- String_map.remove name info.resolvers;
               wakeup_exn wakener exn;
               lwt () = Lwt_switch.turn_off export_switch in
-              fail exn
+              raise_lwt exn
     in
 
     resolver.count <- resolver.count + 1;
@@ -174,7 +174,7 @@ let make ?switch connection name =
           return ()
       with exn ->
         lwt () = Lwt_log.warning_f ~section ~exn "failed to disable resolver for name %S" name in
-        fail exn
+        raise_lwt exn
     ) in
 
     let owner = Lwt_signal.with_finaliser (finalise remove) resolver.owner in

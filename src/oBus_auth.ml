@@ -25,7 +25,7 @@ let max_line_length = 42 * 1024
 let max_reject = 42
 
 exception Auth_failure of string
-let auth_failure fmt = ksprintf (fun msg -> fail (Auth_failure msg)) fmt
+let auth_failure fmt = ksprintf (fun msg -> raise_lwt (Auth_failure msg)) fmt
 
 let () =
   Printexc.register_printer
@@ -112,7 +112,7 @@ end = struct
         Lwt_stream.get_while (fun _ -> true) (Lwt_stream.map parse_line (Lwt_io.lines_of_file fname))
       with exn ->
         lwt () = Lwt_log.error_f ~section "failed to load cookie file %s: %s" (keyring_file_name context) (Printexc.to_string exn) in
-        fail exn
+        raise_lwt exn
     else
       return []
 
@@ -131,14 +131,14 @@ end = struct
               Lwt_log.info_f ~section "stale lock file %s removed" fname
             with Unix.Unix_error(error, _, _) as exn ->
               lwt () = Lwt_log.error_f ~section "failed to remove stale lock file %s: %s" fname (Unix.error_message error) in
-              fail exn
+              raise_lwt exn
           in
           (try_lwt
              really_lock ();
              return ()
            with Unix.Unix_error(error, _, _) as exn ->
              lwt () = Lwt_log.error_f ~section "failed to lock file %s after removing it: %s" fname (Unix.error_message error) in
-             fail exn)
+             raise_lwt exn)
       | n ->
           try_lwt
             really_lock ();
@@ -156,7 +156,7 @@ end = struct
       return ()
     with Unix.Unix_error(error, _, _) as exn ->
       lwt () = Lwt_log.error_f ~section "failed to unlink file %s: %s" fname (Unix.error_message error) in
-      fail exn
+      raise_lwt exn
 
   let save context cookies =
     let fname = keyring_file_name context in
@@ -178,14 +178,14 @@ end = struct
           Lwt_io.lines_to_file tmp_fname (Lwt_stream.map print_line (Lwt_stream.of_list cookies))
         with exn ->
           lwt () = Lwt_log.error_f ~section "unable to write temporary keyring file %s: %s" tmp_fname (Printexc.to_string exn) in
-          fail exn
+          raise_lwt exn
       in
       try
         Unix.rename tmp_fname fname;
         return ()
       with Unix.Unix_error(error, _, _) as exn ->
         lwt () = Lwt_log.error_f ~section "unable to rename file %s to %s: %s" tmp_fname fname (Unix.error_message error) in
-        fail exn
+        raise_lwt exn
       finally
         unlock_file lock_fname
 end
@@ -205,19 +205,19 @@ let make_stream ~recv ~send = {
               recv ()
             with
               | Auth_failure _ as exn ->
-                  fail exn
+                  raise_lwt exn
               | End_of_file ->
-                  fail (Auth_failure("input: premature end of input"))
+                  raise_lwt (Auth_failure("input: premature end of input"))
               | exn ->
-                  fail (Auth_failure("input: " ^ Printexc.to_string exn)));
+                  raise_lwt (Auth_failure("input: " ^ Printexc.to_string exn)));
   send = (fun line ->
             try_lwt
               send line
             with
               | Auth_failure _ as exn ->
-                  fail exn
+                  raise_lwt exn
               | exn ->
-                  fail (Auth_failure("output: " ^ Printexc.to_string exn)));
+                  raise_lwt (Auth_failure("output: " ^ Printexc.to_string exn)));
 }
 
 let stream_of_channels (ic, oc) =
@@ -226,11 +226,11 @@ let stream_of_channels (ic, oc) =
              let buf = Buffer.create 42 in
              let rec loop last =
                if Buffer.length buf > max_line_length then
-                 fail (Auth_failure "input: line too long")
+                 raise_lwt (Auth_failure "input: line too long")
                else
                  Lwt_io.read_char_opt ic >>= function
                    | None ->
-                       fail (Auth_failure "input: premature end of input")
+                       raise_lwt (Auth_failure "input: premature end of input")
                    | Some ch ->
                        Buffer.add_char buf ch;
                        if last = '\r' && ch = '\n' then
@@ -250,13 +250,13 @@ let stream_of_fd fd =
              let rec loop () =
                let len = Buffer.length buf in
                if len > max_line_length then
-                 fail (Auth_failure "input: line too long")
+                 raise_lwt (Auth_failure "input: line too long")
                else if len >= 2 && Buffer.nth buf (len - 2) = '\r' && Buffer.nth buf (len - 1) = '\n' then
                  return (Buffer.contents buf)
                else
                  Lwt_unix.read fd tmp 0 (String.length tmp) >>= function
                    | 0 ->
-                       fail (Auth_failure "input: premature end of input")
+                       raise_lwt (Auth_failure "input: premature end of input")
                    | n ->
                        Buffer.add_substring buf tmp 0 n;
                        loop ()
@@ -269,7 +269,7 @@ let stream_of_fd fd =
                else
                  Lwt_unix.write fd line ofs len >>= function
                    | 0 ->
-                       fail (Auth_failure "output: zero byte written")
+                       raise_lwt (Auth_failure "output: zero byte written")
                    | n ->
                        assert (n > 0 && n <= len);
                        loop (ofs + n) (len - n)
@@ -284,7 +284,7 @@ let rec recv_line stream =
   lwt line = stream.recv () in
   let len = String.length line in
   if len < 2 || not (line.[len - 2] = '\r' && line.[len - 1] = '\n') then
-    fail (Auth_failure("input: invalid line received"))
+    raise_lwt (Auth_failure("input: invalid line received"))
   else
     return (String.sub line 0 (len - 2))
 
@@ -347,7 +347,7 @@ let rec recv mode command_parser stream =
     | `Failure(Failure msg) ->
         lwt () = send_line mode stream ("ERROR \"" ^ msg ^ "\"") in
         recv mode command_parser stream
-    | `Failure exn -> fail exn
+    | `Failure exn -> raise_lwt exn
 
 let client_recv = recv "client"
   (fun command args -> match command with

@@ -26,5 +26,5 @@ let machine_uuid = lazy(
       Lwt_log.error_f ~section "failed to read the local machine uuid from file %S: %s"
         OBus_config.machine_uuid_file (Printexc.to_string exn)
     in
-    fail exn
+    raise_lwt exn
 )

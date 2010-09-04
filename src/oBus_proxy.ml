@@ -95,4 +95,4 @@ let introspect proxy =
   try
     return (OBus_introspect.input (Xmlm.make_input ~strip:true (`String(0, str))))
   with Xmlm.Error((line, column), err) ->
-    fail (Failure(Printf.sprintf "OBus_proxy.introspect: invalid document, at line %d: %s" line (Xmlm.error_message err)))
+    raise_lwt (Failure(Printf.sprintf "OBus_proxy.introspect: invalid document, at line %d: %s" line (Xmlm.error_message err)))

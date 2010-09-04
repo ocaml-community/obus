@@ -411,7 +411,7 @@ let do_remove info rule_string =
       | "org.freedesktop.DBus.Error.MatchRuleNotFound" ->
           Lwt_log.info_f ~section "rule %S does not exists on the message bus" rule_string
       | _ ->
-          fail exn
+          raise_lwt exn
 
 (* Commits rules changes on the message bus: *)
 let commit info =
