@@ -1,0 +1,4 @@
+interface org.Foo.Bar {
+  method GetApplicationName : () -> (name : string)
+    (** Returns the name of the application *)
+}

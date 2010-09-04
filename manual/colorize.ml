@@ -905,6 +905,7 @@ module Caml = struct
     char : style;
     string : style;
     comment : style;
+    doc : style;
     variable : style;
   }
 
@@ -919,6 +920,7 @@ module Caml = struct
     char = { color = "LightSalmon"; bold = false; emph = false };
     string = { color = "LightSalmon"; bold = false; emph = false };
     comment = { color = "Chocolate1"; bold = false; emph = false };
+    doc = { color = "LightSalmon"; bold = false; emph = false };
     variable = { color = "LightGoldenrod"; bold = false; emph = false };
   }
 
@@ -933,6 +935,7 @@ module Caml = struct
     char = { color = "black"; bold = false; emph = false };
     string = { color = "black"; bold = false; emph = false };
     comment = { color = "black"; bold = false; emph = false };
+    doc = { color = "black"; bold = false; emph = false };
     variable = { color = "black"; bold = false; emph = false };
   }
 
@@ -990,7 +993,10 @@ module Caml = struct
           else
             (styles.symbol, "$") :: (styles.default, n) :: (styles.symbol, ":") :: (styles.default, s) :: (styles.symbol, "$") :: aux rest
       | COMMENT comment :: rest ->
-          (styles.comment, comment) :: aux rest
+          if comment.[2] = '*' then
+            (styles.doc, comment) :: aux rest
+          else
+            (styles.comment, comment) :: aux rest
       | BLANKS s :: rest ->
           (dummy, s) :: aux rest
       | NEWLINE :: rest ->
@@ -1034,6 +1040,7 @@ module OBus = struct
     type_ : style;
     number : style;
     comment : style;
+    doc : style;
   }
 
   let default_styles = {
@@ -1046,6 +1053,7 @@ module OBus = struct
     type_ = { color = "PaleGreen"; bold = false; emph = false };
     number = { color = "Orange"; bold = false; emph = false };
     comment = { color = "Chocolate1"; bold = false; emph = false };
+    doc = { color = "LightSalmon"; bold = false; emph = false };
   }
 
   let bw_styles = {
@@ -1058,6 +1066,7 @@ module OBus = struct
     type_ = { color = "black"; bold = false; emph = false };
     number = { color = "black"; bold = false; emph = false };
     comment = { color = "black"; bold = false; emph = false };
+    doc = { color = "black"; bold = false; emph = false };
   }
 
   let latex_of_tokens styles tokens =
@@ -1093,7 +1102,10 @@ module OBus = struct
       | FLOAT(_, s) :: rest ->
           (styles.number, s) :: aux rest
       | COMMENT comment :: rest ->
-          (styles.comment, comment) :: aux rest
+          if comment.[2] = '*' then
+            (styles.doc, comment) :: aux rest
+          else
+            (styles.comment, comment) :: aux rest
       | BLANKS s :: rest ->
           (dummy, s) :: aux rest
       | NEWLINE :: rest ->
@@ -1131,4 +1143,41 @@ module OBus = struct
 
   let input_file ?(styles=default_styles) file =
     process_file keywords (latex_of_tokens styles) styles.background file
+end
+
+(* +-----------------------------------------------------------------+
+   | Shell script                                                    |
+   +-----------------------------------------------------------------+ *)
+
+module Shell = struct
+  type styles = {
+    background : color;
+    default : style;
+  }
+
+  let default_styles = {
+    background = "#323232";
+    default = { color = "#5fbf77"; bold = false; emph = false };
+  }
+
+  let bw_styles = {
+    background = "#e5e5e5";
+    default = { color = "black"; bold = false; emph = false };
+  }
+
+  let input_file ?(styles=default_styles) file =
+    let ic = open_in file in
+    let len = in_channel_length ic in
+    let str = String.create (len + 1) in
+    str.[0] <- '\n';
+    really_input ic str 1 len;
+    close_in ic;
+    Latex.center
+      (with_bg_color styles.background
+         (Latex.minipage (`Cm 14.)
+            (let style = styles.default in
+             let tex = with_fg_color style.color (Latex.texttt (Latex.Verbatim.verbatim str)) in
+             let tex = if style.bold then Latex.textbf tex else tex in
+             let tex = if style.emph then Latex.emph tex else tex in
+             tex)))
 end

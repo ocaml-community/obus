@@ -36,6 +36,7 @@ module Caml : sig
     char : style;
     string : style;
     comment : style;
+    doc : style;
     variable : style;
   }
 
@@ -63,6 +64,7 @@ module OBus : sig
     type_ : style;
     number : style;
     comment : style;
+    doc : style;
   }
 
   val default_styles : styles
@@ -75,4 +77,14 @@ module OBus : sig
     (** [input_file ?styles file_name] reads the given obus idl file
         and format its contents according to [styles], which defaults
         to {!default_stlyes}. *)
+end
+
+module Shell : sig
+  type styles = {
+    background : color;
+    default : style;
+  }
+  val default_styles : styles
+  val bw_styles : styles
+  val input_file : ?styles : styles -> string -> Latex.t
 end
