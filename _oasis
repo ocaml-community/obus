@@ -282,3 +282,13 @@ Document "obus-xml2idl-man"
   XCustomClean: $rm man/obus-xml2idl.1.gz
   DataFiles: man/obus-xml2idl.1.gz
   InstallDir: $datadir/man/man1
+
+# +-------------------------------------------------------------------+
+# | Manual                                                            |
+# +-------------------------------------------------------------------+
+
+Document "User manual"
+  Title: OBus user manual
+  Install: true
+  DataFiles: manual/manual.pdf, manual/manual-colored.pdf
+  InstallDir: $datadir/doc/$pkg_name
