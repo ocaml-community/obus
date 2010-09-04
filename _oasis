@@ -231,6 +231,7 @@ Document "obus-dump-man"
   XCustom: $gzip -c man/obus-dump.1 > man/obus-dump.1.gz
   XCustomClean: $rm man/obus-dump.1.gz
   DataFiles: man/obus-dump.1.gz
+  InstallDir: $datadir/man/man1
 
 Document "obus-gen-interface-man"
   Type: custom (0.1.0)
@@ -240,6 +241,7 @@ Document "obus-gen-interface-man"
   XCustom: $gzip -c man/obus-gen-interface.1 > man/obus-gen-interface.1.gz
   XCustomClean: $rm man/obus-gen-interface.1.gz
   DataFiles: man/obus-gen-interface.1.gz
+  InstallDir: $datadir/man/man1
 
 Document "obus-gen-client-man"
   Type: custom (0.1.0)
@@ -249,6 +251,7 @@ Document "obus-gen-client-man"
   XCustom: $gzip -c man/obus-gen-client.1 > man/obus-gen-client.1.gz
   XCustomClean: $rm man/obus-gen-client.1.gz
   DataFiles: man/obus-gen-client.1.gz
+  InstallDir: $datadir/man/man1
 
 Document "obus-gen-server-man"
   Type: custom (0.1.0)
@@ -258,6 +261,7 @@ Document "obus-gen-server-man"
   XCustom: $gzip -c man/obus-gen-server.1 > man/obus-gen-server.1.gz
   XCustomClean: $rm man/obus-gen-server.1.gz
   DataFiles: man/obus-gen-server.1.gz
+  InstallDir: $datadir/man/man1
 
 Document "obus-idl2xml-man"
   Type: custom (0.1.0)
@@ -267,6 +271,7 @@ Document "obus-idl2xml-man"
   XCustom: $gzip -c man/obus-idl2xml.1 > man/obus-idl2xml.1.gz
   XCustomClean: $rm man/obus-idl2xml.1.gz
   DataFiles: man/obus-idl2xml.1.gz
+  InstallDir: $datadir/man/man1
 
 Document "obus-xml2idl-man"
   Type: custom (0.1.0)
@@ -276,3 +281,4 @@ Document "obus-xml2idl-man"
   XCustom: $gzip -c man/obus-xml2idl.1 > man/obus-xml2idl.1.gz
   XCustomClean: $rm man/obus-xml2idl.1.gz
   DataFiles: man/obus-xml2idl.1.gz
+  InstallDir: $datadir/man/man1
