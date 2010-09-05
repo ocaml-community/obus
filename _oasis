@@ -83,7 +83,7 @@ Library "obus-idl"
 Library "obus-syntax"
   Path: syntax
   Install: true
-  Modules: Pa_obus
+  InternalModules: Pa_obus
   FindlibName: syntax
   FindlibParent: obus
   BuildDepends: type-conv.syntax, camlp4.lib, camlp4.quotations.o
