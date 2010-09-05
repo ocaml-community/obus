@@ -11,7 +11,7 @@ Authors:      Jérémie Dimino
 Homepage:     http://obus.forge.ocamlcore.org/
 BuildTools:   ocamlbuild
 Plugins:      DevFiles (0.1.0), META (0.1.0)
-FilesAB:      src/OBus_config.ml.ab
+FilesAB:      src/oBus_config.ml.ab
 
 Synopsis:     obus
 Description:  Pure OCaml implementation of the D-Bus protocol
@@ -231,7 +231,7 @@ Document "obus-dump-man"
   XCustom: $gzip -c man/obus-dump.1 > man/obus-dump.1.gz
   XCustomClean: $rm man/obus-dump.1.gz
   DataFiles: man/obus-dump.1.gz
-  InstallDir: $datadir/man/man1
+  InstallDir: $mandir/man1
 
 Document "obus-gen-interface-man"
   Type: custom (0.1.0)
@@ -241,7 +241,7 @@ Document "obus-gen-interface-man"
   XCustom: $gzip -c man/obus-gen-interface.1 > man/obus-gen-interface.1.gz
   XCustomClean: $rm man/obus-gen-interface.1.gz
   DataFiles: man/obus-gen-interface.1.gz
-  InstallDir: $datadir/man/man1
+  InstallDir: $mandir/man1
 
 Document "obus-gen-client-man"
   Type: custom (0.1.0)
@@ -251,7 +251,7 @@ Document "obus-gen-client-man"
   XCustom: $gzip -c man/obus-gen-client.1 > man/obus-gen-client.1.gz
   XCustomClean: $rm man/obus-gen-client.1.gz
   DataFiles: man/obus-gen-client.1.gz
-  InstallDir: $datadir/man/man1
+  InstallDir: $mandir/man1
 
 Document "obus-gen-server-man"
   Type: custom (0.1.0)
@@ -261,7 +261,7 @@ Document "obus-gen-server-man"
   XCustom: $gzip -c man/obus-gen-server.1 > man/obus-gen-server.1.gz
   XCustomClean: $rm man/obus-gen-server.1.gz
   DataFiles: man/obus-gen-server.1.gz
-  InstallDir: $datadir/man/man1
+  InstallDir: $mandir/man1
 
 Document "obus-idl2xml-man"
   Type: custom (0.1.0)
@@ -271,24 +271,45 @@ Document "obus-idl2xml-man"
   XCustom: $gzip -c man/obus-idl2xml.1 > man/obus-idl2xml.1.gz
   XCustomClean: $rm man/obus-idl2xml.1.gz
   DataFiles: man/obus-idl2xml.1.gz
-  InstallDir: $datadir/man/man1
+  InstallDir: $mandir/man1
 
 Document "obus-xml2idl-man"
   Type: custom (0.1.0)
   Title: Man page for obus-xml2idl
   Install: true
-  BuildTools: gzip
+  BuildTools: gzip, rm
   XCustom: $gzip -c man/obus-xml2idl.1 > man/obus-xml2idl.1.gz
   XCustomClean: $rm man/obus-xml2idl.1.gz
   DataFiles: man/obus-xml2idl.1.gz
-  InstallDir: $datadir/man/man1
+  InstallDir: $mandir/man1
 
 # +-------------------------------------------------------------------+
-# | Manual                                                            |
+# | Doc                                                               |
 # +-------------------------------------------------------------------+
 
-Document "User manual"
+Document "obus-manual"
   Title: OBus user manual
+  Type: custom (0.1.0)
   Install: true
+  XCustom: true
   DataFiles: manual/manual.pdf, manual/manual-colored.pdf
-  InstallDir: $datadir/doc/$pkg_name
+  InstallDir: $pdfdir
+
+Document "obus-api"
+  Title:                API reference for OBus
+  Type:                 ocamlbuild (0.1.0)
+  Install:              true
+  InstallDir:           $htmldir/api
+  DataFiles:            utils/doc/style.css
+  BuildTools:           ocamldoc
+  XOCamlbuildPath:      ./
+  XOCamlBuildIntro:     apiref-intro
+  XOCamlbuildLibraries:
+    obus,
+    obus.hal,
+    obus.idl,
+    obus.network-manager,
+    obus.notification,
+    obus.policykit,
+    obus.udisks,
+    obus.upower

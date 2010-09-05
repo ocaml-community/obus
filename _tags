@@ -1,44 +1,8 @@
 # -*- conf -*-
 
-# +------------------------------------------------------------------+
-# | Use of syntax extensions                                         |
-# +------------------------------------------------------------------+
+<**/*.ml>: syntax_camlp4o
+<**/*.ml>: pa_obus
+<syntax/*.ml>: -pa_obus
 
-# Use camlp4 for all implementation files
-<**/*.ml>: syntax(camlp4o), package(camlp4)
-
-# Use syntax extesions on all files, except for the syntax extension:
-<**/*.ml> and not <syntax/*.ml>: package(lwt.syntax), \
-                                 package(lwt.syntax.log), \
-                                 package(type-conv.syntax), \
-                                 pa_obus
-
-# The IDL parser uses camlp4:
-<src/oBus_idl.ml>: package(camlp4.extend)
-
-# Extension for the syntax extension:
-<syntax/pa_obus.ml>: package(camlp4.quotations.o)
-
-# +------------------------------------------------------------------+
-# | Packages                                                         |
-# +------------------------------------------------------------------+
-
-# Packages used by syntax extensons:
-<syntax/*>: package(camlp4.lib)
-
-# Pa_obus use type-conv:
-<syntax/pa_obus.*>: package(type-conv)
-
-# Tools use the IDL parser which requires camlp4:
-<tools/*>: package(camlp4.lib)
-
-# Common dependencies, except for syntax extensions and libraries:
-not (<**/*.cm{a,xa,xs}> or <syntax/**/*>): package(lwt.unix), package(lwt.react), package(xmlm)
-
-# Use obus everywhere, except for obus itself, the syntax extension
-# and sub-libraries:
-not (<**/*.cm{a,xa,xs}> or <{syntax,src,tools}/**/*> or <oBus_config.*>): use_obus
-
-# Examples
-<examples/{eject,signals}.*>: use_hal
-<examples/notify.*>: use_notification
+# OASIS_START
+# OASIS_STOP

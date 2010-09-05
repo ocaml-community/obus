@@ -11,7 +11,7 @@ let section = Lwt_log.Section.make "obus(info)"
 
 open Lwt
 
-let version = OBus_version.version
+let version = OBus_config.version
 
 let protocol_version = 1
 let max_name_length = OBus_protocol.max_name_length
