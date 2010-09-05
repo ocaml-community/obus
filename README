@@ -10,21 +10,27 @@ url: https://forge.ocamlcore.org/projects/obus/
   type-conv:  http://www.ocaml.info/home/ocaml_sources.html#type-conv
   xmlm:       http://erratique.ch/software/xmlm
 
-  You requires at least ocaml version 3.12.
+  It also requires at least ocaml version 3.12.
 
 * Installation:
 
   To compile and install OBus just type:
 
-  $ make all
-  $ make PREFIX=<prefix> install
+  $ ocaml setup.ml -configure
+  $ ocaml setup.ml -build
+  $ ocaml setup.ml -install
 
-  Packagers may patch the file "oBus_config.ml".
+  Optionally you can also build the documentation with:
 
-  If you want to only compile/install the libraries, type:
+  $ ocaml setup.ml -doc
 
-  $ make libs
-  $ make install-libs
+  If you got the development version of obus, you also
+  need OASIS (http://oasis.forge.ocamlcore.org/index.php).
+  Once installed type:
+
+  $ OASIS setup-dev
+
+  After that you can follow the normal instructions
 
 * Using the library
 
