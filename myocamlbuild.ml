@@ -36,6 +36,12 @@ let () =
                                    A"-o"; A(env "%");
                                    A(env "%.obus")]));
 
+             (* Generation of ocaml modules from xml introspection files *)
+             rule "XML to OCaml"
+               ~prods:["%.ml"; "%.mli"]
+               ~deps:["%.xml"]
+               (fun env _ -> Cmd(S[P"tools/obus-gen-interface"; A"-o"; A(env "%"); A(env "%.xml")]));
+
              (* Use an introduction page with categories *)
              tag_file "obus-api.docdir/index.html" ["apiref"];
              dep ["apiref"] ["apiref-intro"];

@@ -313,3 +313,93 @@ Document "obus-api"
     obus.policykit,
     obus.udisks,
     obus.upower
+
+# +-------------------------------------------------------------------+
+# | Tests                                                             |
+# +-------------------------------------------------------------------+
+
+Executable tests
+  Path: tests
+  Install: false
+  CompiledObject: best
+  MainIs: main.ml
+  BuildDepends: obus
+
+Test main
+  Command: $tests
+  TestTools: tests
+
+# +-------------------------------------------------------------------+
+# | Examples                                                          |
+# +-------------------------------------------------------------------+
+
+Document examples
+  Title: Examples
+  Type: custom (0.1.0)
+  Install: true
+  XCustom: true
+  DataFiles: examples/*.ml, examples/*.xml
+  InstallDir: $docdir/examples
+
+Executable "bus-functions"
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: bus_functions.ml
+  BuildDepends: obus, lwt.syntax
+
+Executable eject
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: eject.ml
+  BuildDepends: obus, lwt.syntax, obus.hal
+
+Executable hello
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: hello.ml
+  BuildDepends: obus, lwt.syntax
+
+Executable "list-services"
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: list_services.ml
+  BuildDepends: obus, lwt.syntax
+
+Executable monitor
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: monitor.ml
+  BuildDepends: obus, lwt.syntax
+
+Executable notify
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: notify.ml
+  BuildDepends: obus, lwt.syntax, obus.notification
+
+Executable ping
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: ping.ml
+  BuildDepends: obus, lwt.syntax
+
+Executable pong
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: pong.ml
+  BuildDepends: obus, lwt.syntax
+
+Executable signals
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: signals.ml
+  BuildDepends: obus, lwt.syntax, obus.hal
