@@ -5,9 +5,9 @@
 
 # Build the user manual for release
 cd manual
-make all
+ocamlbuild manual.pdf manual-colored.pdf
 mv _build/manual.pdf _build/manual-colored.pdf .
-make clean
+ocamlbuild -clean
 cd ..
 
 # The makefile contains no useful rules for the end user

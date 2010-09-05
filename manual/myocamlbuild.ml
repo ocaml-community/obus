@@ -27,6 +27,8 @@ let () =
 
        | After_rules ->
 
+           tag_any ["package(melt)"; "package(camlp4.lib)"];
+
            if have_native then
              rule "best" ~dep:"%.native" ~prod:"%.best"
                (fun env _ -> ln_s (Filename.basename (env "%.native")) (env "%.best"))
