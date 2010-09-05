@@ -291,7 +291,7 @@ Document "obus-manual"
   Title: OBus user manual
   Type: custom (0.1.0)
   Install: true
-  XCustom: true
+  XCustom: make -C manual manual.pdf manual-colored.pdf
   DataFiles: manual/manual.pdf, manual/manual-colored.pdf
   InstallDir: $pdfdir
 

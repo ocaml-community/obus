@@ -18,5 +18,14 @@ normal:
 colored:
 	$(OC) manual-colored.pdf
 
+manual.pdf:
+	$(OC) manual.pdf
+	cp _build/manual.pdf .
+
+manual-colored.pdf:
+	$(OC) manual-colored.pdf
+	cp _build/manual-colored.pdf .
+
 clean:
 	$(OC) -clean
+	rm -f *.pdf
