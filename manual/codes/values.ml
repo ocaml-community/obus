@@ -15,3 +15,4 @@
 (* Try to cast a D-Bus value to an ocaml one with the wrong type: *)
 # C.cast_sequence (C.seq1 C.basic_string) [V.basic(V.int32 0l)];;
 Exception: OBus_value.C.Signature_mismatch.
+  

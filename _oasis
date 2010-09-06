@@ -2,19 +2,18 @@
 # | Package parameters                                                |
 # +-------------------------------------------------------------------+
 
-OASISFormat:  0.1
-Name:         obus
-Version:      1.0rc1
-LicenseFile:  LICENSE
-License:      BSD3
-Authors:      Jérémie Dimino
-Homepage:     http://obus.forge.ocamlcore.org/
-BuildTools:   ocamlbuild
-Plugins:      DevFiles (0.1.0), META (0.1.0)
-FilesAB:      src/oBus_config.ml.ab
-
-Synopsis:     obus
-Description:  Pure OCaml implementation of the D-Bus protocol
+OASISFormat: 0.1
+Name: obus
+Version: 1.0rc1
+LicenseFile: LICENSE
+License: BSD3
+Authors: Jérémie Dimino
+Homepage: http://obus.forge.ocamlcore.org/
+BuildTools:ocamlbuild
+Plugins: DevFiles (0.1.0), META (0.1.0)
+FilesAB: src/oBus_config.ml.ab
+Synopsis: obus
+Description: Pure OCaml implementation of the D-Bus protocol
 
 # +-------------------------------------------------------------------+
 # | The core library                                                  |

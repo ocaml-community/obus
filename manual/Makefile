@@ -5,27 +5,29 @@
 #
 # This file is a part of obus, an ocaml implementation of D-Bus.
 
-OC := ocamlbuild -classic-display
+MELT := melt -latex xelatex -pdf -no-link myocamlbuild.ml
 
 default: colored
 
-all:
-	$(OC) manual.pdf manual-colored.pdf
+all: manual.pdf manual-colored.pdf
 
 normal:
-	$(OC) manual.pdf
+	env OBUS_MANUAL_USE_COLORS=0 $(MELT) manual.mlt
 
 colored:
-	$(OC) manual-colored.pdf
+	env OBUS_MANUAL_USE_COLORS=1 $(MELT) manual.mlt
 
 manual.pdf:
-	$(OC) manual.pdf
-	cp _build/manual.pdf .
+	env OBUS_MANUAL_USE_COLORS=0 $(MELT) manual.mlt
+	cp _melt/manual.pdf manual.pdf
 
 manual-colored.pdf:
-	$(OC) manual-colored.pdf
-	cp _build/manual-colored.pdf .
+	env OBUS_MANUAL_USE_COLORS=1 $(MELT) manual.mlt
+	cp _melt/manual.pdf manual-colored.pdf
+
+clean-melt:
+	melt -clean
 
 clean:
-	$(OC) -clean
+	melt -clean
 	rm -f *.pdf
