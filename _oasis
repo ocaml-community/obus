@@ -218,6 +218,13 @@ Executable "obus-idl2xml"
   MainIs: obus_idl2xml.ml
   BuildDepends: obus, obus.idl, camlp4.lib
 
+Executable "obus-introspect"
+  Path: tools
+  Install: true
+  CompiledObject: best
+  MainIs: obus_introspect.ml
+  BuildDepends: obus
+
 # +-------------------------------------------------------------------+
 # | Man pages                                                         |
 # +-------------------------------------------------------------------+
@@ -280,6 +287,16 @@ Document "obus-xml2idl-man"
   XCustom: $gzip -c man/obus-xml2idl.1 > man/obus-xml2idl.1.gz
   XCustomClean: $rm man/obus-xml2idl.1.gz
   DataFiles: man/obus-xml2idl.1.gz
+  InstallDir: $mandir/man1
+
+Document "obus-introspect-man"
+  Type: custom (0.1.0)
+  Title: Man page for obus-introspect
+  Install: true
+  BuildTools: gzip, rm
+  XCustom: $gzip -c man/obus-introspect.1 > man/obus-introspect.1.gz
+  XCustomClean: $rm man/obus-introspect.1.gz
+  DataFiles: man/obus-introspect.1.gz
   InstallDir: $mandir/man1
 
 # +-------------------------------------------------------------------+
