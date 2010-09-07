@@ -94,6 +94,72 @@ lwt () =
   manual. Note that you must have a good knowledge of {dbus} to use it.
 
 (*****************************************************************************)
+{section "Quick start"}
+
+  In this section we explain how to quickly uses a {dbus} service using {obus}.
+
+  {itemize [
+     "The first step is to obtain the introspection of the service. Some applications
+      put theses file into {texttt "/usr/share/dbus-1/interfaces/"}. Otherwise you can
+      get it by introspecting a running service, for example:
+
+      <:shell_code:#
+$ obus-introspect -rec org.foo.bar / > foo.xml
+#>
+
+      will recursivelly introspect the service named {texttt "org.foo.bar"} and put
+      all the interfaces it implements into {texttt "foo.xml"}.";
+
+     "The second step is to turn this file into an ocaml module which contains
+      the description of the interface:
+
+       <:shell_code:#
+$ obus-gen-interface foo.xml
+#>
+
+      This will create the two files {texttt "foo_interfaces.ml"} and {texttt "foo_interfaces.ml"}.";
+
+     "The final step is to turn the introspection file into a module for client-side use:
+
+      <:shell_code:#
+$ obus-gen-client foo.xml
+#>
+
+      This will produce the two files {texttt "foo_client.mli"} and {texttt "foo_client.ml"}.
+      These two files can be edited, and must be compiled with the {texttt "lwt.syntax"} syntax
+      extension.";
+  ]}
+
+  After that, you can use {texttt "Foo_client"} module to access the service.
+  Methods are mapped to functions returning a {texttt "lwt"} thread, signals are mapped
+  to values of type {texttt "OBus_signal.t"}, and properties to values of type
+  {texttt "OBus_property.t"}. For example:
+
+  <:caml_code:#
+lwt () =
+  (* Connect to the session bus *)
+  lwt bus = OBus_bus.session () in
+
+  (* Create a proxy for a remote object *)
+  let proxy = OBus_proxy.make (OBus_peer.make bus "org.foo.bar") ["org"; "foo"; "bar"] in
+
+  (* Call a method of the servivce *)
+  lwt result = Foo_client.Org_foo_bar.plop proxy ... in
+
+  (* Connect to a signal of the service *)
+  lwt () =
+    Lwt_event.always_notify
+      (fun args -> ...)
+    =|< OBus_signal.connect (Foo_client.Org_foo_bar.plip proxy)
+  in
+
+  (* Read the contents of a property *)
+  lwt value = OBus_property.get (Foo_client.Org_foo_bar.plap proxy) in
+
+  ...
+#>
+
+(*****************************************************************************)
 {section "Basis"}
 
   In this section we will describe the minimum you must know to use {obus} and
@@ -536,14 +602,62 @@ lwt () =
 (*****************************************************************************)
 {section ~label:lowlevel_section "Low-level use of D-Bus"}
 
+  This section describes the low-level part of {obus}.
+
 {subsection "Message filters"}
+
+  Message filters are function that are applied to all incomming/outgoing
+  messages. Filters are of type:
+
+  <:caml_code:#
+type filter = OBus_message.t -> OBus_message.t option
+#>
+
+  Each filter may use and/or modify the message. If {texttt "None"} is returned
+  the message is dropped.
 
 {subsection "Matching rules"}
 
+  When using a message bus, an application do not receive messages that are not
+  destined to it. In order to receive such messages, one need to add rules on the
+  message bus. All messages matching a rule are sent to the application which defined
+  that rule.
+
+  There are two ways of adding matching rules: by using the module {texttt "OBus_bus"},
+  or by using {texttt "OBus_match"}. The functions {texttt "OBus_bus.add_match"} and
+  {texttt "OBus_bus.remove_match"} are directly mapped to the corresponding methods of the
+  message bus. The function {texttt "OBus_match.export"} is more clever:
+
+  {itemize [
+     "it exports only one time duplicated rules,";
+     "it exports only the most general rules.";
+   ]}
+
+  We say that a rule {texttt "r1"} is more general that a rule {texttt "r2"} if all messages
+  matched by {texttt "r2"} are also matched by {texttt "r1"}.
+  For example a rule that accept all messages with interface field equal to {texttt "foo.bar"}
+  is more general that a rule that accept all messages with interface field equal to
+  {texttt "foo.bar"} and with member field equal to {texttt "plop"}.
+
+  Note that you must be carefull if you use both modules that automatically manage
+  rules (such as {texttt "OBus_signal"}, {texttt "OBus_resolver"} or {texttt "OBus_property"})
+  and {texttt "OBus_bus.add_match"} or {texttt "OBus_bus.remove_match"}.
+
 {subsection "Defining new transports"}
+
+  A transport is a way of receiving and sending messages. The {texttt "OBus_transport"}
+  allow to defines new transports. If you want to create a new transport that use
+  the same serialization format as default transport, then you can use the {texttt "OBus_wire"}
+  module.
+
+  By definning new transports, you can for example write an application that forward messages
+  over the network in a very few lines of code.
 
 {subsection "Defining new authentication mechanisms"}
 
+  When openning a connection, before we can send and receive message over it, {dbus} requires
+  a authentication procedure. {obus} implements both client and server side authentication.
+  The {texttt "OBus_auth"} allow to write new client and server side authentication mechanisms.
 "
 
 let () =
