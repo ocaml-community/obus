@@ -7,35 +7,27 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+(* Color profile: *)
+let profile = `Light
+
 let obus = texttt "OBus"
 let dbus = texttt "D-Bus"
-let abstract body = command \"abstract\" [(T, body)] T
+let abstract body = environment \"abstract\" (T, body) T
 
 let lowlevel_section = label ()
 let name_tracking = label ()
 
-let use_colors =
-  try
-    Sys.getenv \"OBUS_MANUAL_USE_COLORS\" = \"1\"
-  with Not_found ->
-    false
-
-class env_dark = object
-  inherit Meldor_ocaml.env_dark
-  inherit Meldor_obus.env_dark
+class config profile = object(self)
+  inherit Meldor_ocaml.config profile
+  inherit Meldor_obus.config profile
+  method box = Meldor.Box_framed
 end
 
-class env_no_color = object
-  inherit Meldor_ocaml.env_no_color
-  inherit Meldor_obus.env_no_color
-end
+let config = new config profile
 
-let env = if use_colors then new env_dark else new env_no_color
-
-let caml_code = Verbatim.convert (Meldor_ocaml.stylise ~env:(env :> Meldor_ocaml.env))
-let obus_code = Verbatim.convert (Meldor_obus.stylise ~env:(env :> Meldor_obus.env))
-let shell_code =
-  Verbatim.convert (fun str -> Meldor.stylise ?background:env#background [(env#default, str)])
+let caml_code = Meldor_ocaml.stylise (config :> Meldor_ocaml.config)
+let obus_code = Meldor_obus.stylise (config :> Meldor_obus.config)
+let shell_code = Verbatim.convert (fun str -> Meldor.stylise ~box:config#box [(config#default, str)])
 
 let doc = "
 {abstract "
@@ -554,20 +546,12 @@ lwt () =
 
 "
 
-let set_mono_font name =
-  command
-    ~packages:[(\"xltxtra\", \"\")]
-    ~opt:(A, "Mapping=tex-text,Scale=0.8")
-    \"setmonofont\"
-    [(A, name)]
-    A
-
 let () =
   Melt.emit
     (document
        ~options:[`A4paper]
        ~title:"OBus user manual"
        ~author:"Jérémie Dimino"
-       ~prelude:(set_mono_font "DejaVu Sans Mono")
+       ~prelude:(Meldor.set_mono_font ~scale:0.8 "DejaVu Sans Mono")
        ~packages:[("fullpage", "")]
        doc)
