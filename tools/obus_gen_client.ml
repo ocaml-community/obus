@@ -277,10 +277,13 @@ let () =
       | _ -> Arg.usage args usage_message; exit 1
   in
 
-  let prefix =
+  let prefix, intf_module =
     match !prefix with
-      | Some str -> str
-      | None -> (try Filename.chop_extension source with Invalid_argument _ -> source) ^ "_client"
+      | Some str ->
+          (str, String.capitalize (Filename.basename str) ^ "_interfaces")
+      | None ->
+          let name = try Filename.chop_extension source with Invalid_argument _ -> source in
+          (name ^ "_client", String.capitalize name ^ "_interfaces")
   in
 
   let interfaces = Utils.parse_file source in
@@ -288,6 +291,7 @@ let () =
   let oc_impl = open_out (prefix ^ ".ml") and oc_intf = open_out (prefix ^ ".mli") in
 
   output_string oc_impl "open Lwt\n";
+  Printf.fprintf oc_impl "open %s\n" intf_module;
 
   Utils.IFSet.iter
     (fun (name, members, symbols, annotations) ->
