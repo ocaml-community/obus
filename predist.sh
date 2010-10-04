@@ -6,11 +6,8 @@
 # Build the user manual for release
 make -C manual manual.pdf clean-melt
 
-# The makefile contains no useful rules for the end user
-rm -f Makefile
-
 # Add OASIS stuff
 OASIS setup
 
-# Remove this file
-rm -f predist.sh
+# Cleanup
+rm -f predist.sh make-dist.sh
