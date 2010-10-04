@@ -5,7 +5,7 @@
 #
 # This file is a part of obus, an ocaml implementation of D-Bus.
 
-MELT := melt -latex xelatex -pdf -no-link myocamlbuild.ml
+MELT := melt -pdf -no-link
 
 all:
 	$(MELT) manual.mlt

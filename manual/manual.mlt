@@ -7,27 +7,18 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
-(* Color profile: *)
-let profile = `Light
-
 let obus = texttt "OBus"
 let dbus = texttt "D-Bus"
 let abstract body = environment \"abstract\" (T, body) T
 
+let code verb =
+  Verbatim.convert
+    (fun str ->
+       texttt (Latex.Verbatim.verbatim str))
+    verb
+
 let lowlevel_section = label ()
 let name_tracking = label ()
-
-class config profile = object(self)
-  inherit Meldor_ocaml.config profile
-  inherit Meldor_obus.config profile
-  method box = Meldor.Box_framed
-end
-
-let config = new config profile
-
-let caml_code = Meldor_ocaml.stylise (config :> Meldor_ocaml.config)
-let obus_code = Meldor_obus.stylise (config :> Meldor_obus.config)
-let shell_code = Verbatim.convert (fun str -> Meldor.stylise ~box:config#box [(config#default, str)])
 
 let doc = "
 {abstract "
@@ -71,7 +62,7 @@ let doc = "
   The use of these packages is straightforward and you need to know almost nothing
   about {dbus} or {obus}. For example, here is a program which open a popup notification:
 
-  <:caml_code:#
+  <:code:#
 open Notification
 
 lwt () =
@@ -103,7 +94,7 @@ lwt () =
       put theses file into {texttt "/usr/share/dbus-1/interfaces/"}. Otherwise you can
       get it by introspecting a running service, for example:
 
-      <:shell_code:#
+      <:code:#
 $ obus-introspect -rec org.foo.bar / > foo.xml
 #>
 
@@ -113,7 +104,7 @@ $ obus-introspect -rec org.foo.bar / > foo.xml
      "The second step is to turn this file into an ocaml module which contains
       the description of the interface:
 
-       <:shell_code:#
+       <:code:#
 $ obus-gen-interface foo.xml
 #>
 
@@ -121,7 +112,7 @@ $ obus-gen-interface foo.xml
 
      "The final step is to turn the introspection file into a module for client-side use:
 
-      <:shell_code:#
+      <:code:#
 $ obus-gen-client foo.xml
 #>
 
@@ -135,7 +126,7 @@ $ obus-gen-client foo.xml
   to values of type {texttt "OBus_signal.t"}, and properties to values of type
   {texttt "OBus_property.t"}. For example:
 
-  <:caml_code:#
+  <:code:#
 lwt () =
   (* Connect to the session bus *)
   lwt bus = OBus_bus.session () in
@@ -193,7 +184,7 @@ lwt () =
 
   Here is a small example which connects the session bus and prints its id:
 
-  <:caml_code:#
+  <:code:#
 open Lwt
 
 lwt () =
@@ -217,7 +208,7 @@ lwt () =
   Once connected, the unique name can is returned by the function {texttt "OBus_bus.name"}.
   Here is an example of a program that prints its unique name:
 
-  <:caml_code:#
+  <:code:#
 open Lwt
 
 lwt () =
@@ -240,7 +231,7 @@ lwt () =
 
   Here is an example:
 
-  <:caml_code:#
+  <:code:#
 open Lwt
 
 lwt () =
@@ -305,7 +296,7 @@ lwt () =
   Here is a simple example on how to call a method on a proxy
   (we will explain latter what means the {texttt "C.seq..."} things):
 
-  <:caml_code:#
+  <:code:#
 open Lwt
 open OBus_value
 
@@ -349,7 +340,7 @@ lwt () =
 
   Here is an example of convertion (in the toplevel):
 
-  <:caml_code:%
+  <:code:%
 # open OBus_value;;
 
 (* Make a D-Bus value from an ocaml one: *)
@@ -376,7 +367,7 @@ Exception: OBus_value.C.Signature_mismatch.
   Basically, to defines a mapping between an exception and a {dbus} error, here is what
   you have to do:
 
-  <:caml_code:#
+  <:code:#
 exception My_exn of string
 
 let module M = OBus_error.Register(struct
@@ -388,7 +379,7 @@ in ()
 
   Or, if you use the syntax extension:
 
-  <:caml_code:#
+  <:code:#
 exception My_exn of string
   with obus("org.foo.bar.MyError")
 #>
@@ -406,7 +397,7 @@ exception My_exn of string
   named \"foo\" on interface \"org.foo.bar\" which takes a string and returns an 32-bits signed
   integer:
 
-  <:caml_code:#
+  <:code:#
 open OBus_member
 
 let m_Foo = {
@@ -420,7 +411,7 @@ let m_Foo = {
 
   Once a member is defined, it can be used by the corresponding modules:
 
-  <:caml_code:#
+  <:code:#
 open Lwt
 open OBus_members
 
@@ -487,7 +478,7 @@ lwt () =
 
   The syntax is pretty simple. Here is an example, taken from {obus} sources (file {texttt "src/oBus_interfaces.obus"}):
 
-  <:obus_code:#
+  <:code:#
 interface org.freedesktop.DBus {
   (** A method definition: *)
   method Hello : () -> (name : string)
@@ -543,7 +534,7 @@ interface org.freedesktop.DBus {
 
   Here is a small example of interface:
 
-  <:obus_code:#
+  <:code:#
 interface org.Foo.Bar {
   method GetApplicationName : () -> (name : string)
     (** Returns the name of the application *)
@@ -552,7 +543,7 @@ interface org.Foo.Bar {
 
   It is converted with:
 
-  <:shell_code:#
+  <:code:#
 $ obus-gen-interface foobar.obus -o foobar_interfaces
 file "foobar_interfaces.ml" written
 file "foobar_interfaces.mli" written
@@ -566,7 +557,7 @@ file "foobar.ml" written
   Once it is done, here is how to actually create the object, add the interface
   and export it:
 
-  <:caml_code:#
+  <:code:#
 lwt () =
   lwt bus = OBus_bus.session () in
 
@@ -609,7 +600,7 @@ lwt () =
   Message filters are function that are applied to all incomming/outgoing
   messages. Filters are of type:
 
-  <:caml_code:#
+  <:code:#
 type filter = OBus_message.t -> OBus_message.t option
 #>
 
@@ -666,6 +657,5 @@ let () =
        ~options:[`A4paper]
        ~title:"OBus user manual"
        ~author:"Jérémie Dimino"
-       ~prelude:(Meldor.set_mono_font ~scale:0.8 "DejaVu Sans Mono")
        ~packages:[("fullpage", "")]
        doc)
