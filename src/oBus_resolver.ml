@@ -67,15 +67,18 @@ let has_exited peer_name info =
 let key = OBus_connection.new_key ()
 
 let get_name_owner connection name =
-  OBus_connection.method_call
-    ~connection
-    ~destination:OBus_protocol.bus_name
-    ~path:OBus_protocol.bus_path
-    ~interface:OBus_protocol.bus_interface
-    ~member:"GetNameOwner"
-    ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
-    ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
-    name
+  try_lwt
+    OBus_connection.method_call
+      ~connection
+      ~destination:OBus_protocol.bus_name
+      ~path:OBus_protocol.bus_path
+      ~interface:OBus_protocol.bus_interface
+      ~member:"GetNameOwner"
+      ~i_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+      ~o_args:(OBus_value.C.seq1 OBus_value.C.basic_string)
+      name
+  with exn when OBus_error.name exn = "org.freedesktop.DBus.Error.NameHasNoOwner" ->
+    return ""
 
 (* Handle NameOwnerChanged events *)
 let update_mapping info message =
