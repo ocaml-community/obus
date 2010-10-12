@@ -657,5 +657,5 @@ let () =
        ~options:[`A4paper]
        ~title:"OBus user manual"
        ~author:"Jérémie Dimino"
-       ~packages:[("fullpage", "")]
+       ~packages:[("fullpage", ""); ("inputenc", "utf8")]
        doc)
