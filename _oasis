@@ -10,7 +10,7 @@ License: BSD3
 Authors: Jérémie Dimino
 Homepage: http://obus.forge.ocamlcore.org/
 BuildTools:ocamlbuild
-Plugins: DevFiles (0.1.0), META (0.1.0)
+Plugins: DevFiles (0.2), META (0.2)
 FilesAB: src/oBus_config.ml.ab
 Synopsis: obus
 Description: Pure OCaml implementation of the D-Bus protocol
@@ -230,7 +230,7 @@ Executable "obus-introspect"
 # +-------------------------------------------------------------------+
 
 Document "obus-dump-man"
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Title: Man page for obus-dump
   Install: true
   BuildTools: gzip
@@ -240,7 +240,7 @@ Document "obus-dump-man"
   InstallDir: $mandir/man1
 
 Document "obus-gen-interface-man"
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Title: Man page for obus-gen-interface
   Install: true
   BuildTools: gzip
@@ -250,7 +250,7 @@ Document "obus-gen-interface-man"
   InstallDir: $mandir/man1
 
 Document "obus-gen-client-man"
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Title: Man page for obus-gen-client
   Install: true
   BuildTools: gzip
@@ -260,7 +260,7 @@ Document "obus-gen-client-man"
   InstallDir: $mandir/man1
 
 Document "obus-gen-server-man"
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Title: Man page for obus-gen-server
   Install: true
   BuildTools: gzip
@@ -270,7 +270,7 @@ Document "obus-gen-server-man"
   InstallDir: $mandir/man1
 
 Document "obus-idl2xml-man"
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Title: Man page for obus-idl2xml
   Install: true
   BuildTools: gzip
@@ -280,7 +280,7 @@ Document "obus-idl2xml-man"
   InstallDir: $mandir/man1
 
 Document "obus-xml2idl-man"
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Title: Man page for obus-xml2idl
   Install: true
   BuildTools: gzip, rm
@@ -290,7 +290,7 @@ Document "obus-xml2idl-man"
   InstallDir: $mandir/man1
 
 Document "obus-introspect-man"
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Title: Man page for obus-introspect
   Install: true
   BuildTools: gzip, rm
@@ -305,21 +305,20 @@ Document "obus-introspect-man"
 
 Document "obus-manual"
   Title: OBus user manual
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Install: true
   XCustom: make -C manual manual.pdf
   DataFiles: manual/manual.pdf
   InstallDir: $pdfdir
 
 Document "obus-api"
-  Title:                API reference for OBus
-  Type:                 ocamlbuild (0.1.0)
-  Install:              true
-  InstallDir:           $htmldir/api
-  DataFiles:            utils/doc/style.css
-  BuildTools:           ocamldoc
-  XOCamlbuildPath:      ./
-  XOCamlBuildIntro:     apiref-intro
+  Title: API reference for OBus
+  Type: ocamlbuild (0.2)
+  Install: true
+  InstallDir: $htmldir/api
+  DataFiles: utils/doc/style.css
+  BuildTools: ocamldoc
+  XOCamlbuildPath: ./
   XOCamlbuildLibraries:
     obus,
     obus.hal,
@@ -351,7 +350,7 @@ Test main
 
 Document examples
   Title: Examples
-  Type: custom (0.1.0)
+  Type: custom (0.2)
   Install: true
   XCustom: true
   DataFiles: examples/*.ml, examples/*.xml

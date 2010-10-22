@@ -7,7 +7,10 @@
 make -C manual manual.pdf clean-melt
 
 # Add OASIS stuff
-OASIS setup
+oasis setup
+
+# Make the configure script executable
+chmod +x configure
 
 # Cleanup
 rm -f predist.sh make-dist.sh
