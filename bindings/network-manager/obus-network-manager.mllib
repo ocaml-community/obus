@@ -1,0 +1,15 @@
+# OASIS_START
+# DO NOT EDIT (digest: 52fa85029a4f5071b388cb6b4aece75d)
+Nm_access_point
+Nm_connection
+Nm_device
+Nm_dhcp4_config
+Nm_ip4_config
+Nm_ip6_config
+Nm_manager
+Nm_ppp
+Nm_settings
+Nm_vpn_connection
+Nm_vpn_plugin
+Nm_interfaces
+# OASIS_STOP

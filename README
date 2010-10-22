@@ -24,14 +24,6 @@ url: https://forge.ocamlcore.org/projects/obus/
 
   $ ocaml setup.ml -doc
 
-  If you got the development version of obus, you also
-  need OASIS (http://oasis.forge.ocamlcore.org/index.php).
-  Once installed type:
-
-  $ OASIS setup-dev
-
-  After that you can follow the normal instructions
-
 * Using the library
 
   OBus install the following packages:
