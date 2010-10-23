@@ -418,3 +418,12 @@ Executable signals
   CompiledObject: best
   MainIs: signals.ml
   BuildDepends: obus, lwt.syntax, obus.hal
+
+# +-------------------------------------------------------------------+
+# | Misc                                                              |
+# +-------------------------------------------------------------------+
+
+SourceRepository head
+  Type: darcs
+  Location: http://darcs.ocamlcore.org/repos/obus
+  Browser: http://darcs.ocamlcore.org/cgi-bin/darcsweb.cgi?r=obus;a=summary

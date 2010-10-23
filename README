@@ -82,4 +82,4 @@ url: https://forge.ocamlcore.org/projects/obus/
   The last development version of obus can always be found in the
   darcs repository hosted at darcs.ocamlcore.org:
 
-  $ darcs get http://darcs.ocamlcore.org/repos/obus/obus
+  $ darcs get http://darcs.ocamlcore.org/repos/obus
