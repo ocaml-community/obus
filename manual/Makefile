@@ -5,7 +5,7 @@
 #
 # This file is a part of obus, an ocaml implementation of D-Bus.
 
-MELT := melt -pdf -no-link
+MELT := melt -pdf -no-link eclbkbox.sty
 
 all:
 	$(MELT) manual.mlt

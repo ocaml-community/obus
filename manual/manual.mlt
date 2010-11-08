@@ -11,11 +11,15 @@ let obus = texttt "OBus"
 let dbus = texttt "D-Bus"
 let abstract body = environment \"abstract\" (T, body) T
 
+let breakbox tex =
+  environment ~packages:[(\"eclbkbox\", \"\")] \"breakbox\" (A, tex) A
+
 let code verb =
-  Verbatim.convert
-    (fun str ->
-       texttt (Latex.Verbatim.verbatim str))
-    verb
+  breakbox
+    (Verbatim.convert
+      (fun str ->
+         texttt (Latex.Verbatim.verbatim str))
+      verb)
 
 let lowlevel_section = label ()
 let name_tracking = label ()
