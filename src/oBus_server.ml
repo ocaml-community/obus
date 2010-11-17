@@ -125,8 +125,7 @@ let rec accept server listener =
                 lwt () =
                   try
                     Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                    Lwt_unix.close fd;
-                    return ()
+                    Lwt_unix.close fd
                   with Unix.Unix_error(err, _, _) ->
                     Lwt_log.error_f ~section "cannot shutdown socket: %s" (Unix.error_message err)
                 in
@@ -197,8 +196,7 @@ let handle_client server listener fd address =
             lwt () = Lwt_log.notice_f ~section "client from %s rejected because anonymous connections are not allowed" (string_of_address address) in
             try_lwt
               Lwt_unix.shutdown fd SHUTDOWN_ALL;
-              Lwt_unix.close fd;
-              return ()
+              Lwt_unix.close fd
             with Unix.Unix_error(err, _, _) ->
               Lwt_log.error_f ~section "cannot shutdown socket: %s" (Unix.error_message err)
           end else begin
@@ -222,8 +220,7 @@ let rec lst_loop server listener =
     | Event_shutdown ->
         lwt () =
           try
-            Lwt_unix.close listener.lst_fd;
-            return ()
+            Lwt_unix.close listener.lst_fd
           with Unix_error(err, _, _) ->
             Lwt_log.error_f ~section "cannot close listenning socket: %s" (Unix.error_message err)
         in
@@ -248,7 +245,7 @@ let make_socket domain typ address =
     return fd
   with Unix_error(err, _, _) as exn ->
     lwt () = Lwt_log.error_f ~section "failed to create listenning socket with %s: %s" (string_of_address address) (Unix.error_message err) in
-    Lwt_unix.close fd;
+    lwt () = Lwt_unix.close fd in
     raise_lwt exn
 
 let make_path path =
@@ -413,7 +410,7 @@ let make_lowlevel ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms ?(a
                      Lwt_list.iter_p
                        (fun (fd, address) ->
                           try_lwt
-                            Lwt_unix.close fd;
+                            lwt () = Lwt_unix.close fd in
                             cleanup address
                           with Unix_error(err, _, _) ->
                             Lwt_log.error_f ~section "failed to close listenning file descriptor: %s" (Unix.error_message err))

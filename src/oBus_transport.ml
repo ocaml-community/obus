@@ -55,8 +55,7 @@ let socket ?switch ?(capabilities=[]) fd =
         shutdown = (fun _ ->
                       lwt () = OBus_wire.close_reader reader <&> OBus_wire.close_writer writer in
                       Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                      Lwt_unix.close fd;
-                      return ()) }
+                      Lwt_unix.close fd) }
     else
       let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_unix.read fd)
       and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_unix.write fd) in
@@ -66,8 +65,7 @@ let socket ?switch ?(capabilities=[]) fd =
         shutdown = (fun _ ->
                       lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
                       Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                      Lwt_unix.close fd;
-                      return ()) }
+                      Lwt_unix.close fd) }
   in
   Lwt_switch.add_hook switch transport.shutdown;
   transport
@@ -94,7 +92,7 @@ let make_socket domain typ addr =
     lwt () = Lwt_unix.connect fd addr in
     return (fd, domain)
   with exn ->
-    Lwt_unix.close fd;
+    lwt () = Lwt_unix.close fd in
     raise_lwt exn
 
 let rec write_nonce fd nonce pos len =
