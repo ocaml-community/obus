@@ -22,6 +22,15 @@ type t
 val make : connection : OBus_connection.t -> message : OBus_message.t -> t
   (** Creates a context from the given connection and message *)
 
+(** {6 Retreival} *)
+
+val get : unit -> t
+  (** In a method call handler, this returns the context of the method
+      call. *)
+
+val key : t Lwt.key
+  (** The key used for storing the context. *)
+
 (** {6 Projections} *)
 
 val connection : t -> OBus_connection.t

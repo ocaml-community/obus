@@ -25,7 +25,7 @@ module type Method_info = sig
   type i_type
   type o_type
   val info : (i_type, o_type) OBus_member.Method.t
-  val handler : OBus_context.t -> obj -> i_type -> o_type Lwt.t
+  val handler : obj -> i_type -> o_type Lwt.t
 end
 
 module type Signal_info = sig
@@ -39,7 +39,7 @@ module type Property_info = sig
   type typ
   type access
   val info : (typ, access) OBus_member.Property.t
-  val set : (OBus_context.t -> obj -> typ -> unit Lwt.t) option
+  val set : (obj -> typ -> unit Lwt.t) option
   val signal : (obj -> typ React.signal) option
 end
 
@@ -250,7 +250,8 @@ let execute (type d) method_info context obj arguments =
                     (OBus_value.arg_types
                        (OBus_member.Method.i_args M.info))))))
   in
-  lwt reply = M.handler context obj arguments in
+  lwt () = set OBus_context.key (Some context) in
+  lwt reply = M.handler obj arguments in
   return (OBus_value.C.make_sequence (OBus_value.arg_types (OBus_member.Method.o_args M.info)) reply)
 
 (* Dispatch a method call to the implementation of the method *)
@@ -783,7 +784,8 @@ let introspectable (type d) () =
            Method.annotations = [];
          }
 
-         let handler context obj () =
+         let handler obj () =
+           let context = OBus_context.get () in
            let info = get_info (OBus_context.connection context) in
            let buf = Buffer.create 42 in
            OBus_introspect.output
@@ -818,7 +820,7 @@ let properties (type d) () =
            Method.annotations = [];
          }
 
-         let handler context obj (interface, member) =
+         let handler obj (interface, member) =
            match binary_search compare_interface interface obj.interfaces with
              | -1 ->
                  raise_lwt (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
@@ -853,7 +855,7 @@ let properties (type d) () =
            Method.annotations = [];
          }
 
-         let handler context obj interface =
+         let handler obj interface =
            match binary_search compare_interface interface obj.interfaces with
              | -1 ->
                  raise_lwt (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
@@ -894,7 +896,7 @@ let properties (type d) () =
            Method.annotations = [];
          }
 
-         let handler context obj (interface, member, value) =
+         let handler obj (interface, member, value) =
            match binary_search compare_interface interface obj.interfaces with
              | -1 ->
                  raise_lwt (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
@@ -908,7 +910,7 @@ let properties (type d) () =
                          | Some f -> begin
                              match try `Success(OBus_value.C.cast_single (Property.typ P.info) value) with exn -> `Failure exn with
                                | `Success value ->
-                                   f context obj value
+                                   f obj value
                                | `Failure OBus_value.C.Signature_mismatch ->
                                    raise_lwt
                                      (OBus_error.Failed

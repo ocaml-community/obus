@@ -108,7 +108,7 @@ let print_impl oc name members symbols annotations =
            let i_convertors = make_convertors Utils.convertor_recv i_names i_args
            and o_convertors = make_convertors Utils.convertor_send o_names o_args in
            fprintf oc "      m_%s = (\n\
-                      \        fun ctx obj %a ->\n" name print_names i_names;
+                      \        fun obj %a ->\n" name print_names i_names;
            List.iter
              (function
                 | Some(name, f) -> fprintf oc "          let %s = %s %s in\n" name f name
@@ -135,7 +135,7 @@ let print_impl oc name members symbols annotations =
              output_string oc (String.make (11 + String.length name) ' ')
            end;
            if access = Write || access = Read_write then
-             output_string oc "(fun ctx obj x -> failwith \"not implemented\")";
+             output_string oc "(fun obj x -> failwith \"not implemented\")";
            if access = Read_write then
              output_char oc ')';
            output_string oc ";\n"

@@ -36,7 +36,7 @@ let print_record oc members =
   List.iter
     (function
        | Method(name, i_args, o_args, annotations) ->
-           fprintf oc "    m_%s : OBus_context.t -> 'a OBus_object.t -> %a -> %a;\n"
+           fprintf oc "    m_%s : 'a OBus_object.t -> %a -> %a;\n"
              name
              (Term.print_intf true)
              (tuple (List.map (fun (name, typ) -> term_intf typ) i_args))
@@ -50,12 +50,12 @@ let print_record oc members =
              (Term.print_intf true)
              (term "React.signal" [term_intf typ])
        | Property(name, typ, Write, annotations) ->
-           fprintf oc "    p_%s : OBus_context.t -> 'a OBus_object.t -> %a -> unit Lwt.t;\n"
+           fprintf oc "    p_%s : 'a OBus_object.t -> %a -> unit Lwt.t;\n"
              name
              (Term.print_intf true)
              (term_intf typ)
        | Property(name, typ, Read_write, annotations) ->
-           fprintf oc "    p_%s : ('a OBus_object.t -> %a) * (OBus_context.t -> 'a OBus_object.t -> %a -> unit Lwt.t);\n"
+           fprintf oc "    p_%s : ('a OBus_object.t -> %a) * ('a OBus_object.t -> %a -> unit Lwt.t);\n"
              name
              (Term.print_intf true)
              (term "React.signal" [term_intf typ])

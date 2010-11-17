@@ -15,6 +15,13 @@ type t = {
   serial : OBus_message.serial;
 }
 
+let key = Lwt.new_key ()
+
+let get () =
+  match Lwt.get key with
+    | Some ctx -> ctx
+    | None -> failwith "OBus_context.get: not in a method call handler"
+
 let make ~connection ~message = {
   connection = connection;
   flags = OBus_message.flags message;

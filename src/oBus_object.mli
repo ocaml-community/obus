@@ -167,10 +167,12 @@ val properties : unit -> 'a interface
 
 (** {6 Members} *)
 
-val method_info : ('a, 'b) OBus_member.Method.t -> (OBus_context.t -> 'c t -> 'a -> 'b Lwt.t) -> 'c method_info
+val method_info : ('a, 'b) OBus_member.Method.t -> ('c t -> 'a -> 'b Lwt.t) -> 'c method_info
   (** [method_info desc handler] creates a method-call
-      member. [handler] receive the context, the destination object of
-      the method call and the arguments of the method call. *)
+      member. [handler] receive the destination object of the method
+      call and the arguments of the method call. The context of the
+      call is also available to [handler] by using
+      {!OBus_context.get}. *)
 
 val signal_info : 'a OBus_member.Signal.t -> 'b signal_info
   (** Defines a signal. It is only used for introspection *)
@@ -181,11 +183,11 @@ val property_r_info : ('a, [ `readable ]) OBus_member.Property.t -> ('b t -> 'a 
       {!attach}. It must returns a signal holding the current value of
       the property. *)
 
-val property_w_info : ('a, [ `writable ]) OBus_member.Property.t -> (OBus_context.t -> 'b t -> 'a -> unit Lwt.t) -> 'b property_info
+val property_w_info : ('a, [ `writable ]) OBus_member.Property.t -> ('b t -> 'a -> unit Lwt.t) -> 'b property_info
   (** [property_w_info desc set] defines a write-only property. [set]
       is used to set the propertry contents. *)
 
-val property_rw_info : ('a, [ `readable | `writable ]) OBus_member.Property.t -> ('b t -> 'a React.signal) -> (OBus_context.t -> 'b t -> 'a -> unit Lwt.t) -> 'b property_info
+val property_rw_info : ('a, [ `readable | `writable ]) OBus_member.Property.t -> ('b t -> 'a React.signal) -> ('b t -> 'a -> unit Lwt.t) -> 'b property_info
   (** [property_rw_info desc get set] defines a readable and writable
       property. [get] and [set] have the same semantic as for
       {!property_r_info} and {!property_w_info}. *)
