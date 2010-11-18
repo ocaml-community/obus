@@ -157,15 +157,16 @@ let rec connect address =
           | Some family -> Printf.ksprintf invalid_arg "OBus_transport.connect: unknown address family '%s'" family
           | None -> opts
         in
-        match getaddrinfo host port opts with
+        Lwt_unix.getaddrinfo host port opts >>= function
           | [] ->
-              Printf.ksprintf
-                failwith
-                "OBus_transport.connect: no address info for host=%s port=%s%s"
-                host port
-                (match OBus_address.arg "family" address with
-                   | None -> ""
-                   | Some f -> " family=" ^ f)
+              fail
+                (Failure
+                   (Printf.sprintf
+                      "OBus_transport.connect: no address info for host=%s port=%s%s"
+                      host port
+                      (match OBus_address.arg "family" address with
+                         | None -> ""
+                         | Some f -> " family=" ^ f)))
           | ai :: ais ->
               let make_socket =
                 if name = "nonce-tcp" then
