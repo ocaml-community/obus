@@ -91,10 +91,14 @@ end = struct
 
   type context = string
 
-  let keyring_directory = lazy(Filename.concat (Lazy.force OBus_util.homedir) ".dbus-keyrings")
+  let keyring_directory = lazy(
+    lwt homedir = Lazy.force OBus_util.homedir in
+    return (Filename.concat homedir ".dbus-keyrings")
+  )
 
   let keyring_file_name context =
-    Filename.concat (Lazy.force keyring_directory) context
+    lwt dir = Lazy.force keyring_directory in
+    return (Filename.concat dir context)
 
   let parse_line line =
     Scanf.sscanf line "%ld %Ld %[a-fA-F0-9]"
@@ -106,43 +110,43 @@ end = struct
     sprintf  "%ld %Ld %s" (Cookie.id cookie) (Cookie.time cookie) (Cookie.cookie cookie)
 
   let load context =
-    let fname = keyring_file_name context in
+    lwt fname = keyring_file_name context in
     if Sys.file_exists fname then
       try_lwt
         Lwt_stream.get_while (fun _ -> true) (Lwt_stream.map parse_line (Lwt_io.lines_of_file fname))
       with exn ->
-        lwt () = Lwt_log.error_f ~section "failed to load cookie file %s: %s" (keyring_file_name context) (Printexc.to_string exn) in
+        lwt fname = keyring_file_name context in
+        lwt () = Lwt_log.error_f ~section "failed to load cookie file %s: %s" fname (Printexc.to_string exn) in
         raise_lwt exn
     else
       return []
 
   let lock_file fname =
     let really_lock () =
-      Unix.close(Unix.openfile fname
-                   [Unix.O_WRONLY;
-                    Unix.O_EXCL;
-                    Unix.O_CREAT] 0o600)
+      Lwt_unix.openfile fname
+        [Unix.O_WRONLY;
+         Unix.O_EXCL;
+         Unix.O_CREAT] 0o600
+      >>= Lwt_unix.close
     in
     let rec aux = function
       | 0 ->
           lwt () =
             try_lwt
-              Unix.unlink fname;
+              lwt () = Lwt_unix.unlink fname in
               Lwt_log.info_f ~section "stale lock file %s removed" fname
             with Unix.Unix_error(error, _, _) as exn ->
               lwt () = Lwt_log.error_f ~section "failed to remove stale lock file %s: %s" fname (Unix.error_message error) in
               raise_lwt exn
           in
           (try_lwt
-             really_lock ();
-             return ()
+             really_lock ()
            with Unix.Unix_error(error, _, _) as exn ->
              lwt () = Lwt_log.error_f ~section "failed to lock file %s after removing it: %s" fname (Unix.error_message error) in
              raise_lwt exn)
       | n ->
           try_lwt
-            really_lock ();
-            return ()
+            really_lock ()
           with exn ->
             lwt () = Lwt_log.info_f ~section "waiting for lock file (%d) %s" n fname in
             lwt () = Lwt_unix.sleep 0.250 in
@@ -152,25 +156,27 @@ end = struct
 
   let unlock_file fname =
     try_lwt
-      Unix.unlink fname;
-      return ()
+      Lwt_unix.unlink fname
     with Unix.Unix_error(error, _, _) as exn ->
       lwt () = Lwt_log.error_f ~section "failed to unlink file %s: %s" fname (Unix.error_message error) in
       raise_lwt exn
 
   let save context cookies =
-    let fname = keyring_file_name context in
+    lwt fname = keyring_file_name context in
     let tmp_fname = fname ^ "." ^ hex_encode (OBus_util.random_string 8) in
     let lock_fname = fname ^ ".lock" in
-    let lazy dir = keyring_directory in
-    (* Check that the keyring directory exists, or create it *)
-    if not (Sys.file_exists dir) then begin
-      try
-        Unix.mkdir dir 0o700
-      with Unix.Unix_error(error, _, _) as exn ->
-        ignore (Lwt_log.error_f ~section "failed to create directory %s with permissions 0600: %s" dir (Unix.error_message error));
-        raise exn
-    end;
+    lwt dir = Lazy.force keyring_directory in
+    lwt () =
+      (* Check that the keyring directory exists, or create it *)
+      if not (Sys.file_exists dir) then begin
+        try_lwt
+          Lwt_unix.mkdir dir 0o700
+        with Unix.Unix_error(error, _, _) as exn ->
+          lwt () = Lwt_log.error_f ~section "failed to create directory %s with permissions 0600: %s" dir (Unix.error_message error) in
+          raise_lwt exn
+      end else
+        return ()
+    in
     lwt () = lock_file lock_fname in
     try_lwt
       lwt () =
@@ -181,8 +187,7 @@ end = struct
           raise_lwt exn
       in
       try
-        Unix.rename tmp_fname fname;
-        return ()
+        Lwt_unix.rename tmp_fname fname
       with Unix.Unix_error(error, _, _) as exn ->
         lwt () = Lwt_log.error_f ~section "unable to rename file %s to %s: %s" tmp_fname fname (Unix.error_message error) in
         raise_lwt exn

@@ -207,9 +207,9 @@ module V : sig
   val sequence_dup : sequence -> sequence
     (** Duplicates all file descriptors of the given value *)
 
-  val basic_close : basic -> unit
-  val single_close : single -> unit
-  val sequence_close : sequence -> unit
+  val basic_close : basic -> unit Lwt.t
+  val single_close : single -> unit Lwt.t
+  val sequence_close : sequence -> unit Lwt.t
     (** Closes all file descriptors of the given value *)
 end
 

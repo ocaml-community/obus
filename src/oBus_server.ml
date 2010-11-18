@@ -147,8 +147,7 @@ let cleanup address =
           | Some path -> begin
               (* Sockets in the file system must be removed manually *)
               try
-                Unix.unlink path;
-                return ()
+                Lwt_unix.unlink path
               with Unix_error(err, _, _) ->
                 Lwt_log.error_f ~section "cannot unlink '%s': %s" path (Unix.error_message err)
             end
@@ -238,7 +237,7 @@ let rec lst_loop server listener =
 (* Tries to create a socket using the given parameters *)
 let make_socket domain typ address =
   let fd = Lwt_unix.socket domain typ 0 in
-  (try Unix.set_close_on_exec (Lwt_unix.unix_file_descr fd) with _ -> ());
+  (try Lwt_unix.set_close_on_exec fd with _ -> ());
   try
     Lwt_unix.bind fd address;
     Lwt_unix.listen fd 10;
@@ -367,8 +366,7 @@ let shutdown server =
     lwt () =
       if server.srv_nonce_file <> "" then begin
         try
-          Unix.unlink server.srv_nonce_file;
-          return ()
+          Lwt_unix.unlink server.srv_nonce_file
         with Unix_error(err, _, _) ->
           Lwt_log.error_f ~section "cannot unlink '%s': %s" server.srv_nonce_file (Unix.error_message err)
       end else

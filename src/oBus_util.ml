@@ -87,7 +87,13 @@ let hex_decode hex =
   done;
   str
 
-let homedir = lazy((Unix.getpwuid (Unix.getuid ())).Unix.pw_dir)
+let homedir = lazy(
+  try
+    return (Sys.getenv "HOME")
+  with Not_found ->
+    lwt pwd = Lwt_unix.getpwuid (Unix.getuid ()) in
+    return pwd.Unix.pw_dir
+)
 
 let init_pseudo = Lazy.lazy_from_fun Random.self_init
 

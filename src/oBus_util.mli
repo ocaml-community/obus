@@ -46,8 +46,8 @@ val hex_decode : string -> string
       replaced by two hexadecimal characters which represent his ascii
       code *)
 
-val homedir : string Lazy.t
-  (** Return the home directory *)
+val homedir : string Lwt.t Lazy.t
+  (** The home directory *)
 
 (** {6 Random number generation} *)
 

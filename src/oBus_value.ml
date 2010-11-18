@@ -557,13 +557,13 @@ struct
     List.fold_left single_collect_fds acc l
 
   let close_fds collect_fds value =
-    FD_set.iter
+    Lwt_list.iter_p
       (fun fd ->
          try
-           Unix.close fd
+           Lwt_unix.close (Lwt_unix.of_unix_file_descr ~set_flags:false fd)
          with Unix.Unix_error(err, _, _) ->
-           ignore (Lwt_log.error_f ~section "failed to close file descriptor: %s" (Unix.error_message err)))
-      (collect_fds FD_set.empty value)
+           Lwt_log.error_f ~section "failed to close file descriptor: %s" (Unix.error_message err))
+      (FD_set.elements (collect_fds FD_set.empty value))
 
   let basic_close = close_fds basic_collect_fds
   let single_close = close_fds single_collect_fds

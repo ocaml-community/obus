@@ -460,8 +460,7 @@ let rec dispatch_forever active =
           with exn ->
             Lwt_log.error ~section ~exn "message dispatching failed with"
           finally
-            OBus_value.V.sequence_close (OBus_message.body message);
-            return ()
+            OBus_value.V.sequence_close (OBus_message.body message)
         );
         dispatch_forever active
 

@@ -1231,14 +1231,17 @@ type reader = {
 }
 
 let close_reader reader =
-  Queue.iter
-    (fun fd ->
-       try
-         Unix.close fd
-       with Unix.Unix_error(err, _, _) ->
-         ignore (Lwt_log.error_f ~section "cannot close file descriptor: %s" (Unix.error_message err)))
-    reader.pending_fds;
+  let fds = Queue.fold (fun fds fd -> fd :: fds) [] reader.pending_fds in
   Queue.clear reader.pending_fds;
+  lwt () =
+    Lwt_list.iter_p
+      (fun fd ->
+         try
+           Lwt_unix.close (Lwt_unix.of_unix_file_descr ~set_flags:false fd)
+         with Unix.Unix_error(err, _, _) ->
+           Lwt_log.error_f ~section "cannot close file descriptor: %s" (Unix.error_message err))
+      fds
+  in
   Lwt_io.close reader.channel
 
 let reader fd =
@@ -1272,14 +1275,16 @@ let read_message_with_fds reader  =
            f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some(consumed_fds, reader.pending_fds)) return)
     end reader.channel
   with exn ->
-    List.iter
-      (fun fd ->
-         try
-           Unix.close fd
-         with Unix.Unix_error(err, _, _) ->
-           ignore (Lwt_log.error_f ~section "cannot close file descriptor: %s" (Unix.error_message err)))
-      !consumed_fds;
-    raise (map_exn protocol_error exn)
+    lwt () =
+      Lwt_list.iter_p
+        (fun fd ->
+           try
+             Lwt_unix.close (Lwt_unix.of_unix_file_descr ~set_flags:false fd)
+           with Unix.Unix_error(err, _, _) ->
+             Lwt_log.error_f ~section "cannot close file descriptor: %s" (Unix.error_message err))
+        !consumed_fds
+    in
+    raise_lwt (map_exn protocol_error exn)
 
 (* +-----------------------------------------------------------------+
    | Size computation                                                |
