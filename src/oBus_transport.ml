@@ -57,8 +57,8 @@ let socket ?switch ?(capabilities=[]) fd =
                       Lwt_unix.shutdown fd SHUTDOWN_ALL;
                       Lwt_unix.close fd) }
     else
-      let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_unix.read fd)
-      and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_unix.write fd) in
+      let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_bytes.read fd)
+      and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_bytes.write fd) in
       { recv = (fun _ -> OBus_wire.read_message ic);
         send = (fun msg -> OBus_wire.write_message oc msg);
         capabilities = capabilities;

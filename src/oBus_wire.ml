@@ -1249,7 +1249,7 @@ let reader fd =
   {
     channel = Lwt_io.make ~mode:Lwt_io.input
       (fun buf ofs len ->
-         lwt n, fds = Lwt_unix.recv_msg fd [Lwt_unix.io_vector buf ofs len] in
+         lwt n, fds = Lwt_bytes.recv_msg fd [Lwt_bytes.io_vector buf ofs len] in
          List.iter (fun fd ->
                       (try Unix.set_close_on_exec fd with _ -> ());
                       Queue.push fd pending_fds) fds;
