@@ -250,9 +250,10 @@ let execute (type d) method_info context obj arguments =
                     (OBus_value.arg_types
                        (OBus_member.Method.i_args M.info))))))
   in
-  lwt () = set OBus_context.key (Some context) in
-  lwt reply = M.handler obj arguments in
-  return (OBus_value.C.make_sequence (OBus_value.arg_types (OBus_member.Method.o_args M.info)) reply)
+  with_value OBus_context.key (Some context)
+    (fun () ->
+       lwt reply = M.handler obj arguments in
+       return (OBus_value.C.make_sequence (OBus_value.arg_types (OBus_member.Method.o_args M.info)) reply))
 
 (* Dispatch a method call to the implementation of the method *)
 let dispatch context obj interface member arguments =
