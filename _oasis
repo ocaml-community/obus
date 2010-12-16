@@ -3,6 +3,7 @@
 # +-------------------------------------------------------------------+
 
 OASISFormat: 0.1
+OCamlVersion: >= 3.12
 Name: obus
 Version: 1.1
 LicenseFile: LICENSE
