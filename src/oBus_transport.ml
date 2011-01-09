@@ -44,46 +44,31 @@ let shutdown t = t.shutdown ()
    | Socket transport                                                |
    +-----------------------------------------------------------------+ *)
 
-let socket_of_wires ?switch ?(capabilities=[]) fd (reader, writer) =
+let socket ?switch ?(capabilities=[]) fd =
   let transport =
-    { recv = (fun _ -> OBus_wire.read_message_with_fds reader);
-      send = (fun msg -> OBus_wire.write_message_with_fds writer msg);
-      capabilities = capabilities;
-      shutdown = (fun _ ->
-                    lwt () = OBus_wire.close_reader reader <&> OBus_wire.close_writer writer in
-                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                    Lwt_unix.close fd) }
+    if List.mem `Unix_fd capabilities then
+      let reader = OBus_wire.reader fd
+      and writer = OBus_wire.writer fd in
+      { recv = (fun _ -> OBus_wire.read_message_with_fds reader);
+        send = (fun msg -> OBus_wire.write_message_with_fds writer msg);
+        capabilities = capabilities;
+        shutdown = (fun _ ->
+                      lwt () = OBus_wire.close_reader reader <&> OBus_wire.close_writer writer in
+                      Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                      Lwt_unix.close fd) }
+    else
+      let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_bytes.read fd)
+      and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_bytes.write fd) in
+      { recv = (fun _ -> OBus_wire.read_message ic);
+        send = (fun msg -> OBus_wire.write_message oc msg);
+        capabilities = capabilities;
+        shutdown = (fun _ ->
+                      lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
+                      Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                      Lwt_unix.close fd) }
   in
   Lwt_switch.add_hook switch transport.shutdown;
   transport
-
-let socket_of_channels ?switch ?(capabilities=[]) fd (ic, oc) =
-  let transport =
-    { recv = (fun _ -> OBus_wire.read_message ic);
-      send = (fun msg -> OBus_wire.write_message oc msg);
-      capabilities = capabilities;
-      shutdown = (fun _ ->
-                    lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
-                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                    Lwt_unix.close fd) }
-  in
-  Lwt_switch.add_hook switch transport.shutdown;
-  transport
-
-let socket_and_auth_stream ?switch ?(capabilities=[]) fd =
-  if List.mem `Unix_fd capabilities then
-    let reader = OBus_wire.reader fd
-    and writer = OBus_wire.writer fd in
-    (socket_of_wires ?switch ~capabilities fd (reader, writer),
-     OBus_wire.auth_stream (reader, writer))
-  else
-    let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_bytes.read fd)
-    and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_bytes.write fd) in
-    (socket_of_channels ?switch ~capabilities fd (ic, oc),
-     OBus_auth.stream_of_channels (ic, oc))
-
-let socket ?switch ?capabilities fd =
-  fst (socket_and_auth_stream ?switch ?capabilities fd)
 
 (* +-----------------------------------------------------------------+
    | Loopback transport                                              |
@@ -271,7 +256,6 @@ let of_addresses ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms addr
             in
             find rest
         in
-        let transport, stream = socket_and_auth_stream ~capabilities fd in
         (* Do authentication only once: *)
         try_lwt
           Lwt_unix.write fd "\x00" 0 1 >>= function
@@ -282,11 +266,10 @@ let of_addresses ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms addr
                   OBus_auth.Client.authenticate
                     ~capabilities:(List.filter (function `Unix_fd -> domain = PF_UNIX) capabilities)
                     ?mechanisms
-                    ~stream
+                    ~stream:(OBus_auth.stream_of_fd fd)
                     ()
                 in
-                lwt () = Lwt_switch.add_hook_or_exec switch transport.shutdown in
-                return (guid, transport)
+                return (guid, socket ?switch ~capabilities fd)
             | n ->
                 assert false
         with exn ->

@@ -1326,30 +1326,3 @@ let get_message_size buf ofs =
       raise (Protocol_error(message_too_big total_length));
 
     total_length
-
-(* +-----------------------------------------------------------------+
-   | Authentication streams                                          |
-   +-----------------------------------------------------------------+ *)
-
-let auth_stream (reader, writer) =
-  OBus_auth.make_stream
-    ~recv:(fun () ->
-             let buf = Buffer.create 42 in
-             let rec loop last =
-               if Buffer.length buf > OBus_auth.max_line_length then
-                 raise_lwt (OBus_auth.Auth_failure "input: line too long")
-               else
-                 Lwt_io.read_char_opt reader.r_channel >>= function
-                   | None ->
-                       raise_lwt (OBus_auth.Auth_failure "input: premature end of input")
-                   | Some ch ->
-                       Buffer.add_char buf ch;
-                       if last = '\r' && ch = '\n' then
-                         return (Buffer.contents buf)
-                       else
-                         loop ch
-             in
-             loop '\x00')
-    ~send:(fun line ->
-             lwt () = Lwt_io.write writer.w_channel line in
-             Lwt_io.flush writer.w_channel)

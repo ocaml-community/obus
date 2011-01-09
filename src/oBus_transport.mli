@@ -50,19 +50,6 @@ val socket : ?switch : Lwt_switch.t -> ?capabilities : OBus_auth.capability list
       @param capabilities defaults to [[]]. For unix socket, the
       [`Unix_fd] capability is accepted. *)
 
-val socket_and_auth_stream : ?switch : Lwt_switch.t -> ?capabilities : OBus_auth.capability list ->  Lwt_unix.file_descr -> t * OBus_auth.stream
-  (** Same as {!socket} but also returns a authentication stream that
-      use the same buffers as the returned transport. *)
-
-val socket_of_wires : ?switch : Lwt_switch.t -> ?capabilities : OBus_auth.capability list ->  Lwt_unix.file_descr -> OBus_wire.reader * OBus_wire.writer -> t
-  (** [socket_of_wires ?switch ?capabilities fd (reader, writer)]
-      creates a socket transport that use the given reader and
-      writer. *)
-
-val socket_of_channels : ?switch : Lwt_switch.t -> ?capabilities : OBus_auth.capability list ->  Lwt_unix.file_descr -> Lwt_io.input_channel * Lwt_io.output_channel -> t
-  (** [socket_of_wires ?switch ?capabilities fd (ic, oc)] creates a
-      socket transport that use the given channels. *)
-
 val of_addresses :
   ?switch : Lwt_switch.t ->
   ?capabilities : OBus_auth.capability list ->
