@@ -169,6 +169,13 @@ let string_of_address = function
 
 (* Handle new clients. This function never fails. *)
 let handle_client server listener fd address =
+  let shutdown = lazy(
+    try_lwt
+      Lwt_unix.shutdown fd SHUTDOWN_ALL;
+      Lwt_unix.close fd
+    with Unix.Unix_error(err, _, _) ->
+      Lwt_log.error_f ~section "cannot shutdown socket: %s" (Unix.error_message err)
+  ) in
   try_lwt
     let buf = String.create 1 in
     Lwt_unix.read fd buf 0 1 >>= function
@@ -193,25 +200,26 @@ let handle_client server listener fd address =
           in
           if user_id = None && not server.srv_allow_anonymous then begin
             lwt () = Lwt_log.notice_f ~section "client from %s rejected because anonymous connections are not allowed" (string_of_address address) in
-            try_lwt
-              Lwt_unix.shutdown fd SHUTDOWN_ALL;
-              Lwt_unix.close fd
-            with Unix.Unix_error(err, _, _) ->
-              Lwt_log.error_f ~section "cannot shutdown socket: %s" (Unix.error_message err)
+            Lazy.force shutdown
           end else begin
             try
               server.srv_callback server (OBus_transport.socket ~capabilities fd);
               return ()
             with exn ->
-              Lwt_log.error ~section ~exn "server callback failed failed with"
+              lwt () = Lwt_log.error ~section ~exn "server callback failed failed with" in
+              Lazy.force shutdown
           end
       | _ ->
           assert false
-  with
-    | OBus_auth.Auth_failure msg ->
-        Lwt_log.notice_f ~section "authentication failure for client from %s: %s" (string_of_address address) msg
-    | exn ->
-        Lwt_log.error_f ~section ~exn "authentication for client from %s failed with" (string_of_address address)
+  with exn ->
+    lwt () =
+      match exn with
+        | OBus_auth.Auth_failure msg ->
+            Lwt_log.notice_f ~section "authentication failure for client from %s: %s" (string_of_address address) msg
+        | exn ->
+            Lwt_log.error_f ~section ~exn "authentication for client from %s failed with" (string_of_address address)
+    in
+    Lazy.force shutdown
 
 (* Accept clients until the server is shutdown, or an accept fails: *)
 let rec lst_loop server listener =

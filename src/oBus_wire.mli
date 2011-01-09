@@ -67,3 +67,7 @@ val write_message_with_fds : writer -> ?byte_order : Lwt_io.byte_order -> OBus_m
 
 val close_writer : writer -> unit Lwt.t
   (** [close_writer writer] closes the given writer *)
+
+val auth_stream : reader * writer -> OBus_auth.stream
+  (** [auth_stream (reader, writer)] creates an authentification
+      stream from a pair of a reader and a writer. *)

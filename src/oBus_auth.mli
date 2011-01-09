@@ -39,7 +39,14 @@ val stream_of_channels : Lwt_io.input_channel * Lwt_io.output_channel -> stream
   (** Creates a stream from a pair of channels *)
 
 val stream_of_fd : Lwt_unix.file_descr -> stream
-  (** Creates a stream from a file descriptor *)
+  (** Creates a stream from a file descriptor. Note that the stream
+      created by this function is not really efficient because it has
+      to read characters one by one to ensure it does not consume too
+      much. *)
+
+val max_line_length : int
+  (** Maximum lenght accepted for lines of the authentication
+      protocol. Beyond this limit, authentication will fail. *)
 
 (** Client-side authentication *)
 module Client : sig

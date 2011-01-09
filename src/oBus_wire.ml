@@ -845,33 +845,33 @@ let write_message oc ?byte_order msg =
         raise_lwt (Data_error "Cannot send a message with file descriptors on a channel")
 
 type writer = {
-  channel : Lwt_io.output_channel;
-  file_descr : Lwt_unix.file_descr;
+  w_channel : Lwt_io.output_channel;
+  w_file_descr : Lwt_unix.file_descr;
 }
 
-let close_writer writer = Lwt_io.close writer.channel
+let close_writer writer = Lwt_io.close writer.w_channel
 
 let writer fd = {
-  channel = Lwt_io.of_fd ~mode:Lwt_io.output fd;
-  file_descr = fd;
+  w_channel = Lwt_io.of_fd ~mode:Lwt_io.output fd;
+  w_file_descr = fd;
 }
 
 let write_message_with_fds writer ?byte_order msg =
   match string_of_message ?byte_order msg with
     | buf, [||] ->
         (* No file descriptor to send, simply use the channel *)
-        Lwt_io.write writer.channel buf
+        Lwt_io.write writer.w_channel buf
     | buf, fds ->
         Lwt_io.atomic begin fun oc ->
           (* Ensures there is nothing left to send: *)
           lwt () = Lwt_io.flush oc in
           let len = String.length buf in
           (* Send the file descriptors and the message: *)
-          lwt n = Lwt_unix.send_msg writer.file_descr [Lwt_unix.io_vector buf 0 len] (Array.to_list fds) in
+          lwt n = Lwt_unix.send_msg writer.w_file_descr [Lwt_unix.io_vector buf 0 len] (Array.to_list fds) in
           assert (n >= 0 && n <= len);
           (* Write what is remaining: *)
           Lwt_io.write_from_exactly oc buf n (len - n)
-        end writer.channel
+        end writer.w_channel
 
 (* +-----------------------------------------------------------------+
    | Common reading operations                                       |
@@ -1225,14 +1225,14 @@ let message_of_string buffer fds =
     raise (map_exn protocol_error exn)
 
 type reader = {
-  channel : Lwt_io.input_channel;
-  pending_fds : Unix.file_descr Queue.t;
+  r_channel : Lwt_io.input_channel;
+  r_pending_fds : Unix.file_descr Queue.t;
   (* File descriptors received and not yet taken *)
 }
 
 let close_reader reader =
-  let fds = Queue.fold (fun fds fd -> fd :: fds) [] reader.pending_fds in
-  Queue.clear reader.pending_fds;
+  let fds = Queue.fold (fun fds fd -> fd :: fds) [] reader.r_pending_fds in
+  Queue.clear reader.r_pending_fds;
   lwt () =
     Lwt_list.iter_p
       (fun fd ->
@@ -1242,19 +1242,19 @@ let close_reader reader =
            Lwt_log.error_f ~section "cannot close file descriptor: %s" (Unix.error_message err))
       fds
   in
-  Lwt_io.close reader.channel
+  Lwt_io.close reader.r_channel
 
 let reader fd =
   let pending_fds = Queue.create () in
   {
-    channel = Lwt_io.make ~mode:Lwt_io.input
+    r_channel = Lwt_io.make ~mode:Lwt_io.input
       (fun buf ofs len ->
          lwt n, fds = Lwt_bytes.recv_msg fd [Lwt_bytes.io_vector buf ofs len] in
          List.iter (fun fd ->
                       (try Unix.set_close_on_exec fd with _ -> ());
                       Queue.push fd pending_fds) fds;
          return n);
-    pending_fds = pending_fds;
+    r_pending_fds = pending_fds;
   }
 
 let read_message_with_fds reader  =
@@ -1272,8 +1272,8 @@ let read_message_with_fds reader  =
            let length = length - 16 in
            let buffer = String.create length in
            lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
-           f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some(consumed_fds, reader.pending_fds)) return)
-    end reader.channel
+           f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some(consumed_fds, reader.r_pending_fds)) return)
+    end reader.r_channel
   with exn ->
     lwt () =
       Lwt_list.iter_p
@@ -1326,3 +1326,30 @@ let get_message_size buf ofs =
       raise (Protocol_error(message_too_big total_length));
 
     total_length
+
+(* +-----------------------------------------------------------------+
+   | Authentication streams                                          |
+   +-----------------------------------------------------------------+ *)
+
+let auth_stream (reader, writer) =
+  OBus_auth.make_stream
+    ~recv:(fun () ->
+             let buf = Buffer.create 42 in
+             let rec loop last =
+               if Buffer.length buf > OBus_auth.max_line_length then
+                 raise_lwt (OBus_auth.Auth_failure "input: line too long")
+               else
+                 Lwt_io.read_char_opt reader.r_channel >>= function
+                   | None ->
+                       raise_lwt (OBus_auth.Auth_failure "input: premature end of input")
+                   | Some ch ->
+                       Buffer.add_char buf ch;
+                       if last = '\r' && ch = '\n' then
+                         return (Buffer.contents buf)
+                       else
+                         loop ch
+             in
+             loop '\x00')
+    ~send:(fun line ->
+             lwt () = Lwt_io.write writer.w_channel line in
+             Lwt_io.flush writer.w_channel)

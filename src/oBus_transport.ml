@@ -44,31 +44,46 @@ let shutdown t = t.shutdown ()
    | Socket transport                                                |
    +-----------------------------------------------------------------+ *)
 
-let socket ?switch ?(capabilities=[]) fd =
+let socket_of_wires ?switch ?(capabilities=[]) fd (reader, writer) =
   let transport =
-    if List.mem `Unix_fd capabilities then
-      let reader = OBus_wire.reader fd
-      and writer = OBus_wire.writer fd in
-      { recv = (fun _ -> OBus_wire.read_message_with_fds reader);
-        send = (fun msg -> OBus_wire.write_message_with_fds writer msg);
-        capabilities = capabilities;
-        shutdown = (fun _ ->
-                      lwt () = OBus_wire.close_reader reader <&> OBus_wire.close_writer writer in
-                      Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                      Lwt_unix.close fd) }
-    else
-      let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_bytes.read fd)
-      and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_bytes.write fd) in
-      { recv = (fun _ -> OBus_wire.read_message ic);
-        send = (fun msg -> OBus_wire.write_message oc msg);
-        capabilities = capabilities;
-        shutdown = (fun _ ->
-                      lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
-                      Lwt_unix.shutdown fd SHUTDOWN_ALL;
-                      Lwt_unix.close fd) }
+    { recv = (fun _ -> OBus_wire.read_message_with_fds reader);
+      send = (fun msg -> OBus_wire.write_message_with_fds writer msg);
+      capabilities = capabilities;
+      shutdown = (fun _ ->
+                    lwt () = OBus_wire.close_reader reader <&> OBus_wire.close_writer writer in
+                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                    Lwt_unix.close fd) }
   in
   Lwt_switch.add_hook switch transport.shutdown;
   transport
+
+let socket_of_channels ?switch ?(capabilities=[]) fd (ic, oc) =
+  let transport =
+    { recv = (fun _ -> OBus_wire.read_message ic);
+      send = (fun msg -> OBus_wire.write_message oc msg);
+      capabilities = capabilities;
+      shutdown = (fun _ ->
+                    lwt () = Lwt_io.close ic <&> Lwt_io.close oc in
+                    Lwt_unix.shutdown fd SHUTDOWN_ALL;
+                    Lwt_unix.close fd) }
+  in
+  Lwt_switch.add_hook switch transport.shutdown;
+  transport
+
+let socket_and_auth_stream ?switch ?(capabilities=[]) fd =
+  if List.mem `Unix_fd capabilities then
+    let reader = OBus_wire.reader fd
+    and writer = OBus_wire.writer fd in
+    (socket_of_wires ?switch ~capabilities fd (reader, writer),
+     OBus_wire.auth_stream (reader, writer))
+  else
+    let ic = Lwt_io.make ~mode:Lwt_io.input (Lwt_bytes.read fd)
+    and oc = Lwt_io.make ~mode:Lwt_io.output (Lwt_bytes.write fd) in
+    (socket_of_channels ?switch ~capabilities fd (ic, oc),
+     OBus_auth.stream_of_channels (ic, oc))
+
+let socket ?switch ?capabilities fd =
+  fst (socket_and_auth_stream ?switch ?capabilities fd)
 
 (* +-----------------------------------------------------------------+
    | Loopback transport                                              |
@@ -256,20 +271,25 @@ let of_addresses ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms addr
             in
             find rest
         in
+        let transport, stream = socket_and_auth_stream ~capabilities fd in
         (* Do authentication only once: *)
-        Lwt_unix.write fd "\x00" 0 1 >>= function
-          | 0 ->
-              raise_lwt (OBus_auth.Auth_failure "failed to send the initial null byte")
-          | 1 ->
-              lwt guid, capabilities =
-                OBus_auth.Client.authenticate
-                  ~capabilities:(List.filter (function `Unix_fd -> domain = PF_UNIX) capabilities)
-                  ?mechanisms
-                  ~stream:(OBus_auth.stream_of_fd fd)
-                  ()
-              in
-              let transport = socket ~capabilities fd in
-              lwt () = Lwt_switch.add_hook_or_exec switch transport.shutdown in
-              return (guid, transport)
-          | n ->
-              assert false
+        try_lwt
+          Lwt_unix.write fd "\x00" 0 1 >>= function
+            | 0 ->
+                raise_lwt (OBus_auth.Auth_failure "failed to send the initial null byte")
+            | 1 ->
+                lwt guid, capabilities =
+                  OBus_auth.Client.authenticate
+                    ~capabilities:(List.filter (function `Unix_fd -> domain = PF_UNIX) capabilities)
+                    ?mechanisms
+                    ~stream
+                    ()
+                in
+                lwt () = Lwt_switch.add_hook_or_exec switch transport.shutdown in
+                return (guid, transport)
+            | n ->
+                assert false
+        with exn ->
+          Lwt_unix.shutdown fd SHUTDOWN_ALL;
+          lwt () = Lwt_unix.close fd in
+          raise_lwt exn
