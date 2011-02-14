@@ -6,9 +6,6 @@
 # Build the user manual for release
 make -C manual all clean-aux
 
-# Add OASIS stuff
-oasis setup
-
 # Make the configure script executable
 chmod +x configure
 
