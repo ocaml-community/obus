@@ -134,7 +134,7 @@ let rec connect address =
                OBus_address.arg "abstract" address,
                OBus_address.arg "tmpdir" address) with
           | Some path, None, None ->
-              make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX(path))
+              make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX path)
           | None, Some abst, None ->
               make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX("\x00" ^ abst))
           | None, None, Some tmpd ->
@@ -192,6 +192,20 @@ let rec connect address =
                 in
                 find ais
       end
+    | "launchd" -> begin
+        match OBus_address.arg "env" address with
+          | Some env ->
+              lwt path =
+                try_lwt
+                  Lwt_process.pread_line ("launchctl", [|"launchctl"; "getenv"; env|])
+                with exn ->
+                  lwt () = Lwt_log.error_f ~exn ~section "launchctl failed" in
+                  raise_lwt exn
+              in
+              make_socket PF_UNIX SOCK_STREAM (ADDR_UNIX path)
+          | None ->
+              raise_lwt (Invalid_argument "OBus_transport.connect: missing 'env' in launchd address")
+      end
     | "autolaunch" -> begin
         lwt addresses =
           lwt uuid = Lazy.force OBus_info.machine_uuid in
@@ -199,7 +213,7 @@ let rec connect address =
             try_lwt
               Lwt_process.pread_line ("dbus-launch", [|"dbus-launch"; "--autolaunch"; OBus_uuid.to_string uuid; "--binary-syntax"|])
             with exn ->
-              lwt () = Lwt_log.error_f ~section "autolaunch failed: %s" (Printexc.to_string exn) in
+              lwt () = Lwt_log.error_f ~exn ~section "autolaunch failed" in
               raise_lwt exn
           in
           let line = try String.sub line 0 (String.index line '\000') with _ -> line in

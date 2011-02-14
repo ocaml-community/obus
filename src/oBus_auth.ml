@@ -116,7 +116,7 @@ end = struct
         Lwt_stream.get_while (fun _ -> true) (Lwt_stream.map parse_line (Lwt_io.lines_of_file fname))
       with exn ->
         lwt fname = keyring_file_name context in
-        lwt () = Lwt_log.error_f ~section "failed to load cookie file %s: %s" fname (Printexc.to_string exn) in
+        lwt () = Lwt_log.error_f ~exn ~section "failed to load cookie file %s" fname in
         raise_lwt exn
     else
       return []
@@ -183,7 +183,7 @@ end = struct
         try_lwt
           Lwt_io.lines_to_file tmp_fname (Lwt_stream.map print_line (Lwt_stream.of_list cookies))
         with exn ->
-          lwt () = Lwt_log.error_f ~section "unable to write temporary keyring file %s: %s" tmp_fname (Printexc.to_string exn) in
+          lwt () = Lwt_log.error_f ~exn ~section "unable to write temporary keyring file %s" tmp_fname in
           raise_lwt exn
       in
       try

@@ -111,7 +111,7 @@ let fill_random buffer pos len =
     if n < len then fill_pseudo buffer (pos + n) (len - n);
     close_in ic
   with exn ->
-    ignore (Lwt_log.warning_f ~section "failed to get random data from /dev/urandom: %s" (Printexc.to_string exn));
+    ignore (Lwt_log.warning_f ~exn ~section "failed to get random data from /dev/urandom");
     fill_pseudo buffer pos len
 
 let random_string n =
