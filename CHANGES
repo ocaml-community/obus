@@ -1,0 +1,8 @@
+===== 1.1.1 =====
+
+  * Fix a race condition in servers that may causes authentication to hang
+  * Add support for launchd addresses
+
+===== 1.1 (2010-12-13) =====
+
+  * First stable release
