@@ -92,14 +92,12 @@ let default_session = [{ name = "autolaunch"; args = [] }]
 
 open Lwt
 
-let not_found_msg : (_, _, _, _) format4 = "environment variable %s not found, using internal default"
-
 let system = lazy(
   match try Some (Sys.getenv system_bus_variable) with Not_found -> None with
     | Some str ->
         return (of_string str)
     | None ->
-        lwt () = Lwt_log.info_f ~section not_found_msg system_bus_variable in
+        lwt () = Lwt_log.info_f ~section "environment variable %s not found, using internal default" system_bus_variable in
         return default_system
 )
 
@@ -108,6 +106,11 @@ let session = lazy(
     | Some line ->
         return (of_string line)
     | None ->
-        lwt () = Lwt_log.info_f ~section not_found_msg session_bus_variable in
-        return default_session
+        lwt () = Lwt_log.info_f ~section "environment variable %s not found, trying to get session bus address from launchd" session_bus_variable in
+        try_lwt
+          lwt path = Lwt_process.pread_line ("launchctl", [|"launchctl"; "getenv"; "DBUS_LAUNCHD_SESSION_BUS_SOCKET"|]) in
+          return [{ name = "unix"; args = [("path", path)] }]
+        with exn ->
+          lwt () = Lwt_log.info_f ~exn ~section "failed to get session bus address from launchd, using internal default" in
+          return default_session
 )
