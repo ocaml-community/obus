@@ -5,18 +5,15 @@
 #
 # This file is a part of obus, an ocaml implementation of D-Bus.
 
-MELT := melt -pdf -no-link eclbkbox.sty
+.PHONY: all clean clean-aux
 
-all:
-	$(MELT) manual.mlt
+all: manual.pdf
 
-manual.pdf:
-	$(MELT) manual.mlt
-	cp _melt/manual.pdf manual.pdf
+%.pdf: %.tex
+	rubber --pdf $<
 
-clean-melt:
-	melt -clean
-
-clean:
-	melt -clean
+clean: clean-aux
 	rm -f *.pdf
+
+clean-aux:
+	rm -f *.aux *.dvi *.log *.out *.toc *.html *.htoc *.haux
