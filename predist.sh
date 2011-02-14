@@ -13,4 +13,4 @@ oasis setup
 chmod +x configure
 
 # Cleanup
-rm -f predist.sh
+rm -f predist.sh boring
