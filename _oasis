@@ -129,7 +129,8 @@ Library "obus-network-manager"
     Nm_settings,
     Nm_vpn_connection,
     Nm_vpn_plugin,
-    Nm_interfaces
+    Nm_interfaces,
+    Nm_monitor
   BuildDepends: obus
   FindlibName: network-manager
   FindlibParent: obus

@@ -78,16 +78,16 @@ let sleep daemon ~sleep =
   OBus_method.call m_Sleep (proxy daemon) sleep
 
 let wireless_enabled daemon =
-  OBus_property.make p_WirelessEnabled (proxy daemon)
+  OBus_property.make ~monitor:Nm_monitor.monitor p_WirelessEnabled (proxy daemon)
 
 let wireless_hardware_enabled daemon =
-  OBus_property.make p_WirelessHardwareEnabled (proxy daemon)
+  OBus_property.make ~monitor:Nm_monitor.monitor p_WirelessHardwareEnabled (proxy daemon)
 
 let wwan_enabled daemon =
-  OBus_property.make p_WwanEnabled (proxy daemon)
+  OBus_property.make ~monitor:Nm_monitor.monitor p_WwanEnabled (proxy daemon)
 
 let wwan_hardware_enabled daemon =
-  OBus_property.make p_WwanHardwareEnabled (proxy daemon)
+  OBus_property.make ~monitor:Nm_monitor.monitor p_WwanHardwareEnabled (proxy daemon)
 
 let active_connections daemon =
   OBus_property.map_r_with_context
@@ -97,12 +97,12 @@ let active_connections daemon =
             Nm_connection.of_proxy
               (OBus_proxy.make (OBus_context.sender context) path))
          paths)
-    (OBus_property.make p_ActiveConnections (proxy daemon))
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_ActiveConnections (proxy daemon))
 
 let state daemon =
   OBus_property.map_r
     state_of_int32
-    (OBus_property.make p_State (proxy daemon))
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_State (proxy daemon))
 
 let state_changed daemon =
   OBus_signal.map
@@ -125,4 +125,4 @@ let device_removed daemon =
     (OBus_signal.make s_DeviceRemoved (proxy daemon))
 
 let properties daemon =
-  OBus_property.group (proxy daemon) interface
+  OBus_property.group ~monitor:Nm_monitor.monitor (proxy daemon) interface

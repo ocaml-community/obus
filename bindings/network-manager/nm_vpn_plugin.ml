@@ -27,7 +27,7 @@ let set_failure proxy ~reason =
 let state proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_State proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_State proxy)
 
 let state_changed proxy =
   OBus_signal.map

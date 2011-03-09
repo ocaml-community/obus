@@ -145,13 +145,13 @@ let state_reason_of_int32 = function
 open Nm_interfaces.Org_freedesktop_NetworkManager_Device
 
 let udi proxy =
-  OBus_property.make p_Udi proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Udi proxy
 
 let interface proxy =
-  OBus_property.make p_Interface proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Interface proxy
 
 let driver proxy =
-  OBus_property.make p_Driver proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Driver proxy
 
 let capabilities proxy =
   OBus_property.map_r
@@ -161,39 +161,39 @@ let capabilities proxy =
        let l = if n land 0x1 <> 0 then `Nm_supported :: l else l in
        let l = if n land 0x2 <> 0 then `Carrier_detect :: l else l in
        l)
-    (OBus_property.make p_Capabilities proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Capabilities proxy)
 
 let ip4_address proxy =
-  OBus_property.make p_Ip4Address proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Ip4Address proxy
 
 let state proxy =
   OBus_property.map_r
     state_of_int32
-    (OBus_property.make p_State proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_State proxy)
 
 let ip4_config proxy =
   OBus_property.map_r_with_context
     (fun context path ->
        Nm_ip4_config.of_proxy
          (OBus_proxy.make (OBus_context.sender context) path))
-    (OBus_property.make p_Ip4Config proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Ip4Config proxy)
 
 let dhcp4_config proxy =
   OBus_property.map_r_with_context
     (fun context path ->
        Nm_dhcp4_config.of_proxy
          (OBus_proxy.make (OBus_context.sender context) path))
-    (OBus_property.make p_Dhcp4Config proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Dhcp4Config proxy)
 
 let ip6_config proxy =
   OBus_property.map_r_with_context
     (fun context path ->
        Nm_ip6_config.of_proxy
          (OBus_proxy.make (OBus_context.sender context) path))
-    (OBus_property.make p_Ip6Config proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Ip6Config proxy)
 
 let managed proxy =
-  OBus_property.make p_Managed proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Managed proxy
 
 let device_type proxy =
   OBus_property.map_r
@@ -206,7 +206,7 @@ let device_type proxy =
        | n ->
            ignore (Lwt_log.warning_f ~section "device_type_of_int: unknown type: %ld" n);
            `Unknown)
-    (OBus_property.make p_DeviceType proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_DeviceType proxy)
 
 let disconnect proxy =
   OBus_method.call m_Disconnect proxy ()
@@ -220,28 +220,28 @@ let state_changed proxy =
     (OBus_signal.make s_StateChanged proxy)
 
 let properties proxy =
-  OBus_property.group proxy Nm_interfaces.Org_freedesktop_NetworkManager_Device.interface
+  OBus_property.group ~monitor:Nm_monitor.monitor proxy Nm_interfaces.Org_freedesktop_NetworkManager_Device.interface
 
 module Bluetooth =
 struct
   open Nm_interfaces.Org_freedesktop_NetworkManager_Device_Bluetooth
 
   let hw_address proxy =
-    OBus_property.make p_HwAddress proxy
+    OBus_property.make ~monitor:Nm_monitor.monitor p_HwAddress proxy
 
   let name proxy =
-    OBus_property.make p_Name proxy
+    OBus_property.make ~monitor:Nm_monitor.monitor p_Name proxy
 
   let bt_capabilities proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_BtCapabilities proxy)
+      (OBus_property.make ~monitor:Nm_monitor.monitor p_BtCapabilities proxy)
 
   let properties_changed proxy =
     OBus_signal.make s_PropertiesChanged proxy
 
   let properties proxy =
-    OBus_property.group proxy interface
+    OBus_property.group ~monitor:Nm_monitor.monitor proxy interface
 end
 
 module Cdma =
@@ -263,23 +263,23 @@ struct
   open Nm_interfaces.Org_freedesktop_NetworkManager_Device_OlpcMesh
 
   let hw_address proxy =
-    OBus_property.make p_HwAddress proxy
+    OBus_property.make ~monitor:Nm_monitor.monitor p_HwAddress proxy
 
   let companion proxy =
     OBus_property.map_r_with_context
       (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-      (OBus_property.make p_Companion proxy)
+      (OBus_property.make ~monitor:Nm_monitor.monitor p_Companion proxy)
 
   let active_channel proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_ActiveChannel proxy)
+      (OBus_property.make ~monitor:Nm_monitor.monitor p_ActiveChannel proxy)
 
   let properties_changed proxy =
     OBus_signal.make s_PropertiesChanged proxy
 
   let properties proxy =
-    OBus_property.group proxy interface
+    OBus_property.group ~monitor:Nm_monitor.monitor proxy interface
 end
 
 module Serial =
@@ -300,21 +300,21 @@ struct
   open Nm_interfaces.Org_freedesktop_NetworkManager_Device_Wired
 
   let hw_address proxy =
-    OBus_property.make p_HwAddress proxy
+    OBus_property.make ~monitor:Nm_monitor.monitor p_HwAddress proxy
 
   let speed proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_Speed proxy)
+      (OBus_property.make ~monitor:Nm_monitor.monitor p_Speed proxy)
 
   let carrier proxy =
-    OBus_property.make p_Carrier proxy
+    OBus_property.make ~monitor:Nm_monitor.monitor p_Carrier proxy
 
   let properties_changed proxy =
     OBus_signal.make s_PropertiesChanged proxy
 
   let properties proxy =
-    OBus_property.group proxy interface
+    OBus_property.group ~monitor:Nm_monitor.monitor proxy interface
 end
 
 module Wireless =
@@ -345,27 +345,27 @@ struct
     )
 
   let hw_address proxy =
-    OBus_property.make p_HwAddress proxy
+    OBus_property.make ~monitor:Nm_monitor.monitor p_HwAddress proxy
 
   let mode proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_Mode proxy)
+      (OBus_property.make ~monitor:Nm_monitor.monitor p_Mode proxy)
 
   let bitrate proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_Bitrate proxy)
+      (OBus_property.make ~monitor:Nm_monitor.monitor p_Bitrate proxy)
 
   let active_access_point proxy =
     OBus_property.map_r_with_context
       (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-      (OBus_property.make p_ActiveAccessPoint proxy)
+      (OBus_property.make ~monitor:Nm_monitor.monitor p_ActiveAccessPoint proxy)
 
   let wireless_capabilities proxy =
     OBus_property.map_r
       (fun x -> Int32.to_int x)
-      (OBus_property.make p_WirelessCapabilities proxy)
+      (OBus_property.make ~monitor:Nm_monitor.monitor p_WirelessCapabilities proxy)
 
   let properties_changed proxy =
     OBus_signal.make s_PropertiesChanged proxy
@@ -385,5 +385,5 @@ struct
       (OBus_signal.make s_AccessPointRemoved proxy)
 
   let properties proxy =
-    OBus_property.group proxy interface
+    OBus_property.group ~monitor:Nm_monitor.monitor proxy interface
 end

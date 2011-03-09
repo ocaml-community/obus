@@ -15,10 +15,10 @@ let properties_changed proxy =
 let vpn_state proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_VpnState proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_VpnState proxy)
 
 let banner proxy =
-  OBus_property.make p_Banner proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Banner proxy
 
 let vpn_state_changed proxy =
   OBus_signal.map
@@ -29,4 +29,4 @@ let vpn_state_changed proxy =
     (OBus_signal.make s_VpnStateChanged proxy)
 
 let properties proxy =
-  OBus_property.group proxy interface
+  OBus_property.group ~monitor:Nm_monitor.monitor proxy interface

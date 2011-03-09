@@ -19,19 +19,19 @@ type state =
     | `Activated ]
 
 let service_name proxy =
-  OBus_property.make p_ServiceName proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_ServiceName proxy
 
 let connection proxy =
   OBus_property.map_r_with_context
     (fun context x ->
        Nm_settings.Connection.of_proxy
          (OBus_proxy.make (OBus_context.sender context) x))
-    (OBus_property.make p_Connection proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Connection proxy)
 
 let specific_object proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_SpecificObject proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_SpecificObject proxy)
 
 let devices proxy =
   OBus_property.map_r_with_context
@@ -41,7 +41,7 @@ let devices proxy =
             Nm_device.of_proxy
               (OBus_proxy.make (OBus_context.sender context) path))
          paths)
-    (OBus_property.make p_Devices proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Devices proxy)
 
 let state proxy =
   OBus_property.map_r
@@ -52,16 +52,16 @@ let state proxy =
        | st ->
            ignore (Lwt_log.warning_f ~section "Nm_connection.state: unknown state: %ld" st);
            `Unknown)
-    (OBus_property.make p_State proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_State proxy)
 
 let default proxy =
-  OBus_property.make p_Default proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Default proxy
 
 let vpn proxy =
-  OBus_property.make p_Vpn proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Vpn proxy
 
 let properties_changed proxy =
   OBus_signal.make s_PropertiesChanged proxy
 
 let properties proxy =
-  OBus_property.group proxy interface
+  OBus_property.group ~monitor:Nm_monitor.monitor proxy interface

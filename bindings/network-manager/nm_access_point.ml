@@ -17,7 +17,7 @@ type ap_flag =
 let flags proxy =
   OBus_property.map_r
     (fun n -> if (Int32.to_int n) land 0x01 <> 0 then [`Privacy] else [])
-    (OBus_property.make p_Flags proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Flags proxy)
 
 type ap_security_flag =
     [ `Pair_wep40
@@ -55,41 +55,41 @@ let ap_security_flags_of_int32 n =
 let wpa_flags proxy =
   OBus_property.map_r
     ap_security_flags_of_int32
-    (OBus_property.make p_WpaFlags proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_WpaFlags proxy)
 
 let rsn_flags proxy =
   OBus_property.map_r
     ap_security_flags_of_int32
-    (OBus_property.make p_RsnFlags proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_RsnFlags proxy)
 
 let ssid proxy =
-  OBus_property.make p_Ssid proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_Ssid proxy
 
 let frequency proxy =
   OBus_property.map_r
     Int32.to_int
-    (OBus_property.make p_Frequency proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Frequency proxy)
 
 let hw_address proxy =
-  OBus_property.make p_HwAddress proxy
+  OBus_property.make ~monitor:Nm_monitor.monitor p_HwAddress proxy
 
 let mode proxy =
   OBus_property.map_r
     Int32.to_int
-    (OBus_property.make p_Mode proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Mode proxy)
 
 let max_bitrate proxy =
   OBus_property.map_r
     Int32.to_int
-    (OBus_property.make p_MaxBitrate proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_MaxBitrate proxy)
 
 let strength proxy =
   OBus_property.map_r
     int_of_char
-    (OBus_property.make p_Strength proxy)
+    (OBus_property.make ~monitor:Nm_monitor.monitor p_Strength proxy)
 
 let properties_changed proxy =
   OBus_signal.make s_PropertiesChanged proxy
 
 let properties proxy =
-  OBus_property.group proxy interface
+  OBus_property.group ~monitor:Nm_monitor.monitor proxy interface

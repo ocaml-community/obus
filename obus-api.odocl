@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: eb8ff31c7259b296eb420836f41b4f67)
+# DO NOT EDIT (digest: 1f90256b6181c0dc2e036c32ec6b9295)
 src/OBus_address
 src/OBus_auth
 src/OBus_bus
@@ -45,6 +45,7 @@ bindings/network-manager/Nm_settings
 bindings/network-manager/Nm_vpn_connection
 bindings/network-manager/Nm_vpn_plugin
 bindings/network-manager/Nm_interfaces
+bindings/network-manager/Nm_monitor
 bindings/notification/Notification
 bindings/notification/Notification_interfaces
 bindings/policykit/Policy_kit

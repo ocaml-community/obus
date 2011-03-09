@@ -61,10 +61,10 @@ struct
     OBus_method.call m_SaveHostname proxy hostname
 
   let hostname proxy =
-    OBus_property.make p_Hostname proxy
+    OBus_property.make ~monitor:Nm_monitor.monitor p_Hostname proxy
 
   let can_modify proxy =
-    OBus_property.make p_CanModify proxy
+    OBus_property.make ~monitor:Nm_monitor.monitor p_CanModify proxy
 
   let properties_changed proxy =
     OBus_signal.make s_PropertiesChanged proxy
