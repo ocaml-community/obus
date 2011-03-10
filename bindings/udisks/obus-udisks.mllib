@@ -1,9 +1,10 @@
 # OASIS_START
-# DO NOT EDIT (digest: 28f50c66e66e3fd0496bfcc6d5cf63a6)
+# DO NOT EDIT (digest: 0ca1266d1c23bbfeae249af95fd44cab)
 UDisks
 UDisks_device
 UDisks_port
 UDisks_adapter
 UDisks_expander
 UDisks_interfaces
+UDisks_monitor
 # OASIS_STOP

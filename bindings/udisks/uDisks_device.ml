@@ -170,264 +170,264 @@ let job_changed proxy =
     (OBus_signal.make s_JobChanged proxy)
 
 let native_path proxy =
-  OBus_property.make p_NativePath proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_NativePath proxy
 
 let device_detection_time proxy =
-  OBus_property.make p_DeviceDetectionTime proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceDetectionTime proxy
 
 let device_media_detection_time proxy =
-  OBus_property.make p_DeviceMediaDetectionTime proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceMediaDetectionTime proxy
 
 let device_major proxy =
-  OBus_property.make p_DeviceMajor proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceMajor proxy
 
 let device_minor proxy =
-  OBus_property.make p_DeviceMinor proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceMinor proxy
 
 let device_file proxy =
-  OBus_property.make p_DeviceFile proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceFile proxy
 
 let device_file_presentation proxy =
-  OBus_property.make p_DeviceFilePresentation proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceFilePresentation proxy
 
 let device_file_by_id proxy =
-  OBus_property.make p_DeviceFileById proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceFileById proxy
 
 let device_file_by_path proxy =
-  OBus_property.make p_DeviceFileByPath proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceFileByPath proxy
 
 let device_is_system_internal proxy =
-  OBus_property.make p_DeviceIsSystemInternal proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsSystemInternal proxy
 
 let device_is_partition proxy =
-  OBus_property.make p_DeviceIsPartition proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsPartition proxy
 
 let device_is_partition_table proxy =
-  OBus_property.make p_DeviceIsPartitionTable proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsPartitionTable proxy
 
 let device_is_removable proxy =
-  OBus_property.make p_DeviceIsRemovable proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsRemovable proxy
 
 let device_is_media_available proxy =
-  OBus_property.make p_DeviceIsMediaAvailable proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsMediaAvailable proxy
 
 let device_is_media_change_detected proxy =
-  OBus_property.make p_DeviceIsMediaChangeDetected proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsMediaChangeDetected proxy
 
 let device_is_media_change_detection_polling proxy =
-  OBus_property.make p_DeviceIsMediaChangeDetectionPolling proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsMediaChangeDetectionPolling proxy
 
 let device_is_media_change_detection_inhibitable proxy =
-  OBus_property.make p_DeviceIsMediaChangeDetectionInhibitable proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsMediaChangeDetectionInhibitable proxy
 
 let device_is_media_change_detection_inhibited proxy =
-  OBus_property.make p_DeviceIsMediaChangeDetectionInhibited proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsMediaChangeDetectionInhibited proxy
 
 let device_is_read_only proxy =
-  OBus_property.make p_DeviceIsReadOnly proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsReadOnly proxy
 
 let device_is_drive proxy =
-  OBus_property.make p_DeviceIsDrive proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsDrive proxy
 
 let device_is_optical_disc proxy =
-  OBus_property.make p_DeviceIsOpticalDisc proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsOpticalDisc proxy
 
 let device_is_mounted proxy =
-  OBus_property.make p_DeviceIsMounted proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsMounted proxy
 
 let device_mount_paths proxy =
-  OBus_property.make p_DeviceMountPaths proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceMountPaths proxy
 
 let device_mounted_by_uid proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_DeviceMountedByUid proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceMountedByUid proxy)
 
 let device_is_luks proxy =
-  OBus_property.make p_DeviceIsLuks proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLuks proxy
 
 let device_is_luks_cleartext proxy =
-  OBus_property.make p_DeviceIsLuksCleartext proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLuksCleartext proxy
 
 let device_is_linux_md_component proxy =
-  OBus_property.make p_DeviceIsLinuxMdComponent proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLinuxMdComponent proxy
 
 let device_is_linux_md proxy =
-  OBus_property.make p_DeviceIsLinuxMd proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLinuxMd proxy
 
 let device_is_linux_lvm2_lv proxy =
-  OBus_property.make p_DeviceIsLinuxLvm2LV proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLinuxLvm2LV proxy
 
 let device_is_linux_lvm2_pv proxy =
-  OBus_property.make p_DeviceIsLinuxLvm2PV proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLinuxLvm2PV proxy
 
 let device_is_linux_dmmp_component proxy =
-  OBus_property.make p_DeviceIsLinuxDmmpComponent proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLinuxDmmpComponent proxy
 
 let device_is_linux_dmmp proxy =
-  OBus_property.make p_DeviceIsLinuxDmmp proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLinuxDmmp proxy
 
 let device_is_linux_loop proxy =
-  OBus_property.make p_DeviceIsLinuxLoop proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceIsLinuxLoop proxy
 
 let device_size proxy =
-  OBus_property.make p_DeviceSize proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceSize proxy
 
 let device_block_size proxy =
-  OBus_property.make p_DeviceBlockSize proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DeviceBlockSize proxy
 
 let device_presentation_hide proxy =
-  OBus_property.make p_DevicePresentationHide proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DevicePresentationHide proxy
 
 let device_presentation_nopolicy proxy =
-  OBus_property.make p_DevicePresentationNopolicy proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DevicePresentationNopolicy proxy
 
 let device_presentation_name proxy =
-  OBus_property.make p_DevicePresentationName proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DevicePresentationName proxy
 
 let device_presentation_icon_name proxy =
-  OBus_property.make p_DevicePresentationIconName proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DevicePresentationIconName proxy
 
 let job_in_progress proxy =
-  OBus_property.make p_JobInProgress proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_JobInProgress proxy
 
 let job_id proxy =
-  OBus_property.make p_JobId proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_JobId proxy
 
 let job_initiated_by_uid proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_JobInitiatedByUid proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_JobInitiatedByUid proxy)
 
 let job_is_cancellable proxy =
-  OBus_property.make p_JobIsCancellable proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_JobIsCancellable proxy
 
 let job_percentage proxy =
-  OBus_property.make p_JobPercentage proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_JobPercentage proxy
 
 let id_usage proxy =
-  OBus_property.make p_IdUsage proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_IdUsage proxy
 
 let id_type proxy =
-  OBus_property.make p_IdType proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_IdType proxy
 
 let id_version proxy =
-  OBus_property.make p_IdVersion proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_IdVersion proxy
 
 let id_uuid proxy =
-  OBus_property.make p_IdUuid proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_IdUuid proxy
 
 let id_label proxy =
-  OBus_property.make p_IdLabel proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_IdLabel proxy
 
 let luks_holder proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_LuksHolder proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LuksHolder proxy)
 
 let luks_cleartext_slave proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_LuksCleartextSlave proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LuksCleartextSlave proxy)
 
 let luks_cleartext_unlocked_by_uid proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LuksCleartextUnlockedByUid proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LuksCleartextUnlockedByUid proxy)
 
 let partition_slave proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_PartitionSlave proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionSlave proxy)
 
 let partition_scheme proxy =
-  OBus_property.make p_PartitionScheme proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionScheme proxy
 
 let partition_type proxy =
-  OBus_property.make p_PartitionType proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionType proxy
 
 let partition_label proxy =
-  OBus_property.make p_PartitionLabel proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionLabel proxy
 
 let partition_uuid proxy =
-  OBus_property.make p_PartitionUuid proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionUuid proxy
 
 let partition_flags proxy =
-  OBus_property.make p_PartitionFlags proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionFlags proxy
 
 let partition_number proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_PartitionNumber proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionNumber proxy)
 
 let partition_offset proxy =
-  OBus_property.make p_PartitionOffset proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionOffset proxy
 
 let partition_size proxy =
-  OBus_property.make p_PartitionSize proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionSize proxy
 
 let partition_alignment_offset proxy =
-  OBus_property.make p_PartitionAlignmentOffset proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionAlignmentOffset proxy
 
 let partition_table_scheme proxy =
-  OBus_property.make p_PartitionTableScheme proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionTableScheme proxy
 
 let partition_table_count proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_PartitionTableCount proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_PartitionTableCount proxy)
 
 let drive_vendor proxy =
-  OBus_property.make p_DriveVendor proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveVendor proxy
 
 let drive_model proxy =
-  OBus_property.make p_DriveModel proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveModel proxy
 
 let drive_revision proxy =
-  OBus_property.make p_DriveRevision proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveRevision proxy
 
 let drive_serial proxy =
-  OBus_property.make p_DriveSerial proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveSerial proxy
 
 let drive_wwn proxy =
-  OBus_property.make p_DriveWwn proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveWwn proxy
 
 let drive_rotation_rate proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_DriveRotationRate proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveRotationRate proxy)
 
 let drive_write_cache proxy =
-  OBus_property.make p_DriveWriteCache proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveWriteCache proxy
 
 let drive_connection_interface proxy =
-  OBus_property.make p_DriveConnectionInterface proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveConnectionInterface proxy
 
 let drive_connection_speed proxy =
-  OBus_property.make p_DriveConnectionSpeed proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveConnectionSpeed proxy
 
 let drive_media_compatibility proxy =
-  OBus_property.make p_DriveMediaCompatibility proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveMediaCompatibility proxy
 
 let drive_media proxy =
-  OBus_property.make p_DriveMedia proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveMedia proxy
 
 let drive_is_media_ejectable proxy =
-  OBus_property.make p_DriveIsMediaEjectable proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveIsMediaEjectable proxy
 
 let drive_can_detach proxy =
-  OBus_property.make p_DriveCanDetach proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveCanDetach proxy
 
 let drive_can_spindown proxy =
-  OBus_property.make p_DriveCanSpindown proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveCanSpindown proxy
 
 let drive_is_rotational proxy =
-  OBus_property.make p_DriveIsRotational proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveIsRotational proxy
 
 let drive_adapter proxy =
   OBus_property.map_r_with_context
     (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
-    (OBus_property.make p_DriveAdapter proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveAdapter proxy)
 
 let drive_ports proxy =
   OBus_property.map_r_with_context
@@ -436,185 +436,185 @@ let drive_ports proxy =
          (fun path ->
             UDisks_port.of_proxy (OBus_proxy.make (OBus_context.sender context) path))
          x)
-    (OBus_property.make p_DrivePorts proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_DrivePorts proxy)
 
 let drive_similar_devices proxy =
   OBus_property.map_r_with_context
     (fun context x -> List.map (fun path -> OBus_proxy.make (OBus_context.sender context) path) x)
-    (OBus_property.make p_DriveSimilarDevices proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveSimilarDevices proxy)
 
 let optical_disc_is_blank proxy =
-  OBus_property.make p_OpticalDiscIsBlank proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_OpticalDiscIsBlank proxy
 
 let optical_disc_is_appendable proxy =
-  OBus_property.make p_OpticalDiscIsAppendable proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_OpticalDiscIsAppendable proxy
 
 let optical_disc_is_closed proxy =
-  OBus_property.make p_OpticalDiscIsClosed proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_OpticalDiscIsClosed proxy
 
 let optical_disc_num_tracks proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_OpticalDiscNumTracks proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_OpticalDiscNumTracks proxy)
 
 let optical_disc_num_audio_tracks proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_OpticalDiscNumAudioTracks proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_OpticalDiscNumAudioTracks proxy)
 
 let optical_disc_num_sessions proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_OpticalDiscNumSessions proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_OpticalDiscNumSessions proxy)
 
 let drive_ata_smart_is_available proxy =
-  OBus_property.make p_DriveAtaSmartIsAvailable proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveAtaSmartIsAvailable proxy
 
 let drive_ata_smart_time_collected proxy =
-  OBus_property.make p_DriveAtaSmartTimeCollected proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveAtaSmartTimeCollected proxy
 
 let drive_ata_smart_status proxy =
-  OBus_property.make p_DriveAtaSmartStatus proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveAtaSmartStatus proxy
 
 let drive_ata_smart_blob proxy =
-  OBus_property.make p_DriveAtaSmartBlob proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DriveAtaSmartBlob proxy
 
 let linux_md_component_level proxy =
-  OBus_property.make p_LinuxMdComponentLevel proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentLevel proxy
 
 let linux_md_component_position proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LinuxMdComponentPosition proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentPosition proxy)
 
 let linux_md_component_num_raid_devices proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LinuxMdComponentNumRaidDevices proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentNumRaidDevices proxy)
 
 let linux_md_component_uuid proxy =
-  OBus_property.make p_LinuxMdComponentUuid proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentUuid proxy
 
 let linux_md_component_name proxy =
-  OBus_property.make p_LinuxMdComponentName proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentName proxy
 
 let linux_md_component_home_host proxy =
-  OBus_property.make p_LinuxMdComponentHomeHost proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentHomeHost proxy
 
 let linux_md_component_version proxy =
-  OBus_property.make p_LinuxMdComponentVersion proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentVersion proxy
 
 let linux_md_component_holder proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_LinuxMdComponentHolder proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentHolder proxy)
 
 let linux_md_component_state proxy =
-  OBus_property.make p_LinuxMdComponentState proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdComponentState proxy
 
 let linux_md_state proxy =
-  OBus_property.make p_LinuxMdState proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdState proxy
 
 let linux_md_level proxy =
-  OBus_property.make p_LinuxMdLevel proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdLevel proxy
 
 let linux_md_uuid proxy =
-  OBus_property.make p_LinuxMdUuid proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdUuid proxy
 
 let linux_md_home_host proxy =
-  OBus_property.make p_LinuxMdHomeHost proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdHomeHost proxy
 
 let linux_md_name proxy =
-  OBus_property.make p_LinuxMdName proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdName proxy
 
 let linux_md_num_raid_devices proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LinuxMdNumRaidDevices proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdNumRaidDevices proxy)
 
 let linux_md_version proxy =
-  OBus_property.make p_LinuxMdVersion proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdVersion proxy
 
 let linux_md_slaves proxy =
   OBus_property.map_r_with_context
     (fun context x -> List.map (fun path -> OBus_proxy.make (OBus_context.sender context) path) x)
-    (OBus_property.make p_LinuxMdSlaves proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdSlaves proxy)
 
 let linux_md_is_degraded proxy =
-  OBus_property.make p_LinuxMdIsDegraded proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdIsDegraded proxy
 
 let linux_md_sync_action proxy =
-  OBus_property.make p_LinuxMdSyncAction proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdSyncAction proxy
 
 let linux_md_sync_percentage proxy =
-  OBus_property.make p_LinuxMdSyncPercentage proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdSyncPercentage proxy
 
 let linux_md_sync_speed proxy =
-  OBus_property.make p_LinuxMdSyncSpeed proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxMdSyncSpeed proxy
 
 let linux_lvm2_pvuuid proxy =
-  OBus_property.make p_LinuxLvm2PVUuid proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVUuid proxy
 
 let linux_lvm2_pvnum_metadata_areas proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_LinuxLvm2PVNumMetadataAreas proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVNumMetadataAreas proxy)
 
 let linux_lvm2_pvgroup_name proxy =
-  OBus_property.make p_LinuxLvm2PVGroupName proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVGroupName proxy
 
 let linux_lvm2_pvgroup_uuid proxy =
-  OBus_property.make p_LinuxLvm2PVGroupUuid proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVGroupUuid proxy
 
 let linux_lvm2_pvgroup_size proxy =
-  OBus_property.make p_LinuxLvm2PVGroupSize proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVGroupSize proxy
 
 let linux_lvm2_pvgroup_unallocated_size proxy =
-  OBus_property.make p_LinuxLvm2PVGroupUnallocatedSize proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVGroupUnallocatedSize proxy
 
 let linux_lvm2_pvgroup_sequence_number proxy =
-  OBus_property.make p_LinuxLvm2PVGroupSequenceNumber proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVGroupSequenceNumber proxy
 
 let linux_lvm2_pvgroup_extent_size proxy =
-  OBus_property.make p_LinuxLvm2PVGroupExtentSize proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVGroupExtentSize proxy
 
 let linux_lvm2_pvgroup_physical_volumes proxy =
-  OBus_property.make p_LinuxLvm2PVGroupPhysicalVolumes proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVGroupPhysicalVolumes proxy
 
 let linux_lvm2_pvgroup_logical_volumes proxy =
-  OBus_property.make p_LinuxLvm2PVGroupLogicalVolumes proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2PVGroupLogicalVolumes proxy
 
 let linux_lvm2_lvname proxy =
-  OBus_property.make p_LinuxLvm2LVName proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2LVName proxy
 
 let linux_lvm2_lvuuid proxy =
-  OBus_property.make p_LinuxLvm2LVUuid proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2LVUuid proxy
 
 let linux_lvm2_lvgroup_name proxy =
-  OBus_property.make p_LinuxLvm2LVGroupName proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2LVGroupName proxy
 
 let linux_lvm2_lvgroup_uuid proxy =
-  OBus_property.make p_LinuxLvm2LVGroupUuid proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLvm2LVGroupUuid proxy
 
 let linux_dmmp_component_holder proxy =
   OBus_property.map_r_with_context
     (fun context x -> OBus_proxy.make (OBus_context.sender context) x)
-    (OBus_property.make p_LinuxDmmpComponentHolder proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxDmmpComponentHolder proxy)
 
 let linux_dmmp_name proxy =
-  OBus_property.make p_LinuxDmmpName proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxDmmpName proxy
 
 let linux_dmmp_slaves proxy =
   OBus_property.map_r_with_context
     (fun context x -> List.map (fun path -> OBus_proxy.make (OBus_context.sender context) path) x)
-    (OBus_property.make p_LinuxDmmpSlaves proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxDmmpSlaves proxy)
 
 let linux_dmmp_parameters proxy =
-  OBus_property.make p_LinuxDmmpParameters proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxDmmpParameters proxy
 
 let linux_loop_filename proxy =
-  OBus_property.make p_LinuxLoopFilename proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LinuxLoopFilename proxy
 
 let properties proxy =
-  OBus_property.group proxy interface
+  OBus_property.group ~monitor:UDisks_monitor.monitor proxy interface
 

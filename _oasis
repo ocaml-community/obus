@@ -144,7 +144,8 @@ Library "obus-upower"
     UPower_device,
     UPower_policy,
     UPower_wakeups,
-    UPower_interfaces
+    UPower_interfaces,
+    UPower_monitor
   BuildDepends: obus
   FindlibName: upower
   FindlibParent: obus
@@ -159,7 +160,8 @@ Library "obus-udisks"
     UDisks_port,
     UDisks_adapter,
     UDisks_expander,
-    UDisks_interfaces
+    UDisks_interfaces,
+    UDisks_monitor
   BuildDepends: obus
   FindlibName: udisks
   FindlibParent: obus
@@ -427,6 +429,13 @@ Executable "network-manager"
   CompiledObject: best
   MainIs: network_manager.ml
   BuildDepends: obus, lwt.syntax, obus.network-manager
+
+Executable "battery-monitoring"
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: battery_monitoring.ml
+  BuildDepends: obus, lwt.syntax, obus.upower
 
 # +-------------------------------------------------------------------+
 # | Misc                                                              |

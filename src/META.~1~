@@ -3,19 +3,11 @@ v v v v v v v
 # DO NOT EDIT (digest: f2a221c3b0adb6f370eb5d9926d24b0e)
 version = "1.1"
 =============
-# DO NOT EDIT (digest: f6ad6478ecda4a9bf6cd056533325cbd)
-version = "1.1.1"
-*************
-v v v v v v v
-# DO NOT EDIT (digest: f2a221c3b0adb6f370eb5d9926d24b0e)
-version = "1.1"
-=============
 # DO NOT EDIT (digest: ae7099b82bcda4c1c25c90bf735d6de1)
 version = "1.1"
 *************
 # DO NOT EDIT (digest: b0b3ca8cbb9946cab7f43477970e3bdd)
 version = "1.1.1"
-^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^
 description = "Pure OCaml implementation of D-Bus"
 requires = "lwt.unix lwt.react xmlm"
@@ -43,18 +35,6 @@ package "network-manager" (
 
 =============
 *************
-v v v v v v v
-package "network-manager" (
- version = "1.1"
- description = "Freedesktop NetworkManager service binding"
- requires = "obus"
- archive(byte) = "obus-network-manager.cma"
- archive(native) = "obus-network-manager.cmxa"
- exists_if = "obus-network-manager.cma"
-)
-
-=============
-*************
 package "network-manager" (
  version = "1.1.1"
  description = "Freedesktop NetworkManager service binding"
@@ -64,7 +44,6 @@ package "network-manager" (
  exists_if = "obus-network-manager.cma"
 )
 
-^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^
 package "syntax" (
  version = "1.1.1"
@@ -82,6 +61,15 @@ package "policykit" (
  archive(byte) = "obus-policykit.cma"
  archive(native) = "obus-policykit.cmxa"
  exists_if = "obus-policykit.cma"
+)
+
+package "upower" (
+ version = "1.1.1"
+ description = "Freedesktop UPower service binding"
+ requires = "obus"
+ archive(byte) = "obus-upower.cma"
+ archive(native) = "obus-upower.cmxa"
+ exists_if = "obus-upower.cma"
 )
 
 package "hal" (
@@ -103,7 +91,7 @@ package "notification" (
 )
 
 package "network-manager" (
- version = "1.1.1"
+ version = "1.1"
  description = "Freedesktop NetworkManager service binding"
  requires = "obus"
  archive(byte) = "obus-network-manager.cma"
@@ -118,15 +106,6 @@ package "idl" (
  archive(byte) = "obus-idl.cma"
  archive(native) = "obus-idl.cmxa"
  exists_if = "obus-idl.cma"
-)
-
-package "upower" (
- version = "1.1.1"
- description = "Freedesktop UPower service binding"
- requires = "obus"
- archive(byte) = "obus-upower.cma"
- archive(native) = "obus-upower.cmxa"
- exists_if = "obus-upower.cma"
 )
 # OASIS_STOP
 

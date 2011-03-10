@@ -5,7 +5,7 @@
 <syntax/*.ml>: -pa_obus
 
 # OASIS_START
-# DO NOT EDIT (digest: 5b32cfc848d08a71720f9956369d8cf1)
+# DO NOT EDIT (digest: 0ce7ae080c5aadb7056de825b19597a4)
 # Executable obus-gen-interface
 <tools/obus_gen_interface.{native,byte}>: pkg_xmlm
 <tools/obus_gen_interface.{native,byte}>: pkg_type-conv.syntax
@@ -17,6 +17,15 @@
 <tools/obus_gen_interface.{native,byte}>: pkg_camlp4.lib
 <tools/obus_gen_interface.{native,byte}>: pkg_camlp4.extend
 # Library obus
+# Library obus-upower
+"bindings/upower": include
+<bindings/upower/*.ml{,i}>: use_obus
+<bindings/upower/*.ml{,i}>: pkg_xmlm
+<bindings/upower/*.ml{,i}>: pkg_type-conv.syntax
+<bindings/upower/*.ml{,i}>: pkg_lwt.unix
+<bindings/upower/*.ml{,i}>: pkg_lwt.syntax.log
+<bindings/upower/*.ml{,i}>: pkg_lwt.syntax
+<bindings/upower/*.ml{,i}>: pkg_lwt.react
 # Library obus-idl
 "src": include
 <src/*.ml{,i}>: use_obus
@@ -78,6 +87,16 @@
 <tools/obus_introspect.{native,byte}>: pkg_lwt.syntax.log
 <tools/obus_introspect.{native,byte}>: pkg_lwt.syntax
 <tools/obus_introspect.{native,byte}>: pkg_lwt.react
+# Executable battery-monitoring
+<examples/battery_monitoring.{native,byte}>: use_obus-upower
+<examples/battery_monitoring.{native,byte}>: use_obus
+<examples/battery_monitoring.{native,byte}>: pkg_xmlm
+<examples/battery_monitoring.{native,byte}>: pkg_type-conv.syntax
+<examples/battery_monitoring.{native,byte}>: pkg_lwt.unix
+<examples/battery_monitoring.{native,byte}>: pkg_lwt.syntax.log
+<examples/battery_monitoring.{native,byte}>: pkg_lwt.syntax
+<examples/battery_monitoring.{native,byte}>: pkg_lwt.react
+<examples/*.ml{,i}>: use_obus-upower
 # Executable obus-gen-server
 <tools/obus_gen_server.{native,byte}>: use_obus-idl
 <tools/obus_gen_server.{native,byte}>: use_obus
@@ -106,15 +125,6 @@
 <examples/list_services.{native,byte}>: pkg_lwt.syntax.log
 <examples/list_services.{native,byte}>: pkg_lwt.syntax
 <examples/list_services.{native,byte}>: pkg_lwt.react
-# Library obus-upower
-"bindings/upower": include
-<bindings/upower/*.ml{,i}>: use_obus
-<bindings/upower/*.ml{,i}>: pkg_xmlm
-<bindings/upower/*.ml{,i}>: pkg_type-conv.syntax
-<bindings/upower/*.ml{,i}>: pkg_lwt.unix
-<bindings/upower/*.ml{,i}>: pkg_lwt.syntax.log
-<bindings/upower/*.ml{,i}>: pkg_lwt.syntax
-<bindings/upower/*.ml{,i}>: pkg_lwt.react
 # Library obus-policykit
 "bindings/policykit": include
 <bindings/policykit/*.ml{,i}>: use_obus

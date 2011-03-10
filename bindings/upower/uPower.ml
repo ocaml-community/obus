@@ -73,25 +73,25 @@ let hibernate_allowed daemon =
   OBus_method.call m_HibernateAllowed (proxy daemon) ()
 
 let daemon_version daemon =
-  OBus_property.make p_DaemonVersion (proxy daemon)
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_DaemonVersion (proxy daemon)
 
 let can_suspend daemon =
-  OBus_property.make p_CanSuspend (proxy daemon)
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_CanSuspend (proxy daemon)
 
 let can_hibernate daemon =
-  OBus_property.make p_CanHibernate (proxy daemon)
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_CanHibernate (proxy daemon)
 
 let on_battery daemon =
-  OBus_property.make p_OnBattery (proxy daemon)
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_OnBattery (proxy daemon)
 
 let on_low_battery daemon =
-  OBus_property.make p_OnLowBattery (proxy daemon)
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_OnLowBattery (proxy daemon)
 
 let lid_is_closed daemon =
-  OBus_property.make p_LidIsClosed (proxy daemon)
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LidIsClosed (proxy daemon)
 
 let lid_is_present daemon =
-  OBus_property.make p_LidIsPresent (proxy daemon)
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_LidIsPresent (proxy daemon)
 
 let properties daemon =
-  OBus_property.group (proxy daemon) interface
+  OBus_property.group ~monitor:UDisks_monitor.monitor (proxy daemon) interface

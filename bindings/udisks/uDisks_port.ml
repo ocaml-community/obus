@@ -15,25 +15,25 @@ let changed proxy =
   OBus_signal.make s_Changed proxy
 
 let native_path proxy =
-  OBus_property.make p_NativePath proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_NativePath proxy
 
 let adapter proxy =
   OBus_property.map_r_with_context
     (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
-    (OBus_property.make p_Adapter proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_Adapter proxy)
 
 let parent proxy =
   OBus_property.map_r_with_context
     (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
-    (OBus_property.make p_Parent proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_Parent proxy)
 
 let number proxy =
   OBus_property.map_r
     (fun x -> Int32.to_int x)
-    (OBus_property.make p_Number proxy)
+    (OBus_property.make ~monitor:UDisks_monitor.monitor p_Number proxy)
 
 let connector_type proxy =
-  OBus_property.make p_ConnectorType proxy
+  OBus_property.make ~monitor:UDisks_monitor.monitor p_ConnectorType proxy
 
 let properties proxy =
-  OBus_property.group proxy interface
+  OBus_property.group ~monitor:UDisks_monitor.monitor proxy interface

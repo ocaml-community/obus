@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 1f90256b6181c0dc2e036c32ec6b9295)
+# DO NOT EDIT (digest: 5bfe566180154010dd02980897048f17)
 src/OBus_address
 src/OBus_auth
 src/OBus_bus
@@ -56,9 +56,11 @@ bindings/udisks/UDisks_port
 bindings/udisks/UDisks_adapter
 bindings/udisks/UDisks_expander
 bindings/udisks/UDisks_interfaces
+bindings/udisks/UDisks_monitor
 bindings/upower/UPower
 bindings/upower/UPower_device
 bindings/upower/UPower_policy
 bindings/upower/UPower_wakeups
 bindings/upower/UPower_interfaces
+bindings/upower/UPower_monitor
 # OASIS_STOP
