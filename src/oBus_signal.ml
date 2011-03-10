@@ -9,6 +9,7 @@
 
 let section = Lwt_log.Section.make "obus(signal)"
 
+open Lwt_react
 open Lwt
 
 (* +-----------------------------------------------------------------+
@@ -25,7 +26,7 @@ type 'a t = {
   proxy : OBus_proxy.t;
   (* The proxy emitting the signal. *)
 
-  map : (OBus_context.t * OBus_value.V.sequence) React.event -> (OBus_context.t * 'a) React.event;
+  map : (OBus_context.t * OBus_value.V.sequence) event -> (OBus_context.t * 'a) event;
   (* The function which maps the event into an event holding values of
      type ['a]. *)
 
@@ -65,7 +66,7 @@ let make signal proxy = {
   interface = OBus_member.Signal.interface signal;
   member = OBus_member.Signal.member signal;
   proxy = proxy;
-  map = React.E.fmap (cast signal);
+  map = E.fmap (cast signal);
   filters = empty_filters;
   match_rule = OBus_connection.name (OBus_proxy.connection proxy) <> "";
 }
@@ -78,13 +79,13 @@ let map_event f sd =
   { sd with map = fun event -> f (sd.map event) }
 
 let map f sd =
-  { sd with map = fun event -> React.E.map (fun (context, value) -> (context, f value)) (sd.map event) }
+  { sd with map = fun event -> E.map (fun (context, value) -> (context, f value)) (sd.map event) }
 
 let map_with_context f sd =
-  { sd with map = fun event -> React.E.map (fun (context, value) -> (context, f context value)) (sd.map event) }
+  { sd with map = fun event -> E.map (fun (context, value) -> (context, f context value)) (sd.map event) }
 
 let with_context sd =
-  { sd with map = fun event -> React.E.map (fun (context, value) -> (context, (context, value))) (sd.map event) }
+  { sd with map = fun event -> E.map (fun (context, value) -> (context, (context, value))) (sd.map event) }
 
 let with_filters filters sd =
   { sd with filters }
@@ -165,7 +166,7 @@ let connect ?switch sd =
     and owner_option =
       if OBus_connection.name connection <> "" && name <> "" then
         if OBus_name.is_unique name then
-          return (Some (React.S.const name))
+          return (Some (S.const name))
         else
           lwt owner = OBus_resolver.make ~switch:resources_switch connection name in
           return (Some owner)
@@ -196,14 +197,14 @@ let connect ?switch sd =
             senders
     in
 
-    let event, send = React.E.create () in
+    let event, send = E.create () in
     let node = Lwt_sequence.add_r send senders in
 
     let event =
-      React.E.filter
+      E.filter
         (fun (context, body) ->
            match owner_option with
-             | Some owner when React.S.value owner <> OBus_peer.name (OBus_context.sender context) ->
+             | Some owner when S.value owner <> OBus_peer.name (OBus_context.sender context) ->
                  false
              | _ ->
                  OBus_match.match_values sd.filters body)
@@ -230,13 +231,13 @@ let connect ?switch sd =
         raise_lwt exn
     ) in
 
-    let event = Lwt_event.with_finaliser (finalise disconnect) (React.E.map snd (sd.map event)) in
+    let event = E.with_finaliser (finalise disconnect) (E.map snd (sd.map event)) in
 
     lwt () =
       Lwt_switch.add_hook_or_exec
         switch
         (fun () ->
-           React.E.stop event;
+           E.stop event;
            Lazy.force disconnect)
     in
 

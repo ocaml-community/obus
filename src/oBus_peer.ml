@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+open Lwt_react
 open Lwt
 
 type t = {
@@ -60,11 +61,11 @@ let wait_for_exit peer =
     | name ->
         let switch = Lwt_switch.create () in
         lwt owner = OBus_resolver.make ~switch peer.connection name in
-        if React.S.value owner = "" then
+        if S.value owner = "" then
           Lwt_switch.turn_off switch
         else
           try_lwt
-            lwt _ = Lwt_event.next (React.E.filter ((=) "") (React.S.changes owner)) in
+            lwt _ = E.next (E.filter ((=) "") (S.changes owner)) in
             return ()
           finally
             Lwt_switch.turn_off switch

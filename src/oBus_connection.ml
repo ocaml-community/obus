@@ -9,6 +9,7 @@
 
 let section = Lwt_log.Section.make "obus(connection)"
 
+open Lwt_react
 open Lwt
 
 (* +-----------------------------------------------------------------+
@@ -73,12 +74,12 @@ type active_connection = {
      client-side part of a peer-to-peer connection and the connection
      is shared. *)
 
-  down : (unit Lwt.t * unit Lwt.u) option React.signal;
+  down : (unit Lwt.t * unit Lwt.u) option signal;
   set_down : (unit Lwt.t * unit Lwt.u) option -> unit;
   (* Waiting thread used to make the connection to stop dispatching
      messages. *)
 
-  state : [ `Up | `Down ] React.signal;
+  state : [ `Up | `Down ] signal;
 
   abort_recv_wakener : OBus_message.t Lwt.u;
   abort_send_wakener : unit Lwt.u;
@@ -126,7 +127,7 @@ and t = <
   get : active_connection;
   (* Returns the connection if it is active, and fail otherwise *)
 
-  active : bool React.signal;
+  active : bool signal;
   (* Signal holding the current connection state. *)
 >
 
@@ -177,7 +178,7 @@ let cleanup active ~is_crash =
      [get_message] *)
   wakeup_exn active.abort_recv_wakener Connection_closed;
   begin
-    match React.S.value active.down with
+    match S.value active.down with
       | Some(waiter, wakener) ->
           wakeup_exn wakener Connection_closed
       | None ->
@@ -434,7 +435,7 @@ let dispatch_message active message =
 let rec dispatch_forever active =
   lwt () =
     (* Wait for the connection to become up *)
-    match React.S.value active.down with
+    match S.value active.down with
       | Some(waiter, wakener) ->
           waiter
       | None ->
@@ -469,7 +470,7 @@ let rec dispatch_forever active =
    +-----------------------------------------------------------------+ *)
 
 class connection =
-  let active, set_active = React.S.create false in
+  let active, set_active = S.create false in
 object(self)
 
   method active = active
@@ -498,8 +499,8 @@ let of_transport ?switch ?guid ?(up=true) transport =
     let abort_recv_waiter, abort_recv_wakener = Lwt.wait ()
     and abort_send_waiter, abort_send_wakener = Lwt.wait ()
     and connection = new connection
-    and down, set_down = React.S.create (if up then None else Some(wait ())) in
-    let state = React.S.map (function None -> `Up | Some _ -> `Down) down in
+    and down, set_down = S.create (if up then None else Some(wait ())) in
+    let state = S.map (function None -> `Up | Some _ -> `Down) down in
     let active = {
       name = "";
       transport;
@@ -639,7 +640,7 @@ let state connection = connection#get.state
 
 let set_up connection =
   let active = connection#get in
-  match React.S.value active.down with
+  match S.value active.down with
     | None ->
         ()
     | Some(waiter, wakener) ->
@@ -648,7 +649,7 @@ let set_up connection =
 
 let set_down connection =
   let active = connection#get in
-  match React.S.value active.down with
+  match S.value active.down with
     | Some _ ->
         ()
     | None ->

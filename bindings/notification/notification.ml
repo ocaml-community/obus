@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+open Lwt_react
 open Lwt
 open OBus_value
 
@@ -162,7 +163,7 @@ let init_callbacks = lazy(
   in
 
   (* Handle signals for closed notifications *)
-  Lwt_event.always_notify_p
+  E.notify_p
     (fun (peer, id, reason) ->
        match try Some(Peer_map.find peer !notifications) with Not_found -> None with
          | None ->
@@ -185,7 +186,7 @@ let init_callbacks = lazy(
   in
 
   (* Handle signals for actions *)
-  Lwt_event.always_notify_p
+  E.notify_p
     (fun (peer, id, action) ->
        match try Some(Peer_map.find peer !notifications) with Not_found -> None with
          | None ->

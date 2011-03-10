@@ -220,8 +220,7 @@ lwt () =
 
   (* Connect to a signal of the service *)
   lwt () =
-    Lwt_event.always_notify
-      (fun args -> ...)
+    Lwt_react.E.notify (fun args -> ...)
     =|< OBus_signal.connect (Foo_client.Org_foo_bar.plip proxy)
   in
 
@@ -562,7 +561,7 @@ lwt () =
   (* Register to the signal we just defined: *)
   lwt event = OBus_signal.connect (OBus_signal.make s_NameAcquired proxy) in
 
-  Lwt_event.always_notify_p
+  Lwt_react.E.notify_p
     (fun name ->
        Lwt_io.printlf "name acquired: %s" name)
     event;

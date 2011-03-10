@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+open Lwt_react
 open Lwt
 
 let section = Lwt_log.Section.make "obus(obejct)"
@@ -40,7 +41,7 @@ module type Property_info = sig
   type access
   val info : (typ, access) OBus_member.Property.t
   val set : (obj -> typ -> unit Lwt.t) option
-  val signal : (obj -> typ React.signal) option
+  val signal : (obj -> typ signal) option
 end
 
 module type Property_instance = sig
@@ -48,10 +49,10 @@ module type Property_instance = sig
   type access
   val info : (typ, access) OBus_member.Property.t
 
-  val signal : typ React.signal
+  val signal : typ signal
     (* The signal holding the current value of the property *)
 
-  val monitor : unit React.event
+  val monitor : unit event
     (* Event which send notifications when the contents of the
        property changes *)
 end
@@ -85,7 +86,7 @@ and 'a t = {
   mutable data : 'a option;
   (* Data attached to the object *)
 
-  exports : Connection_set.t React.signal;
+  exports : Connection_set.t signal;
   set_exports : Connection_set.t -> unit;
   (* Set of connection on which the object is exported *)
 
@@ -141,7 +142,7 @@ type info = {
   mutable dynamics : dynamic Path_map.t;
   (* Dynamic objects exported on the connection *)
 
-  mutable watcher : unit React.event;
+  mutable watcher : unit event;
   (* Event which cleanup things when the connection goes down *)
 }
 
@@ -418,11 +419,11 @@ let handle_message connection info message =
 let key = OBus_connection.new_key ()
 
 let cleanup connection info =
-  React.E.stop info.watcher;
+  E.stop info.watcher;
   Path_map.iter
     (fun path static ->
        let module M = (val static : Static) in
-       M.obj.set_exports (Connection_set.remove connection (React.S.value M.obj.exports)))
+       M.obj.set_exports (Connection_set.remove connection (S.value M.obj.exports)))
     info.statics
 
 let get_info connection =
@@ -433,23 +434,23 @@ let get_info connection =
         let info = {
           statics = Path_map.empty;
           dynamics = Path_map.empty;
-          watcher = React.E.never;
+          watcher = E.never;
         } in
         OBus_connection.set connection key (Some info);
         let _ = Lwt_sequence.add_r (handle_message connection info) (OBus_connection.incoming_filters connection) in
         info.watcher <- (
-          React.E.map
+          E.map
             (fun state -> cleanup connection info)
-            (React.E.once
-               (React.S.changes
+            (E.once
+               (S.changes
                   (OBus_connection.active connection)))
         );
         info
 
 let remove connection obj =
-  let exports = React.S.value obj.exports in
+  let exports = S.value obj.exports in
   if Connection_set.mem connection exports then begin
-    if React.S.value (OBus_connection.active connection) then begin
+    if S.value (OBus_connection.active connection) then begin
       match OBus_connection.get connection key with
         | Some info ->
             info.statics <- Path_map.remove obj.path info.statics
@@ -460,7 +461,7 @@ let remove connection obj =
   end
 
 let remove_by_path connection path =
-  if React.S.value (OBus_connection.active connection) then
+  if S.value (OBus_connection.active connection) then
     match OBus_connection.get connection key with
       | None ->
           ()
@@ -477,7 +478,7 @@ let export (type d) connection obj =
   if obj.data = None then
     failwith "OBus_object.export: cannot export an object without data attached"
   else
-    let exports = React.S.value obj.exports in
+    let exports = S.value obj.exports in
     if not (Connection_set.mem connection exports) then begin
       let info = get_info connection in
       let () =
@@ -498,7 +499,7 @@ let export (type d) connection obj =
     end
 
 let destroy obj =
-  Connection_set.iter (fun connection -> remove connection obj) (React.S.value obj.exports)
+  Connection_set.iter (fun connection -> remove connection obj) (S.value obj.exports)
 
 let dynamic (type d) ~connection ~prefix ~handler =
   let info = get_info connection in
@@ -537,7 +538,7 @@ let emit obj ~interface ~member ?peer typ x =
         } in
         join (Connection_set.fold
                 (fun connection l -> OBus_connection.send_message connection signal :: l)
-                (React.S.value obj.exports) [])
+                (S.value obj.exports) [])
 
 (* +-----------------------------------------------------------------+
    | Property change notifications                                   |
@@ -607,8 +608,8 @@ let generate (type d) obj =
          (function
             | Some instance ->
                 let module M = (val instance : Property_instance) in
-                React.S.stop M.signal;
-                React.E.stop M.monitor
+                S.stop M.signal;
+                E.stop M.monitor
             | None -> ())
          instances)
     obj.properties;
@@ -635,11 +636,11 @@ let generate (type d) obj =
                 let info = (module P : Property_info with type obj = d t and type typ = P.typ) in
                 match esc_prop, esc_intf with
                   | Esc_false, _ | Esc_default, Esc_false ->
-                      React.E.never
+                      E.never
                   | Esc_true, _ | Esc_default, (Esc_default | Esc_true) ->
-                      React.E.map (handle_property_change_true obj i info) (React.S.changes signal)
+                      E.map (handle_property_change_true obj i info) (S.changes signal)
                   | Esc_invalidates, _ | Esc_default, Esc_invalidates ->
-                      React.E.map (handle_property_change_invalidates obj i info) (React.S.changes signal)
+                      E.map (handle_property_change_invalidates obj i info) (S.changes signal)
             end in
             instances.(j) <- (Some(module I : Property_instance))
         | None ->
@@ -833,7 +834,7 @@ let properties (type d) () =
                        match obj.properties.(i).(j) with
                          | Some instance ->
                              let module I = (val instance : Property_instance) in
-                             return (OBus_value.C.make_single (Property.typ I.info) (React.S.value I.signal))
+                             return (OBus_value.C.make_single (Property.typ I.info) (S.value I.signal))
                          | None ->
                              raise_lwt (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not readable" member interface))
        end in
@@ -871,7 +872,7 @@ let properties (type d) () =
                            let module I = (val instance : Property_instance) in
                            loop (j + 1)
                              ((Property.member I.info,
-                               OBus_value.C.make_single (Property.typ I.info) (React.S.value I.signal)) :: acc)
+                               OBus_value.C.make_single (Property.typ I.info) (S.value I.signal)) :: acc)
                        | None ->
                            loop (j + 1) acc
                  in
@@ -977,7 +978,7 @@ let properties_changed obj interface values =
 
 let make ?owner ?(common=true) ?(interfaces=[]) path =
   let interfaces = if common then introspectable () :: properties () :: interfaces else interfaces in
-  let exports, set_exports = React.S.create ~eq:Connection_set.equal Connection_set.empty in
+  let exports, set_exports = S.create ~eq:Connection_set.equal Connection_set.empty in
   let obj = {
     path = path;
     exports = exports;

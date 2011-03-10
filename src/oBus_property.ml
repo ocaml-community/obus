@@ -9,6 +9,7 @@
 
 let section = Lwt_log.Section.make "obus(property)"
 
+open Lwt_react
 open Lwt
 open OBus_interfaces.Org_freedesktop_DBus_Properties
 
@@ -20,7 +21,7 @@ module String_map = Map.Make(String)
 
 type map = (OBus_context.t * OBus_value.V.single) String_map.t
 
-type monitor = OBus_proxy.t -> OBus_name.interface -> Lwt_switch.t -> map React.signal Lwt.t
+type monitor = OBus_proxy.t -> OBus_name.interface -> Lwt_switch.t -> map signal Lwt.t
 
 type ('a, 'access) t = {
   p_interface : OBus_name.interface;
@@ -69,7 +70,7 @@ type cache = {
   mutable c_count : int;
   (* Numbers of monitored properties using this group. *)
 
-  c_map : map React.signal;
+  c_map : map signal;
   (* The signal holding the current state of properties. *)
 
   c_switch : Lwt_switch.t;
@@ -102,8 +103,8 @@ let default_monitor proxy interface switch =
          (OBus_signal.with_context
             (OBus_signal.make s_PropertiesChanged proxy)))
   and context, dict = get_all_no_cache proxy interface in
-  return (React.S.map snd
-            (Lwt_signal.fold_s ~eq:(fun (_, a) (_, b) -> String_map.equal (=) a b)
+  return (S.map snd
+            (S.fold_s ~eq:(fun (_, a) (_, b) -> String_map.equal (=) a b)
                (fun (_, map) (sig_context, (interface, updates, invalidates)) ->
                   if invalidates = [] then
                     return (sig_context, update_map sig_context updates map)
@@ -236,7 +237,7 @@ let get_with_context prop =
         with
           | Some cache_thread ->
               lwt cache = cache_thread in
-              return (find_with_context prop (React.S.value cache.c_map))
+              return (find_with_context prop (S.value cache.c_map))
           | None ->
               lwt context, value = OBus_method.call_with_context m_Get prop.p_proxy (prop.p_interface, prop.p_member) in
               return (context, prop.p_cast context value)
@@ -264,7 +265,7 @@ let get_group group =
         with
           | Some cache_thread ->
               lwt cache = cache_thread in
-              return (React.S.value cache.c_map)
+              return (S.value cache.c_map)
           | None ->
               lwt context, dict = get_all_no_cache group.g_proxy group.g_interface in
               return (map_of_list context dict)
@@ -344,13 +345,13 @@ let monitor_group ?switch group =
       raise_lwt exn
   ) in
 
-  let signal = Lwt_signal.with_finaliser (finalise disable) cache.c_map in
+  let signal = S.with_finaliser (finalise disable) cache.c_map in
 
   lwt () =
     Lwt_switch.add_hook_or_exec
       switch
       (fun () ->
-         React.S.stop signal;
+         S.stop signal;
          Lazy.force disable)
   in
 
@@ -360,4 +361,4 @@ let monitor ?switch prop =
   lwt signal = monitor_group ?switch { g_interface = prop.p_interface;
                                        g_proxy = prop.p_proxy;
                                        g_monitor = prop.p_monitor } in
-  return (React.S.map (find prop) signal)
+  return (S.map (find prop) signal)

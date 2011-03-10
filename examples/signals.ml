@@ -9,13 +9,14 @@
 
 (* This sample illustrate the use of signals *)
 
+open Lwt_react
 open Lwt
 open Lwt_io
 
 (* Add an handler on keyboard event which print the multimedia key
    pressed *)
 let handle_multimedia_keys device =
-  Lwt_event.always_notify_p
+  E.notify_p
     (fun (action, key) ->
        lwt () = printlf "from Hal: action %S on key %S!" action key in
        lwt () = printlf "          the signal come from the device %S" (OBus_path.to_string (Hal_device.udi device)) in
@@ -30,7 +31,7 @@ lwt () =
      +---------------------------------------------------------------+ *)
 
   lwt () =
-    Lwt_event.always_notify_p
+    E.notify_p
       (fun (name, old_owner, new_owner) ->
          printlf "from D-Bus: the owner of the name %S changed: %S -> %S"
            name old_owner new_owner)
@@ -38,13 +39,13 @@ lwt () =
   in
 
   lwt () =
-    Lwt_event.always_notify_p
+    E.notify_p
       (printlf "from D-Bus: i lost the name %S!")
     =|< OBus_signal.connect (OBus_bus.name_lost session)
   in
 
   lwt () =
-    Lwt_event.always_notify_p
+    E.notify_p
       (printf "from D-Bus: i got the name '%S!")
     =|< OBus_signal.connect (OBus_bus.name_acquired session)
   in
@@ -56,7 +57,7 @@ lwt () =
   lwt manager = Hal_manager.manager () in
 
   lwt () =
-    Lwt_event.always_notify_p
+    E.notify_p
       (fun device ->
          lwt () = printlf "from Hal: device added: %S" (OBus_path.to_string (Hal_device.udi device)) in
 

@@ -10,6 +10,7 @@
 (* This sample illustrate use if some of the functions offered by the
    message bus *)
 
+open Lwt_react
 open Lwt
 open Lwt_io
 
@@ -50,4 +51,4 @@ lwt () =
        | `Already_owner -> "i already own the name")
   in
 
-  printlf "my names are: %s" (String.concat ", " (String_set.elements (React.S.value (OBus_bus.names bus))))
+  printlf "my names are: %s" (String.concat ", " (String_set.elements (S.value (OBus_bus.names bus))))

@@ -9,6 +9,7 @@
 
 let section = Lwt_log.Section.make "obus(resolver)"
 
+open Lwt_react
 open Lwt
 
 module String_map = Map.Make(String)
@@ -22,7 +23,7 @@ type resolver = {
   (* Number of instances of this resolver. The resolver is
      automatically disabled when this number reach 0. *)
 
-  owner : OBus_name.bus React.signal;
+  owner : OBus_name.bus signal;
   (* The owner of the name that is being monitored. *)
 
   set_owner : OBus_name.bus -> unit;
@@ -129,7 +130,7 @@ let make ?switch connection name =
   (* If [name] is a unique name and the peer has already exited, then
      there is nothing to do: *)
   if OBus_name.is_unique name && has_exited name info then
-    return (React.S.const "")
+    return (S.const "")
   else begin
     lwt resolver, export_switch =
       match try Some(String_map.find name info.resolvers) with Not_found -> None with
@@ -153,7 +154,7 @@ let make ?switch connection name =
                      ~arguments:(OBus_match.make_arguments [(0, OBus_match.AF_string name)]) ())
               in
               lwt current_owner = get_name_owner connection name in
-              let owner, set_owner = React.S.create current_owner in
+              let owner, set_owner = S.create current_owner in
               let resolver = { count = 0; owner; set_owner } in
               wakeup wakener (resolver, export_switch);
               return (resolver, export_switch)
@@ -180,13 +181,13 @@ let make ?switch connection name =
         raise_lwt exn
     ) in
 
-    let owner = Lwt_signal.with_finaliser (finalise remove) resolver.owner in
+    let owner = S.with_finaliser (finalise remove) resolver.owner in
 
     lwt () =
       Lwt_switch.add_hook_or_exec
         switch
         (fun () ->
-           React.S.stop owner;
+           S.stop owner;
            Lazy.force remove)
     in
 

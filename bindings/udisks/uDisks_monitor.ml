@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+open Lwt_react
 open Lwt
 
 module String_map = Map.Make(String)
@@ -24,10 +25,10 @@ let monitor proxy interface switch =
       (OBus_signal.with_context
          (OBus_signal.make (changed interface) proxy))
   and context, dict = OBus_property.get_all_no_cache proxy interface in
-  return (React.S.hold
+  return (S.hold
             ~eq:(String_map.equal (=))
             (OBus_property.map_of_list context dict)
-            (Lwt_event.map_s
+            (E.map_s
                (fun (context, ()) ->
                   lwt context, dict = OBus_property.get_all_no_cache proxy interface in
                   return (OBus_property.map_of_list context dict))

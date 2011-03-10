@@ -9,6 +9,7 @@
 
 let section = Lwt_log.Section.make "obus(bus)"
 
+open Lwt_react
 open Lwt
 open OBus_interfaces.Org_freedesktop_DBus
 
@@ -21,7 +22,7 @@ type t = OBus_connection.t
 module String_set = Set.Make(String)
 
 type info = {
-  names : String_set.t React.signal;
+  names : String_set.t signal;
   set_names : String_set.t -> unit;
   connection : OBus_connection.t;
 }
@@ -65,12 +66,12 @@ let update_names info message =
       | { sender = "org.freedesktop.DBus";
           typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameAcquired");
           body = [OBus_value.V.Basic(OBus_value.V.String name)] } ->
-          info.set_names (String_set.add name (React.S.value info.names));
+          info.set_names (String_set.add name (S.value info.names));
           Some message
       | { sender = "org.freedesktop.DBus";
           typ = Signal(["org"; "freedesktop"; "DBus"], "org.freedesktop.DBus", "NameLost");
           body = [OBus_value.V.Basic(OBus_value.V.String name)] } ->
-          info.set_names (String_set.remove name (React.S.value info.names));
+          info.set_names (String_set.remove name (S.value info.names));
           Some message
       | _ ->
           Some message
@@ -80,7 +81,7 @@ let update_names info message =
 let register_connection connection =
   match OBus_connection.get connection key with
     | None ->
-        let names, set_names = React.S.create String_set.empty in
+        let names, set_names = S.create String_set.empty in
         let info = { names; set_names; connection } in
         OBus_connection.set connection key (Some info);
         let _ = Lwt_sequence.add_l (update_names info) (OBus_connection.incoming_filters connection) in
@@ -120,7 +121,7 @@ let system ?switch () =
     Lwt_mutex.with_lock system_bus_mutex
       (fun () ->
          match !system_bus_state with
-           | Some bus when React.S.value (OBus_connection.active bus) ->
+           | Some bus when S.value (OBus_connection.active bus) ->
                return bus
            | _ ->
                try_lwt

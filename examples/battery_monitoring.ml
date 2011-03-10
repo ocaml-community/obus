@@ -7,6 +7,7 @@
  * This file is a part of obus, an ocaml implementation of D-Bus.
  *)
 
+open Lwt_react
 open Lwt
 open Lwt_io
 
@@ -32,8 +33,8 @@ let monitor_device device =
   else begin
     let switch = Lwt_switch.create () in
     lwt signal = OBus_property.monitor (UPower_device.state device) in
-    let id = Lwt_signal.notify_s (print_state device) signal in
-    batteries := (device, switch, id) :: !batteries;
+    lwt s = S.map_s (print_state device) signal in
+    batteries := (device, switch, s) :: !batteries;
     return ()
   end
 
@@ -41,9 +42,9 @@ let monitor_device device =
 let unmonitor_device device =
   lwt () =
     Lwt_list.iter_p
-      (fun (device', switch, id) ->
+      (fun (device', switch, s) ->
          if device = device' then begin
-           Lwt_signal.disable id;
+           S.stop s;
            Lwt_switch.turn_off switch
          end else
            return ())
@@ -59,10 +60,10 @@ lwt () =
   (* Handle device addition/removal. *)
   lwt () =
     OBus_signal.connect (UPower.device_added manager)
-    >|= Lwt_event.always_notify_p monitor_device
+    >|= E.notify_p monitor_device
   and () =
     OBus_signal.connect (UPower.device_removed manager)
-    >|= Lwt_event.always_notify_p unmonitor_device
+    >|= E.notify_p unmonitor_device
   in
 
   (* Monitor all the batteries initially present on the system. *)
