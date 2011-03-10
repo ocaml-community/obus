@@ -8,7 +8,7 @@
  *)
 
 (* OASIS_START *)
-(* DO NOT EDIT (digest: bef45cffcfd414d124350ce9bd48cebc) *)
+(* DO NOT EDIT (digest: 11f44fcd643064aa9d58762bdb3274ba) *)
 module OASISGettext = struct
 # 21 "/home/dim/sources/oasis/src/oasis/OASISGettext.ml"
   
@@ -464,14 +464,14 @@ let package_default =
        [
           ("src/obus", ["src"]);
           ("src/obus-idl", ["src"]);
+          ("bindings/network-manager/obus-network-manager",
+            ["bindings/network-manager"]);
           ("bindings/notification/obus-notification",
             ["bindings/notification"]);
           ("bindings/hal/obus-hal", ["bindings/hal"]);
           ("bindings/upower/obus-upower", ["bindings/upower"]);
           ("bindings/policykit/obus-policykit", ["bindings/policykit"]);
           ("syntax/obus-syntax", ["syntax"]);
-          ("bindings/network-manager/obus-network-manager",
-            ["bindings/network-manager"]);
           ("bindings/udisks/obus-udisks", ["bindings/udisks"])
        ];
      lib_c = [];

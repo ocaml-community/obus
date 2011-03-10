@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: f2a221c3b0adb6f370eb5d9926d24b0e)
+# DO NOT EDIT (digest: ae7099b82bcda4c1c25c90bf735d6de1)
 version = "1.1"
 description = "Pure OCaml implementation of D-Bus"
 requires = "lwt.unix lwt.react xmlm"
@@ -13,15 +13,6 @@ package "udisks" (
  archive(byte) = "obus-udisks.cma"
  archive(native) = "obus-udisks.cmxa"
  exists_if = "obus-udisks.cma"
-)
-
-package "network-manager" (
- version = "1.1"
- description = "Freedesktop NetworkManager service binding"
- requires = "obus"
- archive(byte) = "obus-network-manager.cma"
- archive(native) = "obus-network-manager.cmxa"
- exists_if = "obus-network-manager.cma"
 )
 
 package "syntax" (
@@ -67,6 +58,15 @@ package "notification" (
  archive(byte) = "obus-notification.cma"
  archive(native) = "obus-notification.cmxa"
  exists_if = "obus-notification.cma"
+)
+
+package "network-manager" (
+ version = "1.1"
+ description = "Freedesktop NetworkManager service binding"
+ requires = "obus"
+ archive(byte) = "obus-network-manager.cma"
+ archive(native) = "obus-network-manager.cmxa"
+ exists_if = "obus-network-manager.cma"
 )
 
 package "idl" (

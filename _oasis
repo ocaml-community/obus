@@ -421,6 +421,13 @@ Executable signals
   MainIs: signals.ml
   BuildDepends: obus, lwt.syntax, obus.hal
 
+Executable "network-manager"
+  Path: examples
+  Install: false
+  CompiledObject: best
+  MainIs: network_manager.ml
+  BuildDepends: obus, lwt.syntax, obus.network-manager
+
 # +-------------------------------------------------------------------+
 # | Misc                                                              |
 # +-------------------------------------------------------------------+
