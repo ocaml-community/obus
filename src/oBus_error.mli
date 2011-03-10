@@ -101,6 +101,18 @@ exception Invalid_args of message
 exception Unknown_method of message
   (** The [org.freedesktop.DBus.Error.UnknownMethod] error *)
 
+exception Unknown_object of message
+  (** The [org.freedesktop.DBus.Error.UnknownObject] error *)
+
+exception Unknown_interface of message
+  (** The [org.freedesktop.DBus.Error.UnknownInterface] error *)
+
+exception Unknown_property of message
+  (** The [org.freedesktop.DBus.Error.UnknownProperty] error *)
+
+exception Property_read_only of message
+  (** The [org.freedesktop.DBus.Error.PropertyReadOnly] error *)
+
 exception No_memory of message
   (** The [org.freedesktop.DBus.Error.NoMemory] error *)
 

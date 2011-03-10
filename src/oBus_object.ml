@@ -391,7 +391,7 @@ let handle_message connection info message =
                         ([], children info path);
                       send_reply context [OBus_value.V.basic_string (Buffer.contents buffer)]
                   | _ ->
-                      send_error context (OBus_error.Failed (Printf.sprintf "No such object: %S" (OBus_path.to_string path)))
+                      send_error context (OBus_error.Unknown_object (Printf.sprintf "Object %S does not exists" (OBus_path.to_string path)))
               end
             | exn ->
                 lwt () =
@@ -825,18 +825,18 @@ let properties (type d) () =
          let handler obj (interface, member) =
            match binary_search compare_interface interface obj.interfaces with
              | -1 ->
-                 raise_lwt (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
+                 raise_lwt (OBus_error.Unknown_interface(Printf.sprintf "Interface %S does not exists" interface))
              | i ->
                  match binary_search compare_property member obj.interfaces.(i).i_properties with
                    | -1 ->
-                       raise_lwt (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
+                       raise_lwt (OBus_error.Unknown_property(Printf.sprintf "Property %S on interface %S does not exists" member interface))
                    | j ->
                        match obj.properties.(i).(j) with
                          | Some instance ->
                              let module I = (val instance : Property_instance) in
                              return (OBus_value.C.make_single (Property.typ I.info) (S.value I.signal))
                          | None ->
-                             raise_lwt (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not readable" member interface))
+                             raise_lwt (OBus_error.Failed(Printf.sprintf "Property %S on interface %S is not readable" member interface))
        end in
        (module M : Method_info with type obj = d t));
 
@@ -860,7 +860,7 @@ let properties (type d) () =
          let handler obj interface =
            match binary_search compare_interface interface obj.interfaces with
              | -1 ->
-                 raise_lwt (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
+                 raise_lwt (OBus_error.Unknown_interface(Printf.sprintf "Interface %S does not exists" interface))
              | i ->
                  let count = Array.length obj.properties.(i) in
                  let rec loop j acc =
@@ -901,11 +901,11 @@ let properties (type d) () =
          let handler obj (interface, member, value) =
            match binary_search compare_interface interface obj.interfaces with
              | -1 ->
-                 raise_lwt (OBus_error.Failed(Printf.sprintf "no such interface: %S" interface))
+                 raise_lwt (OBus_error.Unknown_interface(Printf.sprintf "Interface %S does not exists" interface))
              | i ->
                  match binary_search compare_property member obj.interfaces.(i).i_properties with
                    | -1 ->
-                       raise_lwt (OBus_error.Failed(Printf.sprintf "no such property: %S on interface %S" member interface))
+                       raise_lwt (OBus_error.Unknown_property(Printf.sprintf "Property %S on interface %S does not exists" member interface))
                    | j ->
                        let module P = (val obj.interfaces.(i).i_properties.(j) : Property_info with type obj = d t) in
                        match P.set with
@@ -929,7 +929,7 @@ let properties (type d) () =
                                    raise_lwt exn
                            end
                          | None ->
-                             raise_lwt (OBus_error.Failed(Printf.sprintf "property %S on interface %S is not writable" member interface))
+                             raise_lwt (OBus_error.Property_read_only(Printf.sprintf "property %S on interface %S is not writable" member interface))
        end in
        (module M : Method_info with type obj = d t));
     |]
