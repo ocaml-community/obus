@@ -23,10 +23,14 @@ type 'a t = {
   member : OBus_name.member;
   (* The name of the signal. *)
 
-  proxy : OBus_proxy.t;
-  (* The proxy emitting the signal. *)
+  peer : OBus_peer.t;
+  (* The peer emitting the signal. *)
 
-  map : (OBus_context.t * OBus_value.V.sequence) event -> (OBus_context.t * 'a) event;
+  path : OBus_path.t option;
+  (* The path of the object emitting the signa or [None] if we want to
+     match signals comming from any objects. *)
+
+  map : (OBus_context.t * OBus_path.t * OBus_value.V.sequence) event -> (OBus_context.t * 'a) event;
   (* The function which maps the event into an event holding values of
      type ['a]. *)
 
@@ -40,7 +44,7 @@ type 'a t = {
 let empty_filters = OBus_match.make_arguments []
 
 (* Cast a message body into an ocaml value: *)
-let cast signal (context, body) =
+let cast signal (context, path, body) =
   try
     Some(context,
          OBus_value.C.cast_sequence
@@ -62,13 +66,29 @@ let cast signal (context, body) =
     );
     None
 
+let cast_any signal (context, path, body) =
+  match cast signal (context, path, body) with
+    | Some(context, v) -> Some(context, (OBus_proxy.make (OBus_context.sender context) path, v))
+    | None -> None
+
 let make signal proxy = {
   interface = OBus_member.Signal.interface signal;
   member = OBus_member.Signal.member signal;
-  proxy = proxy;
+  peer = OBus_proxy.peer proxy;
+  path = Some(OBus_proxy.path proxy);
   map = E.fmap (cast signal);
   filters = empty_filters;
   match_rule = OBus_connection.name (OBus_proxy.connection proxy) <> "";
+}
+
+let make_any signal peer = {
+  interface = OBus_member.Signal.interface signal;
+  member = OBus_member.Signal.member signal;
+  peer = peer;
+  path = None;
+  map = E.fmap (cast_any signal);
+  filters = empty_filters;
+  match_rule = OBus_connection.name (OBus_peer.connection peer) <> "";
 }
 
 (* +-----------------------------------------------------------------+
@@ -99,31 +119,44 @@ let with_match_rule match_rule sd =
 
 module Signal_map = Map.Make
   (struct
-     type t = OBus_path.t * OBus_name.interface * OBus_name.member
+     type t = OBus_path.t option * OBus_name.interface * OBus_name.member
      let compare = Pervasives.compare
    end)
 
 type info = {
-  mutable senders : (OBus_context.t * OBus_value.V.sequence -> unit) Lwt_sequence.t Signal_map.t;
-  (* Signal senders *)
+  mutable senders : (OBus_context.t * OBus_path.t * OBus_value.V.sequence -> unit) Lwt_sequence.t Signal_map.t;
 }
 
 let dispatch connection info message =
   match OBus_message.typ message with
-    | OBus_message.Signal(path, interface, member) -> begin
-        match try Some(Signal_map.find (path, interface, member) info.senders) with Not_found -> None with
-          | Some senders ->
-              Lwt_sequence.iter_l
-                (fun send ->
-                   try
-                     send (OBus_context.make connection message, OBus_message.body message)
-                   with exn ->
-                     ignore (Lwt_log.error ~section ~exn "signal event failed with"))
-                senders;
-              Some message
-          | None ->
-              Some message
-      end
+    | OBus_message.Signal(path, interface, member) ->
+        begin
+          match try Some(Signal_map.find (Some path, interface, member) info.senders) with Not_found -> None with
+            | Some senders ->
+                Lwt_sequence.iter_l
+                  (fun send ->
+                     try
+                       send (OBus_context.make connection message, path, OBus_message.body message)
+                     with exn ->
+                       ignore (Lwt_log.error ~section ~exn "signal event failed with"))
+                  senders
+            | None ->
+                ()
+        end;
+        begin
+          match try Some(Signal_map.find (None, interface, member) info.senders) with Not_found -> None with
+            | Some senders ->
+                Lwt_sequence.iter_l
+                  (fun send ->
+                     try
+                       send (OBus_context.make connection message, path, OBus_message.body message)
+                     with exn ->
+                       ignore (Lwt_log.error ~section ~exn "signal event failed with"))
+                  senders
+            | None ->
+                ()
+        end;
+        Some message
     | _ ->
         Some message
 
@@ -138,9 +171,7 @@ let key = OBus_connection.new_key ()
 
 let connect ?switch sd =
   Lwt_switch.check switch;
-  let connection = OBus_proxy.connection sd.proxy
-  and name = OBus_proxy.name sd.proxy
-  and path = OBus_proxy.path sd.proxy in
+  let connection = OBus_peer.connection sd.peer and name = OBus_peer.name sd.peer in
 
   (* Switch freeing resources allocated for this signal: *)
   let resources_switch = Lwt_switch.create () in
@@ -155,7 +186,7 @@ let connect ?switch sd =
           (OBus_match.rule
              ~typ:`Signal
              ~sender:name
-             ~path
+             ?path:sd.path
              ~interface:sd.interface
              ~member:sd.member
              ())
@@ -188,12 +219,12 @@ let connect ?switch sd =
     in
 
     let senders =
-      match try Some(Signal_map.find (path, sd.interface, sd.member) info.senders) with Not_found -> None with
+      match try Some(Signal_map.find (sd.path, sd.interface, sd.member) info.senders) with Not_found -> None with
         | Some senders ->
             senders
         | None ->
             let senders = Lwt_sequence.create () in
-            info.senders <- Signal_map.add (path, sd.interface, sd.member) senders info.senders;
+            info.senders <- Signal_map.add (sd.path, sd.interface, sd.member) senders info.senders;
             senders
     in
 
@@ -202,7 +233,7 @@ let connect ?switch sd =
 
     let event =
       E.filter
-        (fun (context, body) ->
+        (fun (context, path, body) ->
            match owner_option with
              | Some owner when S.value owner <> OBus_peer.name (OBus_context.sender context) ->
                  false
@@ -215,7 +246,7 @@ let connect ?switch sd =
       try_lwt
         Lwt_sequence.remove node;
         if Lwt_sequence.is_empty senders then
-          info.senders <- Signal_map.remove (path, sd.interface, sd.member) info.senders;
+          info.senders <- Signal_map.remove (sd.path, sd.interface, sd.member) info.senders;
         Lwt_switch.turn_off resources_switch
       with exn ->
         lwt () =
@@ -225,8 +256,10 @@ let connect ?switch sd =
             "failed to disconnect signal \"%s.%s\" of object \"%s\" from \"%s\""
             sd.interface
             sd.member
-            (OBus_path.to_string (OBus_proxy.path sd.proxy))
-            (OBus_proxy.name sd.proxy)
+            (match sd.path with
+               | Some path -> OBus_path.to_string path
+               | None -> "<any>")
+            (OBus_peer.name sd.peer)
         in
         raise_lwt exn
     ) in

@@ -30,6 +30,10 @@ type 'a t
 val make : 'a OBus_member.Signal.t -> OBus_proxy.t -> 'a t
   (** [make signal proxy] creates a signal descriptor. *)
 
+val make_any : 'a OBus_member.Signal.t -> OBus_peer.t -> (OBus_proxy.t * 'a) t
+  (** [make_any signal peer] creates a signal descriptor for receiving
+      signals from any object of [peer]. *)
+
 val connect : ?switch : Lwt_switch.t -> 'a t -> 'a React.event Lwt.t
   (** [connect ?switch sd] connects the signal descriptor [sd] and
       returns the event which occurs when the given D-Bus signal is
