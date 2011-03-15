@@ -60,10 +60,12 @@ lwt () =
   (* Handle device addition/removal. *)
   lwt () =
     OBus_signal.connect (UPower.device_added manager)
-    >|= E.notify_p monitor_device
+    >|= E.map_p monitor_device
+    >|= E.keep
   and () =
     OBus_signal.connect (UPower.device_removed manager)
-    >|= E.notify_p unmonitor_device
+    >|= E.map_p unmonitor_device
+    >|= E.keep
   in
 
   (* Monitor all the batteries initially present on the system. *)

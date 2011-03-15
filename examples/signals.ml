@@ -16,12 +16,13 @@ open Lwt_io
 (* Add an handler on keyboard event which print the multimedia key
    pressed *)
 let handle_multimedia_keys device =
-  E.notify_p
-    (fun (action, key) ->
-       lwt () = printlf "from Hal: action %S on key %S!" action key in
-       lwt () = printlf "          the signal come from the device %S" (OBus_path.to_string (Hal_device.udi device)) in
-       return ())
-  =|< OBus_signal.connect (Hal_device.condition device)
+  OBus_signal.connect (Hal_device.condition device)
+  >|= (E.map_p
+         (fun (action, key) ->
+            lwt () = printlf "from Hal: action %S on key %S!" action key in
+            lwt () = printlf "          the signal come from the device %S" (OBus_path.to_string (Hal_device.udi device)) in
+            return ()))
+  >|= E.keep
 
 lwt () =
   lwt session = OBus_bus.session () in
@@ -31,23 +32,24 @@ lwt () =
      +---------------------------------------------------------------+ *)
 
   lwt () =
-    E.notify_p
-      (fun (name, old_owner, new_owner) ->
-         printlf "from D-Bus: the owner of the name %S changed: %S -> %S"
-           name old_owner new_owner)
-    =|< OBus_signal.connect (OBus_bus.name_owner_changed session)
+    OBus_signal.connect (OBus_bus.name_owner_changed session)
+    >|= (E.map_p
+           (fun (name, old_owner, new_owner) ->
+              printlf "from D-Bus: the owner of the name %S changed: %S -> %S"
+                name old_owner new_owner))
+    >|= E.keep
   in
 
   lwt () =
-    E.notify_p
-      (printlf "from D-Bus: i lost the name %S!")
-    =|< OBus_signal.connect (OBus_bus.name_lost session)
+    OBus_signal.connect (OBus_bus.name_lost session)
+    >|= E.map_p (printlf "from D-Bus: i lost the name %S!")
+    >|= E.keep
   in
 
   lwt () =
-    E.notify_p
-      (printf "from D-Bus: i got the name '%S!")
-    =|< OBus_signal.connect (OBus_bus.name_acquired session)
+    OBus_signal.connect (OBus_bus.name_acquired session)
+    >|= E.map_p (printf "from D-Bus: i got the name '%S!")
+    >|= E.keep
   in
 
   (* +---------------------------------------------------------------+
@@ -57,15 +59,16 @@ lwt () =
   lwt manager = Hal_manager.manager () in
 
   lwt () =
-    E.notify_p
-      (fun device ->
-         lwt () = printlf "from Hal: device added: %S" (OBus_path.to_string (Hal_device.udi device)) in
+    OBus_signal.connect (Hal_manager.device_added manager)
+    >|= (E.map_p
+           (fun device ->
+              lwt () = printlf "from Hal: device added: %S" (OBus_path.to_string (Hal_device.udi device)) in
 
-         (* Handle the adding of keyboards *)
-         Hal_device.query_capability device "input.keyboard" >>= function
-           | true -> handle_multimedia_keys device
-           | false -> return ())
-    =|< OBus_signal.connect (Hal_manager.device_added manager)
+              (* Handle the adding of keyboards *)
+              Hal_device.query_capability device "input.keyboard" >>= function
+                | true -> handle_multimedia_keys device
+                | false -> return ()))
+    >|= E.keep
   in
 
   (* Find all keyboards and handle events on them *)

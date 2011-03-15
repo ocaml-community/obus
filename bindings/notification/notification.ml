@@ -163,20 +163,21 @@ let init_callbacks = lazy(
   in
 
   (* Handle signals for closed notifications *)
-  E.notify_p
-    (fun (peer, id, reason) ->
-       match try Some(Peer_map.find peer !notifications) with Not_found -> None with
-         | None ->
-             return ()
-         | Some m ->
-             match try Some(Id_map.find id !m) with Not_found -> None with
-               | None ->
-                   return ()
-               | Some notif ->
-                   remove_notification peer id notif;
-                   notif.notif_closed ();
-                   return ())
-    event;
+  E.keep
+    (E.map_p
+       (fun (peer, id, reason) ->
+          match try Some(Peer_map.find peer !notifications) with Not_found -> None with
+            | None ->
+                return ()
+            | Some m ->
+                match try Some(Id_map.find id !m) with Not_found -> None with
+                  | None ->
+                      return ()
+                  | Some notif ->
+                      remove_notification peer id notif;
+                      notif.notif_closed ();
+                      return ())
+       event);
 
   lwt event =
     OBus_signal.connect
@@ -186,20 +187,21 @@ let init_callbacks = lazy(
   in
 
   (* Handle signals for actions *)
-  E.notify_p
-    (fun (peer, id, action) ->
-       match try Some(Peer_map.find peer !notifications) with Not_found -> None with
-         | None ->
-             return ()
-         | Some m ->
-             match try Some(Id_map.find id !m) with Not_found -> None with
-               | None ->
-                   return ()
-               | Some notif ->
-                   remove_notification peer id notif;
-                   notif.notif_action action;
-                   return ())
-    event;
+  E.keep
+    (E.map_p
+       (fun (peer, id, action) ->
+          match try Some(Peer_map.find peer !notifications) with Not_found -> None with
+            | None ->
+                return ()
+            | Some m ->
+                match try Some(Id_map.find id !m) with Not_found -> None with
+                  | None ->
+                      return ()
+                  | Some notif ->
+                      remove_notification peer id notif;
+                      notif.notif_action action;
+                      return ())
+       event);
 
   return ()
 )

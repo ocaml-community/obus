@@ -32,28 +32,31 @@ lwt () =
     OBus_property.monitor (Nm_manager.active_connections manager)
     >>= S.map_s ~eq:(==) (Lwt_list.map_p (fun connection -> OBus_property.monitor (Nm_connection.devices connection)))
     >|= S.map ~eq:(==) (S.merge (List.fold_left (fun l device -> add_to_list device l)) [])
-    >|= flatten_signals
-    >>= S.map_s ~eq:(==) (Lwt_list.map_p (fun device -> OBus_property.monitor (Nm_device.dhcp4_config device)))
-    >|= S.map ~eq:(==) (S.merge (fun l config -> add_to_list config l) [])
-    >|= flatten_signals
-    >>= S.map_s ~eq:(==) (Lwt_list.map_p (fun config -> OBus_property.monitor (Nm_dhcp4_config.options config) >|= S.map (fun options -> (config, options))))
-    >|= S.map ~eq:(==) (S.merge (fun l x -> x :: l) [])
-    >|= flatten_signals
+        >|= flatten_signals
+        >>= S.map_s ~eq:(==) (Lwt_list.map_p (fun device -> OBus_property.monitor (Nm_device.dhcp4_config device)))
+        >|= S.map ~eq:(==) (S.merge (fun l config -> add_to_list config l) [])
+            >|= flatten_signals
+            >>= S.map_s ~eq:(==) (Lwt_list.map_p (fun config -> OBus_property.monitor (Nm_dhcp4_config.options config) >|= S.map (fun options -> (config, options))))
+            >|= S.map ~eq:(==) (S.merge (fun l x -> x :: l) [])
+                >|= flatten_signals
   in
 
   (* Prints all configurations with their options when the list
      changes. *)
-  S.notify_s
-    (fun l ->
-       lwt () = printl "DHCP options:" in
-       Lwt_list.iter_s
-         (fun (config, options) ->
-            lwt () = printlf "  for %s:" (OBus_path.to_string (OBus_proxy.path (Nm_dhcp4_config.to_proxy config))) in
-            Lwt_list.iter_s
-              (fun (key, value) ->
-                 printlf "    %s = %s" key (OBus_value.V.string_of_single value))
-              options)
-         l)
-    configs_with_options;
+  lwt () =
+    S.map_s
+      (fun l ->
+         lwt () = printl "DHCP options:" in
+         Lwt_list.iter_s
+           (fun (config, options) ->
+              lwt () = printlf "  for %s:" (OBus_path.to_string (OBus_proxy.path (Nm_dhcp4_config.to_proxy config))) in
+              Lwt_list.iter_s
+                (fun (key, value) ->
+                   printlf "    %s = %s" key (OBus_value.V.string_of_single value))
+                options)
+           l)
+      configs_with_options
+    >|= S.keep
+  in
 
   fst (wait ())
