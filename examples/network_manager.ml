@@ -13,50 +13,36 @@
 open Lwt_react
 open Lwt
 open Lwt_io
-
-(* Add an element to a list if it is not already part of it. *)
-let add_to_list x l =
-  if List.mem x l then l else x :: l
-
-(* Transforms a signal of signals into a signal. *)
-let flatten_signals s =
-  S.switch (S.value s) (S.changes s)
+open OBus_value
 
 lwt () =
   (* Get the manager. *)
   lwt manager = Nm_manager.daemon () in
 
-  (* Create a signal holding the list of DHCP configurations with
-     their options. *)
-  lwt configs_with_options =
-    OBus_property.monitor (Nm_manager.active_connections manager)
-    >>= S.map_s ~eq:(==) (Lwt_list.map_p (fun connection -> OBus_property.monitor (Nm_connection.devices connection)))
-    >|= S.map ~eq:(==) (S.merge (List.fold_left (fun l device -> add_to_list device l)) [])
-        >|= flatten_signals
-        >>= S.map_s ~eq:(==) (Lwt_list.map_p (fun device -> OBus_property.monitor (Nm_device.dhcp4_config device)))
-        >|= S.map ~eq:(==) (S.merge (fun l config -> add_to_list config l) [])
-            >|= flatten_signals
-            >>= S.map_s ~eq:(==) (Lwt_list.map_p (fun config -> OBus_property.monitor (Nm_dhcp4_config.options config) >|= S.map (fun options -> (config, options))))
-            >|= S.map ~eq:(==) (S.merge (fun l x -> x :: l) [])
-                >|= flatten_signals
+  (* Create a signal descriptor for listenning on signals comming from
+     any DHCP4 object. *)
+  let sig_desc =
+    OBus_signal.make_any
+      Nm_interfaces.Org_freedesktop_NetworkManager_DHCP4Config.s_PropertiesChanged
+      (Nm_manager.to_peer manager)
   in
 
-  (* Prints all configurations with their options when the list
-     changes. *)
-  lwt () =
-    S.map_s
-      (fun l ->
-         lwt () = printl "DHCP options:" in
-         Lwt_list.iter_s
-           (fun (config, options) ->
-              lwt () = printlf "  for %s:" (OBus_path.to_string (OBus_proxy.path (Nm_dhcp4_config.to_proxy config))) in
-              Lwt_list.iter_s
-                (fun (key, value) ->
-                   printlf "    %s = %s" key (OBus_value.V.string_of_single value))
-                options)
-           l)
-      configs_with_options
-    >|= S.keep
-  in
+  (* Connects to this signal. *)
+  lwt event = OBus_signal.connect sig_desc in
+
+  (* Prints all DHCP4 options when one configuration changes. *)
+  E.keep
+    (E.map_s
+       (fun (proxy, properties) ->
+          match try Some(List.assoc "Options" properties) with Not_found -> None with
+            | Some options ->
+                lwt () = printlf "DHCP options for %S:" (OBus_path.to_string (OBus_proxy.path proxy)) in
+                Lwt_list.iter_s
+                  (fun (key, value) ->
+                     printlf "  %s = %s" key (V.string_of_single value))
+                  (C.cast_single (C.dict C.string C.variant) options)
+            | None ->
+                return ())
+       event);
 
   fst (wait ())
