@@ -18,12 +18,19 @@ type argument_filter =
       (** [AF_string str] matches any string argument which is equal
           to [str] *)
   | AF_string_path of string
-      (** [AF_string_path path] matches any string argument [arg] such
-          that one of the following conditions hold:
+      (** [AF_string_path path] matches any string or object-path
+          argument [arg] such that one of the following conditions
+          hold:
 
           - [arg] is equal to [path]
           - [path] ends with ['/'] and is a prefix of [arg]
           - [arg] ends with ['/'] and is a prefix of [path] *)
+  | AF_namespace of string
+      (** [AF_namespace namespace] matches any string argument [arg]
+          such that [arg] is bus or interface name in the namespace of
+          [namespace]. For example [AF_namespace "a.b.c"] matches any
+          string of the form ["a.b.c"], ["a.b.c.foo"],
+          ["a.b.c.foo.bar"], ... *)
 
 type arguments = private (int * argument_filter) list
     (** Type of lists of argument filters. The private type ensures

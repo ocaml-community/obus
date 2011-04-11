@@ -16,6 +16,7 @@ let section = Lwt_log.Section.make "obus(match)"
 type argument_filter =
   | AF_string of string
   | AF_string_path of string
+  | AF_namespace of string
 
 type arguments = (int * argument_filter) list
 
@@ -132,7 +133,9 @@ let string_of_rule mr =
                  | AF_string str ->
                      Printf.bprintf buf "arg%d='%s'" n str
                  | AF_string_path str ->
-                     Printf.bprintf buf "arg%dpath='%s'" n str) mr.arguments;
+                     Printf.bprintf buf "arg%dpath='%s'" n str
+                 | AF_namespace str ->
+                     Printf.bprintf buf "arg%dnamespace='%s'" n str) mr.arguments;
   Buffer.contents buf
 
 exception Parse_failure of string * int * string
@@ -198,8 +201,14 @@ let rule_of_string str =
           end
         | _ ->
             match OBus_match_rule_lexer.arg (Lexing.from_string key) with
-              | Some(n, is_path) ->
-                  { mr with arguments = insert_sorted n (if is_path then AF_string_path value else AF_string value)  mr.arguments }
+              | Some(n, kind) ->
+                  { mr with arguments =
+                      insert_sorted n
+                        (match kind with
+                           | `String -> AF_string value
+                           | `Path -> AF_string_path value
+                           | `Namespace -> AF_namespace value)
+                        mr.arguments }
               | None ->
                   raise (Fail(pos, Printf.sprintf "invalid key (%s)" key))
     end mr l
@@ -245,7 +254,23 @@ and match_arguments_aux num num' filter matcher arguments = match arguments with
          | AF_string_path str ->
              (str = value)
              || (ends_with_slash str && starts_with value str)
-             || (ends_with_slash value && starts_with str value))
+             || (ends_with_slash value && starts_with str value)
+         | AF_namespace str ->
+             starts_with value str &&
+               (String.length value = String.length str ||
+                   value.[String.length str] = '.'))
+      &&  match_arguments (num + 1) matcher rest
+  | OBus_value.V.Basic(OBus_value.V.Object_path value) :: rest ->
+      (match filter with
+         | AF_string str ->
+             false
+         | AF_string_path str ->
+             let value = OBus_path.to_string value in
+             (str = value)
+             || (ends_with_slash str && starts_with value str)
+             || (ends_with_slash value && starts_with str value)
+         | AF_namespace _ ->
+             false)
       &&  match_arguments (num + 1) matcher rest
   | _ ->
       false

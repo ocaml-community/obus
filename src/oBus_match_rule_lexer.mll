@@ -45,11 +45,16 @@ and check_eof = parse
     | _ as ch { fail lexbuf "invalid character %C" ch }
 
 and arg = parse
-    | "arg" (['0'-'9']+ as n) ("path"? as path) {
+  | "arg" (['0'-'9']+ as n) (("" | "path" | "namespace") as kind) eof {
         let n = int_of_string n in
         if n >= 0 && n <= 63 then
-          Some(n, path = "path")
+          Some(n,
+               match kind with
+                 | "" -> `String
+                 | "path" -> `Path
+                 | "namespace" -> `Namespace
+                 | _ -> assert false)
         else
           fail lexbuf "invalid argument number '%d': it must be between 0 and 63" n
       }
-    | "" { None }
+  | "" { None }
