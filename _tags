@@ -5,7 +5,7 @@
 <syntax/*.ml>: -pa_obus
 
 # OASIS_START
-# DO NOT EDIT (digest: 0ce7ae080c5aadb7056de825b19597a4)
+# DO NOT EDIT (digest: f199336746b3cb0dc2249cddbc36e0d8)
 # Executable obus-gen-interface
 <tools/obus_gen_interface.{native,byte}>: pkg_xmlm
 <tools/obus_gen_interface.{native,byte}>: pkg_type-conv.syntax
@@ -17,8 +17,10 @@
 <tools/obus_gen_interface.{native,byte}>: pkg_camlp4.lib
 <tools/obus_gen_interface.{native,byte}>: pkg_camlp4.extend
 # Library obus
+"src/obus.cmxs": use_obus
 # Library obus-upower
 "bindings/upower": include
+"bindings/upower/obus-upower.cmxs": use_obus-upower
 <bindings/upower/*.ml{,i}>: use_obus
 <bindings/upower/*.ml{,i}>: pkg_xmlm
 <bindings/upower/*.ml{,i}>: pkg_type-conv.syntax
@@ -28,6 +30,7 @@
 <bindings/upower/*.ml{,i}>: pkg_lwt.react
 # Library obus-idl
 "src": include
+"src/obus-idl.cmxs": use_obus-idl
 <src/*.ml{,i}>: use_obus
 <src/*.ml{,i}>: pkg_xmlm
 <src/*.ml{,i}>: pkg_type-conv.syntax
@@ -39,6 +42,7 @@
 <src/*.ml{,i}>: pkg_camlp4.extend
 # Library obus-network-manager
 "bindings/network-manager": include
+"bindings/network-manager/obus-network-manager.cmxs": use_obus-network-manager
 <bindings/network-manager/*.ml{,i}>: use_obus
 <bindings/network-manager/*.ml{,i}>: pkg_xmlm
 <bindings/network-manager/*.ml{,i}>: pkg_type-conv.syntax
@@ -48,6 +52,7 @@
 <bindings/network-manager/*.ml{,i}>: pkg_lwt.react
 # Library obus-notification
 "bindings/notification": include
+"bindings/notification/obus-notification.cmxs": use_obus-notification
 <bindings/notification/*.ml{,i}>: use_obus
 <bindings/notification/*.ml{,i}>: pkg_xmlm
 <bindings/notification/*.ml{,i}>: pkg_type-conv.syntax
@@ -72,6 +77,7 @@
 <tests/*.ml{,i}>: pkg_lwt.react
 # Library obus-hal
 "bindings/hal": include
+"bindings/hal/obus-hal.cmxs": use_obus-hal
 <bindings/hal/*.ml{,i}>: use_obus
 <bindings/hal/*.ml{,i}>: pkg_xmlm
 <bindings/hal/*.ml{,i}>: pkg_type-conv.syntax
@@ -127,6 +133,7 @@
 <examples/list_services.{native,byte}>: pkg_lwt.react
 # Library obus-policykit
 "bindings/policykit": include
+"bindings/policykit/obus-policykit.cmxs": use_obus-policykit
 <bindings/policykit/*.ml{,i}>: use_obus
 <bindings/policykit/*.ml{,i}>: pkg_xmlm
 <bindings/policykit/*.ml{,i}>: pkg_type-conv.syntax
@@ -166,6 +173,7 @@
 <examples/*.ml{,i}>: use_obus-network-manager
 # Library obus-syntax
 "syntax": include
+"syntax/obus-syntax.cmxs": use_obus-syntax
 <syntax/*.ml{,i}>: pkg_type-conv.syntax
 <syntax/*.ml{,i}>: pkg_camlp4.quotations.o
 <syntax/*.ml{,i}>: pkg_camlp4.lib
@@ -236,6 +244,7 @@
 <examples/monitor.{native,byte}>: pkg_lwt.react
 # Library obus-udisks
 "bindings/udisks": include
+"bindings/udisks/obus-udisks.cmxs": use_obus-udisks
 <bindings/udisks/*.ml{,i}>: use_obus
 <bindings/udisks/*.ml{,i}>: pkg_xmlm
 <bindings/udisks/*.ml{,i}>: pkg_type-conv.syntax
