@@ -1,3 +1,9 @@
+===== 1.1.2 (2011-04-12) =====
+
+  * implement property monitoring for upower, udisks and network-manager
+  * implement new D-Bus errors (UnknownObject, UnknownInterface, ...)
+  * update and implement new argument filters (argNpath and argNnamespace)
+
 ===== 1.1.1 (2011-02-14) =====
 
   * Fix a race condition in servers that may causes authentication to hang
