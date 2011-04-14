@@ -10,7 +10,7 @@
 open Lwt_react
 open Lwt
 
-let section = Lwt_log.Section.make "obus(obejct)"
+let section = Lwt_log.Section.make "obus(object)"
 
 (* +-----------------------------------------------------------------+
    | Types                                                           |
