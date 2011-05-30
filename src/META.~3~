@@ -1,15 +1,9 @@
 # OASIS_START
 v v v v v v v
-# DO NOT EDIT (digest: a71e2664ac8976770b634ebc4d7cda64)
-=============
-# DO NOT EDIT (digest: 4be5a9dfe36d73e3c7852311a8f4ef34)
-*************
-v v v v v v v
 # DO NOT EDIT (digest: f6ad6478ecda4a9bf6cd056533325cbd)
 version = "1.1.1"
 =============
 # DO NOT EDIT (digest: a71e2664ac8976770b634ebc4d7cda64)
-^ ^ ^ ^ ^ ^ ^
 version = "1.1.2"
 *************
 v v v v v v v
@@ -36,15 +30,6 @@ requires = "lwt.unix lwt.react xmlm"
 archive(byte) = "obus.cma"
 archive(native) = "obus.cmxa"
 exists_if = "obus.cma"
-package "syntax" (
- version = "1.1.2"
- description = "Syntactic sugars for defining D-Bus errors"
- requires = "camlp4 type-conv.syntax"
- archive(syntax, preprocessor) = "obus-syntax.cma"
- archive(syntax, toploop) = "obus-syntax.cma"
- exists_if = "obus-syntax.cma"
-)
-
 package "udisks" (
  version = "1.1.2"
  description = "Freedesktop UDisks service binding"
@@ -54,18 +39,6 @@ package "udisks" (
  exists_if = "obus-udisks.cma"
 )
 
-v v v v v v v
-package "syntax" (
- version = "1.1.2"
- description = "Syntactic sugars for defining D-Bus errors"
- requires = "camlp4 type-conv.syntax"
- archive(syntax,preprocessor) = "obus-syntax.cma"
- archive(syntax,toploop) = "obus-syntax.cma"
- exists_if = "obus-syntax.cma"
-)
-
-=============
-*************
 v v v v v v v
 package "network-manager" (
  version = "1.1"
@@ -110,7 +83,6 @@ package "syntax" (
  exists_if = "obus-syntax.cma"
 )
 
-^ ^ ^ ^ ^ ^ ^
 package "policykit" (
  version = "1.1.2"
  description = "Freedesktop PolicyKit service binding"
@@ -118,6 +90,15 @@ package "policykit" (
  archive(byte) = "obus-policykit.cma"
  archive(native) = "obus-policykit.cmxa"
  exists_if = "obus-policykit.cma"
+)
+
+package "hal" (
+ version = "1.1.2"
+ description = "Freedesktop Hal service binding"
+ requires = "obus"
+ archive(byte) = "obus-hal.cma"
+ archive(native) = "obus-hal.cmxa"
+ exists_if = "obus-hal.cma"
 )
 
 package "notification" (
@@ -138,15 +119,6 @@ package "network-manager" (
  exists_if = "obus-network-manager.cma"
 )
 
-package "upower" (
- version = "1.1.2"
- description = "Freedesktop UPower service binding"
- requires = "obus"
- archive(byte) = "obus-upower.cma"
- archive(native) = "obus-upower.cmxa"
- exists_if = "obus-upower.cma"
-)
-
 package "idl" (
  version = "1.1.2"
  description = "Intermediate language for writing D-Bus interfaces"
@@ -156,13 +128,13 @@ package "idl" (
  exists_if = "obus-idl.cma"
 )
 
-package "hal" (
+package "upower" (
  version = "1.1.2"
- description = "Freedesktop Hal service binding"
+ description = "Freedesktop UPower service binding"
  requires = "obus"
- archive(byte) = "obus-hal.cma"
- archive(native) = "obus-hal.cmxa"
- exists_if = "obus-hal.cma"
+ archive(byte) = "obus-upower.cma"
+ archive(native) = "obus-upower.cmxa"
+ exists_if = "obus-upower.cma"
 )
 # OASIS_STOP
 

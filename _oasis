@@ -62,7 +62,6 @@ Library obus
     OBus_xml_parser,
     OBus_config
   BuildDepends: lwt.unix, lwt.react, lwt.syntax, lwt.syntax.log, type-conv.syntax, xmlm
-  BuildTools: obus-gen-interface
   XMETARequires: lwt.unix, lwt.react, xmlm
   XMETADescription: Pure OCaml implementation of D-Bus
 
