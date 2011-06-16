@@ -5,7 +5,7 @@
 <syntax/*.ml>: -pa_obus
 
 # OASIS_START
-# DO NOT EDIT (digest: 4725001375099eb956ee68bad80dd3a8)
+# DO NOT EDIT (digest: 4184949a97549cd282ccf01910fd3b6c)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -24,7 +24,7 @@
 "bindings/hal": include
 <bindings/hal/*.ml{,i}>: use_obus
 <bindings/hal/*.ml{,i}>: pkg_xmlm
-<bindings/hal/*.ml{,i}>: pkg_type-conv.syntax
+<bindings/hal/*.ml{,i}>: pkg_type-conv
 <bindings/hal/*.ml{,i}>: pkg_lwt.unix
 <bindings/hal/*.ml{,i}>: pkg_lwt.syntax.log
 <bindings/hal/*.ml{,i}>: pkg_lwt.syntax
@@ -33,7 +33,7 @@
 "src": include
 <src/*.ml{,i}>: use_obus
 <src/*.ml{,i}>: pkg_xmlm
-<src/*.ml{,i}>: pkg_type-conv.syntax
+<src/*.ml{,i}>: pkg_type-conv
 <src/*.ml{,i}>: pkg_lwt.unix
 <src/*.ml{,i}>: pkg_lwt.syntax.log
 <src/*.ml{,i}>: pkg_lwt.syntax
@@ -44,7 +44,7 @@
 "bindings/upower": include
 <bindings/upower/*.ml{,i}>: use_obus
 <bindings/upower/*.ml{,i}>: pkg_xmlm
-<bindings/upower/*.ml{,i}>: pkg_type-conv.syntax
+<bindings/upower/*.ml{,i}>: pkg_type-conv
 <bindings/upower/*.ml{,i}>: pkg_lwt.unix
 <bindings/upower/*.ml{,i}>: pkg_lwt.syntax.log
 <bindings/upower/*.ml{,i}>: pkg_lwt.syntax
@@ -52,14 +52,14 @@
 # Executable tests
 <tests/main.{native,byte}>: use_obus
 <tests/main.{native,byte}>: pkg_xmlm
-<tests/main.{native,byte}>: pkg_type-conv.syntax
+<tests/main.{native,byte}>: pkg_type-conv
 <tests/main.{native,byte}>: pkg_lwt.unix
 <tests/main.{native,byte}>: pkg_lwt.syntax.log
 <tests/main.{native,byte}>: pkg_lwt.syntax
 <tests/main.{native,byte}>: pkg_lwt.react
 <tests/*.ml{,i}>: use_obus
 <tests/*.ml{,i}>: pkg_xmlm
-<tests/*.ml{,i}>: pkg_type-conv.syntax
+<tests/*.ml{,i}>: pkg_type-conv
 <tests/*.ml{,i}>: pkg_lwt.unix
 <tests/*.ml{,i}>: pkg_lwt.syntax.log
 <tests/*.ml{,i}>: pkg_lwt.syntax
@@ -68,7 +68,7 @@
 "bindings/network-manager": include
 <bindings/network-manager/*.ml{,i}>: use_obus
 <bindings/network-manager/*.ml{,i}>: pkg_xmlm
-<bindings/network-manager/*.ml{,i}>: pkg_type-conv.syntax
+<bindings/network-manager/*.ml{,i}>: pkg_type-conv
 <bindings/network-manager/*.ml{,i}>: pkg_lwt.unix
 <bindings/network-manager/*.ml{,i}>: pkg_lwt.syntax.log
 <bindings/network-manager/*.ml{,i}>: pkg_lwt.syntax
@@ -77,7 +77,7 @@
 "bindings/notification": include
 <bindings/notification/*.ml{,i}>: use_obus
 <bindings/notification/*.ml{,i}>: pkg_xmlm
-<bindings/notification/*.ml{,i}>: pkg_type-conv.syntax
+<bindings/notification/*.ml{,i}>: pkg_type-conv
 <bindings/notification/*.ml{,i}>: pkg_lwt.unix
 <bindings/notification/*.ml{,i}>: pkg_lwt.syntax.log
 <bindings/notification/*.ml{,i}>: pkg_lwt.syntax
@@ -85,7 +85,7 @@
 # Executable list-services
 <examples/list_services.{native,byte}>: use_obus
 <examples/list_services.{native,byte}>: pkg_xmlm
-<examples/list_services.{native,byte}>: pkg_type-conv.syntax
+<examples/list_services.{native,byte}>: pkg_type-conv
 <examples/list_services.{native,byte}>: pkg_lwt.unix
 <examples/list_services.{native,byte}>: pkg_lwt.syntax.log
 <examples/list_services.{native,byte}>: pkg_lwt.syntax
@@ -94,7 +94,7 @@
 <examples/eject.{native,byte}>: use_obus-hal
 <examples/eject.{native,byte}>: use_obus
 <examples/eject.{native,byte}>: pkg_xmlm
-<examples/eject.{native,byte}>: pkg_type-conv.syntax
+<examples/eject.{native,byte}>: pkg_type-conv
 <examples/eject.{native,byte}>: pkg_lwt.unix
 <examples/eject.{native,byte}>: pkg_lwt.syntax.log
 <examples/eject.{native,byte}>: pkg_lwt.syntax
@@ -103,7 +103,7 @@
 <tools/obus_xml2idl.{native,byte}>: use_obus-idl
 <tools/obus_xml2idl.{native,byte}>: use_obus
 <tools/obus_xml2idl.{native,byte}>: pkg_xmlm
-<tools/obus_xml2idl.{native,byte}>: pkg_type-conv.syntax
+<tools/obus_xml2idl.{native,byte}>: pkg_type-conv
 <tools/obus_xml2idl.{native,byte}>: pkg_lwt.unix
 <tools/obus_xml2idl.{native,byte}>: pkg_lwt.syntax.log
 <tools/obus_xml2idl.{native,byte}>: pkg_lwt.syntax
@@ -115,7 +115,7 @@
 <examples/signals.{native,byte}>: use_obus-hal
 <examples/signals.{native,byte}>: use_obus
 <examples/signals.{native,byte}>: pkg_xmlm
-<examples/signals.{native,byte}>: pkg_type-conv.syntax
+<examples/signals.{native,byte}>: pkg_type-conv
 <examples/signals.{native,byte}>: pkg_lwt.unix
 <examples/signals.{native,byte}>: pkg_lwt.syntax.log
 <examples/signals.{native,byte}>: pkg_lwt.syntax
@@ -125,7 +125,7 @@
 "bindings/policykit": include
 <bindings/policykit/*.ml{,i}>: use_obus
 <bindings/policykit/*.ml{,i}>: pkg_xmlm
-<bindings/policykit/*.ml{,i}>: pkg_type-conv.syntax
+<bindings/policykit/*.ml{,i}>: pkg_type-conv
 <bindings/policykit/*.ml{,i}>: pkg_lwt.unix
 <bindings/policykit/*.ml{,i}>: pkg_lwt.syntax.log
 <bindings/policykit/*.ml{,i}>: pkg_lwt.syntax
@@ -134,7 +134,7 @@
 <tools/obus_idl2xml.{native,byte}>: use_obus-idl
 <tools/obus_idl2xml.{native,byte}>: use_obus
 <tools/obus_idl2xml.{native,byte}>: pkg_xmlm
-<tools/obus_idl2xml.{native,byte}>: pkg_type-conv.syntax
+<tools/obus_idl2xml.{native,byte}>: pkg_type-conv
 <tools/obus_idl2xml.{native,byte}>: pkg_lwt.unix
 <tools/obus_idl2xml.{native,byte}>: pkg_lwt.syntax.log
 <tools/obus_idl2xml.{native,byte}>: pkg_lwt.syntax
@@ -145,7 +145,7 @@
 # Executable hello
 <examples/hello.{native,byte}>: use_obus
 <examples/hello.{native,byte}>: pkg_xmlm
-<examples/hello.{native,byte}>: pkg_type-conv.syntax
+<examples/hello.{native,byte}>: pkg_type-conv
 <examples/hello.{native,byte}>: pkg_lwt.unix
 <examples/hello.{native,byte}>: pkg_lwt.syntax.log
 <examples/hello.{native,byte}>: pkg_lwt.syntax
@@ -153,7 +153,7 @@
 # Executable obus-introspect
 <tools/obus_introspect.{native,byte}>: use_obus
 <tools/obus_introspect.{native,byte}>: pkg_xmlm
-<tools/obus_introspect.{native,byte}>: pkg_type-conv.syntax
+<tools/obus_introspect.{native,byte}>: pkg_type-conv
 <tools/obus_introspect.{native,byte}>: pkg_lwt.unix
 <tools/obus_introspect.{native,byte}>: pkg_lwt.syntax.log
 <tools/obus_introspect.{native,byte}>: pkg_lwt.syntax
@@ -162,7 +162,7 @@
 <examples/battery_monitoring.{native,byte}>: use_obus-upower
 <examples/battery_monitoring.{native,byte}>: use_obus
 <examples/battery_monitoring.{native,byte}>: pkg_xmlm
-<examples/battery_monitoring.{native,byte}>: pkg_type-conv.syntax
+<examples/battery_monitoring.{native,byte}>: pkg_type-conv
 <examples/battery_monitoring.{native,byte}>: pkg_lwt.unix
 <examples/battery_monitoring.{native,byte}>: pkg_lwt.syntax.log
 <examples/battery_monitoring.{native,byte}>: pkg_lwt.syntax
@@ -171,14 +171,14 @@
 # Executable bus-functions
 <examples/bus_functions.{native,byte}>: use_obus
 <examples/bus_functions.{native,byte}>: pkg_xmlm
-<examples/bus_functions.{native,byte}>: pkg_type-conv.syntax
+<examples/bus_functions.{native,byte}>: pkg_type-conv
 <examples/bus_functions.{native,byte}>: pkg_lwt.unix
 <examples/bus_functions.{native,byte}>: pkg_lwt.syntax.log
 <examples/bus_functions.{native,byte}>: pkg_lwt.syntax
 <examples/bus_functions.{native,byte}>: pkg_lwt.react
 # Executable obus-gen-interface
 <tools/obus_gen_interface.{native,byte}>: pkg_xmlm
-<tools/obus_gen_interface.{native,byte}>: pkg_type-conv.syntax
+<tools/obus_gen_interface.{native,byte}>: pkg_type-conv
 <tools/obus_gen_interface.{native,byte}>: pkg_lwt.unix
 <tools/obus_gen_interface.{native,byte}>: pkg_lwt.syntax.log
 <tools/obus_gen_interface.{native,byte}>: pkg_lwt.syntax
@@ -189,7 +189,7 @@
 # Executable ping
 <examples/ping.{native,byte}>: use_obus
 <examples/ping.{native,byte}>: pkg_xmlm
-<examples/ping.{native,byte}>: pkg_type-conv.syntax
+<examples/ping.{native,byte}>: pkg_type-conv
 <examples/ping.{native,byte}>: pkg_lwt.unix
 <examples/ping.{native,byte}>: pkg_lwt.syntax.log
 <examples/ping.{native,byte}>: pkg_lwt.syntax
@@ -198,7 +198,7 @@
 <examples/network_manager.{native,byte}>: use_obus-network-manager
 <examples/network_manager.{native,byte}>: use_obus
 <examples/network_manager.{native,byte}>: pkg_xmlm
-<examples/network_manager.{native,byte}>: pkg_type-conv.syntax
+<examples/network_manager.{native,byte}>: pkg_type-conv
 <examples/network_manager.{native,byte}>: pkg_lwt.unix
 <examples/network_manager.{native,byte}>: pkg_lwt.syntax.log
 <examples/network_manager.{native,byte}>: pkg_lwt.syntax
@@ -207,7 +207,7 @@
 # Executable pong
 <examples/pong.{native,byte}>: use_obus
 <examples/pong.{native,byte}>: pkg_xmlm
-<examples/pong.{native,byte}>: pkg_type-conv.syntax
+<examples/pong.{native,byte}>: pkg_type-conv
 <examples/pong.{native,byte}>: pkg_lwt.unix
 <examples/pong.{native,byte}>: pkg_lwt.syntax.log
 <examples/pong.{native,byte}>: pkg_lwt.syntax
@@ -216,7 +216,7 @@
 <examples/notify.{native,byte}>: use_obus-notification
 <examples/notify.{native,byte}>: use_obus
 <examples/notify.{native,byte}>: pkg_xmlm
-<examples/notify.{native,byte}>: pkg_type-conv.syntax
+<examples/notify.{native,byte}>: pkg_type-conv
 <examples/notify.{native,byte}>: pkg_lwt.unix
 <examples/notify.{native,byte}>: pkg_lwt.syntax.log
 <examples/notify.{native,byte}>: pkg_lwt.syntax
@@ -226,7 +226,7 @@
 "bindings/udisks": include
 <bindings/udisks/*.ml{,i}>: use_obus
 <bindings/udisks/*.ml{,i}>: pkg_xmlm
-<bindings/udisks/*.ml{,i}>: pkg_type-conv.syntax
+<bindings/udisks/*.ml{,i}>: pkg_type-conv
 <bindings/udisks/*.ml{,i}>: pkg_lwt.unix
 <bindings/udisks/*.ml{,i}>: pkg_lwt.syntax.log
 <bindings/udisks/*.ml{,i}>: pkg_lwt.syntax
@@ -235,7 +235,7 @@
 <tools/obus_gen_client.{native,byte}>: use_obus-idl
 <tools/obus_gen_client.{native,byte}>: use_obus
 <tools/obus_gen_client.{native,byte}>: pkg_xmlm
-<tools/obus_gen_client.{native,byte}>: pkg_type-conv.syntax
+<tools/obus_gen_client.{native,byte}>: pkg_type-conv
 <tools/obus_gen_client.{native,byte}>: pkg_lwt.unix
 <tools/obus_gen_client.{native,byte}>: pkg_lwt.syntax.log
 <tools/obus_gen_client.{native,byte}>: pkg_lwt.syntax
@@ -246,14 +246,14 @@
 # Executable monitor
 <examples/monitor.{native,byte}>: use_obus
 <examples/monitor.{native,byte}>: pkg_xmlm
-<examples/monitor.{native,byte}>: pkg_type-conv.syntax
+<examples/monitor.{native,byte}>: pkg_type-conv
 <examples/monitor.{native,byte}>: pkg_lwt.unix
 <examples/monitor.{native,byte}>: pkg_lwt.syntax.log
 <examples/monitor.{native,byte}>: pkg_lwt.syntax
 <examples/monitor.{native,byte}>: pkg_lwt.react
 <examples/*.ml{,i}>: use_obus
 <examples/*.ml{,i}>: pkg_xmlm
-<examples/*.ml{,i}>: pkg_type-conv.syntax
+<examples/*.ml{,i}>: pkg_type-conv
 <examples/*.ml{,i}>: pkg_lwt.unix
 <examples/*.ml{,i}>: pkg_lwt.syntax.log
 <examples/*.ml{,i}>: pkg_lwt.syntax
@@ -261,7 +261,7 @@
 # Executable obus-dump
 <tools/obus_dump.{native,byte}>: use_obus
 <tools/obus_dump.{native,byte}>: pkg_xmlm
-<tools/obus_dump.{native,byte}>: pkg_type-conv.syntax
+<tools/obus_dump.{native,byte}>: pkg_type-conv
 <tools/obus_dump.{native,byte}>: pkg_lwt.unix
 <tools/obus_dump.{native,byte}>: pkg_lwt.syntax.log
 <tools/obus_dump.{native,byte}>: pkg_lwt.syntax
@@ -270,7 +270,7 @@
 <tools/obus_gen_server.{native,byte}>: use_obus-idl
 <tools/obus_gen_server.{native,byte}>: use_obus
 <tools/obus_gen_server.{native,byte}>: pkg_xmlm
-<tools/obus_gen_server.{native,byte}>: pkg_type-conv.syntax
+<tools/obus_gen_server.{native,byte}>: pkg_type-conv
 <tools/obus_gen_server.{native,byte}>: pkg_lwt.unix
 <tools/obus_gen_server.{native,byte}>: pkg_lwt.syntax.log
 <tools/obus_gen_server.{native,byte}>: pkg_lwt.syntax
@@ -281,7 +281,7 @@
 <tools/*.ml{,i}>: use_obus-idl
 <tools/*.ml{,i}>: use_obus
 <tools/*.ml{,i}>: pkg_xmlm
-<tools/*.ml{,i}>: pkg_type-conv.syntax
+<tools/*.ml{,i}>: pkg_type-conv
 <tools/*.ml{,i}>: pkg_lwt.unix
 <tools/*.ml{,i}>: pkg_lwt.syntax.log
 <tools/*.ml{,i}>: pkg_lwt.syntax
@@ -291,7 +291,7 @@
 <tools/*.ml{,i}>: pkg_camlp4.extend
 # Library obus-syntax
 "syntax": include
-<syntax/*.ml{,i}>: pkg_type-conv.syntax
+<syntax/*.ml{,i}>: pkg_type-conv
 <syntax/*.ml{,i}>: pkg_camlp4.quotations.o
 <syntax/*.ml{,i}>: pkg_camlp4.lib
 # OASIS_STOP

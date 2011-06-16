@@ -2,11 +2,6 @@
 
 (* OASIS_START *)
 v v v v v v v
-(* DO NOT EDIT (digest: b108f72cb80f6b1dafedc2810352ca43) *)
-=============
-(* DO NOT EDIT (digest: 3c4826e2cd44fc4e04caa3e27957be0a) *)
-*************
-v v v v v v v
 (* DO NOT EDIT (digest: 5a5728fc9498d06e14a70ccc28cf1df2) *)
 =============
 (* DO NOT EDIT (digest: b108f72cb80f6b1dafedc2810352ca43) *)
@@ -27,7 +22,6 @@ v v v v v v v
 (* DO NOT EDIT (digest: 843e282eec33b68fbe4805b74dc64e1f) *)
 *************
 (* DO NOT EDIT (digest: ce12ab9026ec1c75bab6e8a553ddbb1d) *)
-^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^
@@ -5675,7 +5669,7 @@ let setup_t =
                            FindlibPackage ("lwt.react", None);
                            FindlibPackage ("lwt.syntax", None);
                            FindlibPackage ("lwt.syntax.log", None);
-                           FindlibPackage ("type-conv", None);
+                           FindlibPackage ("type-conv.syntax", None);
                            FindlibPackage ("xmlm", None)
                         ];
                       bs_build_tools = [ExternalTool "ocamlbuild"];
@@ -6467,7 +6461,7 @@ let setup_t =
                            FindlibPackage ("lwt.react", None);
                            FindlibPackage ("lwt.syntax", None);
                            FindlibPackage ("lwt.syntax.log", None);
-                           FindlibPackage ("type-conv", None);
+                           FindlibPackage ("type-conv.syntax", None);
                            FindlibPackage ("xmlm", None);
                            FindlibPackage ("camlp4.quotations.o", None);
                            FindlibPackage ("camlp4.extend", None);
@@ -6805,7 +6799,7 @@ let setup_t =
                       bs_compiled_object = Byte;
                       bs_build_depends =
                         [
-                           FindlibPackage ("type-conv", None);
+                           FindlibPackage ("type-conv.syntax", None);
                            FindlibPackage ("camlp4.lib", None);
                            FindlibPackage ("camlp4.quotations.o", None)
                         ];

@@ -1,10 +1,5 @@
 # OASIS_START
 v v v v v v v
-# DO NOT EDIT (digest: 4be5a9dfe36d73e3c7852311a8f4ef34)
-=============
-# DO NOT EDIT (digest: 121dd8599496c37eba15b88e6f58940f)
-*************
-v v v v v v v
 # DO NOT EDIT (digest: a71e2664ac8976770b634ebc4d7cda64)
 =============
 # DO NOT EDIT (digest: 4be5a9dfe36d73e3c7852311a8f4ef34)
@@ -14,7 +9,6 @@ v v v v v v v
 version = "1.1.1"
 =============
 # DO NOT EDIT (digest: a71e2664ac8976770b634ebc4d7cda64)
-^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^
 version = "1.1.2"
 *************
@@ -45,7 +39,7 @@ exists_if = "obus.cma"
 package "syntax" (
  version = "1.1.2"
  description = "Syntactic sugars for defining D-Bus errors"
- requires = "camlp4 type-conv"
+ requires = "camlp4 type-conv.syntax"
  archive(syntax, preprocessor) = "obus-syntax.cma"
  archive(syntax, toploop) = "obus-syntax.cma"
  exists_if = "obus-syntax.cma"
