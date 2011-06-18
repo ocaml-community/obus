@@ -6,8 +6,8 @@
 # Build the user manual for release
 make -C manual all clean-aux
 
-# Make the configure script executable
-chmod +x configure
+# Add oasis stuff
+oasis setup
 
 # Cleanup
-rm -f predist.sh boring
+rm -f predist.sh boring dist.sh

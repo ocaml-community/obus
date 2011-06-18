@@ -3,5 +3,6 @@
 ^src/oBus_config\.ml$
 ^manual/manual\.pdf$
 ^obus-.*\.tar\.gz$
+^setup\.ml$
 ^setup\.data$
 ^setup\.log$
