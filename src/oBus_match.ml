@@ -28,6 +28,7 @@ type rule = {
   path : OBus_path.t option;
   destination : OBus_name.bus;
   arguments : arguments;
+  eavesdrop : bool option;
 }
 
 let typ e = e.typ
@@ -37,8 +38,9 @@ let member e = e.member
 let path e = e.path
 let destination e = e.destination
 let arguments e = e.arguments
+let eavesdrop e = e.eavesdrop
 
-let rule ?typ ?(sender="") ?(interface="") ?(member="") ?path ?(destination="") ?(arguments=[]) () = {
+let rule ?typ ?(sender="") ?(interface="") ?(member="") ?path ?(destination="") ?(arguments=[]) ?eavesdrop () = {
   typ = typ;
   sender = sender;
   interface = interface;
@@ -46,6 +48,7 @@ let rule ?typ ?(sender="") ?(interface="") ?(member="") ?path ?(destination="") 
   path = path;
   destination = destination;
   arguments = arguments;
+  eavesdrop = eavesdrop;
 }
 
 (* +-----------------------------------------------------------------+
@@ -136,6 +139,11 @@ let string_of_rule mr =
                      Printf.bprintf buf "arg%dpath='%s'" n str
                  | AF_namespace str ->
                      Printf.bprintf buf "arg%dnamespace='%s'" n str) mr.arguments;
+  begin match mr.eavesdrop with
+    | None -> ()
+    | Some true -> add "eavesdrop" "true"
+    | Some false -> add "eavesdrop" "false"
+  end;
   Buffer.contents buf
 
 exception Parse_failure of string * int * string
@@ -171,6 +179,7 @@ let rule_of_string str =
       path = None;
       destination = "";
       arguments = [];
+      eavesdrop = None;
     } in
     List.fold_left begin fun mr (pos, key, value) ->
       match key with
@@ -198,6 +207,12 @@ let rule_of_string str =
               { mr with path = Some(OBus_path.of_string value) }
             with OBus_string.Invalid_string err ->
               raise (Fail(pos, OBus_string.error_message err))
+          end
+        | "eavesdrop" -> begin
+            match value with
+              | "true" -> { mr with eavesdrop = Some true }
+              | "false" -> { mr with eavesdrop = Some false }
+              | _ -> raise (Fail(pos, Printf.sprintf "invalid value for eavesdrop (%s)" value))
           end
         | _ ->
             match OBus_match_rule_lexer.arg (Lexing.from_string key) with
@@ -361,7 +376,21 @@ let compare_rules r1 r2 =
       let acc = compare_option acc r1.path r2.path in
       let acc = compare_string acc r1.interface r2.interface in
       let acc = compare_string acc r1.member r2.member in
-      compare_arguments acc r1.arguments r2.arguments
+      let acc = compare_arguments acc r1.arguments r2.arguments in
+      if r1.eavesdrop = r2.eavesdrop then
+        acc
+      else
+        match acc, r1.eavesdrop, r2.eavesdrop with
+          | _, None, Some false ->
+              acc
+          | _, Some false, None ->
+              acc
+          | (Less_general | Equal), (None | Some false), Some true ->
+              Less_general
+          | (More_general | Equal), Some true, (None | Some false) ->
+              More_general
+          | _ ->
+              Incomparable
     end else
       Incomparable
   with Exit ->

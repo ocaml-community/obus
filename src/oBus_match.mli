@@ -54,6 +54,7 @@ type rule = {
   path : OBus_path.t option;
   destination : OBus_name.bus;
   arguments : arguments;
+  eavesdrop : bool option;
 }
 
 (** {8 Rule projections} *)
@@ -65,6 +66,7 @@ val member : rule -> OBus_name.member
 val path : rule -> OBus_path.t option
 val destination : rule -> OBus_name.bus
 val arguments : rule -> arguments
+val eavesdrop : rule -> bool option
 
 (** {8 Rule construction} *)
 
@@ -76,6 +78,7 @@ val rule :
   ?path : OBus_path.t ->
   ?destination : OBus_name.bus ->
   ?arguments : arguments ->
+  ?eavesdrop : bool ->
   unit -> rule
     (** Create a matching rule. *)
 
