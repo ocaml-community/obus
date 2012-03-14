@@ -336,16 +336,17 @@ Document "obus-api"
 # | Tests                                                             |
 # +-------------------------------------------------------------------+
 
-Executable tests
+Executable tests_exec
   Path: tests
   Install: false
+  Build$: flag(tests)
   CompiledObject: best
   MainIs: main.ml
   BuildDepends: obus
 
 Test main
-  Command: $tests
-  TestTools: tests
+  Command: $tests_exec
+  TestTools: tests_exec
 
 # +-------------------------------------------------------------------+
 # | Examples                                                          |
