@@ -852,7 +852,7 @@ type writer = {
 let close_writer writer = Lwt_io.close writer.w_channel
 
 let writer fd = {
-  w_channel = Lwt_io.of_fd ~mode:Lwt_io.output fd;
+  w_channel = Lwt_io.of_fd ~mode:Lwt_io.output ~close:return fd;
   w_file_descr = fd;
 }
 

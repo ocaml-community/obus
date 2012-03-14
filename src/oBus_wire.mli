@@ -54,7 +54,9 @@ val read_message_with_fds : reader -> OBus_message.t Lwt.t
       reader *)
 
 val close_reader : reader -> unit Lwt.t
-  (** [close_reader reader] closes the given reader *)
+  (** [close_reader reader] closes the given reader.
+
+      Note: this does not close the underlying file descriptor. *)
 
 type writer
   (** A writer which support unix fd passing *)
@@ -66,4 +68,7 @@ val write_message_with_fds : writer -> ?byte_order : Lwt_io.byte_order -> OBus_m
   (** Write a message with its file descriptors on the given writer *)
 
 val close_writer : writer -> unit Lwt.t
-  (** [close_writer writer] closes the given writer *)
+  (** [close_writer writer] closes the given writer.
+
+      Note: this does not close the underlying file descriptor. *)
+
