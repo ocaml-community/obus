@@ -469,7 +469,7 @@ let rec dispatch_forever active =
    | Connection creation                                             |
    +-----------------------------------------------------------------+ *)
 
-class connection =
+class connection () =
   let active, set_active = S.create false in
 object(self)
 
@@ -498,7 +498,7 @@ let of_transport ?switch ?guid ?(up=true) transport =
   let make () =
     let abort_recv_waiter, abort_recv_wakener = Lwt.wait ()
     and abort_send_waiter, abort_send_wakener = Lwt.wait ()
-    and connection = new connection
+    and connection = new connection ()
     and down, set_down = S.create (if up then None else Some(wait ())) in
     let state = S.map (function None -> `Up | Some _ -> `Down) down in
     let active = {
