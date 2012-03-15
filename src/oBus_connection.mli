@@ -103,6 +103,20 @@ val send_message_with_reply : t -> OBus_message.t -> OBus_message.t Lwt.t
       return a thread which wait for the reply (which is a method
       return or an error) *)
 
+val send_message_keep_serial : t -> OBus_message.t -> unit Lwt.t
+  (** Same as {!send_message} but do not generate a serial for the
+      message.
+
+      Warning: this is for implementing a D-Bus daemon only, not for
+      casual use. *)
+
+val send_message_keep_serial_with_reply : t -> OBus_message.t -> OBus_message.t Lwt.t
+  (** Same as {!send_message_with_reply} but do not generate a serial
+      for the message.
+
+      Warning: this is for implementing a D-Bus daemon only, not for
+      casual use. *)
+
 (** {6 Helpers for calling methods} *)
 
 val method_call :

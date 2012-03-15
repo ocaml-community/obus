@@ -230,7 +230,7 @@ let kill connection exn =
 
 (* Send a message, maybe adding a reply waiter and return
    [return_thread] *)
-let send_message_backend connection reply_waiter_opt message =
+let send_message_backend connection gen_serial reply_waiter_opt message =
   let active = connection#get in
   Lwt_mutex.with_lock active.outgoing_mutex
     (fun () ->
@@ -244,7 +244,7 @@ let send_message_backend connection reply_waiter_opt message =
              (false, true)
        in
        if send_it then begin
-         let message = { message with OBus_message.serial = active.next_serial } in
+         let message = if gen_serial then { message with OBus_message.serial = active.next_serial } else message in
          match apply_filters "outgoing" message active.outgoing_filters with
            | None ->
                lwt () = Lwt_log.debug ~section "outgoing message dropped by filters" in
@@ -270,7 +270,7 @@ let send_message_backend connection reply_waiter_opt message =
                                   (* Do not cancel a thread while it is marshaling message: *)
                                   protected (OBus_transport.send active.transport message)] in
                  (* Everything went OK, continue with a new serial *)
-                 active.next_serial <- Int32.succ active.next_serial;
+                 if gen_serial then active.next_serial <- Int32.succ active.next_serial;
                  return ()
                with
                  | OBus_wire.Data_error _ as exn ->
@@ -298,11 +298,19 @@ let send_message_backend connection reply_waiter_opt message =
                return ())
 
 let send_message connection message =
-  send_message_backend connection None message
+  send_message_backend connection true None message
 
 let send_message_with_reply connection message =
   let (waiter, wakener) as v = task () in
-  lwt () = send_message_backend connection (Some v) message in
+  lwt () = send_message_backend connection true (Some v) message in
+  waiter
+
+let send_message_keep_serial connection message =
+  send_message_backend connection false None message
+
+let send_message_keep_serial_with_reply connection message =
+  let (waiter, wakener) as v = task () in
+  lwt () = send_message_backend connection false (Some v) message in
   waiter
 
 (* +-----------------------------------------------------------------+
