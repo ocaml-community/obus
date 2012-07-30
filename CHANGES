@@ -1,3 +1,8 @@
+===== 1.1.4 (2012-07-30) =====
+
+  * update oasis files
+  * minor fixes
+
 ===== 1.1.3 (2011-07-29) =====
 
   * depends on type-conv instead of type-conv.syntax
