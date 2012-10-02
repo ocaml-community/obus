@@ -13,7 +13,7 @@ open Camlp4.PreCast
 
 let () =
   Pa_type_conv.add_generator_with_arg ~is_exn:true "obus" Syntax.expr_eoi
-    (fun typ arg -> match typ, arg with
+    (fun arg is_exn typ -> match typ, arg with
        | _, None ->
            Loc.raise (Ast.loc_of_ctyp typ) (Stream.Error "pa_obus: argument recquired for the 'obus' generator")
        | Ast.TyOf(_loc, (Ast.TyId(_, (Ast.IdUid(_, caml_name)))), _), Some dbus_name ->

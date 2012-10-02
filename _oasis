@@ -61,7 +61,7 @@ Library obus
     OBus_util,
     OBus_xml_parser,
     OBus_config
-  BuildDepends: lwt.unix, lwt.react, lwt.syntax, lwt.syntax.log, type-conv, xmlm
+  BuildDepends: lwt.unix, lwt.react, lwt.syntax, lwt.syntax.log, type_conv, xmlm
   XMETARequires: lwt.unix, lwt.react, xmlm
   XMETADescription: Pure OCaml implementation of D-Bus
 
@@ -85,10 +85,10 @@ Library "obus-syntax"
   InternalModules: Pa_obus
   FindlibName: syntax
   FindlibParent: obus
-  BuildDepends: type-conv, camlp4, camlp4.quotations.o
+  BuildDepends: type_conv, camlp4, camlp4.quotations.o
   CompiledObject: byte
   XMETAType: syntax
-  XMETARequires: camlp4, type-conv
+  XMETARequires: camlp4, type_conv
   XMETADescription: Syntactic sugars for defining D-Bus errors
 
 # +-------------------------------------------------------------------+
@@ -184,7 +184,7 @@ Executable "obus-gen-interface"
   Install: true
   CompiledObject: best
   MainIs: obus_gen_interface.ml
-  BuildDepends: lwt.unix, lwt.react, lwt.syntax, lwt.syntax.log, type-conv, xmlm, camlp4.quotations.o, camlp4.extend, camlp4.lib
+  BuildDepends: lwt.unix, lwt.react, lwt.syntax, lwt.syntax.log, type_conv, xmlm, camlp4.quotations.o, camlp4.extend, camlp4.lib
 
 Executable "obus-dump"
   Path: tools
