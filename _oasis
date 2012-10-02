@@ -47,7 +47,6 @@ Library obus
     OBus_server,
     OBus_signal,
     OBus_string,
-    OBus_top,
     OBus_transport,
     OBus_uuid,
     OBus_value,
