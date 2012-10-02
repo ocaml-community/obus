@@ -1,3 +1,7 @@
+===== 1.1.5 (2012-10-02) =====
+
+  * compatibility fix for type-conv
+
 ===== 1.1.4 (2012-07-30) =====
 
   * update oasis files
