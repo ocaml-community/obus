@@ -24,7 +24,7 @@ For building the development version, you also need to install
 Installation
 ------------
 
-To build and install Lambda-Term:
+To build and install obus:
 
     $ ./configure
     $ make
