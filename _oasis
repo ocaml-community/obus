@@ -13,8 +13,14 @@ Homepage: http://obus.forge.ocamlcore.org/
 BuildTools:ocamlbuild
 Plugins: DevFiles (0.3), META (0.3)
 FilesAB: src/oBus_config.ml.ab
-Synopsis: obus
-Description: Pure OCaml implementation of the D-Bus protocol
+Synopsis: Pure OCaml implementation of the D-Bus protocol
+Description:
+    OBus is a pure OCaml implementation of the D-Bus protocol.
+    It aims to provide a clean and easy way for ocaml programmers to
+    access and provide D-Bus services.
+    .
+    OBus is using the cooperative threading library Lwt, which make it
+    very simple to fully exploit the asynchronous nature of D-Bus.
 
 # +-------------------------------------------------------------------+
 # | The core library                                                  |
@@ -441,6 +447,6 @@ Executable "battery-monitoring"
 # +-------------------------------------------------------------------+
 
 SourceRepository head
-  Type: darcs
-  Location: http://darcs.ocamlcore.org/repos/obus
-  Browser: http://darcs.ocamlcore.org/cgi-bin/darcsweb.cgi?r=obus;a=summary
+  Type: git
+  Location: https://github.com/diml/obus.git
+  Browser: https://github.com/diml/obus

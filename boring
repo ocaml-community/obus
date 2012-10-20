@@ -1,7 +1,0 @@
-(^|/)_build($|/)
-^manual/manual\.(aux|log|toc|pdf|out)$
-^src/oBus_config\.ml$
-^manual/manual\.pdf$
-^obus-.*\.tar\.gz$
-^setup\.data$
-^setup\.log$
