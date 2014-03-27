@@ -229,6 +229,7 @@ let connect ?switch sd =
     in
 
     let event, send = E.create () in
+    let send v = send v in
     let node = Lwt_sequence.add_r send senders in
 
     let event =
