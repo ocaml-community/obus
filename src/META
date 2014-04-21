@@ -1,0 +1,97 @@
+# OASIS_START
+# DO NOT EDIT (digest: 9a0c331df2e1c5ba2665026a579dadf2)
+version = "1.1.6"
+description = "Pure OCaml implementation of D-Bus"
+requires = "lwt.unix lwt.react xmlm"
+archive(byte) = "obus.cma"
+archive(byte, plugin) = "obus.cma"
+archive(native) = "obus.cmxa"
+archive(native, plugin) = "obus.cmxs"
+exists_if = "obus.cma"
+package "upower" (
+ version = "1.1.6"
+ description = "Freedesktop UPower service binding"
+ requires = "obus"
+ archive(byte) = "obus-upower.cma"
+ archive(byte, plugin) = "obus-upower.cma"
+ archive(native) = "obus-upower.cmxa"
+ archive(native, plugin) = "obus-upower.cmxs"
+ exists_if = "obus-upower.cma"
+)
+
+package "udisks" (
+ version = "1.1.6"
+ description = "Freedesktop UDisks service binding"
+ requires = "obus"
+ archive(byte) = "obus-udisks.cma"
+ archive(byte, plugin) = "obus-udisks.cma"
+ archive(native) = "obus-udisks.cmxa"
+ archive(native, plugin) = "obus-udisks.cmxs"
+ exists_if = "obus-udisks.cma"
+)
+
+package "syntax" (
+ version = "1.1.6"
+ description = "Syntactic sugars for defining D-Bus errors"
+ requires = "camlp4 type_conv"
+ archive(syntax, preprocessor) = "obus-syntax.cma"
+ archive(syntax, toploop) = "obus-syntax.cma"
+ exists_if = "obus-syntax.cma"
+)
+
+package "policykit" (
+ version = "1.1.6"
+ description = "Freedesktop PolicyKit service binding"
+ requires = "obus"
+ archive(byte) = "obus-policykit.cma"
+ archive(byte, plugin) = "obus-policykit.cma"
+ archive(native) = "obus-policykit.cmxa"
+ archive(native, plugin) = "obus-policykit.cmxs"
+ exists_if = "obus-policykit.cma"
+)
+
+package "notification" (
+ version = "1.1.6"
+ description = "Freedesktop Notification service binding"
+ requires = "obus"
+ archive(byte) = "obus-notification.cma"
+ archive(byte, plugin) = "obus-notification.cma"
+ archive(native) = "obus-notification.cmxa"
+ archive(native, plugin) = "obus-notification.cmxs"
+ exists_if = "obus-notification.cma"
+)
+
+package "network-manager" (
+ version = "1.1.6"
+ description = "Freedesktop NetworkManager service binding"
+ requires = "obus"
+ archive(byte) = "obus-network-manager.cma"
+ archive(byte, plugin) = "obus-network-manager.cma"
+ archive(native) = "obus-network-manager.cmxa"
+ archive(native, plugin) = "obus-network-manager.cmxs"
+ exists_if = "obus-network-manager.cma"
+)
+
+package "idl" (
+ version = "1.1.6"
+ description = "Intermediate language for writing D-Bus interfaces"
+ requires = "obus camlp4.lib"
+ archive(byte) = "obus-idl.cma"
+ archive(byte, plugin) = "obus-idl.cma"
+ archive(native) = "obus-idl.cmxa"
+ archive(native, plugin) = "obus-idl.cmxs"
+ exists_if = "obus-idl.cma"
+)
+
+package "hal" (
+ version = "1.1.6"
+ description = "Freedesktop Hal service binding"
+ requires = "obus"
+ archive(byte) = "obus-hal.cma"
+ archive(byte, plugin) = "obus-hal.cma"
+ archive(native) = "obus-hal.cmxa"
+ archive(native, plugin) = "obus-hal.cmxs"
+ exists_if = "obus-hal.cma"
+)
+# OASIS_STOP
+
