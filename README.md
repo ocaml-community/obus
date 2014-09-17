@@ -24,6 +24,12 @@ For building the development version, you also need to install
 Installation
 ------------
 
+The recommended way to install obus and its dependencies is via
+[opam](https://opam.ocaml.org/): `opam install obus`.
+
+Manual installation from sources
+--------------------------------
+
 To build and install obus:
 
     $ ./configure
