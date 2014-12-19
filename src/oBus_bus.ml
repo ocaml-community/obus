@@ -151,9 +151,6 @@ exception Match_rule_not_found of string
 exception Match_rule_invalid of string
  with obus("org.freedesktop.DBus.Error.MatchRuleInvalid")
 
-exception Service_unknown of string
- with obus("org.freedesktop.DBus.Error.ServiceUnknown")
-
 exception Name_has_no_owner of string
  with obus("org.freedesktop.DBus.Error.NameHasNoOwner")
 

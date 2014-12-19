@@ -152,10 +152,6 @@ val list_queued_owners : t -> OBus_name.bus -> OBus_name.bus list Lwt.t
   (** Return the connection unique names of applications waiting for a
       name *)
 
-exception Service_unknown of string
-  (** Raised when we try to contact a service which is not available
-      and the bus do not known how to start it *)
-
 (** {6 Messages routing} *)
 
 (** Note that you should prefer using {!OBus_match.export} and
