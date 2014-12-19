@@ -13,7 +13,7 @@ Ocaml.packs := ["obus.hal"; "lwt.syntax"]
 
 (* Make the computer to reboot *)
 
-let _ = Lwt_unix.run begin
+let _ = Lwt_main.run begin
   lwt computer = Lazy.force Hal_device.computer in
   Hal_device.System_power_management.reboot computer
 end

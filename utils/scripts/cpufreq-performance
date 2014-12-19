@@ -13,7 +13,7 @@ Ocaml.packs := ["obus.hal"; "lwt.syntax"]
 
 (* Set the cpufreq governor to performance on all cpus *)
 
-let () = Lwt_unix.run begin
+let () = Lwt_main.run begin
   lwt computer = Lazy.force Hal_device.computer in
   Hal_device.Cpufreq.set_cpufreq_governor computer "performance"
 end
