@@ -251,7 +251,7 @@ let stream_of_channels (ic, oc) =
 let stream_of_fd fd =
   make_stream
     ~recv:(fun () ->
-             let buf = Buffer.create 42 and tmp = String.create 1 in
+             let buf = Buffer.create 42 and tmp = Bytes.create 1 in
              let rec loop last =
                if Buffer.length buf > max_line_length then
                  raise_lwt (Auth_failure "input: line too long")
@@ -260,7 +260,7 @@ let stream_of_fd fd =
                    | 0 ->
                        raise_lwt (Auth_failure "input: premature end of input")
                    | 1 ->
-                       let ch = tmp.[0] in
+                       let ch = Bytes.get tmp 0 in
                        Buffer.add_char buf ch;
                        if last = '\r' && ch = '\n' then
                          return (Buffer.contents buf)
@@ -275,7 +275,7 @@ let stream_of_fd fd =
                if len = 0 then
                  return ()
                else
-                 Lwt_unix.write fd line ofs len >>= function
+                 Lwt_unix.write_string fd line ofs len >>= function
                    | 0 ->
                        raise_lwt (Auth_failure "output: zero byte written")
                    | n ->

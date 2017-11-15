@@ -18,11 +18,11 @@ let of_string str =
 let to_string = OBus_util.hex_encode
 
 let generate () =
-  let uuid = String.create 16 in
+  let uuid = Bytes.create 16 in
   OBus_util.fill_random uuid 0 12;
   let v = Int32.of_float (Unix.time ()) in
-  uuid.[12] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24)));
-  uuid.[13] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
-  uuid.[14] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
-  uuid.[15] <- (Char.unsafe_chr (Int32.to_int v));
-  uuid
+  Bytes.set uuid 12 (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 24)));
+  Bytes.set uuid 13 (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
+  Bytes.set uuid 14 (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
+  Bytes.set uuid 15 (Char.unsafe_chr (Int32.to_int v));
+  Bytes.unsafe_to_string uuid

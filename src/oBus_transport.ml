@@ -96,7 +96,7 @@ let make_socket domain typ addr =
     raise_lwt exn
 
 let rec write_nonce fd nonce pos len =
-  Lwt_unix.write fd nonce 0 16 >>= function
+  Lwt_unix.write_string fd nonce 0 16 >>= function
     | 0 ->
         raise_lwt (Failure "OBus_transport.connect: failed to send the nonce to the server")
     | n ->
@@ -272,7 +272,7 @@ let of_addresses ?switch ?(capabilities=OBus_auth.capabilities) ?mechanisms addr
         in
         (* Do authentication only once: *)
         try_lwt
-          Lwt_unix.write fd "\x00" 0 1 >>= function
+          Lwt_unix.write_string fd "\x00" 0 1 >>= function
             | 0 ->
                 raise_lwt (OBus_auth.Auth_failure "failed to send the initial null byte")
             | 1 ->

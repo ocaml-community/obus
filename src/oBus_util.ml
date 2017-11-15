@@ -61,13 +61,13 @@ let encode_char n =
 
 let hex_encode str =
   let len = String.length str in
-  let hex = String.create (len * 2) in
+  let hex = Bytes.create (len * 2) in
   for i = 0 to len - 1 do
     let n = Char.code (String.unsafe_get str i) in
-    String.unsafe_set hex (i * 2) (encode_char (n lsr 4));
-    String.unsafe_set hex (i * 2 + 1) (encode_char (n land 15))
+    Bytes.unsafe_set hex (i * 2) (encode_char (n lsr 4));
+    Bytes.unsafe_set hex (i * 2 + 1) (encode_char (n land 15))
   done;
-  hex
+  Bytes.unsafe_to_string hex
 
 let decode_char ch = match ch with
   | '0'..'9' -> Char.code ch - Char.code '0'
@@ -78,14 +78,14 @@ let decode_char ch = match ch with
 let hex_decode hex =
   if String.length hex mod 2 <> 0 then raise (Invalid_argument "OBus_util.hex_decode");
   let len = String.length hex / 2 in
-  let str = String.create len in
+  let str = Bytes.create len in
   for i = 0 to len - 1 do
-    String.unsafe_set str i
+    Bytes.unsafe_set str i
       (char_of_int
          ((decode_char (String.unsafe_get hex (i * 2)) lsl 4) lor
             (decode_char (String.unsafe_get hex (i * 2 + 1)))))
   done;
-  str
+  Bytes.unsafe_to_string str
 
 let homedir = lazy(
   try
@@ -101,7 +101,7 @@ let fill_pseudo buffer pos len =
   ignore (Lwt_log.warning ~section "using pseudo-random generator");
   Lazy.force init_pseudo;
   for i = pos to pos + len - 1 do
-    String.unsafe_set buffer i (char_of_int (Random.int 256))
+    Bytes.unsafe_set buffer i (char_of_int (Random.int 256))
   done
 
 let fill_random buffer pos len =
@@ -115,9 +115,9 @@ let fill_random buffer pos len =
     fill_pseudo buffer pos len
 
 let random_string n =
-  let str = String.create n in
+  let str = Bytes.create n in
   fill_random str 0 n;
-  str
+  Bytes.unsafe_to_string str
 
 let random_int32 () =
   let r = random_string 4 in
@@ -146,21 +146,21 @@ let sha_1 s =
     let blen = 8 * len in
     let rem = len mod 64 in
     let mlen = if rem > 55 then len + 128 - rem else len + 64 - rem in
-    let m = String.create mlen in
-    String.blit s 0 m 0 len;
-    String.fill m len (mlen - len) '\x00';
-    m.[len] <- '\x80';
+    let m = Bytes.create mlen in
+    Bytes.blit_string s 0 m 0 len;
+    Bytes.fill m len (mlen - len) '\x00';
+    Bytes.set m len '\x80';
     if Sys.word_size > 32 then begin
-      m.[mlen - 8] <- Char.unsafe_chr (blen lsr 56 land 0xFF);
-      m.[mlen - 7] <- Char.unsafe_chr (blen lsr 48 land 0xFF);
-      m.[mlen - 6] <- Char.unsafe_chr (blen lsr 40 land 0xFF);
-      m.[mlen - 5] <- Char.unsafe_chr (blen lsr 32 land 0xFF);
+      Bytes.set m (mlen - 8) (Char.unsafe_chr (blen lsr 56 land 0xFF));
+      Bytes.set m (mlen - 7) (Char.unsafe_chr (blen lsr 48 land 0xFF));
+      Bytes.set m (mlen - 6) (Char.unsafe_chr (blen lsr 40 land 0xFF));
+      Bytes.set m (mlen - 5) (Char.unsafe_chr (blen lsr 32 land 0xFF));
     end;
-    m.[mlen - 4] <- Char.unsafe_chr (blen lsr 24 land 0xFF);
-    m.[mlen - 3] <- Char.unsafe_chr (blen lsr 16 land 0xFF);
-    m.[mlen - 2] <- Char.unsafe_chr (blen lsr 8 land 0xFF);
-    m.[mlen - 1] <- Char.unsafe_chr (blen land 0xFF);
-    m
+    Bytes.set m (mlen - 4) (Char.unsafe_chr (blen lsr 24 land 0xFF));
+    Bytes.set m (mlen - 3) (Char.unsafe_chr (blen lsr 16 land 0xFF));
+    Bytes.set m (mlen - 2) (Char.unsafe_chr (blen lsr 8 land 0xFF));
+    Bytes.set m (mlen - 1) (Char.unsafe_chr (blen land 0xFF));
+    Bytes.unsafe_to_string m
   in
   (* Operations on int32 *)
   let ( &&& ) = ( land ) in
@@ -229,16 +229,16 @@ let sha_1 s =
     h3 := !h3 ++ !d;
     h4 := !h4 ++ !e
   done;
-  let h = String.create 20 in
+  let h = Bytes.create 20 in
   let i2s h k i =
-    h.[k] <- Char.unsafe_chr ((Int32.to_int (sr i 24)) &&& 0xFF);
-    h.[k + 1] <- Char.unsafe_chr ((Int32.to_int (sr i 16)) &&& 0xFF);
-    h.[k + 2] <- Char.unsafe_chr ((Int32.to_int (sr i 8)) &&& 0xFF);
-    h.[k + 3] <- Char.unsafe_chr ((Int32.to_int i) &&& 0xFF);
+    Bytes.set h (k    ) (Char.unsafe_chr ((Int32.to_int (sr i 24)) &&& 0xFF));
+    Bytes.set h (k + 1) (Char.unsafe_chr ((Int32.to_int (sr i 16)) &&& 0xFF));
+    Bytes.set h (k + 2) (Char.unsafe_chr ((Int32.to_int (sr i 8)) &&& 0xFF));
+    Bytes.set h (k + 3) (Char.unsafe_chr ((Int32.to_int i) &&& 0xFF));
   in
   i2s h 0 !h0;
   i2s h 4 !h1;
   i2s h 8 !h2;
   i2s h 12 !h3;
   i2s h 16 !h4;
-  h
+  Bytes.unsafe_to_string h

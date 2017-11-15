@@ -72,14 +72,14 @@ type t = {
 (* Reads the nonce sent by the client before authentication. The nonce
    is composed of the first 16 bytes sent by the client. *)
 let read_nonce fd =
-  let nonce = String.create 16 in
+  let nonce = Bytes.create 16 in
   let rec loop ofs len =
     Lwt_unix.read fd nonce ofs len >>= function
       | 0 ->
           raise_lwt End_of_file
       | n ->
           if n = len then
-            return nonce
+            return (Bytes.unsafe_to_string nonce)
           else
             loop (ofs + n) (len - n)
   in
@@ -177,7 +177,7 @@ let handle_client server listener fd address =
       Lwt_log.error_f ~section "cannot shutdown socket: %s" (Unix.error_message err)
   ) in
   try_lwt
-    let buf = String.create 1 in
+    let buf = Bytes.create 1 in
     Lwt_unix.read fd buf 0 1 >>= function
       | 0 ->
           raise_lwt (OBus_auth.Auth_failure "did not receive the initial null byte")
@@ -247,7 +247,7 @@ let make_socket domain typ address =
   let fd = Lwt_unix.socket domain typ 0 in
   (try Lwt_unix.set_close_on_exec fd with _ -> ());
   try
-    Lwt_unix.bind fd address;
+    Lwt_unix.Versioned.bind_1 fd address;
     Lwt_unix.listen fd 10;
     return fd
   with Unix_error(err, _, _) as exn ->
