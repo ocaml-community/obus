@@ -10,7 +10,8 @@ build: [
 remove: [["ocamlfind" "remove" "obus"]]
 depends: [
   "ocamlfind"
-  "lwt" {< "3.0.0"}
+  "lwt" {>= "2.7.0"}
+  "lwt_react"
   "react" {>= "1.0.0"}
   "type_conv"
   "xmlm"
