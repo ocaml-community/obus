@@ -296,12 +296,13 @@ let signature_of_string str =
 
 let string_of_signature signature =
   let len = signature_length signature in
-  let str = String.create len and i = ref 0 in
+  let str = Bytes.create len and i = ref 0 in
   let put_char ch =
     let j = !i in
-    String.unsafe_set str j ch;
+    Bytes.unsafe_set str j ch;
     i := j + 1
   in
+  let str = Bytes.to_string str in
   let write_basic t =
     put_char (match t with
                 | T.Byte -> 'y'
@@ -440,14 +441,14 @@ struct
 
   let array t l =
     if t = T.Basic T.Byte then begin
-      let s = String.create (List.length l) and i = ref 0 in
+      let s = Bytes.create (List.length l) and i = ref 0 in
       List.iter (function
                    | Basic(Byte x) ->
-                       String.unsafe_set s !i x;
+                       Bytes.unsafe_set s !i x;
                        incr i
                    | _ ->
                        invalid_arg "OBus_value.array: unexpected type") l;
-      Byte_array s
+      Byte_array (Bytes.to_string s)
     end else begin
       List.iter (fun x ->
                    if type_of_single x <> t then
@@ -1193,4 +1194,3 @@ let arg16 (n1, t1) (n2, t2) (n3, t3) (n4, t4) (n5, t5) (n6, t6) (n7, t7) (n8, t8
   arg_types = seq16 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16;
   arg_names = [n1; n2; n3; n4; n5; n6; n7; n8; n9; n10; n11; n12; n13; n14; n15; n16];
 }
-

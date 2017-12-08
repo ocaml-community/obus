@@ -67,7 +67,7 @@ let hex_encode str =
     String.unsafe_set hex (i * 2) (encode_char (n lsr 4));
     String.unsafe_set hex (i * 2 + 1) (encode_char (n land 15))
   done;
-  hex
+  Bytes.to_string hex
 
 let decode_char ch = match ch with
   | '0'..'9' -> Char.code ch - Char.code '0'
@@ -85,7 +85,7 @@ let hex_decode hex =
          ((decode_char (String.unsafe_get hex (i * 2)) lsl 4) lor
             (decode_char (String.unsafe_get hex (i * 2 + 1)))))
   done;
-  str
+  Bytes.to_string str
 
 let homedir = lazy(
   try
@@ -117,7 +117,7 @@ let fill_random buffer pos len =
 let random_string n =
   let str = String.create n in
   fill_random str 0 n;
-  str
+  Bytes.to_string str
 
 let random_int32 () =
   let r = random_string 4 in
@@ -160,7 +160,7 @@ let sha_1 s =
     m.[mlen - 3] <- Char.unsafe_chr (blen lsr 16 land 0xFF);
     m.[mlen - 2] <- Char.unsafe_chr (blen lsr 8 land 0xFF);
     m.[mlen - 1] <- Char.unsafe_chr (blen land 0xFF);
-    m
+    Bytes.to_string m
   in
   (* Operations on int32 *)
   let ( &&& ) = ( land ) in
@@ -241,4 +241,4 @@ let sha_1 s =
   i2s h 8 !h2;
   i2s h 12 !h3;
   i2s h 16 !h4;
-  h
+  Bytes.to_string h

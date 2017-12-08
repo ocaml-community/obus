@@ -287,14 +287,14 @@ let put_char = String.unsafe_set
 let put_uint8 buf ofs x = put_char buf ofs (Char.unsafe_chr x)
 
 module type Integer_writers = sig
-  val put_int16 : string -> int -> int -> unit
-  val put_int32 : string -> int -> int32 -> unit
-  val put_int64 : string -> int -> int64 -> unit
-  val put_uint16 : string -> int -> int -> unit
-  val put_uint32 : string -> int -> int32 -> unit
-  val put_uint64 : string -> int -> int64 -> unit
+  val put_int16 : Bytes.t -> int -> int -> unit
+  val put_int32 : Bytes.t -> int -> int32 -> unit
+  val put_int64 : Bytes.t -> int -> int64 -> unit
+  val put_uint16 : Bytes.t -> int -> int -> unit
+  val put_uint32 : Bytes.t -> int -> int32 -> unit
+  val put_uint64 : Bytes.t -> int -> int64 -> unit
 
-  val put_uint : string -> int -> int -> unit
+  val put_uint : Bytes.t -> int -> int -> unit
 end
 
 module LE_integer_writers : Integer_writers =
@@ -515,7 +515,7 @@ module FD_map = Map.Make(struct type t = Unix.file_descr let compare = Pervasive
 
 (* A pointer for serializing data *)
 type wpointer = {
-  buf : string;
+  buf : Bytes.t;
   mutable ofs : int;
   max : int;
   fds : int FD_map.t;
@@ -821,7 +821,7 @@ struct
     let fds = Array.create fd_count Unix.stdin in
     FD_map.iter (fun fd index -> Array.unsafe_set fds index fd) ptr.fds;
 
-    (ptr.buf, fds)
+    (Bytes.to_string ptr.buf, fds)
 end
 
 module LE_writer = Make_writer(LE_integer_writers)
@@ -870,7 +870,7 @@ let write_message_with_fds writer ?byte_order msg =
           lwt n = Lwt_unix.send_msg writer.w_file_descr [Lwt_unix.io_vector buf 0 len] (Array.to_list fds) in
           assert (n >= 0 && n <= len);
           (* Write what is remaining: *)
-          Lwt_io.write_from_exactly oc buf n (len - n)
+          Lwt_io.write_from_exactly oc (Bytes.of_string buf) n (len - n)
         end writer.w_channel
 
 (* +-----------------------------------------------------------------+
@@ -946,7 +946,7 @@ let read_bytes ptr len =
   let s = String.create len in
   String.unsafe_blit ptr.buf ptr.ofs s 0 len;
   ptr.ofs <- ptr.ofs + len;
-  s
+  Bytes.to_string s
 
 (* +-----------------------------------------------------------------+
    | Message reading                                                 |
@@ -1196,6 +1196,7 @@ let read_message ic =
     Lwt_io.atomic begin fun ic ->
       let buffer = String.create 16 in
       lwt () = Lwt_io.read_into_exactly ic buffer 0 16 in
+      let buffer = Bytes.to_string buffer in
       (match get_char buffer 0 with
          | 'l' -> LE_reader.read_message
          | 'B' -> BE_reader.read_message
@@ -1205,6 +1206,7 @@ let read_message ic =
            let length = length - 16 in
            let buffer = String.create length in
            lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
+           let buffer = Bytes.to_string buffer in
            f { buf = buffer; ofs = 0; max = length; fds = [||] } None return)
     end ic
   with exn ->
@@ -1263,6 +1265,7 @@ let read_message_with_fds reader  =
     Lwt_io.atomic begin fun ic ->
       let buffer = String.create 16 in
       lwt () = Lwt_io.read_into_exactly ic buffer 0 16 in
+      let buffer = Bytes.to_string buffer in
       (match get_char buffer 0 with
          | 'l' -> LE_reader.read_message
          | 'B' -> BE_reader.read_message
@@ -1272,6 +1275,7 @@ let read_message_with_fds reader  =
            let length = length - 16 in
            let buffer = String.create length in
            lwt () = Lwt_io.read_into_exactly ic buffer 0 length in
+           let buffer = Bytes.to_string buffer in
            f { buf = buffer; ofs = 0; max = length; fds = [||] } (Some(consumed_fds, reader.r_pending_fds)) return)
     end reader.r_channel
   with exn ->

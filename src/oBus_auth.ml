@@ -260,7 +260,7 @@ let stream_of_fd fd =
                    | 0 ->
                        raise_lwt (Auth_failure "input: premature end of input")
                    | 1 ->
-                       let ch = tmp.[0] in
+                       let ch = Bytes.get tmp 0 in
                        Buffer.add_char buf ch;
                        if last = '\r' && ch = '\n' then
                          return (Buffer.contents buf)
@@ -275,7 +275,7 @@ let stream_of_fd fd =
                if len = 0 then
                  return ()
                else
-                 Lwt_unix.write fd line ofs len >>= function
+                 Lwt_unix.write fd (Bytes.of_string line) ofs len >>= function
                    | 0 ->
                        raise_lwt (Auth_failure "output: zero byte written")
                    | n ->
