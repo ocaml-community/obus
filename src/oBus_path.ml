@@ -89,7 +89,7 @@ let to_string = function
                 | Some error ->
                     raise (Invalid_string error))
            0 path);
-      str
+      Bytes.to_string str
 
 let of_string str =
   match validate str with
@@ -104,7 +104,7 @@ let of_string str =
             let len = j - i in
             let elt = create len in
             unsafe_blit str (i + 1) elt 0 len;
-            aux (elt :: acc) (i - 1)
+            aux (Bytes.to_string elt :: acc) (i - 1)
         in
         aux [] (length str - 1)
 
@@ -116,7 +116,7 @@ let escape s =
     r.[j] <- char_of_int (n land 15 + int_of_char 'a');
     r.[j + 1] <- char_of_int (n lsr 4 + int_of_char 'a')
   done;
-  r
+  Bytes.to_string r
 
 let unescape s =
   let len = length s / 2 in
@@ -126,7 +126,7 @@ let unescape s =
     r.[i] <- char_of_int ((int_of_char s.[j] - int_of_char 'a') lor
                             ((int_of_char s.[j + 1] - int_of_char 'a') lsl 4))
   done;
-  r
+  Bytes.to_string r
 
 let rec after prefix path = match prefix, path with
   | [], p -> Some p

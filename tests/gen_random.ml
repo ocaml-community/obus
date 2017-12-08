@@ -25,7 +25,7 @@ let string max_len =
   for i = 0 to len - 1 do
     str.[i] <- char_of_int (Char.code 'a' + Random.int 26)
   done;
-  str
+  Bytes.to_string str
 
 (* Generate an object path *)
 let path () =

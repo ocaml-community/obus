@@ -54,7 +54,7 @@ val homedir : string Lwt.t Lazy.t
 (** All the following functions try to generate random numbers using
     /dev/urandom and can fallback to pseudo-random generator *)
 
-val fill_random : string -> int -> int -> unit
+val fill_random : Bytes.t -> int -> int -> unit
   (** [fill_random str ofs len] Fill the given string from [ofs] to
       [ofs+len-1] with random bytes.  *)
 

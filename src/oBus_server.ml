@@ -79,7 +79,7 @@ let read_nonce fd =
           raise_lwt End_of_file
       | n ->
           if n = len then
-            return nonce
+            return (Bytes.to_string nonce)
           else
             loop (ofs + n) (len - n)
   in

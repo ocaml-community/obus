@@ -25,4 +25,4 @@ let generate () =
   uuid.[13] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 16)));
   uuid.[14] <- (Char.unsafe_chr (Int32.to_int (Int32.shift_right v 8)));
   uuid.[15] <- (Char.unsafe_chr (Int32.to_int v));
-  uuid
+  Bytes.to_string uuid
