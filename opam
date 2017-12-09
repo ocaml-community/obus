@@ -9,7 +9,7 @@ build: [
 ]
 remove: [["ocamlfind" "remove" "obus"]]
 depends: [
-  "ocamlfind"
+  "ocamlfind" {build}
   "lwt" {>= "2.7.0"}
   "lwt_react"
   "react" {>= "1.0.0"}
