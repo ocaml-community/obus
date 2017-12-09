@@ -21,11 +21,11 @@ let option f =
 (* Generate a random non-empty string *)
 let string max_len =
   let len = 1 + Random.int max_len in
-  let str = String.create len in
+  let str = Bytes.create len in
   for i = 0 to len - 1 do
-    str.[i] <- char_of_int (Char.code 'a' + Random.int 26)
+    Bytes.set str i (char_of_int (Char.code 'a' + Random.int 26))
   done;
-  str
+  Bytes.unsafe_to_string str
 
 (* Generate an object path *)
 let path () =

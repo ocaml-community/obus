@@ -42,14 +42,14 @@ let parse_file fname =
     parse_xml fname
 
 let file_name_of_interface_name name =
-  let result = String.create (String.length name) in
+  let result = Bytes.create (String.length name) in
   for i = 0 to String.length name - 1 do
     if name.[i] = '.' then
-      result.[i] <- '_'
+      Bytes.set result i '_'
     else
-      result.[i] <- name.[i]
+      Bytes.set result i name.[i]
   done;
-  result
+  Bytes.unsafe_to_string result
 
 let paren top s = if top then s else sprintf "(%s)" s
 

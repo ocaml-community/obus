@@ -296,10 +296,10 @@ let signature_of_string str =
 
 let string_of_signature signature =
   let len = signature_length signature in
-  let str = String.create len and i = ref 0 in
+  let str = Bytes.create len and i = ref 0 in
   let put_char ch =
     let j = !i in
-    String.unsafe_set str j ch;
+    Bytes.unsafe_set str j ch;
     i := j + 1
   in
   let write_basic t =
@@ -338,6 +338,7 @@ let string_of_signature signature =
         put_char 'v'
   in
   List.iter write_single signature;
+  let str = Bytes.unsafe_to_string str in
   try
     let _ = length_validate_signature in
     str
@@ -440,14 +441,14 @@ struct
 
   let array t l =
     if t = T.Basic T.Byte then begin
-      let s = String.create (List.length l) and i = ref 0 in
+      let s = Bytes.create (List.length l) and i = ref 0 in
       List.iter (function
                    | Basic(Byte x) ->
-                       String.unsafe_set s !i x;
+                       Bytes.unsafe_set s !i x;
                        incr i
                    | _ ->
                        invalid_arg "OBus_value.array: unexpected type") l;
-      Byte_array s
+      Byte_array (Bytes.unsafe_to_string s)
     end else begin
       List.iter (fun x ->
                    if type_of_single x <> t then
