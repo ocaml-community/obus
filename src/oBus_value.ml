@@ -185,7 +185,8 @@ let length_validate_signature l =
         aux_sequence (aux_single length depth_struct depth_array depth_dict_entry t)
           depth_struct depth_array depth_dict_entry tl
   in
-  aux_sequence 0 0 0 0 l
+  let _ : int = aux_sequence 0 0 0 0 l in
+  ()
 
 let signature_length l =
   let rec aux_single length = function
@@ -207,7 +208,7 @@ let signature_length l =
 
 let validate_signature l =
   try
-    let _ = length_validate_signature l in
+    length_validate_signature l;
     None
   with Failure msg ->
     Some msg
@@ -340,7 +341,7 @@ let string_of_signature signature =
   List.iter write_single signature;
   let str = Bytes.unsafe_to_string str in
   try
-    let _ = length_validate_signature in
+    length_validate_signature signature;
     str
   with Failure msg ->
     raise (Invalid_signature(str, msg))
