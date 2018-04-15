@@ -1,3 +1,13 @@
+1.1.8 (unreleased)
+------------------
+
+* opam: add dependency on `oasis`, `lwt_react`, `lwt_camlp4`, `lwt_log`
+* opam: `ocamlfind` is now a build dependency
+* add support for OCaml 4.06 and `lwt` 3
+* bump minimum OCaml version to 4.02.3
+* enable travis tests
+* fix missing signature validation
+
 1.1.7 (2016-07-18)
 ------------------
 
