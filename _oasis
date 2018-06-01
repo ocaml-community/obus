@@ -67,8 +67,8 @@ Library obus
     OBus_util,
     OBus_xml_parser,
     OBus_config
-  BuildDepends: lwt.unix, lwt_react, lwt.syntax, lwt.syntax.log, type_conv, xmlm
-  XMETARequires: lwt.unix, lwt_react, xmlm
+  BuildDepends: lwt.unix, lwt_react, lwt_camlp4, lwt_camlp4.log, lwt_log, type_conv, xmlm
+  XMETARequires: lwt.unix, lwt_react, xmlm, lwt_log
   XMETADescription: Pure OCaml implementation of D-Bus
 
 # +-------------------------------------------------------------------+
@@ -190,7 +190,7 @@ Executable "obus-gen-interface"
   Install: true
   CompiledObject: best
   MainIs: obus_gen_interface.ml
-  BuildDepends: lwt.unix, lwt_react, lwt.syntax, lwt.syntax.log, type_conv, xmlm, camlp4.quotations.o, camlp4.extend, camlp4.lib
+  BuildDepends: lwt.unix, lwt_react, lwt_camlp4, lwt_camlp4.log, lwt_log, type_conv, xmlm, camlp4.quotations.o, camlp4.extend, camlp4.lib
 
 Executable "obus-dump"
   Path: tools
@@ -371,77 +371,77 @@ Executable "bus-functions"
   Install: false
   CompiledObject: best
   MainIs: bus_functions.ml
-  BuildDepends: obus, lwt.syntax
+  BuildDepends: obus, lwt_camlp4
 
 Executable eject
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: eject.ml
-  BuildDepends: obus, lwt.syntax, obus.hal
+  BuildDepends: obus, lwt_camlp4, obus.hal
 
 Executable hello
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: hello.ml
-  BuildDepends: obus, lwt.syntax
+  BuildDepends: obus, lwt_camlp4
 
 Executable "list-services"
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: list_services.ml
-  BuildDepends: obus, lwt.syntax
+  BuildDepends: obus, lwt_camlp4
 
 Executable monitor
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: monitor.ml
-  BuildDepends: obus, lwt.syntax
+  BuildDepends: obus, lwt_camlp4
 
 Executable notify
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: notify.ml
-  BuildDepends: obus, lwt.syntax, obus.notification
+  BuildDepends: obus, lwt_camlp4, obus.notification
 
 Executable ping
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: ping.ml
-  BuildDepends: obus, lwt.syntax
+  BuildDepends: obus, lwt_camlp4
 
 Executable pong
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: pong.ml
-  BuildDepends: obus, lwt.syntax
+  BuildDepends: obus, lwt_camlp4
 
 Executable signals
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: signals.ml
-  BuildDepends: obus, lwt.syntax, obus.hal
+  BuildDepends: obus, lwt_camlp4, obus.hal
 
 Executable "network-manager"
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: network_manager.ml
-  BuildDepends: obus, lwt.syntax, obus.network-manager
+  BuildDepends: obus, lwt_camlp4, obus.network-manager
 
 Executable "battery-monitoring"
   Path: examples
   Install: false
   CompiledObject: best
   MainIs: battery_monitoring.ml
-  BuildDepends: obus, lwt.syntax, obus.upower
+  BuildDepends: obus, lwt_camlp4, obus.upower
 
 # +-------------------------------------------------------------------+
 # | Misc                                                              |
