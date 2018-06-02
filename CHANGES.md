@@ -1,4 +1,4 @@
-1.1.8 (unreleased)
+1.1.8 (2018-06-02)
 ------------------
 
 * opam: add dependency on `oasis`, `lwt_react`, `lwt_camlp4`, `lwt_log`
