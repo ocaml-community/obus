@@ -12,7 +12,7 @@ let not_authorized = "org.freedesktop.PolicyKit.Error.NotAuthorized"
 open Policy_kit_interfaces.Org_freedesktop_PolicyKit_AuthenticationAgent
 
 let obtain_authorization ~action_id ?(xid=0) ~pid () =
-  lwt session_bus = OBus_bus.session () in
+  let%lwt session_bus = OBus_bus.session () in
   let proxy =
     OBus_proxy.make
       (OBus_peer.make session_bus "org.freedesktop.PolicyKit.AuthenticationAgent")

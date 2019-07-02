@@ -1,0 +1,10 @@
+(library
+ (name OBus_idl)
+ (synopsis "DSL for defining D-Bus interfaces")
+ (libraries obus_internals camlp4.lib))
+
+(rule
+ (targets oBus_idl.ml)
+ (deps    oBus_idl.camlp4.ml)
+ (action
+  (run camlp4of -impl %{deps} -o %{targets})))

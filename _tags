@@ -1,8 +1,0 @@
-# -*- conf -*-
-
-<**/*.ml>: syntax_camlp4o
-<**/*.ml>: pa_obus
-<syntax/*.ml>: -pa_obus
-
-# OASIS_START
-# OASIS_STOP

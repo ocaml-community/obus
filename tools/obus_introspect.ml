@@ -26,12 +26,10 @@ let usage_msg = Printf.sprintf "Usage: %s <option> <destination> <path>
 Introspect a D-Bus service (print only interfaces).
 options are:" (Filename.basename (Sys.argv.(0)))
 
-open Lwt
-
 module Interface_map = Map.Make(struct type t = string let compare = compare end)
 
 let rec get proxy =
-  lwt interfaces, children = OBus_proxy.introspect proxy in
+  let%lwt interfaces, children = OBus_proxy.introspect proxy in
   let map = List.fold_left (fun map (name, content, annots) ->
                               Interface_map.add name (content, annots) map)
     Interface_map.empty interfaces in
@@ -40,18 +38,18 @@ let rec get proxy =
     | true ->
         List.fold_left
           (fun t1 t2 ->
-             lwt nodes1, map1 = t1 and nodes2, map2 = t2 in
-             return (nodes1 @ nodes2, Interface_map.fold Interface_map.add map1 map2))
-          (return (nodes, map))
+             let%lwt nodes1, map1 = t1 and nodes2, map2 = t2 in
+             Lwt.return (nodes1 @ nodes2, Interface_map.fold Interface_map.add map1 map2))
+          (Lwt.return (nodes, map))
           (List.map
              (fun child ->
                 get { proxy with OBus_proxy.path = OBus_proxy.path proxy @ [child] })
              children)
     | false ->
-        return (nodes, map)
+        Lwt.return (nodes, map)
 
 let main service path =
-  lwt bus = match !session, !system, !address with
+  let%lwt bus = match !session, !system, !address with
     | true, true, _
     | true, _, Some _
     | _, true, Some _ ->
@@ -63,7 +61,7 @@ let main service path =
     | false, true, None -> OBus_bus.system ()
     | false, false, Some addr -> OBus_bus.of_addresses (OBus_address.of_string addr)
   in
-  lwt nodes, map = get (OBus_proxy.make (OBus_peer.make bus service) path) in
+  let%lwt nodes, map = get (OBus_proxy.make (OBus_peer.make bus service) path) in
   begin
     match !obj_mode with
       | false ->
@@ -76,7 +74,7 @@ let main service path =
             print_newline ();
           end nodes
   end;
-  return ()
+  Lwt.return ()
 
 let () =
   Arg.parse args
@@ -91,5 +89,5 @@ let () =
     Lwt_main.run (main service path)
   with
     | OBus_introspect.Parse_failure((line, column), msg) ->
-        ignore_result (Lwt_io.eprintlf "invalid introspection document returned by the service!:%d:%d: %s" line column msg);
+        Lwt.ignore_result (Lwt_io.eprintlf "invalid introspection document returned by the service!:%d:%d: %s" line column msg);
         exit 1

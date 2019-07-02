@@ -12,13 +12,13 @@ include OBus_proxy.Private
 open Nm_interfaces.Org_freedesktop_NetworkManagerSettings
 
 let user () =
-  lwt bus = OBus_bus.session () in
+  let%lwt bus = OBus_bus.session () in
   return (OBus_proxy.make
             (OBus_peer.make bus "org.freedesktop.NetworkManagerUserSettings")
             [ "org"; "freedesktop"; "NetworkManagerSettings" ])
 
 let system () =
-  lwt bus = OBus_bus.system () in
+  let%lwt bus = OBus_bus.system () in
   return (OBus_proxy.make
             (OBus_peer.make bus "org.freedesktop.NetworkManagerSystemSettings")
             [ "org"; "freedesktop"; "NetworkManagerSettings" ])
@@ -73,13 +73,13 @@ struct
     OBus_signal.make s_CheckPermissions proxy
 
   let get_permissions proxy =
-    lwt permissions = OBus_method.call m_GetPermissions proxy () in
+    let%lwt permissions = OBus_method.call m_GetPermissions proxy () in
     let permissions = Int32.to_int permissions in
     return permissions
 end
 
 let list_connections proxy =
-  lwt (context, connections) = OBus_method.call_with_context m_ListConnections proxy () in
+  let%lwt (context, connections) = OBus_method.call_with_context m_ListConnections proxy () in
   return (
     List.map
       (fun path ->

@@ -75,8 +75,8 @@ let print_symbol oc name sym =
     | [] ->
         ()
     | (key, name) :: rest ->
-        fprintf oc "    [ `%s" (String.capitalize name);
-        List.iter (fun (key, name) -> fprintf oc "\n    | `%s" (String.capitalize name)) rest;
+        fprintf oc "    [ `%s" (String.capitalize_ascii name);
+        List.iter (fun (key, name) -> fprintf oc "\n    | `%s" (String.capitalize_ascii name)) rest;
         fprintf oc " ]\n"
 
 (* +-----------------------------------------------------------------+
@@ -124,7 +124,7 @@ let print_impl oc name members symbols annotations =
   fprintf oc "module %s =\n\
               struct\n\
              \  let interface = %S\n"
-    (String.capitalize (Utils.file_name_of_interface_name name))
+    (String.capitalize_ascii (Utils.file_name_of_interface_name name))
     name;
 
   (***** Symbols *****)
@@ -138,7 +138,7 @@ let print_impl oc name members symbols annotations =
              List.iter
                (fun (key, name) ->
                   fprintf oc "    | `%s -> %s\n"
-                    (String.capitalize name)
+                    (String.capitalize_ascii name)
                     (string_of_integer_enum key))
                values;
              fprintf oc "  let make_%s = function\n" name;
@@ -146,7 +146,7 @@ let print_impl oc name members symbols annotations =
                (fun (key, name) ->
                   fprintf oc "    | %s -> `%s\n"
                     (string_of_integer_enum key)
-                    (String.capitalize name))
+                    (String.capitalize_ascii name))
                values;
              fprintf oc "    | n -> Printf.ksprintf failwith \"invalid value for \\\"%s\\\": %s\" n\n"
                name
@@ -165,7 +165,7 @@ let print_impl oc name members symbols annotations =
              List.iter
                (fun (key, name) ->
                   fprintf oc "      | `%s :: rest -> loop (%s) rest\n"
-                    (String.capitalize name)
+                    (String.capitalize_ascii name)
                     (match key with
                        | V.Byte x ->
                            sprintf "acc lor %d" (Char.code x)
@@ -203,7 +203,7 @@ let print_impl oc name members symbols annotations =
                        | V.Int64 x | V.Uint64 x ->
                            sprintf "Int64.logand n %LdL <> 0L" x
                        | _ -> assert false)
-                    (String.capitalize name))
+                    (String.capitalize_ascii name))
                values;
              fprintf oc "    l\n")
     symbols;
@@ -313,7 +313,7 @@ let string_of_key_type = function
   | _ -> assert false
 
 let print_intf oc name members symbols annotations =
-  fprintf oc "module %s : sig\n" (String.capitalize (Utils.file_name_of_interface_name name));
+  fprintf oc "module %s : sig\n" (String.capitalize_ascii (Utils.file_name_of_interface_name name));
   fprintf oc "  val interface : OBus_name.interface\n";
 
   (***** Symbols *****)
@@ -478,7 +478,4 @@ let () =
     interfaces;
 
   close_out oc_impl;
-  close_out oc_intf;
-
-  printf "file \"%s.ml\" written\n" prefix;
-  printf "file \"%s.mli\" written\n" prefix
+  close_out oc_intf

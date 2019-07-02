@@ -9,7 +9,6 @@
 
 open Printf
 open OBus_introspect_ext
-open OBus_value
 
 let prog_name = Filename.basename Sys.argv.(0)
 
@@ -67,7 +66,7 @@ let make_convertors make_convertor names args =
     names args
 
 let print_impl oc name members symbols annotations =
-  let module_name = String.capitalize (Utils.file_name_of_interface_name name) in
+  let module_name = String.capitalize_ascii (Utils.file_name_of_interface_name name) in
   fprintf oc "\n\
               module %s =\n\
               struct\n\
@@ -101,7 +100,7 @@ let print_impl oc name members symbols annotations =
              print_names oc i_names;
              output_char oc '\n'
            end else begin
-             output_string oc "    lwt ";
+             output_string oc "    let%lwt ";
              if need_context then output_string oc "(context, ";
              print_names oc o_names;
              if need_context then
@@ -205,12 +204,12 @@ let print_symbol oc name sym =
     | [] ->
         ()
     | (key, name) :: rest ->
-        fprintf oc "    [ `%s" (String.capitalize name);
-        List.iter (fun (key, name) -> fprintf oc "\n    | `%s" (String.capitalize name)) rest;
+        fprintf oc "    [ `%s" (String.capitalize_ascii name);
+        List.iter (fun (key, name) -> fprintf oc "\n    | `%s" (String.capitalize_ascii name)) rest;
         fprintf oc " ]\n"
 
 let print_intf oc name members symbols annotations =
-  fprintf oc "\nmodule %s : sig\n" (String.capitalize (Utils.file_name_of_interface_name name));
+  fprintf oc "\nmodule %s : sig\n" (String.capitalize_ascii (Utils.file_name_of_interface_name name));
   List.iter (fun (name, sym) -> print_symbol oc name sym) symbols;
   List.iter
     (function
@@ -280,10 +279,10 @@ let () =
   let prefix, intf_module =
     match !prefix with
       | Some str ->
-          (str, String.capitalize (Filename.basename str) ^ "_interfaces")
+          (str, String.capitalize_ascii (Filename.basename str) ^ "_interfaces")
       | None ->
           let name = try Filename.chop_extension source with Invalid_argument _ -> source in
-          (name ^ "_client", String.capitalize name ^ "_interfaces")
+          (name ^ "_client", String.capitalize_ascii name ^ "_interfaces")
   in
 
   let interfaces = Utils.parse_file source in

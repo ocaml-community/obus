@@ -15,9 +15,9 @@ open Lwt
 open Lwt_io
 open OBus_value
 
-lwt () =
+let () = Lwt_main.run begin
   (* Get the manager. *)
-  lwt manager = Nm_manager.daemon () in
+  let%lwt manager = Nm_manager.daemon () in
 
   (* Create a signal descriptor for listenning on signals comming from
      any DHCP4 object. *)
@@ -28,7 +28,7 @@ lwt () =
   in
 
   (* Connects to this signal. *)
-  lwt event = OBus_signal.connect sig_desc in
+  let%lwt event = OBus_signal.connect sig_desc in
 
   (* Prints all DHCP4 options when one configuration changes. *)
   E.keep
@@ -36,7 +36,7 @@ lwt () =
        (fun (proxy, properties) ->
           match try Some(List.assoc "Options" properties) with Not_found -> None with
             | Some options ->
-                lwt () = printlf "DHCP options for %S:" (OBus_path.to_string (OBus_proxy.path proxy)) in
+                let%lwt () = printlf "DHCP options for %S:" (OBus_path.to_string (OBus_proxy.path proxy)) in
                 Lwt_list.iter_s
                   (fun (key, value) ->
                      printlf "  %s = %s" key (V.string_of_single value))
@@ -46,3 +46,4 @@ lwt () =
        event);
 
   fst (wait ())
+end

@@ -14,7 +14,7 @@ include OBus_proxy.Private
 
 
 let manager () =
-  lwt bus = OBus_bus.system () in
+  let%lwt bus = OBus_bus.system () in
   return (OBus_proxy.make
             (OBus_peer.make bus "org.freedesktop.Hal")
             [ "org"; "freedesktop"; "Hal"; "Manager" ])
@@ -27,11 +27,11 @@ let make_device context udi =
        (OBus_path.of_string udi))
 
 let get_all_devices proxy =
-  lwt context, l = OBus_method.call_with_context m_GetAllDevices proxy () in
+  let%lwt context, l = OBus_method.call_with_context m_GetAllDevices proxy () in
   return (List.map (make_device context) l)
 
 let get_all_devices_with_properties proxy =
-  lwt context, l = OBus_method.call_with_context m_GetAllDevicesWithProperties proxy () in
+  let%lwt context, l = OBus_method.call_with_context m_GetAllDevicesWithProperties proxy () in
   return (List.map
             (fun (udi, properties) ->
                (make_device context udi,
@@ -42,15 +42,15 @@ let device_exists proxy udi =
   OBus_method.call m_DeviceExists proxy (OBus_path.to_string udi)
 
 let find_device_string_match proxy key value =
-  lwt context, l = OBus_method.call_with_context m_FindDeviceStringMatch proxy (key, value) in
+  let%lwt context, l = OBus_method.call_with_context m_FindDeviceStringMatch proxy (key, value) in
   return (List.map (make_device context) l)
 
 let find_device_by_capability proxy capability =
-  lwt context, l = OBus_method.call_with_context m_FindDeviceByCapability proxy capability in
+  let%lwt context, l = OBus_method.call_with_context m_FindDeviceByCapability proxy capability in
   return (List.map (make_device context) l)
 
 let new_device proxy =
-  lwt context, udi = OBus_method.call_with_context m_NewDevice proxy () in
+  let%lwt context, udi = OBus_method.call_with_context m_NewDevice proxy () in
   return (make_device context udi)
 
 let remove proxy dev =

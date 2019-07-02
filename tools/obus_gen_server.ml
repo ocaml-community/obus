@@ -54,7 +54,7 @@ let make_convertors make_convertor names args =
     names args
 
 let print_impl oc name members symbols annotations =
-  let module_name = String.capitalize (Utils.file_name_of_interface_name name) in
+  let module_name = String.capitalize_ascii (Utils.file_name_of_interface_name name) in
   fprintf oc "\n\
               module %s =\n\
               struct\n\
@@ -95,7 +95,7 @@ let print_impl oc name members symbols annotations =
                 | (false, name) -> fprintf oc " %s" name
                 | (true, name) -> fprintf oc " ~%s" name)
              (make_names i_args);
-           output_string oc " =\n    raise_lwt (Failure \"not implemented\")\n"
+           output_string oc " =\n    Lwt.fail (Failure \"not implemented\")\n"
        | _ ->
            ())
     members;
@@ -114,7 +114,7 @@ let print_impl oc name members symbols annotations =
                 | Some(name, f) -> fprintf oc "          let %s = %s %s in\n" name f name
                 | None -> ())
              i_convertors;
-           fprintf oc "          lwt %a = %s (OBus_object.get obj)" print_names o_names (OBus_name.ocaml_lid name);
+           fprintf oc "          let%%lwt %a = %s (OBus_object.get obj)" print_names o_names (OBus_name.ocaml_lid name);
            List.iter (fun (_, name) -> fprintf oc " %s" name) i_names;
            output_string oc " in\n";
            List.iter
@@ -176,10 +176,10 @@ let () =
   let prefix, intf_module =
     match !prefix with
       | Some str ->
-          (str, String.capitalize (Filename.basename str) ^ "_interfaces")
+          (str, String.capitalize_ascii (Filename.basename str) ^ "_interfaces")
       | None ->
           let name = try Filename.chop_extension source with Invalid_argument _ -> source in
-          (name ^ "_server", String.capitalize name ^ "_interfaces")
+          (name ^ "_server", String.capitalize_ascii name ^ "_interfaces")
   in
 
   let interfaces = Utils.parse_file source in

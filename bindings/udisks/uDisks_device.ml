@@ -54,7 +54,7 @@ let partition_delete proxy ~options =
   OBus_method.call m_PartitionDelete proxy options
 
 let partition_create proxy ~offset ~size ~typ ~label ~flags ~options ~fstype ~fsoptions =
-  lwt (context, created_device) = OBus_method.call_with_context m_PartitionCreate proxy (offset, size, typ, label, flags, options, fstype, fsoptions) in
+  let%lwt (context, created_device) = OBus_method.call_with_context m_PartitionCreate proxy (offset, size, typ, label, flags, options, fstype, fsoptions) in
   let created_device = OBus_proxy.make (OBus_context.sender context) created_device in
   return created_device
 
@@ -77,7 +77,7 @@ let filesystem_check proxy ~options =
   OBus_method.call m_FilesystemCheck proxy options
 
 let filesystem_list_open_files proxy =
-  lwt processes = OBus_method.call m_FilesystemListOpenFiles proxy () in
+  let%lwt processes = OBus_method.call m_FilesystemListOpenFiles proxy () in
   return
     (List.map
        (fun (x1, x2, x3) -> {
@@ -88,7 +88,7 @@ let filesystem_list_open_files proxy =
        processes)
 
 let luks_unlock proxy ~passphrase ~options =
-  lwt (context, cleartext_device) = OBus_method.call_with_context m_LuksUnlock proxy (passphrase, options) in
+  let%lwt (context, cleartext_device) = OBus_method.call_with_context m_LuksUnlock proxy (passphrase, options) in
   let cleartext_device = OBus_proxy.make (OBus_context.sender context) cleartext_device in
   return cleartext_device
 
@@ -148,7 +148,7 @@ let drive_ata_smart_initiate_selftest proxy ~test ~options =
   OBus_method.call m_DriveAtaSmartInitiateSelftest proxy (test, options)
 
 let drive_benchmark proxy ~do_write_benchmark ~options =
-  lwt (x1, x2, x3) = OBus_method.call m_DriveBenchmark proxy (do_write_benchmark, options) in
+  let%lwt (x1, x2, x3) = OBus_method.call m_DriveBenchmark proxy (do_write_benchmark, options) in
   return {
     bench_read_transfer_rate_results = x1;
     bench_write_transfer_rate_results = x2;

@@ -15,7 +15,7 @@ let section = Lwt_log.Section.make "network-manager"
 include OBus_peer.Private
 
 let daemon () =
-  lwt bus = OBus_bus.system () in
+  let%lwt bus = OBus_bus.system () in
   Lwt.return (OBus_peer.make bus "org.freedesktop.NetworkManager")
 
 (* +-----------------------------------------------------------------+
@@ -46,7 +46,7 @@ let proxy daemon = OBus_proxy.make daemon ["org"; "freedesktop"; "NetworkManager
 open Nm_interfaces.Org_freedesktop_NetworkManager
 
 let get_devices daemon =
-  lwt (context, devices) = OBus_method.call_with_context m_GetDevices (proxy daemon) () in
+  let%lwt (context, devices) = OBus_method.call_with_context m_GetDevices (proxy daemon) () in
   return (
     List.map
       (fun path ->
@@ -59,7 +59,7 @@ let activate_connection daemon ~service_name ~connection ~device ~specific_objec
   let connection = OBus_proxy.path (Nm_settings.Connection.to_proxy connection) in
   let device = OBus_proxy.path (Nm_device.to_proxy device) in
   let specific_object = OBus_proxy.path specific_object in
-  lwt (context, active_connection) =
+  let%lwt (context, active_connection) =
     OBus_method.call_with_context
       m_ActivateConnection
       (proxy daemon)

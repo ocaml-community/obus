@@ -22,8 +22,9 @@ let rec run_tests con = function
   | 0 ->
       return ()
   | n ->
-      lwt () = OBus_connection.send_message con {
-        Gen_random.message () with
+      let message = Gen_random.message () in
+      let%lwt () = OBus_connection.send_message con {
+        message with
           destination = name;
           typ = Signal(["obus"; "test"], "obus.test", "test");
       } in
@@ -32,21 +33,21 @@ let rec run_tests con = function
 let rec wait_for_name con =
   OBus_bus.name_has_owner con name >>= function
     | true -> return ()
-    | false -> lwt () = Lwt_unix.sleep 0.1 in wait_for_name con
+    | false -> let%lwt () = Lwt_unix.sleep 0.1 in wait_for_name con
 
 let test () =
-  lwt () = Lwt_io.flush Lwt_io.stdout in
+  let%lwt () = Lwt_io.flush Lwt_io.stdout in
   match Unix.fork () with
     | 0 ->
-        lwt con = OBus_bus.session () in
-        lwt () = wait_for_name con in
-        lwt () = run_tests con test_count in
+        let%lwt con = OBus_bus.session () in
+        let%lwt () = wait_for_name con in
+        let%lwt () = run_tests con test_count in
         exit 0
     | pid ->
-        lwt () = printlf "sending and receiving %d messages through the message bus." test_count in
-        lwt bus = OBus_bus.session () in
-        lwt _ = OBus_bus.request_name bus name in
-        lwt progress = Progress.make "received" test_count in
+        let%lwt () = printlf "sending and receiving %d messages through the message bus." test_count in
+        let%lwt bus = OBus_bus.session () in
+        let%lwt _ = OBus_bus.request_name bus name in
+        let%lwt progress = Progress.make "received" test_count in
         let waiter, wakener = wait () in
         let count = ref 0 in
         ignore (Lwt_sequence.add_r
@@ -60,7 +61,7 @@ let test () =
                      | msg ->
                          Some msg)
                   (OBus_connection.incoming_filters bus));
-        lwt result = waiter in
-        lwt () = Progress.close progress in
-        lwt _ = Lwt_unix.waitpid [] pid in
+        let%lwt result = waiter in
+        let%lwt () = Progress.close progress in
+        let%lwt _ = Lwt_unix.waitpid [] pid in
         return result

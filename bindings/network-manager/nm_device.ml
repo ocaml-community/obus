@@ -335,7 +335,7 @@ struct
       | `Infra ]
 
   let get_access_points proxy =
-    lwt (context, access_points) = OBus_method.call_with_context m_GetAccessPoints proxy () in
+    let%lwt (context, access_points) = OBus_method.call_with_context m_GetAccessPoints proxy () in
     return (
       List.map
         (fun path ->
