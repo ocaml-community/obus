@@ -1,9 +1,2 @@
 _build/
-/obus-*.tar.gz
-/setup.data
-/setup.log
-/setup.exe
-/setup-dev.exe
-/man/*.gz
-/src/oBus_config.ml
-/manual/manual.{aux,log,toc,pdf,out}
+.merlin

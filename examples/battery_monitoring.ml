@@ -32,15 +32,15 @@ let monitor_device device =
     return ()
   else begin
     let switch = Lwt_switch.create () in
-    lwt signal = OBus_property.monitor (UPower_device.state device) in
-    lwt s = S.map_s (print_state device) signal in
+    let%lwt signal = OBus_property.monitor (UPower_device.state device) in
+    let%lwt s = S.map_s (print_state device) signal in
     batteries := (device, switch, s) :: !batteries;
     return ()
   end
 
 (* Handle device removal. *)
 let unmonitor_device device =
-  lwt () =
+  let%lwt () =
     Lwt_list.iter_p
       (fun (device', switch, s) ->
          if device = device' then begin
@@ -53,12 +53,12 @@ let unmonitor_device device =
   batteries := List.filter (fun (device', _, _) -> device <> device') !batteries;
   return ()
 
-lwt () =
+let () = Lwt_main.run begin
   (* Get the manager proxy. *)
-  lwt manager = UPower.daemon () in
+  let%lwt manager = UPower.daemon () in
 
   (* Handle device addition/removal. *)
-  lwt () =
+  let%lwt () =
     OBus_signal.connect (UPower.device_added manager)
     >|= E.map_p monitor_device
     >|= E.keep
@@ -69,7 +69,8 @@ lwt () =
   in
 
   (* Monitor all the batteries initially present on the system. *)
-  lwt devices = UPower.enumerate_devices manager in
-  lwt () = Lwt_list.iter_p monitor_device devices in
+  let%lwt devices = UPower.enumerate_devices manager in
+  let%lwt () = Lwt_list.iter_p monitor_device devices in
 
   fst (wait ())
+end

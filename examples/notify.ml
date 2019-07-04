@@ -10,14 +10,14 @@
 open Lwt
 open Lwt_io
 
-lwt () =
+let () = Lwt_main.run begin
   (* Open a first notification: *)
-  lwt _ = Notification.notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" () in
+  let%lwt _ = Notification.notify ~summary:"Hello, world!" ~body:"ocaml is fun!" ~icon:"info" () in
 
-  lwt () = Lwt_unix.sleep 0.5 in
+  let%lwt () = Lwt_unix.sleep 0.5 in
 
   (* Open another one, with buttons on it: *)
-  lwt handle =
+  let%lwt handle =
     Notification.notify ~summary:"Actions test" ~body:"click on something!"
       ~category:"network"
       ~actions:[("coucou", `Coucou); ("plop", `Plop)] ()
@@ -29,3 +29,4 @@ lwt () =
     | `Plop -> eprintl "You pressed plop!"
     | `Default -> eprintl "default action invoked"
     | `Closed -> eprintl "notification closed"
+end

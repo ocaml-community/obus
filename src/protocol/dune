@@ -1,0 +1,15 @@
+(library
+ (name obus)
+ (public_name obus)
+ (wrapped false)
+ (synopsis "Pure Ocaml implementation of the D-Bus protocol")
+ (libraries lwt.unix lwt_log lwt_react xmlm obus.internals)
+ (preprocess (pps lwt_ppx ppx_obus)))
+
+(ocamllex oBus_address_lexer oBus_match_rule_lexer)
+
+(rule
+ (targets oBus_interfaces.ml oBus_interfaces.mli)
+ (deps    oBus_interfaces.obus)
+ (action
+  (run obus-gen-interface -keep-common -o oBus_interfaces %{deps})))

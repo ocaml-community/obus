@@ -78,7 +78,7 @@ let permission_denied = "org.freedesktop.UDisks.Error.PermissionDenied"
 include OBus_peer.Private
 
 let daemon () =
-  lwt bus = OBus_bus.system () in
+  let%lwt bus = OBus_bus.system () in
   return (OBus_peer.make bus "org.freedesktop.UDisks")
 
 open UDisks_interfaces.Org_freedesktop_UDisks
@@ -95,30 +95,30 @@ let make_port context path =
   UDisks_port.of_proxy (OBus_proxy.make (OBus_context.sender context) path)
 
 let enumerate_adapters daemon =
-  lwt (context, devices) = OBus_method.call_with_context m_EnumerateAdapters (proxy daemon) () in
+  let%lwt (context, devices) = OBus_method.call_with_context m_EnumerateAdapters (proxy daemon) () in
   return (List.map (make_adapter context) devices)
 
 let enumerate_expanders daemon =
-  lwt (context, devices) = OBus_method.call_with_context m_EnumerateExpanders (proxy daemon) () in
+  let%lwt (context, devices) = OBus_method.call_with_context m_EnumerateExpanders (proxy daemon) () in
   return (List.map (make_expander context) devices)
 
 let enumerate_ports daemon =
-  lwt (context, devices) = OBus_method.call_with_context m_EnumeratePorts (proxy daemon) () in
+  let%lwt (context, devices) = OBus_method.call_with_context m_EnumeratePorts (proxy daemon) () in
   return (List.map (make_port context) devices)
 
 let enumerate_devices daemon =
-  lwt (context, devices) = OBus_method.call_with_context m_EnumerateDevices (proxy daemon) () in
+  let%lwt (context, devices) = OBus_method.call_with_context m_EnumerateDevices (proxy daemon) () in
   return (List.map (make_device context) devices)
 
 let enumerate_device_files daemon =
   OBus_method.call m_EnumerateDeviceFiles (proxy daemon) ()
 
 let find_device_by_device_file daemon ~device_file =
-  lwt (context, device) = OBus_method.call_with_context m_FindDeviceByDeviceFile (proxy daemon) device_file in
+  let%lwt (context, device) = OBus_method.call_with_context m_FindDeviceByDeviceFile (proxy daemon) device_file in
   return (make_device context device)
 
 let find_device_by_major_minor daemon ~device_major ~device_minor =
-  lwt (context, device) = OBus_method.call_with_context m_FindDeviceByMajorMinor (proxy daemon) (device_major, device_minor) in
+  let%lwt (context, device) = OBus_method.call_with_context m_FindDeviceByMajorMinor (proxy daemon) (device_major, device_minor) in
   return (make_device context device)
 
 let drive_inhibit_all_polling daemon ~options =
@@ -162,17 +162,17 @@ let linux_lvm2_lvremove daemon ~group_uuid ~uuid ~options =
 let linux_lvm2_lvcreate daemon ~group_uuid ~name ~size ~num_stripes ~stripe_size ~num_mirrors ~options ~fstype ~fsoptions =
   let num_stripes = Int32.of_int num_stripes in
   let num_mirrors = Int32.of_int num_mirrors in
-  lwt (context, created_device) = OBus_method.call_with_context m_LinuxLvm2LVCreate (proxy daemon) (group_uuid, name, size, num_stripes, stripe_size, num_mirrors, options, fstype, fsoptions) in
+  let%lwt (context, created_device) = OBus_method.call_with_context m_LinuxLvm2LVCreate (proxy daemon) (group_uuid, name, size, num_stripes, stripe_size, num_mirrors, options, fstype, fsoptions) in
   return (make_device context created_device)
 
 let linux_md_start daemon ~components ~options =
   let components = List.map (fun c -> OBus_proxy.path (UDisks_device.to_proxy c)) components in
-  lwt (context, device) = OBus_method.call_with_context m_LinuxMdStart (proxy daemon) (components, options) in
+  let%lwt (context, device) = OBus_method.call_with_context m_LinuxMdStart (proxy daemon) (components, options) in
   return (make_device context device)
 
 let linux_md_create daemon ~components ~level ~stripe_size ~name ~options =
   let components = List.map (fun c -> OBus_proxy.path (UDisks_device.to_proxy c)) components in
-  lwt (context, device) = OBus_method.call_with_context m_LinuxMdCreate (proxy daemon) (components, level, stripe_size, name, options) in
+  let%lwt (context, device) = OBus_method.call_with_context m_LinuxMdCreate (proxy daemon) (components, level, stripe_size, name, options) in
   return (make_device context device)
 
 let inhibit daemon =

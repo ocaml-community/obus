@@ -14,7 +14,7 @@ include OBus_peer.Private
 let general_error = "org.freedesktop.UPower.GeneralError"
 
 let daemon () =
-  lwt bus = OBus_bus.system () in
+  let%lwt bus = OBus_bus.system () in
   return (OBus_peer.make bus "org.freedesktop.UPower")
 
 open UPower_interfaces.Org_freedesktop_UPower
@@ -22,7 +22,7 @@ open UPower_interfaces.Org_freedesktop_UPower
 let proxy daemon = OBus_proxy.make daemon ["org"; "freedesktop"; "UPower"]
 
 let enumerate_devices daemon =
-  lwt (context, devices) = OBus_method.call_with_context m_EnumerateDevices (proxy daemon) () in
+  let%lwt (context, devices) = OBus_method.call_with_context m_EnumerateDevices (proxy daemon) () in
   return
     (List.map
        (fun path ->

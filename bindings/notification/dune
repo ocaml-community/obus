@@ -1,0 +1,12 @@
+(library
+ (name obus_notification)
+ (public_name obus.notification)
+ (wrapped false)
+ (libraries lwt obus)
+ (preprocess (pps lwt_ppx ppx_obus)))
+
+(rule
+ (targets notification_interfaces.ml notification_interfaces.mli)
+ (deps    notification_interfaces.obus)
+ (action
+  (run obus-gen-interface -keep-common -o notification_interfaces %{deps})))

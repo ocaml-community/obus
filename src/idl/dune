@@ -1,0 +1,10 @@
+(library
+  (name OBus_idl)
+  (synopsis "DSL for defining D-Bus interfaces")
+  (libraries obus_internals))
+
+(ocamllex
+  (modules lexer))
+
+(menhir
+  (modules parser))

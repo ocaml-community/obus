@@ -21,7 +21,7 @@ let properties_changed interface =
     ~annotations:[]
 
 let monitor proxy interface switch =
-  lwt event =
+  let%lwt event =
     OBus_signal.connect ~switch
       (OBus_signal.with_context
          (OBus_signal.make (properties_changed interface) proxy))

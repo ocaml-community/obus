@@ -79,13 +79,13 @@ let server_path = ["org"; "freedesktop"; "Notifications"]
 open Notification_interfaces.Org_freedesktop_Notifications
 
 let proxy = lazy(
-  lwt bus = OBus_bus.session () in
+  let%lwt bus = OBus_bus.session () in
   return (OBus_proxy.make (OBus_peer.make bus server_name) server_path)
 )
 
 let get_server_information () =
-  lwt proxy = Lazy.force proxy in
-  lwt name, vendor, version, spec_version = OBus_method.call m_GetServerInformation proxy () in
+  let%lwt proxy = Lazy.force proxy in
+  let%lwt name, vendor, version, spec_version = OBus_method.call m_GetServerInformation proxy () in
   return {
     server_name = name;
     server_vendor = vendor;
@@ -94,11 +94,11 @@ let get_server_information () =
   }
 
 let get_capabilities () =
-  lwt proxy = Lazy.force proxy in
+  let%lwt proxy = Lazy.force proxy in
   OBus_method.call m_GetCapabilities proxy ()
 
 let notify proxy ~app_name ~id ~icon ~summary ~body ~actions ~hints ~timeout =
-  lwt context, return_id = OBus_method.call_with_context m_Notify proxy (app_name, id, icon, summary, body, actions, hints, Int32.of_int timeout) in
+  let%lwt context, return_id = OBus_method.call_with_context m_Notify proxy (app_name, id, icon, summary, body, actions, hints, Int32.of_int timeout) in
   return (OBus_context.sender context, return_id)
 
 let close_notification proxy id =
@@ -134,7 +134,7 @@ let action_invoked proxy =
 
 let monitor_peer peer =
   ignore begin
-    lwt () = OBus_peer.wait_for_exit peer in
+    let%lwt () = OBus_peer.wait_for_exit peer in
     let m = Peer_map.find peer !notifications in
     notifications := Peer_map.remove peer !notifications;
     (* Cancel all opened notification opened on this peer: *)
@@ -148,14 +148,14 @@ let remove_notification peer id notif =
   r :=  Id_map.remove id !r
 
 let init_callbacks = lazy(
-  lwt bus = OBus_bus.session () in
+  let%lwt bus = OBus_bus.session () in
 
   (* Create an anymous proxy for connecting signals, so we will
      receive signals comming from any daemon *)
   let anonymous_proxy = { OBus_proxy.peer = OBus_peer.anonymous bus;
                           OBus_proxy.path = server_path } in
 
-  lwt event =
+  let%lwt event =
     OBus_signal.connect
       (OBus_signal.map_with_context
          (fun context (id, reason) -> (OBus_context.sender context, id, reason))
@@ -179,7 +179,7 @@ let init_callbacks = lazy(
                       return ())
        event);
 
-  lwt event =
+  let%lwt event =
     OBus_signal.connect
       (OBus_signal.map_with_context
          (fun context (id, action) -> (OBus_context.sender context, id, action))
@@ -290,13 +290,13 @@ let notify ?(app_name= !app_name) ?desktop_entry
   let actions_map = (default_action, `Default) :: actions_map in
 
   (* Setup callbacks *)
-  lwt () = Lazy.force init_callbacks in
+  let%lwt () = Lazy.force init_callbacks in
 
   (* Get the proxy *)
-  lwt daemon = Lazy.force proxy in
+  let%lwt daemon = Lazy.force proxy in
 
   (* Create the notification *)
-  lwt peer, id =
+  let%lwt peer, id =
     notify
       daemon
       ~app_name

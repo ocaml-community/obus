@@ -1,0 +1,12 @@
+(library
+ (name obus_upower)
+ (public_name obus.upower)
+ (wrapped false)
+ (libraries lwt obus)
+ (preprocess (pps lwt_ppx ppx_obus)))
+
+(rule
+ (targets uPower_interfaces.ml uPower_interfaces.mli)
+ (deps    uPower_interfaces.obus)
+ (action
+  (run obus-gen-interface -keep-common -o uPower_interfaces %{deps})))

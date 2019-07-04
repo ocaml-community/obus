@@ -43,7 +43,7 @@ let set_minimum_latency daemon ~latency ~value =
 
 let request_latency daemon ~latency ~value ~persistent =
   let value = Int32.of_int value in
-  lwt cookie = OBus_method.call m_RequestLatency (proxy daemon) (string_of_latency latency, value, persistent) in
+  let%lwt cookie = OBus_method.call m_RequestLatency (proxy daemon) (string_of_latency latency, value, persistent) in
   let cookie = Int32.to_int cookie in
   return cookie
 
@@ -52,7 +52,7 @@ let cancel_request daemon ~latency ~cookie =
   OBus_method.call m_CancelRequest (proxy daemon) (string_of_latency latency, cookie)
 
 let get_latency daemon ~latency =
-  lwt value = OBus_method.call m_GetLatency (proxy daemon) (string_of_latency latency) in
+  let%lwt value = OBus_method.call m_GetLatency (proxy daemon) (string_of_latency latency) in
   let value = Int32.to_int value in
   return value
 
@@ -63,7 +63,7 @@ let latency_changed daemon =
     (OBus_signal.make s_LatencyChanged (proxy daemon))
 
 let get_latency_requests daemon =
-  lwt requests = OBus_method.call m_GetLatencyRequests (proxy daemon) () in
+  let%lwt requests = OBus_method.call m_GetLatencyRequests (proxy daemon) () in
   return
     (List.map
        (fun (cookie, uid, pid, exec, timespec, persistent, typ, reserved, value) -> {

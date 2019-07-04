@@ -13,20 +13,21 @@ open Lwt
 open Lwt_io
 
 let list name get_bus =
-  lwt () = printlf "service name mapping on %s bus:" name in
-  lwt bus = get_bus () in
+  let%lwt () = printlf "service name mapping on %s bus:" name in
+  let%lwt bus = get_bus () in
 
   (* Get the list of all names on the session bus *)
-  lwt names = OBus_bus.list_names bus in
+  let%lwt names = OBus_bus.list_names bus in
 
   Lwt_list.iter_p
     (fun name ->
-       lwt owner = OBus_bus.get_name_owner bus name in
+      let%lwt owner = OBus_bus.get_name_owner bus name in
        printlf "  %s -> %s" owner name)
 
     (* Select only names which are not connection unique names *)
     (List.filter (fun s -> s.[0] <> ':') names)
 
-lwt () =
-  lwt () = list "session" OBus_bus.session in
+let () = Lwt_main.run begin
+  let%lwt () = list "session" OBus_bus.session in
   list "system" OBus_bus.system
+end

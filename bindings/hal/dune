@@ -1,0 +1,12 @@
+(library
+ (name obus_hal)
+ (public_name obus.hal)
+ (wrapped false)
+ (libraries lwt obus)
+ (preprocess (pps lwt_ppx ppx_obus)))
+
+(rule
+ (targets hal_interfaces.ml hal_interfaces.mli)
+ (deps    hal_interfaces.obus)
+ (action
+  (run obus-gen-interface -keep-common -o hal_interfaces %{deps})))

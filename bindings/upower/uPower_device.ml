@@ -53,7 +53,7 @@ let changed proxy =
 let get_history proxy ~typ ~timespan ~resolution =
   let timespan = Int32.of_int timespan in
   let resolution = Int32.of_int resolution in
-  lwt data = OBus_method.call m_GetHistory proxy (typ, timespan, resolution) in
+  let%lwt data = OBus_method.call m_GetHistory proxy (typ, timespan, resolution) in
   let data = List.map (fun (x1, x2, x3) -> (Int32.to_int x1, x2, Int32.to_int x3)) data in
   return data
 

@@ -20,7 +20,7 @@ let changed interface =
     ~annotations:[]
 
 let monitor proxy interface switch =
-  lwt event =
+  let%lwt event =
     OBus_signal.connect ~switch
       (OBus_signal.with_context
          (OBus_signal.make (changed interface) proxy))
@@ -30,6 +30,6 @@ let monitor proxy interface switch =
             (OBus_property.map_of_list context dict)
             (E.map_s
                (fun (context, ()) ->
-                  lwt context, dict = OBus_property.get_all_no_cache proxy interface in
+                  let%lwt context, dict = OBus_property.get_all_no_cache proxy interface in
                   return (OBus_property.map_of_list context dict))
                event))

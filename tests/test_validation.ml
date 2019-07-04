@@ -37,8 +37,8 @@ let bad = [
 ]
 
 let test () =
-  lwt () = printl "Validation of all types of D-Bus strings" in
-  lwt () =
+  let%lwt () = printl "Validation of all types of D-Bus strings" in
+  let%lwt () =
     Lwt_list.iter_s
       (function
          | Some err ->
@@ -47,7 +47,7 @@ let test () =
              return ())
       good
   in
-  lwt () =
+  let%lwt () =
     Lwt_list.iter_s
       (function
          | None ->

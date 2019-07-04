@@ -18,7 +18,7 @@ type udi = OBus_path.t
 let udi = OBus_proxy.path
 
 let computer () =
-  lwt bus = OBus_bus.system () in
+  let%lwt bus = OBus_bus.system () in
   return (OBus_proxy.make
             (OBus_peer.make bus "org.freedesktop.Hal")
             ["org"; "freedesktop"; "Hal"; "devices"; "computer"])
@@ -52,7 +52,7 @@ let variant_of_property = function
 open Org_freedesktop_Hal_Device
 
 let get_all_properties proxy =
-  lwt l = OBus_method.call m_GetAllProperties proxy () in
+  let%lwt l = OBus_method.call m_GetAllProperties proxy () in
   return (List.map (fun (name, value) -> (name, property_of_variant value)) l)
 
 let set_multiple_properties proxy properties =
@@ -69,7 +69,7 @@ let get_property_string_list proxy key =
   OBus_method.call m_GetPropertyStringList proxy key
 
 let get_property_integer proxy key =
-  lwt value = OBus_method.call m_GetPropertyInteger proxy key in
+  let%lwt value = OBus_method.call m_GetPropertyInteger proxy key in
   let value = Int32.to_int value in
   return value
 
@@ -102,7 +102,7 @@ let remove_property proxy key =
   OBus_method.call m_RemoveProperty proxy key
 
 let get_property_type proxy key =
-  lwt typ = OBus_method.call m_GetPropertyType proxy key in
+  let%lwt typ = OBus_method.call m_GetPropertyType proxy key in
   let typ = Int32.to_int typ in
   return typ
 
@@ -188,17 +188,17 @@ module Volume = struct
   open Org_freedesktop_Hal_Device_Volume
 
   let mount proxy mount_point fstype extra_options =
-    lwt return_code = OBus_method.call m_Mount proxy (mount_point, fstype, extra_options) in
+    let%lwt return_code = OBus_method.call m_Mount proxy (mount_point, fstype, extra_options) in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let unmount proxy extra_options =
-    lwt return_code = OBus_method.call m_Unmount proxy extra_options in
+    let%lwt return_code = OBus_method.call m_Unmount proxy extra_options in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let eject proxy extra_options =
-    lwt return_code = OBus_method.call m_Eject proxy extra_options in
+    let%lwt return_code = OBus_method.call m_Eject proxy extra_options in
     let return_code = Int32.to_int return_code in
     return return_code
 end
@@ -207,12 +207,12 @@ module Storage = struct
   open Org_freedesktop_Hal_Device_Storage
 
   let eject proxy extra_options =
-    lwt return_code = OBus_method.call m_Eject proxy extra_options in
+    let%lwt return_code = OBus_method.call m_Eject proxy extra_options in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let close_tray proxy extra_options =
-    lwt return_code = OBus_method.call m_CloseTray proxy extra_options in
+    let%lwt return_code = OBus_method.call m_CloseTray proxy extra_options in
     let return_code = Int32.to_int return_code in
     return return_code
 end
@@ -228,17 +228,17 @@ module Wake_on_lan = struct
   open Org_freedesktop_Hal_Device_WakeOnLan
 
   let get_supported proxy =
-    lwt return_code = OBus_method.call m_GetSupported proxy () in
+    let%lwt return_code = OBus_method.call m_GetSupported proxy () in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let get_enabled proxy =
-    lwt return_code = OBus_method.call m_GetEnabled proxy () in
+    let%lwt return_code = OBus_method.call m_GetEnabled proxy () in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let set_enabled proxy enable =
-    lwt return_code = OBus_method.call m_SetEnabled proxy enable in
+    let%lwt return_code = OBus_method.call m_SetEnabled proxy enable in
     let return_code = Int32.to_int return_code in
     return return_code
 end
@@ -248,33 +248,33 @@ module System_power_management = struct
 
   let suspend proxy num_seconds_to_sleep =
     let num_seconds_to_sleep = Int32.of_int num_seconds_to_sleep in
-    lwt return_code = OBus_method.call m_Suspend proxy num_seconds_to_sleep in
+    let%lwt return_code = OBus_method.call m_Suspend proxy num_seconds_to_sleep in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let suspend_hybrid proxy num_seconds_to_sleep =
     let num_seconds_to_sleep = Int32.of_int num_seconds_to_sleep in
-    lwt return_code = OBus_method.call m_SuspendHybrid proxy num_seconds_to_sleep in
+    let%lwt return_code = OBus_method.call m_SuspendHybrid proxy num_seconds_to_sleep in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let hibernate proxy =
-    lwt return_code = OBus_method.call m_Hibernate proxy () in
+    let%lwt return_code = OBus_method.call m_Hibernate proxy () in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let shutdown proxy =
-    lwt return_code = OBus_method.call m_Shutdown proxy () in
+    let%lwt return_code = OBus_method.call m_Shutdown proxy () in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let reboot proxy =
-    lwt return_code = OBus_method.call m_Reboot proxy () in
+    let%lwt return_code = OBus_method.call m_Reboot proxy () in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let set_power_save proxy enable_power_save =
-    lwt return_code = OBus_method.call m_SetPowerSave proxy enable_power_save in
+    let%lwt return_code = OBus_method.call m_SetPowerSave proxy enable_power_save in
     let return_code = Int32.to_int return_code in
     return return_code
 end
@@ -296,7 +296,7 @@ module Cpufreq = struct
     OBus_method.call m_GetCPUFreqGovernor proxy ()
 
   let get_cpufreq_performance proxy =
-    lwt return_code = OBus_method.call m_GetCPUFreqPerformance proxy () in
+    let%lwt return_code = OBus_method.call m_GetCPUFreqPerformance proxy () in
     let return_code = Int32.to_int return_code in
     return return_code
 
@@ -312,12 +312,12 @@ module Laptop_panel = struct
 
   let set_brightness proxy brightness_value =
     let brightness_value = Int32.of_int brightness_value in
-    lwt return_code = OBus_method.call m_SetBrightness proxy brightness_value in
+    let%lwt return_code = OBus_method.call m_SetBrightness proxy brightness_value in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let get_brightness proxy =
-    lwt brightness_value = OBus_method.call m_GetBrightness proxy () in
+    let%lwt brightness_value = OBus_method.call m_GetBrightness proxy () in
     let brightness_value = Int32.to_int brightness_value in
     return brightness_value
 end
@@ -326,12 +326,12 @@ module Kill_switch = struct
   open Org_freedesktop_Hal_Device_KillSwitch
 
   let set_power proxy value =
-    lwt return_code = OBus_method.call m_SetPower proxy value in
+    let%lwt return_code = OBus_method.call m_SetPower proxy value in
     let return_code = Int32.to_int return_code in
     return return_code
 
   let get_power proxy =
-    lwt value = OBus_method.call m_GetPower proxy () in
+    let%lwt value = OBus_method.call m_GetPower proxy () in
     let value = Int32.to_int value in
     return value
 end

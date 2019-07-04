@@ -42,40 +42,40 @@ let run_one_test byte_order msg acc =
         { acc with reading_error = acc.reading_error + 1 }
 
 let run_tests prefix byte_order l =
-  lwt progress = Progress.make prefix test_count in
+  let%lwt progress = Progress.make prefix test_count in
   let rec aux acc n = function
     | [] ->
-        lwt () = Progress.close progress in
+        let%lwt () = Progress.close progress in
         return acc
     | msg :: l ->
-        lwt () = Progress.incr progress in
+        let%lwt () = Progress.incr progress in
         aux (run_one_test byte_order msg acc) (n + 1) l
   in
   aux { success = 0; failure = 0; reading_error = 0; writing_error = 0 } 0 l
 
 let print_result result =
-  lwt () = printf "     success: %d\n" result.success in
-  lwt () = printf "     failure: %d\n" result.failure in
-  lwt () = printf "     writing error: %d\n" result.writing_error in
-  lwt () = printf "     reading error: %d\n" result.reading_error in
+  let%lwt () = printf "     success: %d\n" result.success in
+  let%lwt () = printf "     failure: %d\n" result.failure in
+  let%lwt () = printf "     writing error: %d\n" result.writing_error in
+  let%lwt () = printf "     reading error: %d\n" result.reading_error in
   return ()
 
 let rec gen_messages progress acc = function
   | 0 ->
-      lwt () = Progress.close progress in
+      let%lwt () = Progress.close progress in
       return acc
   | n ->
-      lwt () = Progress.incr progress in
+      let%lwt () = Progress.incr progress in
       gen_messages progress (Gen_random.message () :: acc) (n - 1)
 
 let test () =
-  lwt progress = Progress.make (Printf.sprintf "generating %d messages" test_count) test_count in
-  lwt msgs = gen_messages progress [] test_count in
-  lwt () = printl "try to serialize/deserialize all messages and compare the result to the original message." in
-  lwt result_le = run_tests "  - in little endian" Lwt_io.Little_endian msgs in
-  lwt () = print_result result_le in
-  lwt result_be = run_tests "  - in big endian" Lwt_io.Big_endian msgs in
-  lwt () = print_result result_be in
+  let%lwt progress = Progress.make (Printf.sprintf "generating %d messages" test_count) test_count in
+  let%lwt msgs = gen_messages progress [] test_count in
+  let%lwt () = printl "try to serialize/deserialize all messages and compare the result to the original message." in
+  let%lwt result_le = run_tests "  - in little endian" Lwt_io.Little_endian msgs in
+  let%lwt () = print_result result_le in
+  let%lwt result_be = run_tests "  - in big endian" Lwt_io.Big_endian msgs in
+  let%lwt () = print_result result_be in
   return (result_le.failure = 0
       && result_le.reading_error = 0
       && result_le.writing_error = 0

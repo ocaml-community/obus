@@ -10,8 +10,7 @@
 (* Just open a connection with the message bus and print the assigned
    unique name *)
 
-open Lwt
-
-lwt () =
-  lwt bus = OBus_bus.session () in
+let () = Lwt_main.run begin
+  let%lwt bus = OBus_bus.session () in
   Lwt_io.printlf "My unique connection name is: %s" (OBus_connection.name bus)
+end
