@@ -32,7 +32,7 @@ let parse_idl fname =
   try
     List.fold_left (fun acc iface -> IFSet.add iface acc) IFSet.empty (OBus_idl.parse_file fname)
   with exn ->
-    Format.eprintf "@[<v0>%a@]@." Camlp4.ErrorHandler.print exn;
+    Format.eprintf "@[<v0>%s@]@." (Printexc.to_string exn);
     exit 1
 
 let parse_file fname =

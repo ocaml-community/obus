@@ -1,0 +1,5 @@
+(library
+ (name tools_util)
+ (modules term utils)
+ (wrapped false)
+ (libraries obus.internals OBus_idl))
