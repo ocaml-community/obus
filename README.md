@@ -11,11 +11,10 @@ very simple to fully exploit the asynchronous nature of D-Bus.
 Dependencies
 ------------
 
-* [OCaml](http://caml.inria.fr/ocaml/) (>= 3.12)
-* [findlib](http://projects.camlcity.org/projects/findlib.html)
+* [OCaml](http://caml.inria.fr/ocaml/) (>= 4.04)
 * [react](http://erratique.ch/software/react)
 * [lwt](http://ocsigen.org/lwt/) (>= 2.4.0) built with react support
-* [type-conv](http://bitbucket.org/yminsky/ocaml-core)
+* [menhir](http://gallium.inria.fr/~fpottier/menhir)
 * [xmlm](http://erratique.ch/software/xmlm)
 
 For building the development version, you also need to install
@@ -32,24 +31,13 @@ Manual installation from sources
 
 To build and install obus:
 
-    $ ./configure
-    $ make
-    $ make install
-
-### Documentation and manual pages _(optional)_
-
-To build the documentation:
-
-    $ make doc
-
-It will then be installed by `make install`.
+    $ dune build @install
 
 ### Tests _(optionnal)_
 
 To build and execute tests:
 
-    $ ./configure --enable-tests
-    $ make test
+    $ dune runtest
 
 Using the library
 -----------------
@@ -57,6 +45,7 @@ Using the library
 OBus install the following packages:
 
 * `obus`: the core library, implementing the D-Bus protocol,
+* `obus.ppx`: syntax extensions to aid registering OBus exceptions.
 * `obus.notification`: interface to the freedesktop Notification
   service,
 * `obus.hal`: interface to the freedesktop Hal service,
