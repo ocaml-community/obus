@@ -1,6 +1,8 @@
 OBus
 ====
 
+[![Build Status](https://travis-ci.com/ocaml-community/obus.svg?branch=master)](https://travis-ci.com/ocaml-community/obus)
+
 OBus is a pure OCaml implementation of the D-Bus protocol.  It aims to
 provide a clean and easy way for ocaml programmers to access and
 provide D-Bus services.
