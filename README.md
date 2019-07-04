@@ -11,14 +11,11 @@ very simple to fully exploit the asynchronous nature of D-Bus.
 Dependencies
 ------------
 
-* [OCaml](http://caml.inria.fr/ocaml/) (>= 4.04)
-* [react](http://erratique.ch/software/react)
-* [lwt](http://ocsigen.org/lwt/) (>= 2.4.0) built with react support
-* [menhir](http://gallium.inria.fr/~fpottier/menhir)
-* [xmlm](http://erratique.ch/software/xmlm)
+Make sure you have [dune](https://dune.build/)
+installed, and install all the missing dependencies listed in
+the output of this command:
 
-For building the development version, you also need to install
-[oasis](http://oasis.forge.ocamlcore.org/) (>= 0.3.0).
+    $ dune external-lib-deps @install --missing
 
 Installation
 ------------
