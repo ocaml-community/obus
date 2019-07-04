@@ -1,7 +1,7 @@
 opam-version: "2.0"
 
 name: "obus"
-description: "Pure Ocaml implementation of the D-Bus protocol"
+synopsis: "Pure Ocaml implementation of the D-Bus protocol"
 maintainer: "freyrnjordrson@gmail.com"
 authors: [ "Jérémie Dimino" ]
 homepage: "https://github.com/ocaml-community/obus"
@@ -12,14 +12,6 @@ license: "BSD3"
 build: [
   [ "dune" "build" "-p" name "-j" jobs ]
   [ "dune" "runtest" "-p" name "-j" jobs] {with-test}
-]
-
-install: [
-  [ "dune" "install" "-p" name ]
-]
-
-remove:  [
-  [ "dune" "uninstall" "-p" name ]
 ]
 
 depends: [

@@ -1,13 +1,12 @@
-open Migrate_parsetree.OCaml_current.Ast.Parsetree
 open Migrate_parsetree
-
+open Ast_407.Parsetree
 
 let rewriter_name = "ppx_obus"
 
 
-let raise_errorf ?sub ?if_highlight ?loc message =
+let raise_errorf ?sub ?loc message =
   message |> Printf.kprintf (fun str ->
-    let err = Location.error ?sub ?if_highlight ?loc str in
+    let err = Location.error ?sub ?loc str in
     raise (Location.Error err))
 
 
@@ -58,10 +57,10 @@ let register_obus_exception = function
 
 
 let obus_mapper =
-  { Ast_mapper.default_mapper with
+  { Ast_407.Ast_mapper.default_mapper with
     structure = fun mapper items ->
       List.fold_right (fun item acc ->
-        let item' = Ast_mapper.default_mapper.structure_item mapper item in
+        let item' = Ast_407.Ast_mapper.default_mapper.structure_item mapper item in
         match register_obus_exception item with
         | Some reg ->
           item' :: reg :: acc
@@ -72,5 +71,5 @@ let obus_mapper =
 
 
 let () =
-  Driver.register ~name:rewriter_name Versions.ocaml_current
+  Driver.register ~name:rewriter_name Versions.ocaml_407
     (fun _ _ -> obus_mapper)
