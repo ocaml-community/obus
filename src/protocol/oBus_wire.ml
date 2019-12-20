@@ -865,8 +865,10 @@ let write_message_with_fds writer ?byte_order msg =
           (* Ensures there is nothing left to send: *)
           let%lwt () = Lwt_io.flush oc in
           let len = String.length buf in
+          let vec = Lwt_unix.IO_vectors.create () in
+          Lwt_unix.IO_vectors.append_bytes vec (Bytes.unsafe_of_string buf) 0 len;
           (* Send the file descriptors and the message: *)
-          let%lwt n = Lwt_unix.send_msg writer.w_file_descr [Lwt_unix.io_vector buf 0 len] (Array.to_list fds) in
+          let%lwt n = Lwt_unix.send_msg writer.w_file_descr vec (Array.to_list fds) in
           assert (n >= 0 && n <= len);
           (* Write what is remaining: *)
           Lwt_io.write_from_string_exactly oc buf n (len - n)

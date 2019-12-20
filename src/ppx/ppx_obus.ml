@@ -1,5 +1,5 @@
 open Migrate_parsetree
-open Ast_407.Parsetree
+open Ast_408.Parsetree
 
 let rewriter_name = "ppx_obus"
 
@@ -14,13 +14,17 @@ let find_attr_expr s attrs =
   let expr_of_payload = function
     | PStr [{ pstr_desc = Pstr_eval (e, _); _ }] -> Some e
     | _ -> None in
-  try expr_of_payload (snd (List.find (fun (x, _) -> x.Asttypes.txt = s) attrs))
+  try expr_of_payload (
+          let payload =
+            List.find (fun attr -> attr.Ast_408.Parsetree.attr_name.txt = s) attrs
+          in
+          payload.Ast_408.Parsetree.attr_payload)
   with Not_found -> None
 
 
 let register_obus_exception = function
   | { pstr_desc = Pstr_exception exn; pstr_loc } ->
-    (match find_attr_expr "obus" exn.pext_attributes with
+    (match find_attr_expr "obus" exn.ptyexn_attributes with
     | Some expr ->
       let registerer typ =
         let loc = pstr_loc in
@@ -44,7 +48,7 @@ let register_obus_exception = function
                 end)
               in ()
           ] in
-      (match exn.pext_kind with
+      (match exn.ptyexn_constructor.pext_kind with
       | Pext_decl (Pcstr_tuple [typ], None) ->
           Some (registerer typ)
       | _ ->
@@ -57,10 +61,10 @@ let register_obus_exception = function
 
 
 let obus_mapper =
-  { Ast_407.Ast_mapper.default_mapper with
+  { Ast_408.Ast_mapper.default_mapper with
     structure = fun mapper items ->
       List.fold_right (fun item acc ->
-        let item' = Ast_407.Ast_mapper.default_mapper.structure_item mapper item in
+        let item' = Ast_408.Ast_mapper.default_mapper.structure_item mapper item in
         match register_obus_exception item with
         | Some reg ->
           item' :: reg :: acc
@@ -71,5 +75,5 @@ let obus_mapper =
 
 
 let () =
-  Driver.register ~name:rewriter_name Versions.ocaml_407
+  Driver.register ~name:rewriter_name Versions.ocaml_408
     (fun _ _ -> obus_mapper)
