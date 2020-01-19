@@ -11,6 +11,7 @@ license: "BSD3"
 
 build: [
   [ "dune" "build" "-p" name "-j" jobs ]
+  [ "dune" "build" "-p" name "-j" jobs "@doc" ] {with-doc}
 ]
 
 depends: [
@@ -23,4 +24,5 @@ depends: [
   "lwt_react"
   "ocaml-migrate-parsetree"
   "ppxlib"
+  "odoc" {with-doc}
 ]
