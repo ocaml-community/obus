@@ -3,10 +3,10 @@
  (public_name obus.udisks)
  (wrapped false)
  (libraries lwt obus)
- (preprocess (pps lwt_ppx ppx_obus)))
+ (preprocess (pps lwt_ppx)))
 
 (rule
  (targets uDisks_interfaces.ml uDisks_interfaces.mli)
- (deps    uDisks_interfaces.obus)
+ (deps    uDisks_interfaces.xml)
  (action
   (run obus-gen-interface -keep-common -o uDisks_interfaces %{deps})))

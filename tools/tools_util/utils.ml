@@ -28,19 +28,6 @@ let parse_xml fname =
         Printf.eprintf "%s:%d:%d: %s.\n%!" fname line column msg;
         exit 1
 
-let parse_idl fname =
-  try
-    List.fold_left (fun acc iface -> IFSet.add iface acc) IFSet.empty (OBus_idl.parse_file fname)
-  with exn ->
-    Format.eprintf "@[<v0>%s@]@." (Printexc.to_string exn);
-    exit 1
-
-let parse_file fname =
-  if Filename.check_suffix fname ".obus" then
-    parse_idl fname
-  else
-    parse_xml fname
-
 let file_name_of_interface_name name =
   let result = Bytes.create (String.length name) in
   for i = 0 to String.length name - 1 do

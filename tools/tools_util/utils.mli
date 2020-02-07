@@ -16,14 +16,6 @@ val parse_xml : string -> IFSet.t
   (** [parse_xml file_name] parses [file_name] as an XML introspection
       file *)
 
-val parse_idl : string -> IFSet.t
-  (** [parse_xml file_name] parses [file_name] as an obus IDL file *)
-
-val parse_file : string -> IFSet.t
-  (** [parse_file file_name] parses [file_name] as an XML
-      introspection file or as an IDL file (according to the file name
-      extension), and returns the set of interfaces it contains. *)
-
 val file_name_of_interface_name : OBus_name.interface -> string
   (** Convert an interface name into a valid module file name *)
 

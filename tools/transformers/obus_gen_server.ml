@@ -182,7 +182,7 @@ let () =
           (name ^ "_server", String.capitalize_ascii name ^ "_interfaces")
   in
 
-  let interfaces = Utils.parse_file source in
+  let interfaces = Utils.parse_xml source in
 
   let oc = open_out (prefix ^ ".ml") in
 

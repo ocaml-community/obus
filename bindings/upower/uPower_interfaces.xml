@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+  <interface name="org.freedesktop.UPower">
+    <property name="LidIsPresent" type="b" access="read"/>
+    <property name="LidIsClosed" type="b" access="read"/>
+    <property name="OnLowBattery" type="b" access="read"/>
+    <property name="OnBattery" type="b" access="read"/>
+    <property name="CanHibernate" type="b" access="read"/>
+    <property name="CanSuspend" type="b" access="read"/>
+    <property name="DaemonVersion" type="s" access="read"/>
+    <method name="HibernateAllowed">
+      <arg name="allowed" direction="out" type="b"/>
+    </method>
+    <method name="Hibernate"/>
+    <method name="SuspendAllowed">
+      <arg name="allowed" direction="out" type="b"/>
+    </method>
+    <method name="Suspend"/>
+    <method name="AboutToSleep"/>
+    <signal name="Resuming"/>
+    <signal name="Sleeping"/>
+    <signal name="Changed"/>
+    <signal name="DeviceChanged">
+      <arg name="device" type="s"/>
+    </signal>
+    <signal name="DeviceRemoved">
+      <arg name="device" type="s"/>
+    </signal>
+    <signal name="DeviceAdded">
+      <arg name="device" type="s"/>
+    </signal>
+    <method name="EnumerateDevices">
+      <arg name="devices" direction="out" type="ao"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.UPower.Device">
+    <property name="RecallUrl" type="s" access="read"/>
+    <property name="RecallVendor" type="s" access="read"/>
+    <property name="RecallNotice" type="b" access="read"/>
+    <property name="Technology" type="u" access="read"/>
+    <property name="Capacity" type="d" access="read"/>
+    <property name="IsRechargeable" type="b" access="read"/>
+    <property name="State" type="u" access="read"/>
+    <property name="IsPresent" type="b" access="read"/>
+    <property name="Percentage" type="d" access="read"/>
+    <property name="TimeToFull" type="x" access="read"/>
+    <property name="TimeToEmpty" type="x" access="read"/>
+    <property name="Voltage" type="d" access="read"/>
+    <property name="EnergyRate" type="d" access="read"/>
+    <property name="EnergyFullDesign" type="d" access="read"/>
+    <property name="EnergyFull" type="d" access="read"/>
+    <property name="EnergyEmpty" type="d" access="read"/>
+    <property name="Energy" type="d" access="read"/>
+    <property name="Online" type="b" access="read"/>
+    <property name="HasStatistics" type="b" access="read"/>
+    <property name="HasHistory" type="b" access="read"/>
+    <property name="PowerSupply" type="b" access="read"/>
+    <property name="Type" type="u" access="read"/>
+    <property name="UpdateTime" type="t" access="read"/>
+    <property name="Serial" type="s" access="read"/>
+    <property name="Model" type="s" access="read"/>
+    <property name="Vendor" type="s" access="read"/>
+    <property name="NativePath" type="s" access="read"/>
+    <method name="GetStatistics">
+      <arg name="type" direction="in" type="s"/>
+      <arg name="data" direction="out" type="a(dd)"/>
+    </method>
+    <method name="GetHistory">
+      <arg name="type" direction="in" type="s"/>
+      <arg name="timespan" direction="in" type="u"/>
+      <arg name="resolution" direction="in" type="u"/>
+      <arg name="data" direction="out" type="a(udu)"/>
+    </method>
+    <signal name="Changed"/>
+    <method name="Refresh"/>
+  </interface>
+  <interface name="org.freedesktop.UPower.QoS">
+    <signal name="RequestsChanged"/>
+    <method name="GetLatencyRequests">
+      <arg name="requests" direction="out" type="a(uuusxbssi)"/>
+    </method>
+    <signal name="LatencyChanged">
+      <arg name="type" type="s"/>
+      <arg name="value" type="i"/>
+    </signal>
+    <method name="GetLatency">
+      <arg name="type" direction="in" type="s"/>
+      <arg name="value" direction="out" type="i"/>
+    </method>
+    <method name="CancelRequest">
+      <arg name="type" direction="in" type="s"/>
+      <arg name="cookie" direction="in" type="u"/>
+    </method>
+    <method name="RequestLatency">
+      <arg name="type" direction="in" type="s"/>
+      <arg name="value" direction="in" type="i"/>
+      <arg name="persistent" direction="in" type="b"/>
+      <arg name="cookie" direction="out" type="u"/>
+    </method>
+    <method name="SetMinimumLatency">
+      <arg name="type" direction="in" type="s"/>
+      <arg name="value" direction="in" type="i"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.UPower.Wakeups">
+    <signal name="DataChanged"/>
+    <method name="GetData">
+      <arg name="data" direction="out" type="a(budss)"/>
+    </method>
+    <signal name="TotalChanged">
+      <arg name="value" type="u"/>
+    </signal>
+    <method name="GetTotal">
+      <arg name="value" direction="out" type="u"/>
+    </method>
+    <property name="HasCapability" type="b" access="read"/>
+  </interface>
+</node>

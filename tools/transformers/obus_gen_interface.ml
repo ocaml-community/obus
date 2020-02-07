@@ -438,7 +438,7 @@ let () =
       | _ -> Arg.usage args usage_message; exit 1
   in
 
-  let interfaces = Utils.parse_file source in
+  let interfaces = Utils.parse_xml source in
 
   let prefix =
     match !prefix with

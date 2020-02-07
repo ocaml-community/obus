@@ -285,7 +285,7 @@ let () =
           (name ^ "_client", String.capitalize_ascii name ^ "_interfaces")
   in
 
-  let interfaces = Utils.parse_file source in
+  let interfaces = Utils.parse_xml source in
 
   let oc_impl = open_out (prefix ^ ".ml") and oc_intf = open_out (prefix ^ ".mli") in
 

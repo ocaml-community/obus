@@ -1,0 +1,449 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+  <interface name="org.freedesktop.UDisks">
+    <property name="KnownFilesystems" type="a(ssbbbubbbbbbbb)" access="read"/>
+    <property name="SupportsLuksDevices" type="b" access="read"/>
+    <property name="DaemonIsInhibited" type="b" access="read"/>
+    <property name="DaemonVersion" type="s" access="read"/>
+    <signal name="PortChanged">
+      <arg name="port" type="o"/>
+    </signal>
+    <signal name="PortRemoved">
+      <arg name="port" type="o"/>
+    </signal>
+    <signal name="PortAdded">
+      <arg name="port" type="o"/>
+    </signal>
+    <signal name="ExpanderChanged">
+      <arg name="expander" type="o"/>
+    </signal>
+    <signal name="ExpanderRemoved">
+      <arg name="expander" type="o"/>
+    </signal>
+    <signal name="ExpanderAdded">
+      <arg name="expander" type="o"/>
+    </signal>
+    <signal name="AdapterChanged">
+      <arg name="adapter" type="o"/>
+    </signal>
+    <signal name="AdapterRemoved">
+      <arg name="adapter" type="o"/>
+    </signal>
+    <signal name="AdapterAdded">
+      <arg name="adapter" type="o"/>
+    </signal>
+    <signal name="DeviceJobChanged">
+      <arg name="device" type="o"/>
+      <arg name="job_in_progress" type="b"/>
+      <arg name="job_is_cancellable" type="b"/>
+      <arg name="job_id" type="s"/>
+      <arg name="job_num_tasks" type="i"/>
+      <arg name="job_cur_task" type="i"/>
+      <arg name="job_cur_task_id" type="s"/>
+      <arg name="job_cur_task_percentage" type="d"/>
+    </signal>
+    <signal name="DeviceChanged">
+      <arg name="device" type="o"/>
+    </signal>
+    <signal name="DeviceRemoved">
+      <arg name="device" type="o"/>
+    </signal>
+    <signal name="DeviceAdded">
+      <arg name="device" type="o"/>
+    </signal>
+    <method name="Uninhibit">
+      <arg name="cookie" direction="in" type="s"/>
+    </method>
+    <method name="Inhibit">
+      <arg name="cookie" direction="out" type="s"/>
+    </method>
+    <method name="LinuxMdCreate">
+      <arg name="components" direction="in" type="ao"/>
+      <arg name="level" direction="in" type="s"/>
+      <arg name="stripe_size" direction="in" type="t"/>
+      <arg name="name" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="device" direction="out" type="o"/>
+    </method>
+    <method name="LinuxMdStart">
+      <arg name="components" direction="in" type="ao"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="device" direction="out" type="o"/>
+    </method>
+    <method name="LinuxLvm2LVCreate">
+      <arg name="group_uuid" direction="in" type="s"/>
+      <arg name="name" direction="in" type="s"/>
+      <arg name="size" direction="in" type="t"/>
+      <arg name="num_stripes" direction="in" type="u"/>
+      <arg name="stripe_size" direction="in" type="t"/>
+      <arg name="num_mirrors" direction="in" type="u"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="fstype" direction="in" type="s"/>
+      <arg name="fsoptions" direction="in" type="as"/>
+      <arg name="created_device" direction="out" type="o"/>
+    </method>
+    <method name="LinuxLvm2LVRemove">
+      <arg name="group_uuid" direction="in" type="s"/>
+      <arg name="uuid" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxLvm2LVStart">
+      <arg name="group_uuid" direction="in" type="s"/>
+      <arg name="uuid" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxLvm2LVSetName">
+      <arg name="group_uuid" direction="in" type="s"/>
+      <arg name="uuid" direction="in" type="s"/>
+      <arg name="name" direction="in" type="s"/>
+    </method>
+    <method name="LinuxLvm2VGRemovePV">
+      <arg name="vg_uuid" direction="in" type="s"/>
+      <arg name="pv_uuid" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxLvm2VGAddPV">
+      <arg name="uuid" direction="in" type="s"/>
+      <arg name="physical_volume" direction="in" type="o"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxLvm2VGSetName">
+      <arg name="uuid" direction="in" type="s"/>
+      <arg name="name" direction="in" type="s"/>
+    </method>
+    <method name="LinuxLvm2VGStop">
+      <arg name="uuid" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxLvm2VGStart">
+      <arg name="uuid" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="DriveUnsetAllSpindownTimeouts">
+      <arg name="cookie" direction="in" type="s"/>
+    </method>
+    <method name="DriveSetAllSpindownTimeouts">
+      <arg name="timeout_seconds" direction="in" type="i"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="cookie" direction="out" type="s"/>
+    </method>
+    <method name="DriveUninhibitAllPolling">
+      <arg name="cookie" direction="in" type="s"/>
+    </method>
+    <method name="DriveInhibitAllPolling">
+      <arg name="options" direction="in" type="as"/>
+      <arg name="cookie" direction="out" type="s"/>
+    </method>
+    <method name="FindDeviceByMajorMinor">
+      <arg name="device_major" direction="in" type="x"/>
+      <arg name="device_minor" direction="in" type="x"/>
+      <arg name="device" direction="out" type="o"/>
+    </method>
+    <method name="FindDeviceByDeviceFile">
+      <arg name="device_file" direction="in" type="s"/>
+      <arg name="device" direction="out" type="o"/>
+    </method>
+    <method name="EnumerateDeviceFiles">
+      <arg name="device_files" direction="out" type="as"/>
+    </method>
+    <method name="EnumerateDevices">
+      <arg name="devices" direction="out" type="ao"/>
+    </method>
+    <method name="EnumeratePorts">
+      <arg name="devices" direction="out" type="ao"/>
+    </method>
+    <method name="EnumerateExpanders">
+      <arg name="devices" direction="out" type="ao"/>
+    </method>
+    <method name="EnumerateAdapters">
+      <arg name="devices" direction="out" type="ao"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.UDisks.Adapter">
+    <property name="Fabric" type="s" access="read"/>
+    <property name="NumPorts" type="u" access="read"/>
+    <property name="Driver" type="s" access="read"/>
+    <property name="Model" type="s" access="read"/>
+    <property name="Vendor" type="s" access="read"/>
+    <property name="NativePath" type="s" access="read"/>
+    <signal name="Changed"/>
+  </interface>
+  <interface name="org.freedesktop.UDisks.Device">
+    <property name="LinuxLoopFilename" type="s" access="read"/>
+    <property name="LinuxDmmpParameters" type="s" access="read"/>
+    <property name="LinuxDmmpSlaves" type="ao" access="read"/>
+    <property name="LinuxDmmpName" type="s" access="read"/>
+    <property name="LinuxDmmpComponentHolder" type="o" access="read"/>
+    <property name="LinuxLvm2LVGroupUuid" type="s" access="read"/>
+    <property name="LinuxLvm2LVGroupName" type="s" access="read"/>
+    <property name="LinuxLvm2LVUuid" type="s" access="read"/>
+    <property name="LinuxLvm2LVName" type="s" access="read"/>
+    <property name="LinuxLvm2PVGroupLogicalVolumes" type="as" access="read"/>
+    <property name="LinuxLvm2PVGroupPhysicalVolumes" type="as" access="read"/>
+    <property name="LinuxLvm2PVGroupExtentSize" type="t" access="read"/>
+    <property name="LinuxLvm2PVGroupSequenceNumber" type="t" access="read"/>
+    <property name="LinuxLvm2PVGroupUnallocatedSize" type="t" access="read"/>
+    <property name="LinuxLvm2PVGroupSize" type="t" access="read"/>
+    <property name="LinuxLvm2PVGroupUuid" type="s" access="read"/>
+    <property name="LinuxLvm2PVGroupName" type="s" access="read"/>
+    <property name="LinuxLvm2PVNumMetadataAreas" type="u" access="read"/>
+    <property name="LinuxLvm2PVUuid" type="s" access="read"/>
+    <property name="LinuxMdSyncSpeed" type="t" access="read"/>
+    <property name="LinuxMdSyncPercentage" type="d" access="read"/>
+    <property name="LinuxMdSyncAction" type="s" access="read"/>
+    <property name="LinuxMdIsDegraded" type="b" access="read"/>
+    <property name="LinuxMdSlaves" type="ao" access="read"/>
+    <property name="LinuxMdVersion" type="s" access="read"/>
+    <property name="LinuxMdNumRaidDevices" type="i" access="read"/>
+    <property name="LinuxMdName" type="s" access="read"/>
+    <property name="LinuxMdHomeHost" type="s" access="read"/>
+    <property name="LinuxMdUuid" type="s" access="read"/>
+    <property name="LinuxMdLevel" type="s" access="read"/>
+    <property name="LinuxMdState" type="s" access="read"/>
+    <property name="LinuxMdComponentState" type="as" access="read"/>
+    <property name="LinuxMdComponentHolder" type="o" access="read"/>
+    <property name="LinuxMdComponentVersion" type="s" access="read"/>
+    <property name="LinuxMdComponentHomeHost" type="s" access="read"/>
+    <property name="LinuxMdComponentName" type="s" access="read"/>
+    <property name="LinuxMdComponentUuid" type="s" access="read"/>
+    <property name="LinuxMdComponentNumRaidDevices" type="i" access="read"/>
+    <property name="LinuxMdComponentPosition" type="i" access="read"/>
+    <property name="LinuxMdComponentLevel" type="s" access="read"/>
+    <property name="DriveAtaSmartBlob" type="ay" access="read"/>
+    <property name="DriveAtaSmartStatus" type="s" access="read"/>
+    <property name="DriveAtaSmartTimeCollected" type="t" access="read"/>
+    <property name="DriveAtaSmartIsAvailable" type="b" access="read"/>
+    <property name="OpticalDiscNumSessions" type="u" access="read"/>
+    <property name="OpticalDiscNumAudioTracks" type="u" access="read"/>
+    <property name="OpticalDiscNumTracks" type="u" access="read"/>
+    <property name="OpticalDiscIsClosed" type="b" access="read"/>
+    <property name="OpticalDiscIsAppendable" type="b" access="read"/>
+    <property name="OpticalDiscIsBlank" type="b" access="read"/>
+    <property name="DriveSimilarDevices" type="ao" access="read"/>
+    <property name="DrivePorts" type="ao" access="read"/>
+    <property name="DriveAdapter" type="o" access="read"/>
+    <property name="DriveIsRotational" type="b" access="read"/>
+    <property name="DriveCanSpindown" type="b" access="read"/>
+    <property name="DriveCanDetach" type="b" access="read"/>
+    <property name="DriveIsMediaEjectable" type="b" access="read"/>
+    <property name="DriveMedia" type="s" access="read"/>
+    <property name="DriveMediaCompatibility" type="as" access="read"/>
+    <property name="DriveConnectionSpeed" type="t" access="read"/>
+    <property name="DriveConnectionInterface" type="s" access="read"/>
+    <property name="DriveWriteCache" type="s" access="read"/>
+    <property name="DriveRotationRate" type="u" access="read"/>
+    <property name="DriveWwn" type="s" access="read"/>
+    <property name="DriveSerial" type="s" access="read"/>
+    <property name="DriveRevision" type="s" access="read"/>
+    <property name="DriveModel" type="s" access="read"/>
+    <property name="DriveVendor" type="s" access="read"/>
+    <property name="PartitionTableCount" type="i" access="read"/>
+    <property name="PartitionTableScheme" type="s" access="read"/>
+    <property name="PartitionAlignmentOffset" type="t" access="read"/>
+    <property name="PartitionSize" type="t" access="read"/>
+    <property name="PartitionOffset" type="t" access="read"/>
+    <property name="PartitionNumber" type="i" access="read"/>
+    <property name="PartitionFlags" type="as" access="read"/>
+    <property name="PartitionUuid" type="s" access="read"/>
+    <property name="PartitionLabel" type="s" access="read"/>
+    <property name="PartitionType" type="s" access="read"/>
+    <property name="PartitionScheme" type="s" access="read"/>
+    <property name="PartitionSlave" type="o" access="read"/>
+    <property name="LuksCleartextUnlockedByUid" type="u" access="read"/>
+    <property name="LuksCleartextSlave" type="o" access="read"/>
+    <property name="LuksHolder" type="o" access="read"/>
+    <property name="IdLabel" type="s" access="read"/>
+    <property name="IdUuid" type="s" access="read"/>
+    <property name="IdVersion" type="s" access="read"/>
+    <property name="IdType" type="s" access="read"/>
+    <property name="IdUsage" type="s" access="read"/>
+    <property name="JobPercentage" type="d" access="read"/>
+    <property name="JobIsCancellable" type="b" access="read"/>
+    <property name="JobInitiatedByUid" type="u" access="read"/>
+    <property name="JobId" type="s" access="read"/>
+    <property name="JobInProgress" type="b" access="read"/>
+    <property name="DevicePresentationIconName" type="s" access="read"/>
+    <property name="DevicePresentationName" type="s" access="read"/>
+    <property name="DevicePresentationNopolicy" type="b" access="read"/>
+    <property name="DevicePresentationHide" type="b" access="read"/>
+    <property name="DeviceBlockSize" type="t" access="read"/>
+    <property name="DeviceSize" type="t" access="read"/>
+    <property name="DeviceIsLinuxLoop" type="b" access="read"/>
+    <property name="DeviceIsLinuxDmmp" type="b" access="read"/>
+    <property name="DeviceIsLinuxDmmpComponent" type="b" access="read"/>
+    <property name="DeviceIsLinuxLvm2PV" type="b" access="read"/>
+    <property name="DeviceIsLinuxLvm2LV" type="b" access="read"/>
+    <property name="DeviceIsLinuxMd" type="b" access="read"/>
+    <property name="DeviceIsLinuxMdComponent" type="b" access="read"/>
+    <property name="DeviceIsLuksCleartext" type="b" access="read"/>
+    <property name="DeviceIsLuks" type="b" access="read"/>
+    <property name="DeviceMountedByUid" type="u" access="read"/>
+    <property name="DeviceMountPaths" type="as" access="read"/>
+    <property name="DeviceIsMounted" type="b" access="read"/>
+    <property name="DeviceIsOpticalDisc" type="b" access="read"/>
+    <property name="DeviceIsDrive" type="b" access="read"/>
+    <property name="DeviceIsReadOnly" type="b" access="read"/>
+    <property name="DeviceIsMediaChangeDetectionInhibited" type="b" access="read"/>
+    <property name="DeviceIsMediaChangeDetectionInhibitable" type="b" access="read"/>
+    <property name="DeviceIsMediaChangeDetectionPolling" type="b" access="read"/>
+    <property name="DeviceIsMediaChangeDetected" type="b" access="read"/>
+    <property name="DeviceIsMediaAvailable" type="b" access="read"/>
+    <property name="DeviceIsRemovable" type="b" access="read"/>
+    <property name="DeviceIsPartitionTable" type="b" access="read"/>
+    <property name="DeviceIsPartition" type="b" access="read"/>
+    <property name="DeviceIsSystemInternal" type="b" access="read"/>
+    <property name="DeviceFileByPath" type="as" access="read"/>
+    <property name="DeviceFileById" type="as" access="read"/>
+    <property name="DeviceFilePresentation" type="s" access="read"/>
+    <property name="DeviceFile" type="s" access="read"/>
+    <property name="DeviceMinor" type="x" access="read"/>
+    <property name="DeviceMajor" type="x" access="read"/>
+    <property name="DeviceMediaDetectionTime" type="t" access="read"/>
+    <property name="DeviceDetectionTime" type="t" access="read"/>
+    <property name="NativePath" type="s" access="read"/>
+    <signal name="JobChanged">
+      <arg name="job_in_progress" type="b"/>
+      <arg name="job_is_cancellable" type="b"/>
+      <arg name="job_id" type="s"/>
+      <arg name="job_initiated_by_uid" type="u"/>
+      <arg name="job_percentage" type="d"/>
+    </signal>
+    <signal name="Changed"/>
+    <method name="DriveBenchmark">
+      <arg name="do_write_benchmark" direction="in" type="b"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="read_transfer_rate_results" direction="out" type="a(td)"/>
+      <arg name="write_transfer_rate_results" direction="out" type="a(td)"/>
+      <arg name="access_time_results" direction="out" type="a(td)"/>
+    </method>
+    <method name="DriveAtaSmartInitiateSelftest">
+      <arg name="test" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="DriveAtaSmartRefreshData">
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="DriveUnsetSpindownTimeout">
+      <arg name="cookie" direction="in" type="s"/>
+    </method>
+    <method name="DriveSetSpindownTimeout">
+      <arg name="timeout_seconds" direction="in" type="i"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="cookie" direction="out" type="s"/>
+    </method>
+    <method name="DriveDetach">
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="DriveEject">
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="DrivePollMedia"/>
+    <method name="DriveUninhibitPolling">
+      <arg name="cookie" direction="in" type="s"/>
+    </method>
+    <method name="DriveInhibitPolling">
+      <arg name="options" direction="in" type="as"/>
+      <arg name="cookie" direction="out" type="s"/>
+    </method>
+    <method name="LinuxMdCheck">
+      <arg name="options" direction="in" type="as"/>
+      <arg name="number_of_errors" direction="out" type="t"/>
+    </method>
+    <method name="LinuxLvm2LVStop">
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxMdStop">
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxMdRemoveComponent">
+      <arg name="component" direction="in" type="o"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxMdExpand">
+      <arg name="components" direction="in" type="ao"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LinuxMdAddSpare">
+      <arg name="component" direction="in" type="o"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LuksChangePassphrase">
+      <arg name="current_passphrase" direction="in" type="s"/>
+      <arg name="new_passphrase" direction="in" type="s"/>
+    </method>
+    <method name="LuksLock">
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="LuksUnlock">
+      <arg name="passphrase" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="cleartext_device" direction="out" type="o"/>
+    </method>
+    <method name="FilesystemListOpenFiles">
+      <arg name="processes" direction="out" type="a(uus)"/>
+    </method>
+    <method name="FilesystemCheck">
+      <arg name="options" direction="in" type="as"/>
+      <arg name="is_clean" direction="out" type="b"/>
+    </method>
+    <method name="FilesystemUnmount">
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="FilesystemMount">
+      <arg name="filesystem_type" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="mount_path" direction="out" type="s"/>
+    </method>
+    <method name="FilesystemSetLabel">
+      <arg name="new_label" direction="in" type="s"/>
+    </method>
+    <method name="FilesystemCreate">
+      <arg name="fstype" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="PartitionModify">
+      <arg name="type" direction="in" type="s"/>
+      <arg name="label" direction="in" type="s"/>
+      <arg name="flags" direction="in" type="as"/>
+    </method>
+    <method name="PartitionCreate">
+      <arg name="offset" direction="in" type="t"/>
+      <arg name="size" direction="in" type="t"/>
+      <arg name="type" direction="in" type="s"/>
+      <arg name="label" direction="in" type="s"/>
+      <arg name="flags" direction="in" type="as"/>
+      <arg name="options" direction="in" type="as"/>
+      <arg name="fstype" direction="in" type="s"/>
+      <arg name="fsoptions" direction="in" type="as"/>
+      <arg name="created_device" direction="out" type="o"/>
+    </method>
+    <method name="PartitionDelete">
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="PartitionTableCreate">
+      <arg name="scheme" direction="in" type="s"/>
+      <arg name="options" direction="in" type="as"/>
+    </method>
+    <method name="JobCancel"/>
+  </interface>
+  <interface name="org.freedesktop.UDisks.Expander">
+    <property name="Adapter" type="o" access="read"/>
+    <property name="UpstreamPorts" type="ao" access="read"/>
+    <property name="NumPorts" type="u" access="read"/>
+    <property name="Revision" type="s" access="read"/>
+    <property name="Model" type="s" access="read"/>
+    <property name="Vendor" type="s" access="read"/>
+    <property name="NativePath" type="s" access="read"/>
+    <signal name="Changed"/>
+  </interface>
+  <interface name="org.freedesktop.UDisks.Port">
+    <property name="ConnectorType" type="s" access="read"/>
+    <property name="Number" type="i" access="read"/>
+    <property name="Parent" type="o" access="read"/>
+    <property name="Adapter" type="o" access="read"/>
+    <property name="NativePath" type="s" access="read"/>
+    <signal name="Changed"/>
+  </interface>
+</node>
