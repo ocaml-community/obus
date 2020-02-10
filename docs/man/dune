@@ -1,5 +1,6 @@
 (install
   (section man)
+  (package obus)
   (files
     obus-dump.1
     obus-gen-client.1

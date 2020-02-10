@@ -8,5 +8,6 @@
   (modules      obus_gen_interface
                 obus_gen_client
                 obus_gen_server)
- (libraries     tools_util
+  (package      obus_utils)
+  (libraries    tools_util
                 obus.internals))
