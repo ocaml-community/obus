@@ -15,7 +15,6 @@ build: [
 
 depends: [
   "dune" {>= "1.1"}
-  "obus-utils" {build}
   "xmlm"
   "lwt" {>= "4.3.0"}
   "lwt_ppx"
