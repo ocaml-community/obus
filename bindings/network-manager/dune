@@ -1,6 +1,6 @@
 (library
  (name obus_network_manager)
- (public_name obus.network_manager)
+ (public_name obus-network-manager)
  (wrapped false)
  (libraries lwt lwt_log obus)
  (preprocess (pps lwt_ppx)))

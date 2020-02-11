@@ -1,6 +1,6 @@
 (library
   (name obus_internals)
-  (public_name obus.internals)
+  (public_name obus-internals)
   (libraries lwt.unix lwt_log xmlm)
   (wrapped false)
   (preprocess (pps lwt_ppx)))
