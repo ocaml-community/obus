@@ -10,27 +10,28 @@
 (** Servers for one-to-one communication *)
 
 type t
-  (** Type of a server *)
+(** Type of a server *)
 
 val addresses : t -> OBus_address.t list
-  (** [addresses server] returns all the addresses the server is
+(** [addresses server] returns all the addresses the server is
       listenning on. These addresses must be passed to clients so they
       can connect to [server]. *)
 
 val shutdown : t -> unit Lwt.t
-  (** [shutdown server] shutdowns the given server. It terminates when
+(** [shutdown server] shutdowns the given server. It terminates when
       all listeners (a server may listen on several addresses) have
       exited. If the server has already been shut down, it does
       nothing. *)
 
 val make :
-  ?switch : Lwt_switch.t ->
-  ?capabilities : OBus_auth.capability list ->
-  ?mechanisms : OBus_auth.Server.mechanism list ->
-  ?addresses : OBus_address.t list ->
-  ?allow_anonymous : bool ->
-  (t -> OBus_connection.t -> unit) -> t Lwt.t
-  (** [make ?switch ?capabilities ?mechanisms ?addresses ?allow_anonymous f]
+  ?switch:Lwt_switch.t ->
+  ?capabilities:OBus_auth.capability list ->
+  ?mechanisms:OBus_auth.Server.mechanism list ->
+  ?addresses:OBus_address.t list ->
+  ?allow_anonymous:bool ->
+  (t -> OBus_connection.t -> unit) ->
+  t Lwt.t
+(** [make ?switch ?capabilities ?mechanisms ?addresses ?allow_anonymous f]
       Creates a server which will listen on all of the given addresses.
 
       @param capabilites is the set of the server's capabilities,
@@ -61,12 +62,13 @@ val make :
       to the user to set them up with {!OBus_connection.set_up}. *)
 
 val make_lowlevel :
-  ?switch : Lwt_switch.t ->
-  ?capabilities : OBus_auth.capability list ->
-  ?mechanisms : OBus_auth.Server.mechanism list ->
-  ?addresses : OBus_address.t list ->
-  ?allow_anonymous : bool ->
-  (t -> OBus_transport.t -> unit) -> t Lwt.t
-  (** [make_lowlevel] is the same as {!make} except that [f] receives
+  ?switch:Lwt_switch.t ->
+  ?capabilities:OBus_auth.capability list ->
+  ?mechanisms:OBus_auth.Server.mechanism list ->
+  ?addresses:OBus_address.t list ->
+  ?allow_anonymous:bool ->
+  (t -> OBus_transport.t -> unit) ->
+  t Lwt.t
+(** [make_lowlevel] is the same as {!make} except that [f] receives
       only the transport, and no connection is created for this
       transport. *)

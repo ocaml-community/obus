@@ -8,11 +8,9 @@
  *)
 
 include OBus_proxy.Private
-
 open UDisks_interfaces.Org_freedesktop_UDisks_Adapter
 
-let changed proxy =
-  OBus_signal.make s_Changed proxy
+let changed proxy = OBus_signal.make s_Changed proxy
 
 let native_path proxy =
   OBus_property.make ~monitor:UDisks_monitor.monitor p_NativePath proxy

@@ -27,8 +27,12 @@
     Note that with a peer-to-peer connection, resolver will always act
     as if there is no owner. *)
 
-val make : ?switch : Lwt_switch.t -> OBus_connection.t -> OBus_name.bus -> OBus_name.bus React.signal Lwt.t
-  (** [make ?switch bus name] creates a resolver which will monitor
+val make :
+  ?switch:Lwt_switch.t ->
+  OBus_connection.t ->
+  OBus_name.bus ->
+  OBus_name.bus React.signal Lwt.t
+(** [make ?switch bus name] creates a resolver which will monitor
       the name [name] on [bus]. It returns a signal holding the
       current owner of the name. It holds [""] when there is no
       owner. *)

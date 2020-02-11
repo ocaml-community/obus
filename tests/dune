@@ -1,11 +1,12 @@
 (executable
  (name main)
- (modules main gen_random  progress
-  test_serialization test_validation
-  test_auth test_communication test_gc)
+ (modules main gen_random progress test_serialization test_validation
+   test_auth test_communication test_gc)
  (libraries lwt obus)
- (preprocess (pps lwt_ppx)))
+ (preprocess
+  (pps lwt_ppx)))
 
 (alias
- (name   runtest)
- (action (run ./main.exe)))
+ (name runtest)
+ (action
+  (run ./main.exe)))

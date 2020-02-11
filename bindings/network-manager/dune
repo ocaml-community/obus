@@ -3,10 +3,11 @@
  (public_name obus-network-manager)
  (wrapped false)
  (libraries lwt lwt_log obus)
- (preprocess (pps lwt_ppx)))
+ (preprocess
+  (pps lwt_ppx)))
 
 (rule
  (targets nm_interfaces.ml nm_interfaces.mli)
- (deps    nm_interfaces.xml)
+ (deps nm_interfaces.xml)
  (action
   (run obus-gen-interface -keep-common -o nm_interfaces %{deps})))

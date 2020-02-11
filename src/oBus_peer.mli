@@ -15,23 +15,21 @@
     connected to it. *)
 
 type t = {
-  connection : OBus_connection.t;
-  (** Connection used to reach the peer. *)
-
+  connection : OBus_connection.t;  (** Connection used to reach the peer. *)
   name : OBus_name.bus;
-  (** Name of the peer. This only make sense if the connection is a
+      (** Name of the peer. This only make sense if the connection is a
       connection to a message bus. *)
 }
 
 val compare : t -> t -> int
-  (** Same as [Pervasives.compare]. It allows this module to be used
+(** Same as [Pervasives.compare]. It allows this module to be used
       as argument to the functors [Set.Make] and [Map.Make]. *)
 
 val connection : t -> OBus_connection.t
-  (** [connection] projection *)
+(** [connection] projection *)
 
 val name : t -> OBus_name.bus
-  (** [name] projection *)
+(** [name] projection *)
 
 (** Note that it is possible to use either a unique connection name or
     a bus name as peer name.
@@ -63,14 +61,14 @@ val name : t -> OBus_name.bus
     from a method call.
 *)
 
-val make : connection : OBus_connection.t -> name : OBus_name.bus -> t
-  (** [make connection name] make a named peer *)
+val make : connection:OBus_connection.t -> name:OBus_name.bus -> t
+(** [make connection name] make a named peer *)
 
 val anonymous : OBus_connection.t -> t
-  (** [anonymous connection] make an anonymous peer *)
+(** [anonymous connection] make an anonymous peer *)
 
 val ping : t -> t Lwt.t
-  (** Ping a peer, and return the peer which really respond to the
+(** Ping a peer, and return the peer which really respond to the
       ping.
 
       For example, the fastest way to get the the peer owning a bus
@@ -79,10 +77,10 @@ val ping : t -> t Lwt.t
       [ping (OBus_peer.make bus "well.known.name")] *)
 
 val get_machine_id : t -> OBus_uuid.t Lwt.t
-  (** @return the id of the machine the peer is running on *)
+(** @return the id of the machine the peer is running on *)
 
 val wait_for_exit : t -> unit Lwt.t
-  (** [wait_for_exit peer] wait until [peer] exit. If [peer] is not
+(** [wait_for_exit peer] wait until [peer] exit. If [peer] is not
       running then it returns immediatly. Raises [Invalid_argument] if
       the peer has no name. *)
 
@@ -95,6 +93,7 @@ module type Private = sig
   type t = private peer
 
   external of_peer : peer -> t = "%identity"
+
   external to_peer : t -> peer = "%identity"
 end
 
@@ -103,5 +102,6 @@ module Private : sig
   type t = peer
 
   external of_peer : peer -> t = "%identity"
+
   external to_peer : t -> peer = "%identity"
 end

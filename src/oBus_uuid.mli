@@ -17,10 +17,10 @@
 type t
 
 val generate : unit -> t
-  (** Generate a new uuid *)
+(** Generate a new uuid *)
 
 val of_string : string -> t
-  (** Create a uuid from a string. The string must contain an
+(** Create a uuid from a string. The string must contain an
       hex-encoded uuid, i.e. be of length 32 and only contain
       hexadecimal characters. It raise a failure otherwise.
 
@@ -28,4 +28,4 @@ val of_string : string -> t
       uuid. *)
 
 val to_string : t -> string
-  (** Return a hex-encoded string representation of an uuid. *)
+(** Return a hex-encoded string representation of an uuid. *)

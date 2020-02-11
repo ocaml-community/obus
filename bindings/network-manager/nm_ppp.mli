@@ -12,5 +12,8 @@
 include OBus_proxy.Private
 
 val need_secrets : t -> (string * string) Lwt.t
-val set_ip4_config : t -> config : (string * OBus_value.V.single) list -> unit Lwt.t
-val set_state : t -> state : int -> unit Lwt.t
+
+val set_ip4_config :
+  t -> config:(string * OBus_value.V.single) list -> unit Lwt.t
+
+val set_state : t -> state:int -> unit Lwt.t

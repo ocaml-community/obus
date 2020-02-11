@@ -33,19 +33,19 @@ type argument_filter =
           ["a.b.c.foo.bar"], ... *)
 
 type arguments = private (int * argument_filter) list
-    (** Type of lists of argument filters. The private type ensures
+(** Type of lists of argument filters. The private type ensures
         that such lists are always sorted by argument number, do not
         contain duplicates and indexes are in the range [0..63].. *)
 
 val make_arguments : (int * argument_filter) list -> arguments
-  (** Creates an arguments filter from a list of filters. It raises
+(** Creates an arguments filter from a list of filters. It raises
       [Invalid_argument] if one of the argument filters use a number
       outside of the range [1..63] *)
 
-external cast_arguments : arguments -> (int * argument_filter) list = "%identity"
-  (** Returns the list of filters for the given arguments filter. *)
+external cast_arguments : arguments -> (int * argument_filter) list
+  = "%identity"
+(** Returns the list of filters for the given arguments filter. *)
 
-(** Type of a rule used to match a message *)
 type rule = {
   typ : [ `Signal | `Error | `Method_call | `Method_return ] option;
   sender : OBus_name.bus;
@@ -56,40 +56,49 @@ type rule = {
   arguments : arguments;
   eavesdrop : bool option;
 }
+(** Type of a rule used to match a message *)
 
 (** {8 Rule projections} *)
 
 val typ : rule -> [ `Signal | `Error | `Method_call | `Method_return ] option
+
 val sender : rule -> OBus_name.bus
+
 val interface : rule -> OBus_name.interface
+
 val member : rule -> OBus_name.member
+
 val path : rule -> OBus_path.t option
+
 val destination : rule -> OBus_name.bus
+
 val arguments : rule -> arguments
+
 val eavesdrop : rule -> bool option
 
 (** {8 Rule construction} *)
 
 val rule :
-  ?typ : [ `Signal | `Error | `Method_call | `Method_return ] ->
-  ?sender : OBus_name.bus ->
-  ?interface : OBus_name.interface ->
-  ?member : OBus_name.member ->
-  ?path : OBus_path.t ->
-  ?destination : OBus_name.bus ->
-  ?arguments : arguments ->
-  ?eavesdrop : bool ->
-  unit -> rule
-    (** Create a matching rule. *)
+  ?typ:[ `Signal | `Error | `Method_call | `Method_return ] ->
+  ?sender:OBus_name.bus ->
+  ?interface:OBus_name.interface ->
+  ?member:OBus_name.member ->
+  ?path:OBus_path.t ->
+  ?destination:OBus_name.bus ->
+  ?arguments:arguments ->
+  ?eavesdrop:bool ->
+  unit ->
+  rule
+(** Create a matching rule. *)
 
 (** {6 Matching} *)
 
 val match_message : rule -> OBus_message.t -> bool
-  (** [match_message rule message] returns wether [message] is matched
+(** [match_message rule message] returns wether [message] is matched
       by [rule] *)
 
 val match_values : arguments -> OBus_value.V.sequence -> bool
-  (** [match_values filters values] returns whether [values] are
+(** [match_values filters values] returns whether [values] are
       matched by the given list of argument filters. *)
 
 (** {6 Comparison} *)
@@ -102,8 +111,7 @@ type comparison_result =
   | Less_general
       (** [r1] is less general than [r2], i.e. any message matched by
           [r1] is also matched by [r2] *)
-  | Equal
-      (** [r1] and [r2] are equal *)
+  | Equal  (** [r1] and [r2] are equal *)
   | Incomparable
       (** [r1] and [r2] are incomparable, i.e. there exists two
           message [m1] and [m2] such that:
@@ -113,28 +121,28 @@ type comparison_result =
       *)
 
 val compare_rules : rule -> rule -> comparison_result
-  (** [compare_rules r1 r2] compares the two matching rules [r1] and
+(** [compare_rules r1 r2] compares the two matching rules [r1] and
       [r2] *)
 
 (** {6 Parsing/printing} *)
 
 exception Parse_failure of string * int * string
-  (** [Parse_failure(string, position, reason)] is raised when parsing
+(** [Parse_failure(string, position, reason)] is raised when parsing
       a rule failed *)
 
 val string_of_rule : rule -> string
-  (** Returns a string representation of a matching rule. *)
+(** Returns a string representation of a matching rule. *)
 
 val rule_of_string : string -> rule
-  (** Parse a string representation of a matching rule.
+(** Parse a string representation of a matching rule.
 
       @raise Failure if the given string does not contain a valid
       matching rule. *)
 
 (** {6 Rules and message buses} *)
 
-val export : ?switch : Lwt_switch.t -> OBus_connection.t -> rule -> unit Lwt.t
-  (** [export ?switch connection rule] registers [rule] on the message
+val export : ?switch:Lwt_switch.t -> OBus_connection.t -> rule -> unit Lwt.t
+(** [export ?switch connection rule] registers [rule] on the message
       bus. If another rule more general than [rule] is already
       exported, then it does nothihng.
 

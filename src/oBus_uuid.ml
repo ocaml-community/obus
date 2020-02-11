@@ -10,10 +10,11 @@
 type t = string
 
 let of_string str =
-  let fail _ = raise (Invalid_argument (Printf.sprintf "OBus_uuid.of_string(%S)" str)) in
+  let fail _ =
+    raise (Invalid_argument (Printf.sprintf "OBus_uuid.of_string(%S)" str))
+  in
   if String.length str <> 32 then fail ();
-  try OBus_util.hex_decode str
-  with _ -> fail ()
+  try OBus_util.hex_decode str with _ -> fail ()
 
 let to_string = OBus_util.hex_encode
 

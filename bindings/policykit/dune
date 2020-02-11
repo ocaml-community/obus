@@ -3,10 +3,11 @@
  (public_name obus-policykit)
  (wrapped false)
  (libraries lwt obus)
- (preprocess (pps lwt_ppx)))
+ (preprocess
+  (pps lwt_ppx)))
 
 (rule
  (targets policy_kit_interfaces.ml policy_kit_interfaces.mli)
- (deps    policy_kit_interfaces.xml)
+ (deps policy_kit_interfaces.xml)
  (action
   (run obus-gen-interface -keep-common -o policy_kit_interfaces %{deps})))

@@ -15,10 +15,10 @@
     messages. *)
 
 type t
-    (** Type of D-Bus connections *)
+(** Type of D-Bus connections *)
 
 val compare : t -> t -> int
-  (** Same as [Pervasives.compare]. It allows this module to be used
+(** Same as [Pervasives.compare]. It allows this module to be used
       as argument to the functors [Set.Make] and [Map.Make]. *)
 
 (** {6 Creation} *)
@@ -31,8 +31,9 @@ val compare : t -> t -> int
     Otherwise you should use [OBus_bus] or immediately call
     [OBus_bus.register_connection] after the creation. *)
 
-val of_addresses : ?switch : Lwt_switch.t -> ?shared : bool -> OBus_address.t list -> t Lwt.t
-  (** [of_addresses ?switch ?shared addresses] try to get a working
+val of_addresses :
+  ?switch:Lwt_switch.t -> ?shared:bool -> OBus_address.t list -> t Lwt.t
+(** [of_addresses ?switch ?shared addresses] try to get a working
       D-Bus connection from a list of addresses. The server must be
       accessible from at least one of these addresses.
 
@@ -41,10 +42,10 @@ val of_addresses : ?switch : Lwt_switch.t -> ?shared : bool -> OBus_address.t li
       the default behaviour. *)
 
 val loopback : unit -> t
-  (** Create a connection with a loopback transport *)
+(** Create a connection with a loopback transport *)
 
 val close : t -> unit Lwt.t
-  (** Close a connection.
+(** Close a connection.
 
       All thread waiting for a reply will fail with the exception
       {!Connection_closed}.
@@ -56,37 +57,41 @@ val close : t -> unit Lwt.t
   *)
 
 val active : t -> bool React.signal
-  (** Returns whether a connection is active. *)
+(** Returns whether a connection is active. *)
 
 exception Connection_closed
-  (** Raised when trying to use a closed connection *)
+(** Raised when trying to use a closed connection *)
 
 exception Connection_lost
-  (** Raised when a connection has been lost *)
+(** Raised when a connection has been lost *)
 
 exception Transport_error of exn
-  (** Raised when something wrong happens on the backend transport of
+(** Raised when something wrong happens on the backend transport of
       the connection *)
 
 (** {6 Informations} *)
 
 val name : t -> OBus_name.bus
-  (** Returns the unique name of the connection. This is only
+(** Returns the unique name of the connection. This is only
       meaningful is the other endpoint of the connection is a
       message bus. If it is not the case it returns [""]. *)
 
 (**/**)
+
 val set_name : t -> OBus_name.bus -> unit
+
 (**/**)
 
 val transport : t -> OBus_transport.t
-  (** [transport connection] get the transport associated with a
+(** [transport connection] get the transport associated with a
       connection *)
 
 val can_send_basic_type : t -> OBus_value.T.basic -> bool
+
 val can_send_single_type : t -> OBus_value.T.single -> bool
+
 val can_send_sequence_type : t -> OBus_value.T.sequence -> bool
-  (** [can_send_*_type connection typ] returns whether values of the
+(** [can_send_*_type connection typ] returns whether values of the
       given type can be sent through the given connection. *)
 
 (** {6 Sending messages} *)
@@ -95,23 +100,24 @@ val can_send_sequence_type : t -> OBus_value.T.sequence -> bool
     messages. They take and return a complete message description *)
 
 val send_message : t -> OBus_message.t -> unit Lwt.t
-  (** [send_message connection message] send a message without
+(** [send_message connection message] send a message without
       expecting a reply. *)
 
 val send_message_with_reply : t -> OBus_message.t -> OBus_message.t Lwt.t
-  (** [send_message_with_reply connection message] Send a message and
+(** [send_message_with_reply connection message] Send a message and
       return a thread which waits for the reply (which is a method
       return or an error) *)
 
 val send_message_keep_serial : t -> OBus_message.t -> unit Lwt.t
-  (** Same as {!send_message} but does not generate a serial for the
+(** Same as {!send_message} but does not generate a serial for the
       message.
 
       Warning: this is for implementing a D-Bus daemon only, not for
       casual use. *)
 
-val send_message_keep_serial_with_reply : t -> OBus_message.t -> OBus_message.t Lwt.t
-  (** Same as {!send_message_with_reply} but does not generate a serial
+val send_message_keep_serial_with_reply :
+  t -> OBus_message.t -> OBus_message.t Lwt.t
+(** Same as {!send_message_with_reply} but does not generate a serial
       for the message.
 
       Warning: this is for implementing a D-Bus daemon only, not for
@@ -120,38 +126,41 @@ val send_message_keep_serial_with_reply : t -> OBus_message.t -> OBus_message.t 
 (** {6 Helpers for calling methods} *)
 
 val method_call :
-  connection : t ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  ?interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  i_args : 'a OBus_value.C.sequence ->
-  o_args : 'b OBus_value.C.sequence ->
-  'a -> 'b Lwt.t
-  (** Calls a method using the given parameters, and waits for its
+  connection:t ->
+  ?destination:OBus_name.bus ->
+  path:OBus_path.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
+  i_args:'a OBus_value.C.sequence ->
+  o_args:'b OBus_value.C.sequence ->
+  'a ->
+  'b Lwt.t
+(** Calls a method using the given parameters, and waits for its
       reply. *)
 
 val method_call_with_message :
-  connection : t ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  ?interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  i_args : 'a OBus_value.C.sequence ->
-  o_args : 'b OBus_value.C.sequence ->
-  'a -> (OBus_message.t * 'b) Lwt.t
-  (** Same as {!method_call}, but also returns the reply message so
+  connection:t ->
+  ?destination:OBus_name.bus ->
+  path:OBus_path.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
+  i_args:'a OBus_value.C.sequence ->
+  o_args:'b OBus_value.C.sequence ->
+  'a ->
+  (OBus_message.t * 'b) Lwt.t
+(** Same as {!method_call}, but also returns the reply message so
       you can extract informations from it. *)
 
 val method_call_no_reply :
-  connection : t ->
-  ?destination : OBus_name.bus ->
-  path : OBus_path.t ->
-  ?interface : OBus_name.interface ->
-  member : OBus_name.member ->
-  i_args : 'a OBus_value.C.sequence ->
-  'a -> unit Lwt.t
-  (** Same as {!method_call} but does not expect a reply *)
+  connection:t ->
+  ?destination:OBus_name.bus ->
+  path:OBus_path.t ->
+  ?interface:OBus_name.interface ->
+  member:OBus_name.member ->
+  i_args:'a OBus_value.C.sequence ->
+  'a ->
+  unit Lwt.t
+(** Same as {!method_call} but does not expect a reply *)
 
 (** {6 General purpose filters} *)
 
@@ -163,7 +172,7 @@ val method_call_no_reply :
 *)
 
 type filter = OBus_message.t -> OBus_message.t option
-  (** The result of a filter must be:
+(** The result of a filter must be:
 
       - [Some msg] where [msg] is the message given to the filter
       modified or not, which means that the message is replaced by
@@ -173,10 +182,10 @@ type filter = OBus_message.t -> OBus_message.t option
       dispatched or not sent *)
 
 val incoming_filters : t -> filter Lwt_sequence.t
-  (** Filters applied on incoming messages *)
+(** Filters applied on incoming messages *)
 
 val outgoing_filters : t -> filter Lwt_sequence.t
-  (** Filters appllied on outgoing messages *)
+(** Filters appllied on outgoing messages *)
 
 (** {6 Connection local Storage} *)
 
@@ -184,18 +193,18 @@ val outgoing_filters : t -> filter Lwt_sequence.t
     connection. It is internally used by modules of obus. *)
 
 type 'a key
-  (** Type of keys. Keys are used to identify a resource attached to a
+(** Type of keys. Keys are used to identify a resource attached to a
       connection. *)
 
 val new_key : unit -> 'a key
-  (** [new_key ()] generates a new key. *)
+(** [new_key ()] generates a new key. *)
 
 val get : t -> 'a key -> 'a option
-  (** [get connection key] returns the data associated to [key] in
+(** [get connection key] returns the data associated to [key] in
       connection, if any. *)
 
 val set : t -> 'a key -> 'a option -> unit
-  (** [set connection key value] attach [value] to [connection] under
+(** [set connection key value] attach [value] to [connection] under
       the key [key]. [set connection key None] will remove any
       occurence of [key] from [connection]. *)
 
@@ -206,7 +215,7 @@ val set : t -> 'a key -> 'a option -> unit
     message is printed on [stderr] *)
 
 val set_on_disconnect : t -> (exn -> unit Lwt.t) -> unit
-  (** Sets the function called when a fatal error happen or when the
+(** Sets the function called when a fatal error happen or when the
       conection is lost.
 
       Notes:
@@ -217,8 +226,13 @@ val set_on_disconnect : t -> (exn -> unit Lwt.t) -> unit
 
 (** {6 Low-level} *)
 
-val of_transport : ?switch : Lwt_switch.t -> ?guid : OBus_address.guid -> ?up : bool -> OBus_transport.t -> t
-  (** Create a D-Bus connection on the given transport. If [guid] is
+val of_transport :
+  ?switch:Lwt_switch.t ->
+  ?guid:OBus_address.guid ->
+  ?up:bool ->
+  OBus_transport.t ->
+  t
+(** Create a D-Bus connection on the given transport. If [guid] is
       provided the connection will be shared.
 
       [up] tell whether the connection is initially up or down,
@@ -230,10 +244,10 @@ val of_transport : ?switch : Lwt_switch.t -> ?guid : OBus_address.guid -> ?up : 
     When a connection is down, messages will not be dispatched *)
 
 val state : t -> [ `Up | `Down ] React.signal
-  (** Signal holding the current state of the connection *)
+(** Signal holding the current state of the connection *)
 
 val set_up : t -> unit
-  (** Sets up the connection if it is not already up *)
+(** Sets up the connection if it is not already up *)
 
 val set_down : t -> unit
-  (** Sets down the connection if it is not already down *)
+(** Sets down the connection if it is not already down *)

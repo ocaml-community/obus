@@ -12,9 +12,11 @@
 include OBus_proxy.Private
 
 val vpn_state_changed : t -> (int * int) OBus_signal.t
+
 val properties_changed : t -> (string * OBus_value.V.single) list OBus_signal.t
 
 val vpn_state : t -> int OBus_property.r
+
 val banner : t -> string OBus_property.r
 
 val properties : t -> OBus_property.group

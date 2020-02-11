@@ -1,46 +1,53 @@
 (alias
  (name examples)
- (deps bus_functions.exe hello.exe list_services.exe monitor.exe eject.exe signals.exe
-       battery_monitoring.exe network_manager.exe notify.exe ping.exe pong.exe))
+ (deps bus_functions.exe hello.exe list_services.exe monitor.exe eject.exe
+   signals.exe battery_monitoring.exe network_manager.exe notify.exe ping.exe
+   pong.exe))
 
 (executables
- (names      bus_functions hello list_services monitor)
- (modules    bus_functions hello list_services monitor)
- (libraries  lwt obus)
- (preprocess (pps lwt_ppx)))
+ (names bus_functions hello list_services monitor)
+ (modules bus_functions hello list_services monitor)
+ (libraries lwt obus)
+ (preprocess
+  (pps lwt_ppx)))
 
 (executables
- (names      eject signals)
- (modules    eject signals)
- (libraries  lwt obus obus_hal)
- (preprocess (pps lwt_ppx)))
+ (names eject signals)
+ (modules eject signals)
+ (libraries lwt obus obus_hal)
+ (preprocess
+  (pps lwt_ppx)))
 
 (executable
- (name       battery_monitoring)
- (modules    battery_monitoring)
- (libraries  lwt obus obus_upower)
- (preprocess (pps lwt_ppx)))
+ (name battery_monitoring)
+ (modules battery_monitoring)
+ (libraries lwt obus obus_upower)
+ (preprocess
+  (pps lwt_ppx)))
 
 (executable
- (name       network_manager)
- (modules    network_manager)
- (libraries  lwt obus obus_network_manager)
- (preprocess (pps lwt_ppx)))
+ (name network_manager)
+ (modules network_manager)
+ (libraries lwt obus obus_network_manager)
+ (preprocess
+  (pps lwt_ppx)))
 
 (executable
- (name       notify)
- (modules    notify)
- (libraries  lwt obus obus_notification)
- (preprocess (pps lwt_ppx)))
+ (name notify)
+ (modules notify)
+ (libraries lwt obus obus_notification)
+ (preprocess
+  (pps lwt_ppx)))
 
 (executables
- (names      ping pong)
- (modules    ping pong ping_pong)
- (libraries  lwt obus)
- (preprocess (pps lwt_ppx)))
+ (names ping pong)
+ (modules ping pong ping_pong)
+ (libraries lwt obus)
+ (preprocess
+  (pps lwt_ppx)))
 
 (rule
  (targets ping_pong.ml ping_pong.mli)
- (deps    ping_pong.xml)
+ (deps ping_pong.xml)
  (action
   (run obus-gen-interface -keep-common -o ping_pong %{deps})))

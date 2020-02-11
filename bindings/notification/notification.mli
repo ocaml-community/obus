@@ -14,20 +14,20 @@
     specifications} *)
 
 val app_name : string ref
-  (** Application name used for notification. The default value is
+(** Application name used for notification. The default value is
       taken from [Sys.argv.(0)] *)
 
 val desktop_entry : string option ref
-  (** If the application has a desktop entry, it can be specified
+(** If the application has a desktop entry, it can be specified
       here *)
 
 (** {6 Operations on notifications} *)
 
-(** Type of an opened notifications *)
 type 'a t
+(** Type of an opened notifications *)
 
 val result : 'a t -> 'a Lwt.t
-  (** Waits for a notification to be closed then returns:
+(** Waits for a notification to be closed then returns:
 
       - [`Closed] if the user clicked on the cross, timeout was
       reached or the notification daemon exited
@@ -39,42 +39,43 @@ val result : 'a t -> 'a Lwt.t
       than the cross *)
 
 val close : 'a t -> unit Lwt.t
-  (** Close the notification now *)
+(** Close the notification now *)
 
 (** {6 Opening notifications} *)
 
 type urgency = [ `Low | `Normal | `Critical ]
-    (** Urgency level of popups *)
+(** Urgency level of popups *)
 
-(** An image description *)
 type image = {
   img_width : int;
   img_height : int;
   img_rowstride : int;
-  img_has_alpha: bool;
+  img_has_alpha : bool;
   img_bits_per_sample : int;
   img_channels : int;
   img_data : string;
 }
+(** An image description *)
 
 val notify :
-  ?app_name : string ->
-  ?desktop_entry : string ->
-  ?replace : _ t ->
-  ?icon : string ->
-  ?image : image ->
-  summary : string ->
-  ?body : string ->
-  ?actions : (string * ([> `Default | `Closed ] as 'a)) list ->
-  ?urgency : urgency ->
-  ?category : string ->
-  ?sound_file : string ->
-  ?suppress_sound : bool ->
-  ?pos : int * int ->
-  ?hints : (string * OBus_value.V.single) list ->
-  ?timeout : int ->
-  unit -> 'a t Lwt.t
-  (** Open a notification.
+  ?app_name:string ->
+  ?desktop_entry:string ->
+  ?replace:_ t ->
+  ?icon:string ->
+  ?image:image ->
+  summary:string ->
+  ?body:string ->
+  ?actions:(string * ([> `Default | `Closed ] as 'a)) list ->
+  ?urgency:urgency ->
+  ?category:string ->
+  ?sound_file:string ->
+  ?suppress_sound:bool ->
+  ?pos:int * int ->
+  ?hints:(string * OBus_value.V.single) list ->
+  ?timeout:int ->
+  unit ->
+  'a t Lwt.t
+(** Open a notification.
 
       - [app_name] and [desktop_entry] can override default values
       taken from references
@@ -102,16 +103,16 @@ val notify :
 
 (** {6 Informations} *)
 
-(** Server informations *)
 type server_info = {
   server_name : string;
   server_vendor : string;
   server_version : string;
   server_spec_version : string;
 }
+(** Server informations *)
 
 val get_server_information : unit -> server_info Lwt.t
-  (** Retreive server informations *)
+(** Retreive server informations *)
 
 val get_capabilities : unit -> string list Lwt.t
-  (** Retreive server capabilities, see specification for details *)
+(** Retreive server capabilities, see specification for details *)

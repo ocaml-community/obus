@@ -24,24 +24,23 @@
     informations into D-Bus introspection documents *)
 
 val obus_enum : string
-  (** The [org.ocamlcore.forge.obus.Enum] annotation *)
+(** The [org.ocamlcore.forge.obus.Enum] annotation *)
 
 val obus_flag : string
-  (** The [org.ocamlcore.forge.obus.Flag] annotation *)
+(** The [org.ocamlcore.forge.obus.Flag] annotation *)
 
 val obus_type : string
-  (** The [org.ocamlcore.forge.obus.Type] annotation *)
+(** The [org.ocamlcore.forge.obus.Type] annotation *)
 
 val obus_itype : string
-  (** The [org.ocamlcore.forge.obus.IType] annotation *)
+(** The [org.ocamlcore.forge.obus.IType] annotation *)
 
 val obus_otype : string
-  (** The [org.ocamlcore.forge.obus.OType] annotation *)
+(** The [org.ocamlcore.forge.obus.OType] annotation *)
 
 (** {6 Extended types} *)
 
-type basic =
-    private
+type basic = private
   | Byte
   | Boolean
   | Int16
@@ -99,32 +98,49 @@ type sequence = single list
 (** {8 Constructors} *)
 
 val byte : basic
+
 val boolean : basic
+
 val int16 : basic
+
 val int32 : basic
+
 val int64 : basic
+
 val uint16 : basic
+
 val uint32 : basic
+
 val uint64 : basic
+
 val double : basic
+
 val string : basic
+
 val signature : basic
+
 val object_path : basic
+
 val unix_fd : basic
+
 val enum : OBus_value.T.basic -> (OBus_value.V.basic * string) list -> basic
+
 val flag : OBus_value.T.basic -> (OBus_value.V.basic * string) list -> basic
 
 val basic : basic -> single
+
 val structure : single list -> single
+
 val array : single -> single
+
 val dict : basic -> single -> single
+
 val variant : single
 
 (** {6 Terms} *)
 
 (** A term represent a type, where symbols have not been resolved. *)
-type term =
-    private
+type term = private
   | Term of string * term list
       (** A term. Arguments are
           - the symbol name, which is either the name of a D-Bus type
@@ -137,25 +153,26 @@ type term =
           is never a type of the form [Tuple[t]]. *)
 
 val term : string -> term list -> term
-  (** Construct a term *)
+(** Construct a term *)
 
 val tuple : term list -> term
-  (** Construct a tuple. If the list is of length 1, the type itself
+(** Construct a tuple. If the list is of length 1, the type itself
       is returned. *)
 
 (** {6 Symbols} *)
 
 (** Type of user-definable symbols *)
-type symbol =
-    private
+type symbol = private
   | Sym_enum of OBus_value.T.basic * (OBus_value.V.basic * string) list
   | Sym_flag of OBus_value.T.basic * (OBus_value.V.basic * string) list
 
-val sym_enum : OBus_value.T.basic -> (OBus_value.V.basic * string) list -> symbol
-  (** Create an enumeration *)
+val sym_enum :
+  OBus_value.T.basic -> (OBus_value.V.basic * string) list -> symbol
+(** Create an enumeration *)
 
-val sym_flag : OBus_value.T.basic -> (OBus_value.V.basic * string) list -> symbol
-  (** Create a flag type *)
+val sym_flag :
+  OBus_value.T.basic -> (OBus_value.V.basic * string) list -> symbol
+(** Create a flag type *)
 
 (** {6 Conversions} *)
 
@@ -164,7 +181,9 @@ val sym_flag : OBus_value.T.basic -> (OBus_value.V.basic * string) list -> symbo
 (** The following functions remove extension from types. *)
 
 val strip_basic : basic -> OBus_value.T.basic
+
 val strip_single : single -> OBus_value.T.single
+
 val strip_sequence : sequence -> OBus_value.T.sequence
 
 (** {8 Projections} *)
@@ -173,7 +192,9 @@ val strip_sequence : sequence -> OBus_value.T.sequence
     D-Bus types *)
 
 val project_basic : OBus_value.T.basic -> basic
+
 val project_single : OBus_value.T.single -> single
+
 val project_sequence : OBus_value.T.sequence -> sequence
 
 (** {8 Types to terms conversions} *)
@@ -182,20 +203,22 @@ val project_sequence : OBus_value.T.sequence -> sequence
     D-Bus type *)
 
 val term_of_basic : OBus_value.T.basic -> term
+
 val term_of_single : OBus_value.T.single -> term
+
 val term_of_sequence : OBus_value.T.sequence -> term
 
 (** {8 Symbols resolution} *)
 
 type env = (string * symbol) list
-    (** An environment, mapping names to symbol *)
+(** An environment, mapping names to symbol *)
 
 exception Resolve_error of string
-  (** Exception raised when the resolution of symbols of a type
+(** Exception raised when the resolution of symbols of a type
       fails. *)
 
 val resolve : env -> term -> single
-  (** [resolve env term] resolves symbols of [term] using [env], and
+(** [resolve env term] resolves symbols of [term] using [env], and
       returns the extended type it denotes. It raises {!Resolve_error}
       if a symbol of [term] is not found in [env]. *)
 
@@ -204,6 +227,7 @@ val resolve : env -> term -> single
 type name = string
 
 type annotation = name * string
+
 type argument = name option * term
 
 type access = OBus_introspect.access = Read | Write | Read_write
@@ -218,9 +242,9 @@ type interface = name * member list * (string * symbol) list * annotation list
 (** {6 Encoding/decoding} *)
 
 val encode : interface -> OBus_introspect.interface
-  (** Encode the given interface into a standard one by using
+(** Encode the given interface into a standard one by using
       annotations *)
 
 val decode : OBus_introspect.interface -> interface
-  (** Decode the given standard interface into an extended one by
+(** Decode the given standard interface into an extended one by
       decoding annotations *)

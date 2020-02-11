@@ -1,5 +1,5 @@
 (library
-  (name        obus_utils_common)
-  (modules     term utils)
-  (wrapped     false)
-  (libraries   obus.internals))
+ (name obus_utils_common)
+ (modules term utils)
+ (wrapped false)
+ (libraries obus.internals))
