@@ -12,10 +12,10 @@
 type t
 
 val make : string -> int -> t Lwt.t
-  (** [make prefix max] *)
+(** [make prefix max] *)
 
 val incr : t -> unit Lwt.t
-  (** [incr progress] *)
+(** [incr progress] *)
 
 val close : t -> unit Lwt.t
-  (** [close progress] *)
+(** [close progress] *)

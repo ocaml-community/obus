@@ -18,10 +18,15 @@ val changed : t -> unit OBus_signal.t
 (** {6 Properties} *)
 
 val fabric : t -> string OBus_property.r
+
 val num_ports : t -> int OBus_property.r
+
 val driver : t -> string OBus_property.r
+
 val model : t -> string OBus_property.r
+
 val vendor : t -> string OBus_property.r
+
 val native_path : t -> string OBus_property.r
 
 val properties : t -> OBus_property.group

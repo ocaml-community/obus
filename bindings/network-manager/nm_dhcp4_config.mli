@@ -12,4 +12,5 @@
 include OBus_proxy.Private
 
 val options : t -> (string * OBus_value.V.single) list OBus_property.r
+
 val properties_changed : t -> (string * OBus_value.V.single) list OBus_signal.t

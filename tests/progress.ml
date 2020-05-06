@@ -18,22 +18,16 @@ type t = {
 
 let make prefix max =
   let%lwt () = Lwt_io.printf "%s: 0%%%!" prefix in
-  return {
-    prefix = prefix;
-    max = max;
-    current = 0;
-    current_percent = 0;
-  }
+  return { prefix; max; current = 0; current_percent = 0 }
 
 let incr p =
   p.current <- p.current + 1;
   let x = p.current * 100 / p.max in
-  if x <> p.current_percent then begin
+  if x <> p.current_percent then (
     p.current_percent <- x;
     let%lwt () = Lwt_io.printf "\r%s: %d%%" p.prefix x in
-    Lwt_io.flush Lwt_io.stdout
-  end else
-    return ()
+    Lwt_io.flush Lwt_io.stdout )
+  else return ()
 
 let close p =
   let%lwt () = Lwt_io.printf "\r%s: 100%%\n" p.prefix in

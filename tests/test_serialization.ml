@@ -22,24 +22,20 @@ type result = {
   (* Writing/reading succeed but original and resulting messages are not equal *)
   reading_error : int;
   (* Failed to deserialize the message *)
-  writing_error : int;
-  (* Falied to serialize the message *)
+  writing_error : int; (* Falied to serialize the message *)
 }
 
 let run_one_test byte_order msg acc =
   try
     let str, fds = OBus_wire.string_of_message ~byte_order msg in
     let msg' = OBus_wire.message_of_string str fds in
-    if msg' = msg then
-      { acc with success = acc.success + 1 }
-    else begin
-      { acc with failure = acc.failure + 1 }
-    end
+    if msg' = msg then { acc with success = acc.success + 1 }
+    else { acc with failure = acc.failure + 1 }
   with
-    | OBus_wire.Data_error msg ->
-        { acc with writing_error = acc.writing_error + 1 }
-    | OBus_wire.Protocol_error msg ->
-        { acc with reading_error = acc.reading_error + 1 }
+  | OBus_wire.Data_error msg ->
+      { acc with writing_error = acc.writing_error + 1 }
+  | OBus_wire.Protocol_error msg ->
+      { acc with reading_error = acc.reading_error + 1 }
 
 let run_tests prefix byte_order l =
   let%lwt progress = Progress.make prefix test_count in
@@ -69,16 +65,27 @@ let rec gen_messages progress acc = function
       gen_messages progress (Gen_random.message () :: acc) (n - 1)
 
 let test () =
-  let%lwt progress = Progress.make (Printf.sprintf "generating %d messages" test_count) test_count in
+  let%lwt progress =
+    Progress.make
+      (Printf.sprintf "generating %d messages" test_count)
+      test_count
+  in
   let%lwt msgs = gen_messages progress [] test_count in
-  let%lwt () = printl "try to serialize/deserialize all messages and compare the result to the original message." in
-  let%lwt result_le = run_tests "  - in little endian" Lwt_io.Little_endian msgs in
+  let%lwt () =
+    printl
+      "try to serialize/deserialize all messages and compare the result to the \
+       original message."
+  in
+  let%lwt result_le =
+    run_tests "  - in little endian" Lwt_io.Little_endian msgs
+  in
   let%lwt () = print_result result_le in
   let%lwt result_be = run_tests "  - in big endian" Lwt_io.Big_endian msgs in
   let%lwt () = print_result result_be in
-  return (result_le.failure = 0
-      && result_le.reading_error = 0
-      && result_le.writing_error = 0
-      && result_be.failure = 0
-      && result_be.reading_error = 0
-      && result_be.writing_error = 0)
+  return
+    ( result_le.failure = 0
+    && result_le.reading_error = 0
+    && result_le.writing_error = 0
+    && result_be.failure = 0
+    && result_be.reading_error = 0
+    && result_be.writing_error = 0 )

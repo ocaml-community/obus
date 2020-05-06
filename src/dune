@@ -1,0 +1,10 @@
+(library
+ (name obus)
+ (public_name obus)
+ (wrapped false)
+ (synopsis "Pure Ocaml implementation of the D-Bus protocol")
+ (libraries obus_internals lwt.unix lwt_log lwt_react xmlm)
+ (preprocess
+  (pps lwt_ppx)))
+
+(ocamllex oBus_address_lexer oBus_match_rule_lexer)

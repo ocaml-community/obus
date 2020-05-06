@@ -1,0 +1,5 @@
+(install
+ (section man)
+ (package obus-utils)
+ (files obus-dump.1 obus-introspect.1 obus-gen-client.1 obus-gen-interface.1
+   obus-gen-server.1))

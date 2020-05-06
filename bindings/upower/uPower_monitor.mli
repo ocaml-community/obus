@@ -10,4 +10,4 @@
 (** Properties monitoring *)
 
 val monitor : OBus_property.monitor
-  (** Monitor for properties of upower interfaces. *)
+(** Monitor for properties of upower interfaces. *)

@@ -8,23 +8,23 @@
  *)
 
 include OBus_proxy.Private
-
 open UDisks_interfaces.Org_freedesktop_UDisks_Port
 
-let changed proxy =
-  OBus_signal.make s_Changed proxy
+let changed proxy = OBus_signal.make s_Changed proxy
 
 let native_path proxy =
   OBus_property.make ~monitor:UDisks_monitor.monitor p_NativePath proxy
 
 let adapter proxy =
   OBus_property.map_r_with_context
-    (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
+    (fun context x ->
+      UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
     (OBus_property.make ~monitor:UDisks_monitor.monitor p_Adapter proxy)
 
 let parent proxy =
   OBus_property.map_r_with_context
-    (fun context x -> UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
+    (fun context x ->
+      UDisks_adapter.of_proxy (OBus_proxy.make (OBus_context.sender context) x))
     (OBus_property.make ~monitor:UDisks_monitor.monitor p_Parent proxy)
 
 let number proxy =

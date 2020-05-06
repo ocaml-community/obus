@@ -10,4 +10,4 @@
 (** Properties monitoring *)
 
 val monitor : OBus_property.monitor
-  (** Monitor for properties of Network Manager interfaces. *)
+(** Monitor for properties of Network Manager interfaces. *)

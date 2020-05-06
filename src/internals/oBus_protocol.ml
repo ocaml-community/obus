@@ -10,10 +10,15 @@
 (* Protocol parameters *)
 
 let max_type_recursion_depth = 32
+
 let max_name_length = 255
+
 let max_array_size = 1 lsl 26
+
 let max_message_size = 1 lsl 27
 
 let bus_name = "org.freedesktop.DBus"
-let bus_path = ["org"; "freedesktop"; "DBus"]
+
+let bus_path = [ "org"; "freedesktop"; "DBus" ]
+
 let bus_interface = "org.freedesktop.DBus"
