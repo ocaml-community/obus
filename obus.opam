@@ -21,6 +21,5 @@ depends: [
   "lwt_ppx"
   "lwt_log"
   "lwt_react"
-  "ocaml-migrate-parsetree"
   "ppxlib"
 ]

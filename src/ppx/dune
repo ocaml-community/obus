@@ -3,5 +3,5 @@
  (public_name obus.ppx)
  (kind ppx_rewriter)
  (synopsis "Utility syntax for defining D-Bus errors")
- (libraries ocaml-migrate-parsetree)
+ (libraries ppxlib)
  (preprocess (pps ppxlib.metaquot)))

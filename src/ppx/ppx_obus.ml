@@ -1,13 +1,6 @@
-open Migrate_parsetree
-open Ast_408.Parsetree
+open Ppxlib
 
 let rewriter_name = "ppx_obus"
-
-
-let raise_errorf ?sub ?loc message =
-  message |> Printf.kprintf (fun str ->
-    let err = Location.error ?sub ?loc str in
-    raise (Location.Error err))
 
 
 let find_attr_expr s attrs =
@@ -16,9 +9,9 @@ let find_attr_expr s attrs =
     | _ -> None in
   try expr_of_payload (
           let payload =
-            List.find (fun attr -> attr.Ast_408.Parsetree.attr_name.txt = s) attrs
+            List.find (fun attr -> attr.attr_name.txt = s) attrs
           in
-          payload.Ast_408.Parsetree.attr_payload)
+          payload.attr_payload)
   with Not_found -> None
 
 
@@ -52,7 +45,7 @@ let register_obus_exception = function
       | Pext_decl (Pcstr_tuple [typ], None) ->
           Some (registerer typ)
       | _ ->
-        raise_errorf ~loc:pstr_loc
+        Location.raise_errorf ~loc:pstr_loc
           "%s: OBus exceptions take a single string argument" rewriter_name)
     | _ ->
       None)
@@ -60,20 +53,22 @@ let register_obus_exception = function
     None
 
 
-let obus_mapper =
-  { Ast_408.Ast_mapper.default_mapper with
-    structure = fun mapper items ->
-      List.fold_right (fun item acc ->
-        let item' = Ast_408.Ast_mapper.default_mapper.structure_item mapper item in
+let obus_mapper = object(self)
+  inherit Ast_traverse.map
+
+  method! structure items =
+    List.fold_right (fun item acc ->
+        let item' = self#structure_item item in
         match register_obus_exception item with
         | Some reg ->
           item' :: reg :: acc
         | None ->
           item' :: acc)
       items []
-  }
+end
 
 
 let () =
-  Driver.register ~name:rewriter_name Versions.ocaml_408
-    (fun _ _ -> obus_mapper)
+  Driver.register_transformation
+    ~impl:(fun structure -> obus_mapper#structure structure)
+    rewriter_name
