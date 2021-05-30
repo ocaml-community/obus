@@ -141,7 +141,7 @@ let print_impl oc name members symbols annotations =
              output_string oc "         ";
              print_names oc names;
              output_string oc ")\n";
-             fprintf oc "      (OBus_signal.connect s_%s proxy)\n" name
+             fprintf oc "      (OBus_signal.make s_%s proxy)\n" name
            end
        | Property(name, typ, access, annotations) ->
            fprintf oc "\n  let %s proxy =\n" (OBus_name.ocaml_lid name);

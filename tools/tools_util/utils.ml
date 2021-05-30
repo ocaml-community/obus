@@ -130,7 +130,7 @@ let convertor_recv top typ =
     (fun top t ->
        match t with
          | "int32" | "uint32" -> Some "Int32.to_int"
-         | "object_path" -> Some(paren top ("OBus_proxy.make (OBus_context.sender context)"))
+         | "object_path" -> Some(paren top ("(fun x -> OBus_proxy.make ~peer:(OBus_context.sender context) ~path:x)"))
          | name when List.mem name dbus_symbols -> None
          | name -> Some("make_" ^ name))
     top typ
