@@ -108,10 +108,8 @@ let xdg_fallback_session () =
      Lwt.catch (fun () ->
          let sock_path = Filename.concat path "bus" in
          let%lwt stat = Lwt_unix.stat sock_path in
-         let%lwt login = Lwt_unix.getlogin () in
-         let%lwt user = Lwt_unix.getpwnam login in
-         if stat.st_uid = user.pw_uid
-            && stat.st_kind = Lwt_unix.S_SOCK
+         let uid = Unix.getuid () in
+         if stat.st_uid = uid && stat.st_kind = Lwt_unix.S_SOCK
          then Lwt.return_some [{ name = "unix"; args = [("path", sock_path)] }]
          else Lwt.return_none)
        (fun _ -> Lwt.return_none)
