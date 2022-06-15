@@ -42,7 +42,7 @@ let register_obus_exception = function
               in ()
           ] in
       (match exn.ptyexn_constructor.pext_kind with
-      | Pext_decl (Pcstr_tuple [typ], None) ->
+      | Pext_decl (_, Pcstr_tuple [typ], None) ->
           Some (registerer typ)
       | _ ->
         Location.raise_errorf ~loc:pstr_loc
