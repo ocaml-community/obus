@@ -22,7 +22,7 @@ type t = {
 }
 
 val compare : t -> t -> int
-  (** Same as [Pervasives.compare]. It allows this module to be used
+  (** Same as [Stdlib.compare]. It allows this module to be used
       as argument to the functors [Set.Make] and [Map.Make]. *)
 
 val make : peer : OBus_peer.t -> path : OBus_path.t -> t

@@ -510,7 +510,7 @@ end
    | Common writing functions                                      |
    +---------------------------------------------------------------+ *)
 
-module FD_map = Map.Make(struct type t = Unix.file_descr let compare = Pervasives.compare end)
+module FD_map = Map.Make(struct type t = Unix.file_descr let compare = Stdlib.compare end)
 
 (* A pointer for serializing data *)
 type wpointer = {

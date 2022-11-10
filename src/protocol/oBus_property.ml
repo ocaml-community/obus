@@ -62,7 +62,7 @@ module Group_map = Map.Make
             - name of the owner of the property
             - path of the object owning the property
             - interfaec of the property *)
-     let compare = Pervasives.compare
+     let compare = Stdlib.compare
    end)
 
 (* Type of a cache for a group *)

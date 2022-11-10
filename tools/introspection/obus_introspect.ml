@@ -65,7 +65,7 @@ let main service path =
   begin
     match !obj_mode with
       | false ->
-          OBus_introspect.output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel Pervasives.stdout))
+          OBus_introspect.output (Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel Stdlib.stdout))
             (Interface_map.fold (fun name (content, annots) acc -> (name, content, annots) :: acc) map [], [])
       | true ->
           List.iter begin fun (proxy, interfaces) ->

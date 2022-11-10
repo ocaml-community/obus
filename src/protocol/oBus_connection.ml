@@ -131,7 +131,7 @@ and t = <
   (* Signal holding the current connection state. *)
 >
 
-let compare : t -> t -> int = Pervasives.compare
+let compare : t -> t -> int = Stdlib.compare
 
 (* +-----------------------------------------------------------------+
    | Guids                                                           |
@@ -140,7 +140,7 @@ let compare : t -> t -> int = Pervasives.compare
 (* Mapping from server guid to connection. *)
 module Guid_map = Map.Make(struct
                             type t = OBus_address.guid
-                            let compare = Pervasives.compare
+                            let compare = Stdlib.compare
                           end)
 
 let guid_connection_map = ref Guid_map.empty
