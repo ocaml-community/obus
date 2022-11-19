@@ -14,7 +14,7 @@ open OBus_string
 type element = string
 type t = element list
 
-let compare = Pervasives.compare
+let compare = Stdlib.compare
 
 let is_valid_char ch =
   (ch >= 'A' && ch <= 'Z') ||

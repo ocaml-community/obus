@@ -14,7 +14,7 @@ type t = {
   name : OBus_name.bus;
 }
 
-let compare = Pervasives.compare
+let compare = Stdlib.compare
 
 let connection p = p.connection
 let name p = p.name

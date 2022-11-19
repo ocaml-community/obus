@@ -119,7 +119,7 @@ let with_match_rule match_rule sd =
 module Signal_map = Map.Make
   (struct
      type t = OBus_path.t option * OBus_name.interface * OBus_name.member
-     let compare = Pervasives.compare
+     let compare = Stdlib.compare
    end)
 
 type info = {

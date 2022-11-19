@@ -18,7 +18,7 @@ type t
     (** Type of D-Bus connections *)
 
 val compare : t -> t -> int
-  (** Same as [Pervasives.compare]. It allows this module to be used
+  (** Same as [Stdlib.compare]. It allows this module to be used
       as argument to the functors [Set.Make] and [Map.Make]. *)
 
 (** {6 Creation} *)
