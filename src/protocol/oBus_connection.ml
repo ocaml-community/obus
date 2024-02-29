@@ -463,7 +463,12 @@ let rec dispatch_forever active =
     | Some message ->
         (* The internal dispatcher accepts only messages destined to
            the current connection: *)
-        if active.name = "" || OBus_message.destination message = active.name then ignore (
+        let is_signal message =
+          match OBus_message.typ message with
+            | Signal _ -> true
+            | _ -> false
+        in
+        if active.name = "" || (OBus_message.destination message = active.name && not (is_signal message)) then ignore (
           (try%lwt
             dispatch_message active message
           with exn ->
